@@ -1089,8 +1089,8 @@ const FamilyHubContent = () => {
       setBudgetData(prev => ({
         ...prev,
         [section]: {
-          ...prev[section],
-          [listName]: [...prev[section][listName], newItem]
+          ...(prev as any)[section],
+          [listName]: [...(prev as any)[section]?.[listName] || [], newItem]
         }
       }));
     }
