@@ -1066,11 +1066,11 @@ const FamilyHubContent = () => {
       setBudgetData(prev => ({
         ...prev,
         [section]: {
-          ...prev[section],
+          ...(prev as any)[section],
           [category]: {
-            ...prev[section][category],
+            ...(prev as any)[section]?.[category],
             [subCategory]: {
-              ...prev[section][category][subCategory],
+              ...(prev as any)[section]?.[category]?.[subCategory],
               [newItem.id]: {
                 name: newItem.name,
                 amount: newItem.amount,
