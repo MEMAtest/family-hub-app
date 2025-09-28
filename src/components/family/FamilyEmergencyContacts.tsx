@@ -37,16 +37,7 @@ export const FamilyEmergencyContacts: React.FC<FamilyEmergencyContactsProps> = (
   onEditContact,
   onDeleteContact
 }) => {
-  const [contacts, setContacts] = useState<EmergencyContact[]>(
-    initialContacts.length > 0 ? initialContacts : mockContacts
-  );
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [editingContact, setEditingContact] = useState<EmergencyContact | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedFilter, setSelectedFilter] = useState<string>('all');
-  const [copiedPhone, setCopiedPhone] = useState<string | null>(null);
-
-  const mockContacts: EmergencyContact[] = [
+  const mockContacts: any[] = [
     {
       id: '1',
       name: 'Dr. Sarah Johnson',
@@ -179,6 +170,15 @@ export const FamilyEmergencyContacts: React.FC<FamilyEmergencyContactsProps> = (
     }
   ];
 
+  const [contacts, setContacts] = useState<any[]>(
+    initialContacts.length > 0 ? initialContacts : mockContacts
+  );
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [editingContact, setEditingContact] = useState<EmergencyContact | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedFilter, setSelectedFilter] = useState<string>('all');
+  const [copiedPhone, setCopiedPhone] = useState<string | null>(null);
+
   const categoryConfig = {
     emergency: { icon: AlertTriangle, color: 'red', label: 'Emergency Services' },
     medical: { icon: Heart, color: 'blue', label: 'Medical' },
@@ -216,8 +216,8 @@ export const FamilyEmergencyContacts: React.FC<FamilyEmergencyContactsProps> = (
     window.open(`mailto:${email}`, '_blank');
   };
 
-  const ContactCard: React.FC<{ contact: EmergencyContact }> = ({ contact }) => {
-    const config = categoryConfig[contact.category] || categoryConfig.other;
+  const ContactCard: React.FC<{ contact: any }> = ({ contact }) => {
+    const config = categoryConfig[contact.category as keyof typeof categoryConfig] || categoryConfig.other;
     const IconComponent = config.icon;
 
     return (
@@ -534,7 +534,7 @@ export const FamilyEmergencyContacts: React.FC<FamilyEmergencyContactsProps> = (
                     Category
                   </label>
                   <select
-                    defaultValue={editingContact?.category || 'other'}
+                    defaultValue={(editingContact as any)?.category || 'other'}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   >
                     {Object.entries(categoryConfig).map(([category, config]) => (

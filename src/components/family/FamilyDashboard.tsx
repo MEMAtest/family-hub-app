@@ -1026,12 +1026,12 @@ const FamilyDashboard: React.FC<FamilyDashboardProps> = ({ onClose }) => {
                       },
                       {
                         name: 'Parent',
-                        value: familyMembers.filter(m => m.role.level === 'parent').length,
+                        value: familyMembers.filter(m => (m as any).role?.level === 'parent' || (m as any).role === 'parent').length,
                         fill: '#3B82F6'
                       },
                       {
                         name: 'Teen',
-                        value: familyMembers.filter(m => m.role.level === 'teen').length,
+                        value: familyMembers.filter(m => (m as any).role?.level === 'teen' || (m as any).ageGroup === 'Teen').length,
                         fill: '#8B5CF6'
                       },
                       {
@@ -1044,7 +1044,7 @@ const FamilyDashboard: React.FC<FamilyDashboardProps> = ({ onClose }) => {
                     cy="50%"
                     outerRadius={80}
                     dataKey="value"
-                    label={({ name, value }) => value > 0 ? `${name}: ${value}` : ''}
+                    label={({ name, value }: any) => (value as number) > 0 ? `${name}: ${value}` : ''}
                   >
                   </Pie>
                   <Tooltip />
@@ -1065,7 +1065,7 @@ const FamilyDashboard: React.FC<FamilyDashboardProps> = ({ onClose }) => {
                   <div className="flex-1">
                     <p className="font-medium text-gray-900">{member.firstName} {member.lastName}</p>
                     <p className="text-sm text-gray-600">
-                      {member.isActive ? 'Active now' : `Last seen ${Math.floor(Math.random() * 24)} hours ago`}
+                      {(member as any).isActive !== false ? 'Active now' : `Last seen ${Math.floor(Math.random() * 24)} hours ago`}
                     </p>
                   </div>
                   <div className="text-sm text-gray-500">
@@ -1148,7 +1148,7 @@ const FamilyDashboard: React.FC<FamilyDashboardProps> = ({ onClose }) => {
       {/* New Member Form Modal */}
       {showNewMemberForm && (
         <FamilyMemberForm
-          member={selectedMember ? familyMembers.find(m => m.id === selectedMember) : undefined}
+          member={(selectedMember ? familyMembers.find(m => m.id === selectedMember) : undefined) as any}
           onCancel={() => {
             setShowNewMemberForm(false);
             setSelectedMember(null);
@@ -1270,7 +1270,7 @@ const FamilyDashboard: React.FC<FamilyDashboardProps> = ({ onClose }) => {
                             <div className="flex justify-between">
                               <span className="text-sm font-medium text-gray-500">Last Updated:</span>
                               <span className="text-sm text-gray-900">
-                                {member.updatedAt.toLocaleDateString()}
+                                {(member as any).updatedAt ? new Date((member as any).updatedAt).toLocaleDateString() : 'N/A'}
                               </span>
                             </div>
                             {member.lastActiveAt && (
@@ -1284,11 +1284,11 @@ const FamilyDashboard: React.FC<FamilyDashboardProps> = ({ onClose }) => {
                           </div>
                         </div>
 
-                        {member.notes && (
+                        {(member as any).notes && (
                           <div>
                             <h4 className="text-lg font-semibold text-gray-900 mb-3">Notes</h4>
                             <p className="text-sm text-gray-700 bg-gray-50 p-3 rounded">
-                              {member.notes}
+                              {(member as any).notes}
                             </p>
                           </div>
                         )}
