@@ -51,7 +51,7 @@ export interface InAppNotification {
   message: string;
   icon?: string;
   priority: 'low' | 'medium' | 'high' | 'urgent';
-  category: 'event' | 'sync' | 'system' | 'error';
+  category: 'event' | 'sync' | 'system' | 'error' | 'conflict';
   timestamp: Date;
   read: boolean;
   actionRequired: boolean;
