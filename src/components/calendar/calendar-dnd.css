@@ -1,0 +1,141 @@
+/* Enhanced drag and drop styles for React Big Calendar */
+
+/* Dragging state styles */
+.rbc-addons-dnd-drag-preview {
+  background-color: rgba(59, 130, 246, 0.8) !important;
+  border: 2px dashed #3B82F6 !important;
+  border-radius: 6px !important;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15) !important;
+  transform: rotate(2deg) !important;
+  opacity: 0.9 !important;
+}
+
+/* Drop target styles */
+.rbc-addons-dnd-drop-preview {
+  background-color: rgba(34, 197, 94, 0.1) !important;
+  border: 2px dashed #22C55E !important;
+  border-radius: 6px !important;
+  animation: pulse 1s infinite !important;
+}
+
+/* Enhanced event styles during drag */
+.rbc-event.rbc-addons-dnd-dragging {
+  opacity: 0.7 !important;
+  filter: brightness(1.1) !important;
+  transform: scale(1.02) !important;
+  transition: all 0.2s ease !important;
+  z-index: 1000 !important;
+}
+
+/* Resize handle styles */
+.rbc-addons-dnd-resize-anchor-e,
+.rbc-addons-dnd-resize-anchor-w {
+  background: rgba(255, 255, 255, 0.8) !important;
+  border: 1px solid #3B82F6 !important;
+  border-radius: 50% !important;
+  width: 8px !important;
+  height: 8px !important;
+}
+
+.rbc-addons-dnd-resize-anchor-e:hover,
+.rbc-addons-dnd-resize-anchor-w:hover {
+  background: #3B82F6 !important;
+  transform: scale(1.2) !important;
+  transition: all 0.2s ease !important;
+}
+
+/* Calendar cell highlighting during drag */
+.rbc-day-bg.rbc-addons-dnd-drag-over {
+  background-color: rgba(34, 197, 94, 0.05) !important;
+  border: 1px solid rgba(34, 197, 94, 0.2) !important;
+}
+
+/* Month view drag over styles */
+.rbc-date-cell.rbc-addons-dnd-drag-over {
+  background-color: rgba(34, 197, 94, 0.05) !important;
+  border-radius: 4px !important;
+}
+
+/* Week view time slot highlighting */
+.rbc-time-slot.rbc-addons-dnd-drag-over {
+  background-color: rgba(34, 197, 94, 0.08) !important;
+}
+
+/* Custom cursor during drag operations */
+.rbc-addons-dnd-dragging * {
+  cursor: grabbing !important;
+}
+
+.rbc-addons-dnd-resizing * {
+  cursor: col-resize !important;
+}
+
+/* Smooth animations */
+.rbc-event {
+  transition: opacity 0.2s ease, transform 0.2s ease !important;
+}
+
+/* Enhanced event hover state */
+.rbc-event:hover {
+  filter: brightness(1.05) !important;
+  transform: scale(1.01) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Calendar-specific improvements */
+.family-hub-calendar .rbc-event {
+  cursor: grab !important;
+  border-radius: 4px !important;
+  border: none !important;
+  font-weight: 500 !important;
+}
+
+.family-hub-calendar .rbc-event:hover {
+  cursor: grab !important;
+}
+
+.family-hub-calendar .rbc-event.rbc-selected {
+  outline: 2px solid #3B82F6 !important;
+  outline-offset: 1px !important;
+}
+
+/* Month view event styling */
+.family-hub-calendar .rbc-month-view .rbc-event {
+  border-radius: 3px !important;
+  margin: 1px 0 !important;
+  padding: 1px 4px !important;
+  font-size: 11px !important;
+}
+
+/* Week/Day view event styling */
+.family-hub-calendar .rbc-time-view .rbc-event {
+  border-radius: 4px !important;
+  margin: 0 1px !important;
+  padding: 2px 6px !important;
+}
+
+/* Pulse animation for drop zones */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 0.8;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+/* Feedback toast animation */
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.drag-feedback-toast {
+  animation: slideInRight 0.3s ease-out;
+}

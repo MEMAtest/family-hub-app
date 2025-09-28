@@ -1,0 +1,359 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// User authentication table
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  familyMembers FamilyMember[]
+
+  @@map("users")
+}
+
+// Families table
+model Family {
+  id         String   @id @default(cuid())
+  familyName String   @map("family_name")
+  familyCode String   @unique @map("family_code")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  members               FamilyMember[]
+  calendarEvents        CalendarEvent[]
+  budgetIncome          BudgetIncome[]
+  budgetExpenses        BudgetExpense[]
+  budgetCategories      BudgetCategory[]
+  savingsGoals          SavingsGoal[]
+  budgetAlerts          BudgetAlert[]
+  monthlyBudgetSummaries MonthlyBudgetSummary[]
+  mealPlans             MealPlan[]
+  shoppingLists         ShoppingList[]
+  familyGoals           FamilyGoal[]
+  achievements          Achievement[]
+
+  @@map("families")
+}
+
+// Family members table
+model FamilyMember {
+  id           String   @id @default(cuid())
+  familyId     String   @map("family_id")
+  userId       String?  @map("user_id")
+  name         String
+  role         String
+  ageGroup     String   @map("age_group")
+  color        String   // Hex color code
+  icon         String   // Emoji icon
+  fitnessGoals Json?    @map("fitness_goals")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  family           Family             @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  user             User?              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  calendarEvents   CalendarEvent[]
+  budgetIncome     BudgetIncome[]
+  budgetExpenses   BudgetExpense[]
+  shoppingItems    ShoppingItem[]
+  achievements     Achievement[]
+  fitnessTracking  FitnessTracking[]
+
+  @@map("family_members")
+}
+
+// Calendar events table
+model CalendarEvent {
+  id               String   @id @default(cuid())
+  familyId         String   @map("family_id")
+  personId         String   @map("person_id")
+  title            String
+  description      String?
+  eventDate        DateTime @map("event_date")
+  eventTime        DateTime @map("event_time")
+  durationMinutes  Int      @default(60) @map("duration_minutes")
+  location         String?
+  cost             Float    @default(0.00)
+  eventType        String   @map("event_type")
+  recurringPattern String   @default("none") @map("recurring_pattern")
+  isRecurring      Boolean  @default(false) @map("is_recurring")
+  notes            String?
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  family Family       @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  person FamilyMember @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@map("calendar_events")
+}
+
+// Budget income table
+model BudgetIncome {
+  id          String    @id @default(cuid())
+  familyId    String    @map("family_id")
+  personId    String?   @map("person_id")
+  incomeName  String    @map("income_name")
+  amount      Float
+  category    String
+  isRecurring Boolean   @default(true) @map("is_recurring")
+  paymentDate DateTime? @map("payment_date")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  family Family        @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  person FamilyMember? @relation(fields: [personId], references: [id])
+
+  @@map("budget_income")
+}
+
+// Budget expenses table
+model BudgetExpense {
+  id          String    @id @default(cuid())
+  familyId    String    @map("family_id")
+  personId    String?   @map("person_id")
+  expenseName String    @map("expense_name")
+  amount      Float
+  category    String
+  budgetLimit Float?    @map("budget_limit")
+  isRecurring Boolean   @default(true) @map("is_recurring")
+  paymentDate DateTime? @map("payment_date")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  family Family        @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  person FamilyMember? @relation(fields: [personId], references: [id])
+
+  @@map("budget_expenses")
+}
+
+// Budget categories table
+model BudgetCategory {
+  id               String   @id @default(cuid())
+  familyId         String   @map("family_id")
+  categoryName     String   @map("category_name")
+  categoryType     String   @map("category_type") // income, expense
+  budgetLimit      Float?   @map("budget_limit")
+  colorCode        String?  @map("color_code")
+  iconName         String?  @map("icon_name")
+  isActive         Boolean  @default(true) @map("is_active")
+  sortOrder        Int      @default(0) @map("sort_order")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  family Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  @@unique([familyId, categoryName, categoryType])
+  @@map("budget_categories")
+}
+
+// Savings goals table
+model SavingsGoal {
+  id                String    @id @default(cuid())
+  familyId          String    @map("family_id")
+  goalName          String    @map("goal_name")
+  goalDescription   String?   @map("goal_description")
+  targetAmount      Float     @map("target_amount")
+  currentAmount     Float     @default(0.00) @map("current_amount")
+  targetDate        DateTime? @map("target_date")
+  priority          String    @default("medium") // high, medium, low
+  category          String    @default("general")
+  isActive          Boolean   @default(true) @map("is_active")
+  autoContribution  Float?    @map("auto_contribution")
+  contributionFreq  String?   @map("contribution_frequency") // weekly, monthly, yearly
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  family        Family              @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  contributions SavingsContribution[]
+
+  @@map("savings_goals")
+}
+
+// Savings contributions table
+model SavingsContribution {
+  id              String   @id @default(cuid())
+  savingsGoalId   String   @map("savings_goal_id")
+  contributionAmount Float    @map("contribution_amount")
+  contributionDate   DateTime @map("contribution_date")
+  contributionType   String   @default("manual") // manual, automatic
+  notes           String?
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  // Relations
+  savingsGoal SavingsGoal @relation(fields: [savingsGoalId], references: [id], onDelete: Cascade)
+
+  @@map("savings_contributions")
+}
+
+// Budget alerts table
+model BudgetAlert {
+  id                String   @id @default(cuid())
+  familyId          String   @map("family_id")
+  alertType         String   @map("alert_type") // overspend, goal_progress, recurring_reminder
+  alertTitle        String   @map("alert_title")
+  alertMessage      String   @map("alert_message")
+  severity          String   @default("medium") // low, medium, high, critical
+  isActive          Boolean  @default(true) @map("is_active")
+  triggerCondition  Json     @map("trigger_condition") // Flexible condition storage
+  lastTriggered     DateTime? @map("last_triggered")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  family Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  @@map("budget_alerts")
+}
+
+// Monthly budget summary table
+model MonthlyBudgetSummary {
+  id               String   @id @default(cuid())
+  familyId         String   @map("family_id")
+  summaryMonth     Int      @map("summary_month") // 1-12
+  summaryYear      Int      @map("summary_year")
+  totalIncome      Float    @map("total_income")
+  totalExpenses    Float    @map("total_expenses")
+  netIncome        Float    @map("net_income")
+  savingsRate      Float    @map("savings_rate") // Percentage
+  categoryBreakdown Json    @map("category_breakdown") // Detailed category spending
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  family Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  @@unique([familyId, summaryMonth, summaryYear])
+  @@map("monthly_budget_summaries")
+}
+
+// Meal plans table
+model MealPlan {
+  id                 String    @id @default(cuid())
+  familyId           String    @map("family_id")
+  mealDate           DateTime  @map("meal_date")
+  mealName           String    @map("meal_name")
+  proteinSource      String?   @map("protein_source")
+  carbohydrateSource String?   @map("carbohydrate_source")
+  vegetableSource    String?   @map("vegetable_source")
+  estimatedCalories  Int?      @map("estimated_calories")
+  mealNotes          String?   @map("meal_notes")
+  isEaten            Boolean   @default(false) @map("is_eaten")
+  eatenAt            DateTime? @map("eaten_at")
+  createdAt          DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  family Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  @@map("meal_plans")
+}
+
+// Shopping lists table
+model ShoppingList {
+  id        String   @id @default(cuid())
+  familyId  String   @map("family_id")
+  listName  String   @map("list_name")
+  category  String   @default("General")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  family Family         @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  items  ShoppingItem[]
+
+  @@map("shopping_lists")
+}
+
+// Shopping items table
+model ShoppingItem {
+  id             String    @id @default(cuid())
+  listId         String    @map("list_id")
+  itemName       String    @map("item_name")
+  estimatedPrice Float     @default(0.00) @map("estimated_price")
+  category       String    @default("General")
+  frequency      String?
+  personId       String?   @map("person_id")
+  isCompleted    Boolean   @default(false) @map("is_completed")
+  completedAt    DateTime? @map("completed_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  list   ShoppingList  @relation(fields: [listId], references: [id], onDelete: Cascade)
+  person FamilyMember? @relation(fields: [personId], references: [id])
+
+  @@map("shopping_items")
+}
+
+// Family goals table
+model FamilyGoal {
+  id              String   @id @default(cuid())
+  familyId        String   @map("family_id")
+  goalTitle       String   @map("goal_title")
+  goalDescription String?  @map("goal_description")
+  goalType        String   @map("goal_type") // family, individual
+  targetValue     String   @map("target_value")
+  currentProgress Int      @default(0) @map("current_progress") // Percentage 0-100
+  deadline        DateTime?
+  participants    Json     // Array of member IDs
+  milestones      Json     // Array of milestone objects
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  family Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  @@map("family_goals")
+}
+
+// Achievements table
+model Achievement {
+  id                     String   @id @default(cuid())
+  familyId               String   @map("family_id")
+  personId               String   @map("person_id")
+  achievementTitle       String   @map("achievement_title")
+  achievementDescription String?  @map("achievement_description")
+  category               String
+  badgeEmoji             String?  @map("badge_emoji")
+  pointsAwarded          Int      @default(0) @map("points_awarded")
+  achievedDate           DateTime @default(now()) @map("achieved_date")
+  createdAt              DateTime @default(now()) @map("created_at")
+
+  // Relations
+  family Family       @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  person FamilyMember @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@map("achievements")
+}
+
+// Fitness tracking table
+model FitnessTracking {
+  id             String   @id @default(cuid())
+  personId       String   @map("person_id")
+  activityType   String   @map("activity_type")
+  durationMinutes Int     @map("duration_minutes")
+  intensityLevel String   @map("intensity_level")
+  activityDate   DateTime @default(now()) @map("activity_date")
+  notes          String?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  // Relations
+  person FamilyMember @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@map("fitness_tracking")
+}
