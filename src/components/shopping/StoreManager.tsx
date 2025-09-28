@@ -119,13 +119,8 @@ const StoreManager: React.FC<StoreManagerProps> = ({ onClose }) => {
   };
 
   const formatOpeningHours = (hours: OpeningHours) => {
-    const today = new Date().toLocaleLowerCase().slice(0, 3) as keyof OpeningHours;
-    const todayHours = hours[today === 'sun' ? 'sunday' :
-                           today === 'mon' ? 'monday' :
-                           today === 'tue' ? 'tuesday' :
-                           today === 'wed' ? 'wednesday' :
-                           today === 'thu' ? 'thursday' :
-                           today === 'fri' ? 'friday' : 'saturday'];
+    const today = new Date().toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase() as keyof OpeningHours;
+    const todayHours = hours[today];
 
     if (todayHours.isClosed) return 'Closed today';
     if (todayHours.is24Hours) return 'Open 24 hours';

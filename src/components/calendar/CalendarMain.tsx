@@ -2,6 +2,8 @@
 
 import React, { useState, useMemo, useCallback } from 'react'
 import { Calendar, momentLocalizer, View, Views } from 'react-big-calendar'
+
+type ExtendedView = View | 'YEAR';
 import withDragAndDrop from 'react-big-calendar/lib/addons/dragAndDrop'
 import moment from 'moment'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
@@ -92,7 +94,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
   onEventsSync,
   onWorkEventCreate
 }) => {
-  const [view, setView] = useState<View>(Views.MONTH)
+  const [view, setView] = useState<ExtendedView>(Views.MONTH)
   const [showFilters, setShowFilters] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [selectedPeople, setSelectedPeople] = useState<string[]>(people.map(p => p.id))
@@ -393,7 +395,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
               { view: Views.WEEK, label: 'Week' },
               { view: Views.MONTH, label: 'Month' },
               { view: Views.AGENDA, label: 'Agenda' },
-              { view: 'YEAR' as View, label: 'Year' }
+              { view: 'YEAR' as ExtendedView, label: 'Year' }
             ].map(({ view: viewType, label }) => (
               <button
                 key={viewType}

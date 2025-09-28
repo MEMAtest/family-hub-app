@@ -224,7 +224,7 @@ const SavingsGoalsReportComponent: React.FC<SavingsGoalsReportProps> = ({ filter
                     outerRadius={80}
                     fill="#8884d8"
                     dataKey="amount"
-                    label={({ category, amount }) => `${category}: ${formatCurrency(amount)}`}
+                    label={({ category, amount }) => `${category}: ${formatCurrency(amount as number)}`}
                   >
                     {categoryData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />

@@ -362,7 +362,7 @@ const MonthlyBudgetReportComponent: React.FC<MonthlyBudgetReportProps> = ({ filt
                 outerRadius={80}
                 fill="#8884d8"
                 dataKey="value"
-                label={({ name, percentage }) => `${name}: ${percentage.toFixed(1)}%`}
+                label={({ name, percentage }) => `${name}: ${(percentage as number).toFixed(1)}%`}
               >
                 {incomeData.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />

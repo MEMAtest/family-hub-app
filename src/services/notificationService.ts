@@ -155,8 +155,8 @@ class FamilyHubNotificationService implements NotificationService {
   async scheduleReminder(eventId: string, reminderData: Omit<NotificationReminder, 'id'>): Promise<NotificationReminder> {
     const reminder: NotificationReminder = {
       id: this.generateId('reminder'),
-      eventId,
       ...reminderData,
+      eventId,
       retryCount: 0,
       status: 'pending'
     };
@@ -205,11 +205,7 @@ class FamilyHubNotificationService implements NotificationService {
         badge: reminder.metadata.badge || '/icons/badge-icon.png',
         tag: reminder.metadata.tag || `event-${reminder.eventId}`,
         data: reminder.metadata.data,
-        requireInteraction: true,
-        actions: [
-          { action: 'view', title: 'View Event' },
-          { action: 'snooze', title: 'Snooze 10m' }
-        ]
+        requireInteraction: true
       });
 
       notification.onclick = () => {
@@ -294,8 +290,8 @@ class FamilyHubNotificationService implements NotificationService {
     const notification: InAppNotification = {
       id: this.generateId('notification'),
       timestamp: new Date(),
-      read: false,
-      ...notificationData
+      ...notificationData,
+      read: false
     };
 
     this.notifications.unshift(notification);
@@ -443,6 +439,7 @@ class FamilyHubNotificationService implements NotificationService {
       // Only schedule future reminders
       if (reminderTime > new Date()) {
         await this.scheduleReminder(event.id, {
+          eventId: event.id,
           type: 'notification',
           scheduledFor: reminderTime,
           status: 'pending',
@@ -651,7 +648,7 @@ class FamilyHubNotificationService implements NotificationService {
    * Send weekly summary email
    */
   async sendWeeklySummary(events: CalendarEvent[], people: any[], weekStart: Date): Promise<void> {
-    if (!this.settings.channels.email || this.settings.emailFrequency !== 'weekly_summary') return;
+    if (!this.settings.channels.email || this.settings.emailFrequency !== 'weekly_digest') return;
 
     try {
       await fetch('/api/emails/send', {
@@ -720,46 +717,6 @@ class FamilyHubNotificationService implements NotificationService {
     this.emailRecipients = recipients;
   }
 
-  /**
-   * Enhanced schedule event reminders with email support
-   */
-  async scheduleEventReminders(event: CalendarEvent): Promise<void> {
-    const eventDateTime = new Date(`${event.date}T${event.time}`);
-    const eventType = event.type as keyof NotificationSettings['defaultReminders'];
-    const reminderTimes = this.settings.defaultReminders[eventType] || this.settings.defaultReminders.other;
-
-    // Cancel existing reminders for this event
-    await this.cancelEventReminders(event.id);
-
-    // Schedule new reminders
-    for (const minutesBefore of reminderTimes) {
-      const reminderTime = new Date(eventDateTime.getTime() - (minutesBefore * 60 * 1000));
-
-      // Only schedule future reminders
-      if (reminderTime > new Date()) {
-        const reminder = await this.scheduleReminder(event.id, {
-          type: 'notification',
-          scheduledFor: reminderTime,
-          status: 'pending',
-          retryCount: 0,
-          metadata: {
-            title: `Upcoming: ${event.title}`,
-            body: `${event.title} starts in ${this.formatDuration(minutesBefore)}`,
-            icon: '/icons/calendar-icon.png',
-            tag: `event-${event.id}`,
-            data: { eventId: event.id, type: 'reminder' }
-          }
-        });
-
-        // Schedule email reminder if enabled
-        if (this.settings.channels.email) {
-          setTimeout(async () => {
-            await this.sendEmailReminder(event, minutesBefore);
-          }, reminderTime.getTime() - Date.now());
-        }
-      }
-    }
-  }
 }
 
 // Export singleton instance

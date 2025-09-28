@@ -276,7 +276,7 @@ const WorkStatusManager: React.FC<WorkStatusManagerProps> = ({
                         key={transport}
                         type="button"
                         onClick={() => updateTravelDetails({
-                          transportation: transport as WorkStatus['travelDetails']['transportation']
+                          transportation: transport as "car" | "train" | "flight" | "other"
                         })}
                         className={`p-2 rounded-lg border transition-colors ${
                           workStatus.travelDetails?.transportation === transport

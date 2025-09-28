@@ -106,8 +106,8 @@ const ExpenseTrendsChart: React.FC<ExpenseTrendsChartProps> = ({ data }) => {
       <div className="mt-4 grid grid-cols-4 gap-4">
         {['Housing', 'Children', 'Transport', 'Food'].map((category, index) => {
           const colors = ['#374151', '#6B7280', '#9CA3AF', '#D1D5DB'];
-          const currentValue = trendData[trendData.length - 1][category as keyof typeof trendData[0]];
-          const previousValue = trendData[trendData.length - 2][category as keyof typeof trendData[0]];
+          const currentValue = Number(trendData[trendData.length - 1][category as keyof typeof trendData[0]]);
+          const previousValue = Number(trendData[trendData.length - 2][category as keyof typeof trendData[0]]);
           const change = currentValue - previousValue;
 
           return (

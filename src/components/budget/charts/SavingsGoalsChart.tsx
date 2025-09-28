@@ -80,9 +80,7 @@ const SavingsGoalsChart: React.FC<SavingsGoalsChartProps> = ({ data }) => {
               data={mockGoalsData}
             >
               <RadialBar
-                minAngle={15}
                 background
-                clockWise
                 dataKey="progress"
               />
               <Tooltip content={<CustomTooltip />} />

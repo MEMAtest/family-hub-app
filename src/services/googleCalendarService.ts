@@ -479,7 +479,7 @@ class GoogleCalendarService {
               event.googleEventId = googleEventId;
               result.exported++;
             } catch (error) {
-              result.errors.push(`Failed to export event "${event.title}": ${error.message}`);
+              result.errors.push(`Failed to export event "${event.title}": ${error instanceof Error ? error.message : String(error)}`);
             }
           }
         }
@@ -492,7 +492,7 @@ class GoogleCalendarService {
       return result;
 
     } catch (error) {
-      result.errors.push(error.message || 'Unknown sync error');
+      result.errors.push(error instanceof Error ? error.message : 'Unknown sync error');
       return result;
     }
   }
@@ -534,13 +534,13 @@ class GoogleCalendarService {
       if (hasTimeConflict) {
         result.conflicts.push({
           familyHubEvent: fEvent,
-          googleEvent: gEvent,
+          googleEvent: gEvent as any, // TODO: Fix type mismatch - should store original Google event
           conflictType: 'time_mismatch'
         });
 
         // Auto-resolve: Google Calendar takes precedence for time conflicts
         try {
-          if (fEvent.updatedAt && gEvent.updatedAt && gEvent.updatedAt > fEvent.updatedAt) {
+          if (fEvent.updatedAt && gEvent.updatedAt && new Date(gEvent.updatedAt) > new Date(fEvent.updatedAt)) {
             // Google event is newer, update Family Hub event
             await this.updateFamilyHubFromGoogle(fEvent, gEvent);
             result.updated++;
@@ -550,20 +550,20 @@ class GoogleCalendarService {
             result.updated++;
           }
         } catch (error) {
-          result.errors.push(`Failed to resolve time conflict for "${fEvent.title}": ${error.message}`);
+          result.errors.push(`Failed to resolve time conflict for "${fEvent.title}": ${error instanceof Error ? error.message : String(error)}`);
         }
       }
 
       if (hasContentConflict && !hasTimeConflict) {
         result.conflicts.push({
           familyHubEvent: fEvent,
-          googleEvent: gEvent,
+          googleEvent: gEvent as any, // TODO: Fix type mismatch - should store original Google event
           conflictType: 'content_mismatch'
         });
 
         // Auto-resolve: Most recently updated takes precedence
         try {
-          if (fEvent.updatedAt && gEvent.updatedAt && gEvent.updatedAt > fEvent.updatedAt) {
+          if (fEvent.updatedAt && gEvent.updatedAt && new Date(gEvent.updatedAt) > new Date(fEvent.updatedAt)) {
             await this.updateFamilyHubFromGoogle(fEvent, gEvent);
             result.updated++;
           } else {
@@ -571,7 +571,7 @@ class GoogleCalendarService {
             result.updated++;
           }
         } catch (error) {
-          result.errors.push(`Failed to resolve content conflict for "${fEvent.title}": ${error.message}`);
+          result.errors.push(`Failed to resolve content conflict for "${fEvent.title}": ${error instanceof Error ? error.message : String(error)}`);
         }
       }
     }
@@ -599,6 +599,10 @@ class GoogleCalendarService {
   ): CalendarEvent {
     const startDate = googleEvent.start.dateTime || googleEvent.start.date;
     const endDate = googleEvent.end.dateTime || googleEvent.end.date;
+
+    if (!startDate || !endDate) {
+      throw new Error('Invalid date range in Google Calendar event');
+    }
 
     const start = new Date(startDate);
     const end = new Date(endDate);

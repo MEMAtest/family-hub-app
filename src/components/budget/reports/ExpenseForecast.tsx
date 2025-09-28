@@ -32,8 +32,8 @@ const ExpenseForecastComponent: React.FC<ExpenseForecastProps> = ({ filter }) =>
 
   const combinedData = [...historicalData, ...forecastData].map(item => ({
     ...item,
-    total: item.actual || item.predicted,
-    type: item.actual ? 'actual' : 'predicted'
+    total: ('actual' in item ? item.actual : item.predicted) as number,
+    type: 'actual' in item ? 'actual' : 'predicted'
   }));
 
   const categoryForecasts = [

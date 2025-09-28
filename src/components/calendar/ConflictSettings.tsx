@@ -4,7 +4,6 @@ import React, { useState, useEffect } from 'react';
 import {
   Settings,
   Shield,
-  Toggle,
   Clock,
   MapPin,
   Users,

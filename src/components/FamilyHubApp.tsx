@@ -1049,7 +1049,7 @@ const FamilyHubContent = () => {
   };
 
   // Budget management
-  const handleBudgetSubmit = (e) => {
+  const handleBudgetSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const newItem = {
       id: generateId('budget'),

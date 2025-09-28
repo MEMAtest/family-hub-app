@@ -78,7 +78,7 @@ const ConflictDetectionModal: React.FC<ConflictDetectionModalProps> = ({
       'travel_time': 'Travel Time Issue',
       'family_conflict': 'Family Event Conflict'
     };
-    return labels[type] || type;
+    return labels[type as keyof typeof labels] || type;
   };
 
   const getPersonName = (personId: string) => {
@@ -355,7 +355,7 @@ const ConflictDetectionModal: React.FC<ConflictDetectionModalProps> = ({
                             <div className="flex items-center space-x-3">
                               <div className="flex items-center space-x-2">
                                 {resolution.automated && (
-                                  <Zap className="w-4 h-4 text-yellow-500" title="Automated resolution" />
+                                  <Zap className="w-4 h-4 text-yellow-500" />
                                 )}
                                 <span className="font-medium text-gray-900">
                                   {resolution.type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}

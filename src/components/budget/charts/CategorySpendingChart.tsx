@@ -82,7 +82,7 @@ const CategorySpendingChart: React.FC<CategorySpendingChartProps> = ({ data }) =
           <ResponsiveContainer width="100%" height={300}>
             <PieChart>
               <Pie
-                data={data.categorySpending}
+                data={data.categorySpending as any}
                 cx="50%"
                 cy="50%"
                 labelLine={false}

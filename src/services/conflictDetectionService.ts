@@ -291,7 +291,7 @@ class ConflictDetectionService {
           id: `family-conflict-${newEvent.id}`,
           newEvent,
           conflictingEvents: individualEvents,
-          conflictType: 'family_conflict',
+          conflictType: 'double_booking',
           severity: 'major',
           detectedAt: new Date(),
           resolved: false,

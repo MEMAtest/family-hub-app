@@ -171,7 +171,7 @@ const YearView: React.FC<YearViewProps> = ({
 
     // Get major events (high cost or priority)
     const majorEvents = events.filter(event =>
-      event.cost > 100 || event.priority === 'high' || event.priority === 'urgent'
+      event.cost > 100 || event.priority === 'high'
     ).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
     return {
@@ -398,9 +398,6 @@ const YearView: React.FC<YearViewProps> = ({
                       </div>
                       <div className="text-right">
                         <div className="flex items-center space-x-2">
-                          {event.priority === 'urgent' && (
-                            <AlertTriangle className="w-4 h-4 text-red-500" />
-                          )}
                           {event.priority === 'high' && (
                             <Star className="w-4 h-4 text-yellow-500" />
                           )}
