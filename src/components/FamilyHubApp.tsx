@@ -1135,7 +1135,7 @@ const FamilyHubContent = () => {
     ));
   };
 
-  const toggleShoppingItem = (listId, itemId) => {
+  const toggleShoppingItem = (listId: string, itemId: string) => {
     setShoppingLists(lists => lists.map(list =>
       list.id === listId
         ? {
@@ -1164,7 +1164,7 @@ const FamilyHubContent = () => {
     });
   };
 
-  const getDayEvents = (date) => {
+  const getDayEvents = (date: Date) => {
     const dayString = date.toISOString().split('T')[0];
     return events.filter(e => e.date === dayString);
   };
