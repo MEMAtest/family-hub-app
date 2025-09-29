@@ -202,10 +202,10 @@ export interface MealSearchCriteria {
   dietary?: string[];
   maxCalories?: number;
   minProtein?: number;
-  tags?: string[];
-  rating?: number;
-  servings?: number;
 }
+
+// Alias for compatibility
+export type RecipeSearchCriteria = MealSearchCriteria;
 
 export interface CookingSession {
   id: string;

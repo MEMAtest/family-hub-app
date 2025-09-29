@@ -49,8 +49,8 @@ export const FamilyPhotoManager: React.FC<FamilyPhotoManagerProps> = ({
   onDeletePhoto,
   onUpdatePhoto
 }) => {
-  const [photos, setPhotos] = useState<FamilyPhoto[]>(initialPhotos.length > 0 ? initialPhotos : mockPhotos);
-  const [albums, setAlbums] = useState<FamilyAlbum[]>(initialAlbums.length > 0 ? initialAlbums : mockAlbums);
+  const [photos, setPhotos] = useState<FamilyPhoto[]>([]);
+  const [albums, setAlbums] = useState<FamilyAlbum[]>([]);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [selectedAlbum, setSelectedAlbum] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
@@ -109,11 +109,11 @@ export const FamilyPhotoManager: React.FC<FamilyPhotoManagerProps> = ({
       url: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800',
       thumbnailUrl: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=200',
       caption: 'Amazing family trip to Disney World!',
-      dateTaken: '2023-07-15',
+      dateTaken: new Date('2023-07-15'),
       uploadedBy: 'ade',
       albumId: '1',
       tags: ['disney', 'vacation', 'family', 'fun'],
-      location: 'Orlando, Florida',
+      location: { lat: 28.5383, lng: -81.3792, name: 'Orlando, Florida' },
       people: ['ade', 'angela', 'askia', 'amari'],
       isPrivate: false,
       views: 45,
@@ -125,11 +125,11 @@ export const FamilyPhotoManager: React.FC<FamilyPhotoManagerProps> = ({
       url: 'https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=800',
       thumbnailUrl: 'https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=200',
       caption: 'Askia\'s first day of middle school',
-      dateTaken: '2023-08-20',
+      dateTaken: new Date('2023-08-20'),
       uploadedBy: 'angela',
       albumId: '2',
       tags: ['school', 'milestone', 'askia', 'education'],
-      location: 'Atlanta, Georgia',
+      location: { lat: 33.7490, lng: -84.3880, name: 'Atlanta, Georgia' },
       people: ['askia'],
       isPrivate: false,
       views: 23,
@@ -141,11 +141,11 @@ export const FamilyPhotoManager: React.FC<FamilyPhotoManagerProps> = ({
       url: 'https://images.unsplash.com/photo-1515488042361-ee00e0ddd4e4?w=800',
       thumbnailUrl: 'https://images.unsplash.com/photo-1515488042361-ee00e0ddd4e4?w=200',
       caption: 'Amari\'s piano recital performance',
-      dateTaken: '2023-12-10',
+      dateTaken: new Date('2023-12-10'),
       uploadedBy: 'angela',
       albumId: '3',
       tags: ['piano', 'recital', 'amari', 'music', 'achievement'],
-      location: 'Community Center, Atlanta',
+      location: { lat: 33.7537, lng: -84.3863, name: 'Community Center, Atlanta' },
       people: ['amari'],
       isPrivate: false,
       views: 67,
@@ -157,11 +157,11 @@ export const FamilyPhotoManager: React.FC<FamilyPhotoManagerProps> = ({
       url: 'https://images.unsplash.com/photo-1511895426328-dc8714191300?w=800',
       thumbnailUrl: 'https://images.unsplash.com/photo-1511895426328-dc8714191300?w=200',
       caption: 'Sunday morning pancake breakfast',
-      dateTaken: '2024-01-14',
+      dateTaken: new Date('2024-01-14'),
       uploadedBy: 'ade',
       albumId: '4',
       tags: ['breakfast', 'pancakes', 'sunday', 'family time'],
-      location: 'Home',
+      location: { lat: 33.7488, lng: -84.3877, name: 'Home' },
       people: ['ade', 'angela', 'askia', 'amari'],
       isPrivate: false,
       views: 31,
@@ -173,11 +173,11 @@ export const FamilyPhotoManager: React.FC<FamilyPhotoManagerProps> = ({
       url: 'https://images.unsplash.com/photo-1551698618-1dfe5d97d256?w=800',
       thumbnailUrl: 'https://images.unsplash.com/photo-1551698618-1dfe5d97d256?w=200',
       caption: 'Askia wins soccer championship!',
-      dateTaken: '2023-10-30',
+      dateTaken: new Date('2023-10-30'),
       uploadedBy: 'ade',
       albumId: '3',
       tags: ['soccer', 'championship', 'askia', 'sports', 'victory'],
-      location: 'Atlanta Sports Complex',
+      location: { lat: 33.7553, lng: -84.4006, name: 'Atlanta Sports Complex' },
       people: ['askia'],
       isPrivate: false,
       views: 89,
@@ -189,11 +189,11 @@ export const FamilyPhotoManager: React.FC<FamilyPhotoManagerProps> = ({
       url: 'https://images.unsplash.com/photo-1464207687429-7505649dae38?w=800',
       thumbnailUrl: 'https://images.unsplash.com/photo-1464207687429-7505649dae38?w=200',
       caption: 'Angela\'s 35th birthday celebration',
-      dateTaken: '2023-09-18',
+      dateTaken: new Date('2023-09-18'),
       uploadedBy: 'ade',
       albumId: '3',
       tags: ['birthday', 'celebration', 'angela', 'party'],
-      location: 'Home',
+      location: { lat: 33.7488, lng: -84.3877, name: 'Home' },
       people: ['ade', 'angela', 'askia', 'amari'],
       isPrivate: false,
       views: 52,
@@ -202,9 +202,24 @@ export const FamilyPhotoManager: React.FC<FamilyPhotoManagerProps> = ({
     }
   ];
 
+  // Initialize photos and albums with mock data if no initial data provided
+  React.useEffect(() => {
+    if (initialPhotos.length === 0 && photos.length === 0) {
+      setPhotos(mockPhotos);
+    } else if (initialPhotos.length > 0 && photos.length === 0) {
+      setPhotos(initialPhotos);
+    }
+
+    if (initialAlbums.length === 0 && albums.length === 0) {
+      setAlbums(mockAlbums);
+    } else if (initialAlbums.length > 0 && albums.length === 0) {
+      setAlbums(initialAlbums);
+    }
+  }, []);
+
   const filteredPhotos = photos.filter(photo => {
     if (selectedAlbum !== 'all' && photo.albumId !== selectedAlbum) return false;
-    if (searchTerm && !photo.caption.toLowerCase().includes(searchTerm.toLowerCase()) &&
+    if (searchTerm && !(photo.caption || '').toLowerCase().includes(searchTerm.toLowerCase()) &&
         !photo.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()))) return false;
     return true;
   });
@@ -214,9 +229,9 @@ export const FamilyPhotoManager: React.FC<FamilyPhotoManagerProps> = ({
       case 'date':
         return new Date(b.dateTaken).getTime() - new Date(a.dateTaken).getTime();
       case 'name':
-        return a.caption.localeCompare(b.caption);
+        return (a.caption || '').localeCompare(b.caption || '');
       case 'views':
-        return b.views - a.views;
+        return (b.views || 0) - (a.views || 0);
       default:
         return 0;
     }

@@ -46,7 +46,7 @@ export const FamilyTimeline: React.FC<FamilyTimelineProps> = ({
       id: '1',
       title: 'Omosanya Family Established',
       description: 'Ade and Angela got married and started their beautiful family journey together.',
-      date: '2010-06-15',
+      date: new Date('2010-06-15'),
       type: 'wedding',
       involvedMembers: ['ade', 'angela'],
       photos: ['https://images.unsplash.com/photo-1511285560929-80b456fea0bc?w=800'],
@@ -58,7 +58,7 @@ export const FamilyTimeline: React.FC<FamilyTimelineProps> = ({
       id: '2',
       title: 'Moved to New Home',
       description: 'The family moved to their dream home in a wonderful neighborhood.',
-      date: '2012-03-20',
+      date: new Date('2012-03-20'),
       type: 'achievement',
       involvedMembers: ['ade', 'angela'],
       photos: ['https://images.unsplash.com/photo-1570129477492-45c003edd2be?w=800'],
@@ -70,7 +70,7 @@ export const FamilyTimeline: React.FC<FamilyTimelineProps> = ({
       id: '3',
       title: 'Askia Born',
       description: 'Welcome to the world, Askia! Our first bundle of joy brought so much happiness to our family.',
-      date: '2013-08-10',
+      date: new Date('2013-08-10'),
       type: 'birth',
       involvedMembers: ['ade', 'angela', 'askia'],
       photos: ['https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=800'],
@@ -82,7 +82,7 @@ export const FamilyTimeline: React.FC<FamilyTimelineProps> = ({
       id: '4',
       title: 'Amari Born',
       description: 'Our family is complete! Amari joined us and filled our hearts with even more love.',
-      date: '2016-04-22',
+      date: new Date('2016-04-22'),
       type: 'birth',
       involvedMembers: ['ade', 'angela', 'askia', 'amari'],
       photos: ['https://images.unsplash.com/photo-1515488042361-ee00e0ddd4e4?w=800'],
@@ -94,7 +94,7 @@ export const FamilyTimeline: React.FC<FamilyTimelineProps> = ({
       id: '5',
       title: 'Ade\'s Promotion',
       description: 'Ade got promoted to Senior Manager at his company. A well-deserved recognition!',
-      date: '2018-11-15',
+      date: new Date('2018-11-15'),
       type: 'career',
       involvedMembers: ['ade'],
       photos: [],
@@ -121,7 +121,7 @@ export const FamilyTimeline: React.FC<FamilyTimelineProps> = ({
       id: '7',
       title: 'Askia\'s First Soccer Trophy',
       description: 'Askia won their first soccer trophy! We\'re so proud of their dedication and teamwork.',
-      date: '2020-10-30',
+      date: new Date('2020-10-30'),
       type: 'achievement',
       involvedMembers: ['askia'],
       photos: ['https://images.unsplash.com/photo-1551698618-1dfe5d97d256?w=800'],
@@ -133,7 +133,7 @@ export const FamilyTimeline: React.FC<FamilyTimelineProps> = ({
       id: '8',
       title: 'Angela\'s Master\'s Degree',
       description: 'Angela graduated with her Master\'s degree in Education. Years of hard work paid off!',
-      date: '2021-05-18',
+      date: new Date('2021-05-18'),
       type: 'graduation',
       involvedMembers: ['angela'],
       photos: ['https://images.unsplash.com/photo-1523050854058-8df90110c9d1?w=800'],
@@ -145,7 +145,7 @@ export const FamilyTimeline: React.FC<FamilyTimelineProps> = ({
       id: '9',
       title: 'Family Pet Adoption',
       description: 'We adopted our beloved dog Max! He\'s been the perfect addition to our family.',
-      date: '2022-02-14',
+      date: new Date('2022-02-14'),
       type: 'other',
       involvedMembers: ['ade', 'angela', 'askia', 'amari'],
       photos: ['https://images.unsplash.com/photo-1552053831-71594a27632d?w=800'],
@@ -157,7 +157,7 @@ export const FamilyTimeline: React.FC<FamilyTimelineProps> = ({
       id: '10',
       title: 'Amari\'s Piano Recital',
       description: 'Amari performed beautifully at their first piano recital. Such talent and confidence!',
-      date: '2023-12-10',
+      date: new Date('2023-12-10'),
       type: 'achievement',
       involvedMembers: ['amari'],
       photos: ['https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=800'],
@@ -177,15 +177,13 @@ export const FamilyTimeline: React.FC<FamilyTimelineProps> = ({
   const [expandedMilestone, setExpandedMilestone] = useState<string | null>(null);
 
   const milestoneTypeConfig = {
-    birth: { icon: Baby, color: 'pink', label: 'Birth' },
-    graduation: { icon: GraduationCap, color: 'blue', label: 'Graduation' },
-    wedding: { icon: Heart, color: 'red', label: 'Wedding' },
+    birthday: { icon: Baby, color: 'pink', label: 'Birthday' },
     anniversary: { icon: Heart, color: 'purple', label: 'Anniversary' },
     achievement: { icon: Trophy, color: 'yellow', label: 'Achievement' },
-    career: { icon: Briefcase, color: 'green', label: 'Career' },
-    vacation: { icon: MapPin, color: 'teal', label: 'Vacation' },
+    life_event: { icon: Briefcase, color: 'green', label: 'Life Event' },
+    family_event: { icon: MapPin, color: 'teal', label: 'Family Event' },
     other: { icon: Star, color: 'gray', label: 'Other' }
-  };
+  } as Record<MilestoneType, { icon: any; color: string; label: string }>;
 
   const filteredMilestones = milestones
     .filter(milestone => {
@@ -352,7 +350,7 @@ export const FamilyTimeline: React.FC<FamilyTimelineProps> = ({
                                   <Users className="w-4 h-4" />
                                   <span>
                                     {milestone.involvedMembers
-                                      .map(id => getMemberById(id)?.firstName || 'Unknown')
+                                      .map((id: string) => getMemberById(id)?.firstName || 'Unknown')
                                       .join(', ')}
                                   </span>
                                 </div>

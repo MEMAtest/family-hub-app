@@ -592,7 +592,7 @@ export const FamilySettings: React.FC<FamilySettingsProps> = ({
             <div>
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Important Locations</h3>
               <div className="space-y-3">
-                {formData.importantLocations?.map((location, index) => (
+                {formData.importantLocations?.map((location: any, index: number) => (
                   <div key={index} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
                     <div className="flex-1">
                       <p className="font-medium text-gray-900">{location.name}</p>
@@ -695,7 +695,7 @@ export const FamilySettings: React.FC<FamilySettingsProps> = ({
             <div>
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Family Traditions</h3>
               <div className="space-y-3">
-                {formData.familyTraditions?.map((tradition, index) => (
+                {formData.familyTraditions?.map((tradition: any, index: number) => (
                   <div key={index} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
                     <Heart className="w-5 h-5 text-red-500" />
                     <div className="flex-1">

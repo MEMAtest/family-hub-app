@@ -1100,7 +1100,7 @@ const FamilyHubContent = () => {
   };
 
   // Quick activity logging
-  const handleQuickActivitySubmit = (e) => {
+  const handleQuickActivitySubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const newActivity = {
       id: generateId('activity'),
@@ -1124,7 +1124,7 @@ const FamilyHubContent = () => {
   };
 
   // Shopping management
-  const handleAddShoppingItem = (listId, itemData) => {
+  const handleAddShoppingItem = (listId: string, itemData: any) => {
     setShoppingLists(lists => lists.map(list =>
       list.id === listId
         ? {
@@ -1234,7 +1234,7 @@ const FamilyHubContent = () => {
 
     return [
       {
-        label: viewNames[currentView] || currentView.charAt(0).toUpperCase() + currentView.slice(1),
+        label: viewNames[currentView as keyof typeof viewNames] || currentView.charAt(0).toUpperCase() + currentView.slice(1),
         isActive: true
       }
     ];
@@ -1469,7 +1469,7 @@ const FamilyHubContent = () => {
         </div>
 
         {/* School Holidays Spotlight */}
-        <DashboardWidget title="School Holidays & Term Dates" className="mb-6">
+        <DashboardWidget title="School Holidays & Term Dates" className="mb-6" action={null}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Current/Next Holiday */}
             <div className="bg-purple-50 border border-purple-200 p-4 rounded-lg">
@@ -1576,7 +1576,7 @@ const FamilyHubContent = () => {
         </DashboardWidget>
 
         {/* Weekly/Monthly Insights Widget */}
-        <DashboardWidget title="Weekly & Monthly Insights" className="mb-6">
+        <DashboardWidget title="Weekly & Monthly Insights" className="mb-6" action={null}>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* This Week Summary */}
             <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg">

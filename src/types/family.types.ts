@@ -15,9 +15,12 @@ export interface FamilyMember {
   status: 'active' | 'inactive' | 'away' | 'archived';
   avatar: string;
   profilePhoto?: string;
+  profilePicture?: string;
   color: string;
   email?: string;
   phone?: string;
+  phoneNumber?: string;
+  joinDate?: Date;
   address?: Address;
   emergencyContacts: EmergencyContact[];
   medicalInfo: MedicalInfo;
@@ -89,6 +92,7 @@ export interface EmergencyContact {
   email?: string;
   address?: Address;
   isPrimary: boolean;
+  availability?: string;
   notes?: string;
 }
 
@@ -99,6 +103,7 @@ export interface MedicalInfo {
   bloodType?: string;
   insuranceInfo?: InsuranceInfo;
   primaryDoctor?: HealthcareProvider;
+  doctorContact?: HealthcareProvider;
   emergencyMedicalInfo?: string;
   medicalNotes?: string;
   lastUpdated: Date;
@@ -165,6 +170,7 @@ export interface MemberPreferences {
   timezone: string;
   calendar: CalendarPreferences;
   dashboard: DashboardPreferences;
+  communication?: PersonalPreferences['communication'];
 }
 
 export interface NotificationPreferences {
@@ -173,7 +179,7 @@ export interface NotificationPreferences {
   sms: boolean;
   inApp: boolean;
   frequency: 'real_time' | 'hourly' | 'daily' | 'weekly';
-  quietHours: { start: string; end: string };
+  quietHours: { start: string; end: string; enabled?: boolean };
   categories: { [category: string]: boolean };
 }
 
@@ -205,7 +211,7 @@ export interface ThemePreferences {
 export interface CalendarPreferences {
   defaultView: 'month' | 'week' | 'day' | 'agenda';
   weekStart: 'monday' | 'sunday';
-  workingHours: { start: string; end: string };
+  workingHours: { start: string; end: string; enabled?: boolean };
   showWeekends: boolean;
   reminderDefaults: { time: number; type: string }[];
 }
@@ -324,6 +330,18 @@ export interface FamilySettings {
   features: FeatureSettings;
   integrations: IntegrationSettings;
   backup: BackupSettings;
+  homeAddress?: Address;
+  defaultLanguage?: string;
+  currency?: string;
+  preferences?: any;
+  timezone?: string;
+  region?: string;
+  locationSettings?: any;
+  importantLocations?: any[];
+  familyMotto?: string;
+  familyPhoto?: string;
+  familyDescription?: string;
+  familyTraditions?: any[];
 }
 
 export interface GeneralSettings {
@@ -348,6 +366,9 @@ export interface FamilyPrivacySettings {
   shareCalendar: boolean;
   sharePhotos: boolean;
   anonymizeData: boolean;
+  dataSharing?: boolean;
+  dataRetentionPeriod?: number;
+  photoRetention?: number;
 }
 
 export interface FamilySecuritySettings {
@@ -375,7 +396,7 @@ export interface FamilyNotificationSettings {
   smsNotifications: boolean;
   digestFrequency: 'daily' | 'weekly' | 'monthly' | 'never';
   categories: { [category: string]: boolean };
-  quietHours: { start: string; end: string };
+  quietHours: { start: string; end: string; enabled?: boolean };
 }
 
 export interface FeatureSettings {
@@ -654,6 +675,7 @@ export interface FamilyPhoto {
   id: string;
   name?: string;
   description?: string;
+  caption?: string;
   file?: File;
   url?: string;
   thumbnailUrl?: string;
@@ -666,8 +688,13 @@ export interface FamilyPhoto {
   tags: string[];
   peopleTagged: PhotoTag[];
   albums: string[];
+  albumId?: string;
   isPrivate: boolean;
   isFavorite: boolean;
+  views?: number;
+  likes?: number;
+  fileSize?: number;
+  people?: string[];
   rating?: number;
   metadata?: PhotoMetadata;
 }
@@ -979,6 +1006,52 @@ export interface FamilyNotification {
   expiresAt?: Date;
   createdAt: Date;
 }
+
+// Missing Type Exports - Priority 1 Fix
+export interface ContactInfo {
+  email?: string;
+  phone?: string;
+  address?: string;
+  emergencyContact?: string;
+}
+
+export interface PersonalPreferences {
+  notifications?: {
+    email?: boolean;
+    push?: boolean;
+    sms?: boolean;
+  };
+  privacy?: {
+    profileVisibility?: string;
+    shareActivity?: boolean;
+  };
+  communication?: {
+    preferredMethod?: string;
+    language?: string;
+    preferredLanguage?: string;
+    timezone?: string;
+  };
+}
+
+export interface FamilyAlbum {
+  id: string;
+  name: string;
+  description?: string;
+  photos: string[];
+  photoCount?: number;
+  coverPhoto?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface FamilyPermission {
+  id: string;
+  name: string;
+  description: string;
+  level: 'view' | 'edit' | 'admin';
+}
+
+export type MilestoneType = 'birthday' | 'anniversary' | 'achievement' | 'life_event' | 'family_event' | 'other';
 
 export interface NotificationAction {
   id: string;

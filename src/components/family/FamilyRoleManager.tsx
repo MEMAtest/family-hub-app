@@ -16,7 +16,7 @@ export const FamilyRoleManager: React.FC<FamilyRoleManagerProps> = ({
   onUpdateRolePermissions
 }) => {
   const [activeTab, setActiveTab] = useState<'members' | 'permissions'>('members');
-  const [selectedRole, setSelectedRole] = useState<FamilyRole>('parent');
+  const [selectedRole, setSelectedRole] = useState<string>('parent');
 
   const roleConfig = {
     parent: {
@@ -39,7 +39,7 @@ export const FamilyRoleManager: React.FC<FamilyRoleManagerProps> = ({
         'manage_family_settings',
         'view_analytics',
         'manage_emergency_contacts'
-      ] as FamilyPermission[]
+      ] as unknown as FamilyPermission[]
     },
     guardian: {
       label: 'Guardian',
@@ -59,7 +59,7 @@ export const FamilyRoleManager: React.FC<FamilyRoleManagerProps> = ({
         'manage_meal_plans',
         'view_analytics',
         'manage_emergency_contacts'
-      ] as FamilyPermission[]
+      ] as unknown as FamilyPermission[]
     },
     grandparent: {
       label: 'Grandparent',
@@ -72,7 +72,7 @@ export const FamilyRoleManager: React.FC<FamilyRoleManagerProps> = ({
         'view_shopping_lists',
         'view_meal_plans',
         'manage_emergency_contacts'
-      ] as FamilyPermission[]
+      ] as unknown as FamilyPermission[]
     },
     child: {
       label: 'Child',
@@ -84,7 +84,7 @@ export const FamilyRoleManager: React.FC<FamilyRoleManagerProps> = ({
         'view_goals',
         'view_shopping_lists',
         'view_meal_plans'
-      ] as FamilyPermission[]
+      ] as unknown as FamilyPermission[]
     },
     sibling: {
       label: 'Sibling',
@@ -98,7 +98,7 @@ export const FamilyRoleManager: React.FC<FamilyRoleManagerProps> = ({
         'view_shopping_lists',
         'manage_shopping_lists',
         'view_meal_plans'
-      ] as FamilyPermission[]
+      ] as unknown as FamilyPermission[]
     },
     other: {
       label: 'Other',
@@ -107,7 +107,7 @@ export const FamilyRoleManager: React.FC<FamilyRoleManagerProps> = ({
       defaultPermissions: [
         'view_family_overview',
         'view_schedules'
-      ] as FamilyPermission[]
+      ] as unknown as FamilyPermission[]
     }
   };
 
@@ -202,7 +202,7 @@ export const FamilyRoleManager: React.FC<FamilyRoleManagerProps> = ({
     const hasPermission = currentPermissions.includes(permission);
 
     const updatedPermissions = hasPermission
-      ? currentPermissions.filter(p => p !== permission)
+      ? currentPermissions.filter((p: FamilyPermission) => p !== permission)
       : [...currentPermissions, permission];
 
     setRolePermissions(prev => ({

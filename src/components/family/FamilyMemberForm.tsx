@@ -23,47 +23,108 @@ export const FamilyMemberForm: React.FC<FamilyMemberFormProps> = ({
     lastName: member?.lastName || '',
     email: member?.email || '',
     phoneNumber: member?.phoneNumber || '',
-    dateOfBirth: member?.dateOfBirth || '',
+    dateOfBirth: member?.dateOfBirth || new Date(),
     profilePicture: member?.profilePicture || '',
-    role: member?.role || 'child',
+    role: member?.role || {
+      id: 'child',
+      name: 'Child',
+      description: 'Child member',
+      permissions: [],
+      level: 'child' as const,
+      canManageFamily: false,
+      canManageCalendar: false,
+      canManageBudget: false,
+      canManageGoals: false,
+      canManageShopping: false,
+      canManageMeals: false,
+      canViewReports: false,
+      canManageSettings: false,
+      restrictions: []
+    },
     isActive: member?.isActive ?? true,
-    joinDate: member?.joinDate || new Date().toISOString().split('T')[0],
+    joinDate: member?.joinDate || new Date(),
     emergencyContacts: member?.emergencyContacts || [],
     medicalInfo: member?.medicalInfo || {
       allergies: [],
       medications: [],
-      medicalConditions: [],
+      conditions: [],
       bloodType: '',
-      doctorContact: {
+      primaryDoctor: {
+        id: '',
         name: '',
+        specialty: '',
         phone: '',
         email: '',
-        address: ''
-      },
+        address: {
+          street: '',
+          city: '',
+          state: '',
+          zipCode: '',
+          country: '',
+          type: 'work' as const,
+          isPrimary: true
+        },
+        hospital: '',
+        isPrimary: true,
+        notes: ''
+      } as HealthcareProvider,
       insuranceInfo: {
         provider: '',
         policyNumber: '',
         groupNumber: ''
-      }
+      },
+      lastUpdated: new Date()
     },
-    preferences: member?.preferences || {
+    preferences: member?.preferences || ({
       notifications: {
         email: true,
         sms: false,
         push: true,
-        reminders: true
+        inApp: true,
+        frequency: 'real_time',
+        quietHours: { start: '22:00', end: '07:00', enabled: false },
+        categories: {}
       },
       privacy: {
         profileVisibility: 'family',
-        locationSharing: false,
-        activitySharing: true
+        shareLocation: false,
+        shareCalendar: true,
+        sharePhotos: true
+      },
+      accessibility: {
+        screenReaderSupport: false,
+        highContrast: false,
+        fontSize: 'medium',
+        reducedMotion: false
+      },
+      theme: {
+        mode: 'light',
+        primaryColor: 'blue',
+        fontSize: 16,
+        compactMode: false
+      },
+      language: 'en',
+      timezone: 'America/New_York',
+      calendar: {
+        defaultView: 'month',
+        weekStart: 'monday',
+        workingHours: { start: '09:00', end: '17:00', enabled: false },
+        showWeekends: true,
+        reminderDefaults: []
+      },
+      dashboard: {
+        layout: 'comfortable',
+        widgets: [],
+        showTips: true,
+        autoRefresh: false
       },
       communication: {
+        preferredMethod: 'email',
+        language: 'en',
         preferredLanguage: 'en',
-        timezone: 'America/New_York',
-        communicationStyle: 'casual'
+        timezone: 'America/New_York'
       }
-    }
+    } as MemberPreferences)
   });
 
   const [activeTab, setActiveTab] = useState('basic');
@@ -151,24 +212,24 @@ export const FamilyMemberForm: React.FC<FamilyMemberFormProps> = ({
     }));
   };
 
-  const addMedicalItem = (type: 'allergies' | 'medications' | 'medicalConditions', value: string) => {
+  const addMedicalItem = (type: 'allergies' | 'medications' | 'conditions', value: string) => {
     if (!value.trim()) return;
 
     setFormData(prev => ({
       ...prev,
       medicalInfo: {
         ...prev.medicalInfo!,
-        [type]: [...(prev.medicalInfo?.[type] || []), value.trim()]
+        [type]: [...(prev.medicalInfo?.[type as keyof typeof prev.medicalInfo] || []), value.trim()]
       }
     }));
   };
 
-  const removeMedicalItem = (type: 'allergies' | 'medications' | 'medicalConditions', index: number) => {
+  const removeMedicalItem = (type: 'allergies' | 'medications' | 'conditions', index: number) => {
     setFormData(prev => ({
       ...prev,
       medicalInfo: {
         ...prev.medicalInfo!,
-        [type]: prev.medicalInfo?.[type]?.filter((_, i) => i !== index) || []
+        [type]: (prev.medicalInfo?.[type as keyof typeof prev.medicalInfo] as any[])?.filter((_, i) => i !== index) || []
       }
     }));
   };
@@ -273,7 +334,7 @@ export const FamilyMemberForm: React.FC<FamilyMemberFormProps> = ({
                 </label>
                 <input
                   type="date"
-                  value={formData.dateOfBirth || ''}
+                  value={formData.dateOfBirth instanceof Date ? formData.dateOfBirth.toISOString().split('T')[0] : formData.dateOfBirth || ''}
                   onChange={(e) => handleInputChange('dateOfBirth', e.target.value)}
                   className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
                     errors.dateOfBirth ? 'border-red-300' : 'border-gray-300'
@@ -290,7 +351,7 @@ export const FamilyMemberForm: React.FC<FamilyMemberFormProps> = ({
                 </label>
                 <select
                   value={formData.role || 'child'}
-                  onChange={(e) => handleInputChange('role', e.target.value as FamilyRole)}
+                  onChange={(e) => handleInputChange('role', e.target.value as unknown as FamilyRole)}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 >
                   <option value="parent">Parent</option>
