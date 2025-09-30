@@ -1,0 +1,200 @@
+src/components/family/FamilyEmergencyContacts.tsx(554,21): error TS2322: Type 'string | Address' is not assignable to type 'string | number | readonly string[] | undefined'.
+  Type 'Address' is not assignable to type 'string | number | readonly string[] | undefined'.
+src/components/family/FamilyMemberForm.tsx(47,5): error TS2322: Type 'MedicalInfo | { allergies: never[]; medications: never[]; conditions: never[]; bloodType: string; primaryDoctor: HealthcareProvider; insuranceInfo: { provider: string; policyNumber: string; groupNumber: string; }; lastUpdated: Date; }' is not assignable to type 'MedicalInfo | undefined'.
+  Type '{ allergies: never[]; medications: never[]; conditions: never[]; bloodType: string; primaryDoctor: HealthcareProvider; insuranceInfo: { provider: string; policyNumber: string; groupNumber: string; }; lastUpdated: Date; }' is not assignable to type 'MedicalInfo'.
+    Types of property 'insuranceInfo' are incompatible.
+      Type '{ provider: string; policyNumber: string; groupNumber: string; }' is missing the following properties from type 'InsuranceInfo': memberId, effectiveDate
+src/components/family/FamilyMemberForm.tsx(70,12): error TS2304: Cannot find name 'HealthcareProvider'.
+src/components/family/FamilyMemberForm.tsx(127,10): error TS2304: Cannot find name 'MemberPreferences'.
+src/components/family/FamilyMemberForm.tsx(222,21): error TS2488: Type 'string | Date | Allergy[] | Medication[] | MedicalCondition[] | InsuranceInfo | HealthcareProvider' must have a '[Symbol.iterator]()' method that returns an iterator.
+src/components/family/FamilyMemberForm.tsx(353,19): error TS2322: Type 'string | FamilyRole' is not assignable to type 'string | number | readonly string[] | undefined'.
+  Type 'FamilyRole' is not assignable to type 'string | number | readonly string[] | undefined'.
+src/components/family/FamilyMemberForm.tsx(567,21): error TS2352: Conversion of type 'string | Date | Allergy[] | Medication[] | MedicalCondition[] | InsuranceInfo | HealthcareProvider | undefined' to type 'string[]' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Type 'HealthcareProvider' is missing the following properties from type 'string[]': length, pop, push, concat, and 28 more.
+src/components/family/FamilyMemberForm.tsx(639,19): error TS2322: Type 'string | Address' is not assignable to type 'string | number | readonly string[] | undefined'.
+  Type 'Address' is not assignable to type 'string | number | readonly string[] | undefined'.
+src/components/family/FamilyMemberForm.tsx(689,23): error TS2322: Type 'boolean | "real_time" | "hourly" | "daily" | "weekly" | { start: string; end: string; enabled?: boolean | undefined; } | { [category: string]: boolean; }' is not assignable to type 'boolean | undefined'.
+  Type '"real_time"' is not assignable to type 'boolean | undefined'.
+src/components/family/FamilyMemberForm.tsx(725,25): error TS2322: Type 'boolean | "family" | "extended_family" | "private" | "parents_only"' is not assignable to type 'boolean | undefined'.
+  Type '"family"' is not assignable to type 'boolean | undefined'.
+src/components/family/FamilyPhotoManager.tsx(69,7): error TS2561: Object literal may only specify known properties, but 'createdDate' does not exist in type 'FamilyAlbum'. Did you mean to write 'createdAt'?
+src/components/family/FamilyPhotoManager.tsx(79,7): error TS2561: Object literal may only specify known properties, but 'createdDate' does not exist in type 'FamilyAlbum'. Did you mean to write 'createdAt'?
+src/components/family/FamilyPhotoManager.tsx(89,7): error TS2561: Object literal may only specify known properties, but 'createdDate' does not exist in type 'FamilyAlbum'. Did you mean to write 'createdAt'?
+src/components/family/FamilyPhotoManager.tsx(99,7): error TS2561: Object literal may only specify known properties, but 'createdDate' does not exist in type 'FamilyAlbum'. Did you mean to write 'createdAt'?
+src/components/family/FamilyPhotoManager.tsx(107,5): error TS2739: Type '{ id: string; url: string; thumbnailUrl: string; caption: string; dateTaken: Date; uploadedBy: string; albumId: string; tags: string[]; location: { lat: number; lng: number; name: string; }; people: string[]; isPrivate: false; views: number; likes: number; fileSize: number; }' is missing the following properties from type 'FamilyPhoto': uploadedAt, peopleTagged, albums, isFavorite
+src/components/family/FamilyPhotoManager.tsx(123,5): error TS2739: Type '{ id: string; url: string; thumbnailUrl: string; caption: string; dateTaken: Date; uploadedBy: string; albumId: string; tags: string[]; location: { lat: number; lng: number; name: string; }; people: string[]; isPrivate: false; views: number; likes: number; fileSize: number; }' is missing the following properties from type 'FamilyPhoto': uploadedAt, peopleTagged, albums, isFavorite
+src/components/family/FamilyPhotoManager.tsx(139,5): error TS2739: Type '{ id: string; url: string; thumbnailUrl: string; caption: string; dateTaken: Date; uploadedBy: string; albumId: string; tags: string[]; location: { lat: number; lng: number; name: string; }; people: string[]; isPrivate: false; views: number; likes: number; fileSize: number; }' is missing the following properties from type 'FamilyPhoto': uploadedAt, peopleTagged, albums, isFavorite
+src/components/family/FamilyPhotoManager.tsx(155,5): error TS2739: Type '{ id: string; url: string; thumbnailUrl: string; caption: string; dateTaken: Date; uploadedBy: string; albumId: string; tags: string[]; location: { lat: number; lng: number; name: string; }; people: string[]; isPrivate: false; views: number; likes: number; fileSize: number; }' is missing the following properties from type 'FamilyPhoto': uploadedAt, peopleTagged, albums, isFavorite
+src/components/family/FamilyPhotoManager.tsx(171,5): error TS2739: Type '{ id: string; url: string; thumbnailUrl: string; caption: string; dateTaken: Date; uploadedBy: string; albumId: string; tags: string[]; location: { lat: number; lng: number; name: string; }; people: string[]; isPrivate: false; views: number; likes: number; fileSize: number; }' is missing the following properties from type 'FamilyPhoto': uploadedAt, peopleTagged, albums, isFavorite
+src/components/family/FamilyPhotoManager.tsx(187,5): error TS2739: Type '{ id: string; url: string; thumbnailUrl: string; caption: string; dateTaken: Date; uploadedBy: string; albumId: string; tags: string[]; location: { lat: number; lng: number; name: string; }; people: string[]; isPrivate: false; views: number; likes: number; fileSize: number; }' is missing the following properties from type 'FamilyPhoto': uploadedAt, peopleTagged, albums, isFavorite
+src/components/family/FamilyPhotoManager.tsx(338,19): error TS2322: Type '{ lat: number; lng: number; name?: string | undefined; }' is not assignable to type 'ReactNode'.
+src/components/family/FamilyPhotoManager.tsx(341,37): error TS2345: Argument of type 'number | undefined' is not assignable to parameter of type 'number'.
+  Type 'undefined' is not assignable to type 'number'.
+src/components/family/FamilyPhotoManager.tsx(563,27): error TS2322: Type '{ lat: number; lng: number; name?: string | undefined; }' is not assignable to type 'ReactNode'.
+src/components/family/FamilyPhotoManager.tsx(569,22): error TS18048: 'selectedPhoto.people' is possibly 'undefined'.
+src/components/family/FamilyRoleManager.tsx(114,35): error TS2322: Type 'FamilyPermission' is not assignable to type 'string | number | symbol'.
+src/components/family/FamilyRoleManager.tsx(192,65): error TS2344: Type 'FamilyRole' does not satisfy the constraint 'string | number | symbol'.
+src/components/family/FamilyRoleManager.tsx(193,27): error TS2344: Type 'FamilyRole' does not satisfy the constraint 'string | number | symbol'.
+src/components/family/FamilyRoleManager.tsx(195,15): error TS2352: Conversion of type 'string' to type 'FamilyRole' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+src/components/family/FamilyRoleManager.tsx(195,15): error TS2538: Type 'FamilyRole' cannot be used as an index type.
+src/components/family/FamilyRoleManager.tsx(201,32): error TS7053: Element implicitly has an 'any' type because expression of type 'string' can't be used to index type 'Record<FamilyRole, FamilyPermission[]>'.
+  No index signature with a parameter of type 'string' was found on type 'Record<FamilyRole, FamilyPermission[]>'.
+src/components/family/FamilyRoleManager.tsx(213,29): error TS2345: Argument of type 'string' is not assignable to parameter of type 'FamilyRole'.
+src/components/family/FamilyRoleManager.tsx(223,23): error TS18046: 'config' is of type 'unknown'.
+src/components/family/FamilyRoleManager.tsx(224,20): error TS18046: 'config' is of type 'unknown'.
+src/components/family/FamilyRoleManager.tsx(226,18): error TS18046: 'config' is of type 'unknown'.
+src/components/family/FamilyRoleManager.tsx(226,40): error TS2352: Conversion of type 'string' to type 'FamilyPermission' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+src/components/family/FamilyRoleManager.tsx(277,48): error TS2352: Conversion of type 'string' to type 'FamilyRole' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+src/components/family/FamilyRoleManager.tsx(322,29): error TS2322: Type 'FamilyRole' is not assignable to type 'string | number | readonly string[] | undefined'.
+src/components/family/FamilyRoleManager.tsx(323,76): error TS2352: Conversion of type 'string' to type 'FamilyRole' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+src/components/family/FamilyRoleManager.tsx(352,50): error TS2345: Argument of type 'FamilyRole' is not assignable to parameter of type 'SetStateAction<string>'.
+src/components/family/FamilyRoleManager.tsx(352,50): error TS2352: Conversion of type 'string' to type 'FamilyRole' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+src/components/family/FamilyRoleManager.tsx(365,38): error TS7053: Element implicitly has an 'any' type because expression of type 'string' can't be used to index type '{ parent: { label: string; icon: ForwardRefExoticComponent<Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>>; color: string; defaultPermissions: FamilyPermission[]; }; ... 4 more ...; other: { ...; }; }'.
+  No index signature with a parameter of type 'string' was found on type '{ parent: { label: string; icon: ForwardRefExoticComponent<Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>>; color: string; defaultPermissions: FamilyPermission[]; }; ... 4 more ...; other: { ...; }; }'.
+src/components/family/FamilyRoleManager.tsx(366,46): error TS7053: Element implicitly has an 'any' type because expression of type 'string' can't be used to index type '{ parent: { label: string; icon: ForwardRefExoticComponent<Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>>; color: string; defaultPermissions: FamilyPermission[]; }; ... 4 more ...; other: { ...; }; }'.
+  No index signature with a parameter of type 'string' was found on type '{ parent: { label: string; icon: ForwardRefExoticComponent<Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>>; color: string; defaultPermissions: FamilyPermission[]; }; ... 4 more ...; other: { ...; }; }'.
+src/components/family/FamilyRoleManager.tsx(369,20): error TS7053: Element implicitly has an 'any' type because expression of type 'string' can't be used to index type '{ parent: { label: string; icon: ForwardRefExoticComponent<Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>>; color: string; defaultPermissions: FamilyPermission[]; }; ... 4 more ...; other: { ...; }; }'.
+  No index signature with a parameter of type 'string' was found on type '{ parent: { label: string; icon: ForwardRefExoticComponent<Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>>; color: string; defaultPermissions: FamilyPermission[]; }; ... 4 more ...; other: { ...; }; }'.
+src/components/family/FamilyRoleManager.tsx(373,58): error TS7053: Element implicitly has an 'any' type because expression of type 'string' can't be used to index type '{ parent: { label: string; icon: ForwardRefExoticComponent<Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>>; color: string; defaultPermissions: FamilyPermission[]; }; ... 4 more ...; other: { ...; }; }'.
+  No index signature with a parameter of type 'string' was found on type '{ parent: { label: string; icon: ForwardRefExoticComponent<Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>>; color: string; defaultPermissions: FamilyPermission[]; }; ... 4 more ...; other: { ...; }; }'.
+src/components/family/FamilyRoleManager.tsx(384,43): error TS7053: Element implicitly has an 'any' type because expression of type 'string' can't be used to index type 'Record<FamilyRole, FamilyPermission[]>'.
+  No index signature with a parameter of type 'string' was found on type 'Record<FamilyRole, FamilyPermission[]>'.
+src/components/family/FamilyRoleManager.tsx(385,51): error TS2538: Type 'FamilyPermission' cannot be used as an index type.
+src/components/family/FamilyRoleManager.tsx(388,28): error TS2322: Type 'FamilyPermission' is not assignable to type 'Key | null | undefined'.
+src/components/family/FamilySettings.tsx(146,21): error TS2322: Type 'string | Address' is not assignable to type 'string | number | readonly string[] | undefined'.
+  Type 'Address' is not assignable to type 'string | number | readonly string[] | undefined'.
+src/components/family/FamilySettings.tsx(231,21): error TS2322: Type 'true | "family_only"' is not assignable to type 'string | number | readonly string[] | undefined'.
+  Type 'true' is not assignable to type 'string | number | readonly string[] | undefined'.
+src/components/family/FamilySettings.tsx(267,25): error TS2322: Type 'number | boolean | "private" | "public" | "family_only"' is not assignable to type 'boolean | undefined'.
+  Type 'number' is not assignable to type 'boolean | undefined'.
+src/components/family/FamilySettings.tsx(365,29): error TS2322: Type 'boolean | "daily" | "weekly" | "monthly" | "never" | { [category: string]: boolean; } | { start: string; end: string; enabled?: boolean | undefined; }' is not assignable to type 'boolean | undefined'.
+  Type '"daily"' is not assignable to type 'boolean | undefined'.
+src/components/family/FamilyTimeline.tsx(50,7): error TS2322: Type '"wedding"' is not assignable to type '"other" | "birthday" | "anniversary" | "achievement" | "life_event" | "family_event"'.
+src/components/family/FamilyTimeline.tsx(63,7): error TS2353: Object literal may only specify known properties, and 'involvedMembers' does not exist in type 'FamilyMilestone'.
+src/components/family/FamilyTimeline.tsx(74,7): error TS2322: Type '"birth"' is not assignable to type '"other" | "birthday" | "anniversary" | "achievement" | "life_event" | "family_event"'.
+src/components/family/FamilyTimeline.tsx(86,7): error TS2322: Type '"birth"' is not assignable to type '"other" | "birthday" | "anniversary" | "achievement" | "life_event" | "family_event"'.
+src/components/family/FamilyTimeline.tsx(98,7): error TS2322: Type '"career"' is not assignable to type '"other" | "birthday" | "anniversary" | "achievement" | "life_event" | "family_event"'.
+src/components/family/FamilyTimeline.tsx(109,7): error TS2322: Type 'string' is not assignable to type 'Date'.
+src/components/family/FamilyTimeline.tsx(110,7): error TS2322: Type '"vacation"' is not assignable to type '"other" | "birthday" | "anniversary" | "achievement" | "life_event" | "family_event"'.
+src/components/family/FamilyTimeline.tsx(126,7): error TS2353: Object literal may only specify known properties, and 'involvedMembers' does not exist in type 'FamilyMilestone'.
+src/components/family/FamilyTimeline.tsx(137,7): error TS2322: Type '"graduation"' is not assignable to type '"other" | "birthday" | "anniversary" | "achievement" | "life_event" | "family_event"'.
+src/components/family/FamilyTimeline.tsx(150,7): error TS2353: Object literal may only specify known properties, and 'involvedMembers' does not exist in type 'FamilyMilestone'.
+src/components/family/FamilyTimeline.tsx(162,7): error TS2353: Object literal may only specify known properties, and 'involvedMembers' does not exist in type 'FamilyMilestone'.
+src/components/family/FamilyTimeline.tsx(336,51): error TS2345: Argument of type 'Date' is not assignable to parameter of type 'string'.
+src/components/family/FamilyTimeline.tsx(338,51): error TS2345: Argument of type 'Date' is not assignable to parameter of type 'string'.
+src/components/family/FamilyTimeline.tsx(341,42): error TS2339: Property 'location' does not exist on type 'FamilyMilestone'.
+src/components/family/FamilyTimeline.tsx(344,52): error TS2339: Property 'location' does not exist on type 'FamilyMilestone'.
+src/components/family/FamilyTimeline.tsx(348,42): error TS2339: Property 'involvedMembers' does not exist on type 'FamilyMilestone'.
+src/components/family/FamilyTimeline.tsx(352,48): error TS2339: Property 'involvedMembers' does not exist on type 'FamilyMilestone'.
+src/components/FamilyHubApp.tsx(1206,35): error TS2769: No overload matches this call.
+  Overload 1 of 4, '(value: string | number | Date): Date', gave the following error.
+    Argument of type 'string | undefined' is not assignable to parameter of type 'string | number | Date'.
+      Type 'undefined' is not assignable to type 'string | number | Date'.
+  Overload 2 of 4, '(value: string | number): Date', gave the following error.
+    Argument of type 'string | undefined' is not assignable to parameter of type 'string | number'.
+      Type 'undefined' is not assignable to type 'string | number'.
+src/components/FamilyHubApp.tsx(1244,30): error TS7031: Binding element 'title' implicitly has an 'any' type.
+src/components/FamilyHubApp.tsx(1244,37): error TS7031: Binding element 'children' implicitly has an 'any' type.
+src/components/FamilyHubApp.tsx(1244,47): error TS7031: Binding element 'action' implicitly has an 'any' type.
+src/components/FamilyHubApp.tsx(1320,12): error TS2339: Property 'percentage' does not exist on type '{ name: string; value: number; color: string; }'.
+src/components/FamilyHubApp.tsx(1482,45): error TS2769: No overload matches this call.
+  Overload 1 of 4, '(value: string | number | Date): Date', gave the following error.
+    Argument of type 'string | undefined' is not assignable to parameter of type 'string | number | Date'.
+      Type 'undefined' is not assignable to type 'string | number | Date'.
+  Overload 2 of 4, '(value: string | number): Date', gave the following error.
+    Argument of type 'string | undefined' is not assignable to parameter of type 'string | number'.
+      Type 'undefined' is not assignable to type 'string | number'.
+src/components/FamilyHubApp.tsx(1485,37): error TS2339: Property 'id' does not exist on type '{ name: string; date: string; type: string; category: string; dateStart?: undefined; dateEnd?: undefined; } | { name: string; date: string; type: string; category?: undefined; dateStart?: undefined; dateEnd?: undefined; } | { ...; }'.
+  Property 'id' does not exist on type '{ name: string; date: string; type: string; category: string; dateStart?: undefined; dateEnd?: undefined; }'.
+src/components/FamilyHubApp.tsx(1488,77): error TS2339: Property 'title' does not exist on type '{ name: string; date: string; type: string; category: string; dateStart?: undefined; dateEnd?: undefined; } | { name: string; date: string; type: string; category?: undefined; dateStart?: undefined; dateEnd?: undefined; } | { ...; }'.
+  Property 'title' does not exist on type '{ name: string; date: string; type: string; category: string; dateStart?: undefined; dateEnd?: undefined; }'.
+src/components/FamilyHubApp.tsx(1492,52): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string | number | Date'.
+  Type 'undefined' is not assignable to type 'string | number | Date'.
+src/components/FamilyHubApp.tsx(1496,39): error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/components/FamilyHubApp.tsx(1496,48): error TS2769: No overload matches this call.
+  Overload 1 of 4, '(value: string | number | Date): Date', gave the following error.
+    Argument of type 'string | undefined' is not assignable to parameter of type 'string | number | Date'.
+      Type 'undefined' is not assignable to type 'string | number | Date'.
+  Overload 2 of 4, '(value: string | number): Date', gave the following error.
+    Argument of type 'string | undefined' is not assignable to parameter of type 'string | number'.
+      Type 'undefined' is not assignable to type 'string | number'.
+src/components/FamilyHubApp.tsx(1496,85): error TS2363: The right-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/components/FamilyHubApp.tsx(1518,46): error TS2769: No overload matches this call.
+  Overload 1 of 4, '(value: string | number | Date): Date', gave the following error.
+    Argument of type 'string | undefined' is not assignable to parameter of type 'string | number | Date'.
+      Type 'undefined' is not assignable to type 'string | number | Date'.
+  Overload 2 of 4, '(value: string | number): Date', gave the following error.
+    Argument of type 'string | undefined' is not assignable to parameter of type 'string | number'.
+      Type 'undefined' is not assignable to type 'string | number'.
+src/components/FamilyHubApp.tsx(1519,44): error TS2769: No overload matches this call.
+  Overload 1 of 4, '(value: string | number | Date): Date', gave the following error.
+    Argument of type 'string | undefined' is not assignable to parameter of type 'string | number | Date'.
+      Type 'undefined' is not assignable to type 'string | number | Date'.
+  Overload 2 of 4, '(value: string | number): Date', gave the following error.
+    Argument of type 'string | undefined' is not assignable to parameter of type 'string | number'.
+      Type 'undefined' is not assignable to type 'string | number'.
+src/components/FamilyHubApp.tsx(1523,34): error TS2339: Property 'id' does not exist on type '{ name: string; date: string; type: string; category: string; dateStart?: undefined; dateEnd?: undefined; } | { name: string; date: string; type: string; category?: undefined; dateStart?: undefined; dateEnd?: undefined; } | { ...; }'.
+  Property 'id' does not exist on type '{ name: string; date: string; type: string; category: string; dateStart?: undefined; dateEnd?: undefined; }'.
+src/components/FamilyHubApp.tsx(1526,73): error TS2339: Property 'title' does not exist on type '{ name: string; date: string; type: string; category: string; dateStart?: undefined; dateEnd?: undefined; } | { name: string; date: string; type: string; category?: undefined; dateStart?: undefined; dateEnd?: undefined; } | { ...; }'.
+  Property 'title' does not exist on type '{ name: string; date: string; type: string; category: string; dateStart?: undefined; dateEnd?: undefined; }'.
+src/components/FamilyHubApp.tsx(1528,49): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string | number | Date'.
+  Type 'undefined' is not assignable to type 'string | number | Date'.
+src/components/FamilyHubApp.tsx(1528,90): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string | number | Date'.
+  Type 'undefined' is not assignable to type 'string | number | Date'.
+src/components/FamilyHubApp.tsx(1531,39): error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/components/FamilyHubApp.tsx(1531,48): error TS2769: No overload matches this call.
+  Overload 1 of 4, '(value: string | number | Date): Date', gave the following error.
+    Argument of type 'string | undefined' is not assignable to parameter of type 'string | number | Date'.
+      Type 'undefined' is not assignable to type 'string | number | Date'.
+  Overload 2 of 4, '(value: string | number): Date', gave the following error.
+    Argument of type 'string | undefined' is not assignable to parameter of type 'string | number'.
+      Type 'undefined' is not assignable to type 'string | number'.
+src/components/FamilyHubApp.tsx(1531,64): error TS2363: The right-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/components/FamilyHubApp.tsx(1553,47): error TS2769: No overload matches this call.
+  Overload 1 of 4, '(value: string | number | Date): Date', gave the following error.
+    Argument of type 'string | undefined' is not assignable to parameter of type 'string | number | Date'.
+      Type 'undefined' is not assignable to type 'string | number | Date'.
+  Overload 2 of 4, '(value: string | number): Date', gave the following error.
+    Argument of type 'string | undefined' is not assignable to parameter of type 'string | number'.
+      Type 'undefined' is not assignable to type 'string | number'.
+src/components/FamilyHubApp.tsx(1554,49): error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/components/FamilyHubApp.tsx(1554,60): error TS2363: The right-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/components/FamilyHubApp.tsx(1561,47): error TS2769: No overload matches this call.
+  Overload 1 of 4, '(value: string | number | Date): Date', gave the following error.
+    Argument of type 'string | undefined' is not assignable to parameter of type 'string | number | Date'.
+      Type 'undefined' is not assignable to type 'string | number | Date'.
+  Overload 2 of 4, '(value: string | number): Date', gave the following error.
+    Argument of type 'string | undefined' is not assignable to parameter of type 'string | number'.
+      Type 'undefined' is not assignable to type 'string | number'.
+src/components/FamilyHubApp.tsx(1562,49): error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/components/FamilyHubApp.tsx(1562,60): error TS2363: The right-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/components/FamilyHubApp.tsx(1646,71): error TS2339: Property 'name' does not exist on type 'CalendarEvent | { name: string; date: string; type: string; category: string; dateStart?: undefined; dateEnd?: undefined; } | { name: string; date: string; type: string; category?: undefined; dateStart?: undefined; dateEnd?: undefined; } | { ...; }'.
+  Property 'name' does not exist on type 'CalendarEvent'.
+src/components/FamilyHubApp.tsx(1646,85): error TS2339: Property 'title' does not exist on type 'CalendarEvent | { name: string; date: string; type: string; category: string; dateStart?: undefined; dateEnd?: undefined; } | { name: string; date: string; type: string; category?: undefined; dateStart?: undefined; dateEnd?: undefined; } | { ...; }'.
+  Property 'title' does not exist on type '{ name: string; date: string; type: string; category: string; dateStart?: undefined; dateEnd?: undefined; }'.
+src/components/FamilyHubApp.tsx(1648,53): error TS2339: Property 'dateStart' does not exist on type 'CalendarEvent | { name: string; date: string; type: string; category: string; dateStart?: undefined; dateEnd?: undefined; } | { name: string; date: string; type: string; category?: undefined; dateStart?: undefined; dateEnd?: undefined; } | { ...; }'.
+  Property 'dateStart' does not exist on type 'CalendarEvent'.
+src/components/FamilyHubApp.tsx(1690,66): error TS18046: 'percent' is of type 'unknown'.
+src/components/FamilyHubApp.tsx(1736,145): error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/components/FamilyHubApp.tsx(2028,9): error TS2322: Type 'CalendarEvent | null' is not assignable to type 'CalendarEvent | undefined'.
+  Type 'null' is not assignable to type 'CalendarEvent | undefined'.
+src/components/FamilyHubApp.tsx(2036,9): error TS2322: Type '{ start: Date; end: Date; } | null' is not assignable to type '{ start: Date; end: Date; } | undefined'.
+  Type 'null' is not assignable to type '{ start: Date; end: Date; } | undefined'.
+src/components/FamilyHubApp.tsx(2132,21): error TS2322: Type 'string' is not assignable to type 'number'.
+src/components/goals/GoalForm.tsx(371,21): error TS2322: Type 'string | number | boolean' is not assignable to type 'string | number | readonly string[] | undefined'.
+  Type 'false' is not assignable to type 'string | number | readonly string[] | undefined'.
+src/components/goals/GoalsDashboard.tsx(326,44): error TS2367: This comparison appears to be unintentional because the types '"active"' and '"completed"' have no overlap.
+src/components/meals/RecipeImporter.tsx(221,11): error TS2322: Type '{ id: string; familyId: string; recipeName: string; cuisineType: string; mealType: "dinner"; prepTime: number | undefined; cookTime: number | undefined; servings: number; difficulty: "medium"; ... 8 more ...; createdAt: Date; }[]' is not assignable to type 'MealRecipe[]'.
+  Type '{ id: string; familyId: string; recipeName: string; cuisineType: string; mealType: "dinner"; prepTime: number | undefined; cookTime: number | undefined; servings: number; difficulty: "medium"; ... 8 more ...; createdAt: Date; }' is not assignable to type 'MealRecipe'.
+    Types of property 'nutritionInfo' are incompatible.
+      Type 'Partial<NutritionInfo> | undefined' is not assignable to type 'NutritionInfo | undefined'.
+        Type 'Partial<NutritionInfo>' is not assignable to type 'NutritionInfo'.
+          Types of property 'calories' are incompatible.
+            Type 'number | undefined' is not assignable to type 'number'.
+              Type 'undefined' is not assignable to type 'number'.
+src/components/news/NewsDashboard.tsx(47,78): error TS2448: Block-scoped variable 'mockArticles' used before its declaration.
+src/components/news/NewsDashboard.tsx(47,78): error TS2454: Variable 'mockArticles' is used before being assigned.
+src/components/news/NewsDashboard.tsx(49,27): error TS2448: Block-scoped variable 'mockPreferences' used before its declaration.
+src/components/news/NewsDashboard.tsx(49,27): error TS2454: Variable 'mockPreferences' is used before being assigned.
+src/components/shopping/ShoppingListManager.tsx(590,64): error TS2322: Type '{ className: string; title: string; }' is not assignable to type 'IntrinsicAttributes & Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>'.
+  Property 'title' does not exist on type 'IntrinsicAttributes & Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>'.

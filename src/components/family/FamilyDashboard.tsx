@@ -341,7 +341,7 @@ const FamilyDashboard: React.FC<FamilyDashboardProps> = ({ onClose }) => {
   const renderDashboard = () => (
     <div className="space-y-8">
       {/* Family Overview */}
-      <div className="bg-white border border-gray-200 rounded-lg p-6">
+      <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
         <div className="flex items-center justify-between mb-6">
           <div>
             <h2 className="text-2xl font-semibold text-gray-900">{familyInfo.name}</h2>
@@ -367,32 +367,32 @@ const FamilyDashboard: React.FC<FamilyDashboardProps> = ({ onClose }) => {
         </div>
 
         {/* Family Stats */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           <div className="text-center p-4 bg-blue-50 rounded-lg">
             <Users className="w-8 h-8 text-blue-500 mx-auto mb-2" />
-            <p className="text-2xl font-bold text-blue-800">{familyStatistics.totalMembers}</p>
+            <p className="text-xl md:text-2xl font-bold text-blue-800">{familyStatistics.totalMembers}</p>
             <p className="text-sm text-blue-600">Family Members</p>
           </div>
           <div className="text-center p-4 bg-green-50 rounded-lg">
             <Star className="w-8 h-8 text-green-500 mx-auto mb-2" />
-            <p className="text-2xl font-bold text-green-800">{familyStatistics.totalPoints.toLocaleString()}</p>
+            <p className="text-xl md:text-2xl font-bold text-green-800">{familyStatistics.totalPoints.toLocaleString()}</p>
             <p className="text-sm text-green-600">Total Points</p>
           </div>
           <div className="text-center p-4 bg-purple-50 rounded-lg">
             <Camera className="w-8 h-8 text-purple-500 mx-auto mb-2" />
-            <p className="text-2xl font-bold text-purple-800">{familyStatistics.totalPhotos}</p>
+            <p className="text-xl md:text-2xl font-bold text-purple-800">{familyStatistics.totalPhotos}</p>
             <p className="text-sm text-purple-600">Photos Shared</p>
           </div>
           <div className="text-center p-4 bg-orange-50 rounded-lg">
             <Calendar className="w-8 h-8 text-orange-500 mx-auto mb-2" />
-            <p className="text-2xl font-bold text-orange-800">{familyStatistics.totalEvents}</p>
+            <p className="text-xl md:text-2xl font-bold text-orange-800">{familyStatistics.totalEvents}</p>
             <p className="text-sm text-orange-600">Events Created</p>
           </div>
         </div>
       </div>
 
       {/* Family Members Overview */}
-      <div className="bg-white border border-gray-200 rounded-lg p-6">
+      <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-semibold text-gray-900">Family Members</h2>
           <button
@@ -403,7 +403,7 @@ const FamilyDashboard: React.FC<FamilyDashboardProps> = ({ onClose }) => {
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {familyMembers.map(member => (
             <div key={member.id} className="border border-gray-200 rounded-lg p-4">
               <div className="flex items-center space-x-3 mb-3">
@@ -469,7 +469,7 @@ const FamilyDashboard: React.FC<FamilyDashboardProps> = ({ onClose }) => {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Recent Activity */}
-        <div className="bg-white border border-gray-200 rounded-lg p-6">
+        <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold text-gray-900">Recent Activity</h2>
             <button
@@ -505,7 +505,7 @@ const FamilyDashboard: React.FC<FamilyDashboardProps> = ({ onClose }) => {
         </div>
 
         {/* Family Insights */}
-        <div className="bg-white border border-gray-200 rounded-lg p-6">
+        <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold text-gray-900">Family Insights</h2>
             <button
@@ -575,7 +575,7 @@ const FamilyDashboard: React.FC<FamilyDashboardProps> = ({ onClose }) => {
       </div>
 
       {/* Weekly Engagement Chart */}
-      <div className="bg-white border border-gray-200 rounded-lg p-6">
+      <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
         <h2 className="text-xl font-semibold text-gray-900 mb-4">Weekly Family Engagement</h2>
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
@@ -632,7 +632,7 @@ const FamilyDashboard: React.FC<FamilyDashboardProps> = ({ onClose }) => {
       {/* Members Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredMembers.map(member => (
-          <div key={member.id} className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow">
+          <div key={member.id} className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6 hover:shadow-md transition-shadow">
             <div className="flex items-start justify-between mb-4">
               <div className="flex items-center space-x-3">
                 <div
@@ -762,7 +762,7 @@ const FamilyDashboard: React.FC<FamilyDashboardProps> = ({ onClose }) => {
   );
 
   return (
-    <div className="p-8 bg-gray-50 min-h-screen">
+    <div className="p-3 sm:p-4 md:p-6 lg:p-8 bg-gray-50 min-h-screen">
       {/* Breadcrumb Navigation */}
       <Breadcrumb
         items={getFamilyBreadcrumbItems()}
@@ -773,7 +773,7 @@ const FamilyDashboard: React.FC<FamilyDashboardProps> = ({ onClose }) => {
       <div className="mb-8">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-light text-gray-900 mb-2">
+            <h1 className="text-2xl md:text-3xl font-light text-gray-900 mb-2">
               {activeView === 'dashboard' && 'Family Management'}
               {activeView === 'members' && 'Family Members'}
               {activeView === 'settings' && 'Family Settings'}
@@ -939,23 +939,23 @@ const FamilyDashboard: React.FC<FamilyDashboardProps> = ({ onClose }) => {
       {activeView === 'analytics' && (
         <div className="space-y-6">
           {/* Key Metrics Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div className="bg-white border border-gray-200 rounded-lg p-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">Family Size</p>
-                  <p className="text-3xl font-bold text-gray-900">{familyMembers.length}</p>
+                  <p className="text-xl md:text-2xl font-bold text-gray-900">{familyMembers.length}</p>
                 </div>
                 <Users className="w-8 h-8 text-blue-500" />
               </div>
               <p className="text-xs text-gray-500 mt-2">Active members</p>
             </div>
 
-            <div className="bg-white border border-gray-200 rounded-lg p-6">
+            <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">Avg Age</p>
-                  <p className="text-3xl font-bold text-gray-900">
+                  <p className="text-xl md:text-2xl font-bold text-gray-900">
                     {Math.round(familyMembers.reduce((sum, m) => sum + m.age, 0) / familyMembers.length)}
                   </p>
                 </div>
@@ -964,11 +964,11 @@ const FamilyDashboard: React.FC<FamilyDashboardProps> = ({ onClose }) => {
               <p className="text-xs text-gray-500 mt-2">Years old</p>
             </div>
 
-            <div className="bg-white border border-gray-200 rounded-lg p-6">
+            <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">Active Members</p>
-                  <p className="text-3xl font-bold text-gray-900">
+                  <p className="text-xl md:text-2xl font-bold text-gray-900">
                     {familyMembers.filter(m => (m as any).isActive !== false).length}
                   </p>
                 </div>
@@ -977,11 +977,11 @@ const FamilyDashboard: React.FC<FamilyDashboardProps> = ({ onClose }) => {
               <p className="text-xs text-gray-500 mt-2">Currently active</p>
             </div>
 
-            <div className="bg-white border border-gray-200 rounded-lg p-6">
+            <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">Admins</p>
-                  <p className="text-3xl font-bold text-gray-900">
+                  <p className="text-xl md:text-2xl font-bold text-gray-900">
                     {familyMembers.filter(m => m.role.level === 'admin').length}
                   </p>
                 </div>
@@ -994,7 +994,7 @@ const FamilyDashboard: React.FC<FamilyDashboardProps> = ({ onClose }) => {
           {/* Charts Row */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Age Distribution Chart */}
-            <div className="bg-white border border-gray-200 rounded-lg p-6">
+            <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Age Distribution</h3>
               <ResponsiveContainer width="100%" height={250}>
                 <BarChart data={[
@@ -1013,7 +1013,7 @@ const FamilyDashboard: React.FC<FamilyDashboardProps> = ({ onClose }) => {
             </div>
 
             {/* Role Distribution Chart */}
-            <div className="bg-white border border-gray-200 rounded-lg p-6">
+            <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Role Distribution</h3>
               <ResponsiveContainer width="100%" height={250}>
                 <PieChart>
@@ -1054,7 +1054,7 @@ const FamilyDashboard: React.FC<FamilyDashboardProps> = ({ onClose }) => {
           </div>
 
           {/* Activity Timeline */}
-          <div className="bg-white border border-gray-200 rounded-lg p-6">
+          <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Activity</h3>
             <div className="space-y-4">
               {familyMembers.slice(0, 5).map((member, index) => (
@@ -1078,7 +1078,7 @@ const FamilyDashboard: React.FC<FamilyDashboardProps> = ({ onClose }) => {
 
           {/* Family Insights */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-white border border-gray-200 rounded-lg p-6">
+            <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Family Insights</h3>
               <div className="space-y-3">
                 <div className="flex items-center space-x-3">
@@ -1108,7 +1108,7 @@ const FamilyDashboard: React.FC<FamilyDashboardProps> = ({ onClose }) => {
               </div>
             </div>
 
-            <div className="bg-white border border-gray-200 rounded-lg p-6">
+            <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
               <div className="grid grid-cols-2 gap-3">
                 <button

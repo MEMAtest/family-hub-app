@@ -336,11 +336,11 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
   return (
     <div className="h-full flex flex-col bg-white">
       {/* Calendar Header */}
-      <div className="flex items-center justify-between p-6 border-b border-gray-200">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 sm:p-4 md:p-6 border-b border-gray-200 gap-3">
         <div className="flex items-center space-x-4">
           <div className="flex items-center space-x-2">
             <CalendarDays className="w-6 h-6 text-blue-600" />
-            <h1 className="text-2xl font-semibold text-gray-900">Calendar</h1>
+            <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Calendar</h1>
           </div>
 
           {/* Date Navigation */}
@@ -653,13 +653,13 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
             </h3>
           </div>
 
-          <div className="grid grid-cols-4 gap-4 mb-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-4">
             {/* Total Events */}
             <div className="bg-white border border-gray-200 p-4 rounded-lg">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">Total Events</p>
-                  <p className="text-2xl font-bold text-blue-600">{monthAnalytics.totalEvents}</p>
+                  <p className="text-xl md:text-2xl font-bold text-blue-600">{monthAnalytics.totalEvents}</p>
                 </div>
                 <CalendarDays className="w-8 h-8 text-blue-500" />
               </div>
@@ -698,7 +698,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">Total Cost</p>
-                  <p className="text-2xl font-bold text-orange-600">£{monthAnalytics.totalCost.toFixed(2)}</p>
+                  <p className="text-xl md:text-2xl font-bold text-orange-600">£{monthAnalytics.totalCost.toFixed(2)}</p>
                 </div>
                 <DollarSign className="w-8 h-8 text-orange-500" />
               </div>

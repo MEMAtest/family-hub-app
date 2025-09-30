@@ -47,123 +47,163 @@ export const FamilyTimeline: React.FC<FamilyTimelineProps> = ({
       title: 'Omosanya Family Established',
       description: 'Ade and Angela got married and started their beautiful family journey together.',
       date: new Date('2010-06-15'),
-      type: 'wedding',
-      involvedMembers: ['ade', 'angela'],
+      type: 'family_event' as const,
+      participants: ['ade', 'angela'],
       photos: ['https://images.unsplash.com/photo-1511285560929-80b456fea0bc?w=800'],
-      location: 'Lagos, Nigeria',
+      // location: 'Lagos, Nigeria',
       isPrivate: false,
-      tags: ['wedding', 'love', 'beginning']
+      tags: ['wedding', 'love', 'beginning'],
+      isRecurring: false,
+      reminderDays: [],
+      createdBy: 'ade',
+      createdAt: new Date('2010-06-15')
     },
     {
       id: '2',
       title: 'Moved to New Home',
       description: 'The family moved to their dream home in a wonderful neighborhood.',
       date: new Date('2012-03-20'),
-      type: 'achievement',
-      involvedMembers: ['ade', 'angela'],
+      type: 'achievement' as const,
+      participants: ['ade', 'angela'],
       photos: ['https://images.unsplash.com/photo-1570129477492-45c003edd2be?w=800'],
-      location: 'Atlanta, GA',
+      // location: 'Atlanta, GA',
       isPrivate: false,
-      tags: ['home', 'milestone', 'new-chapter']
+      tags: ['home', 'milestone', 'new-chapter'],
+      isRecurring: false,
+      reminderDays: [],
+      createdBy: 'ade',
+      createdAt: new Date('2012-03-20')
     },
     {
       id: '3',
       title: 'Askia Born',
       description: 'Welcome to the world, Askia! Our first bundle of joy brought so much happiness to our family.',
       date: new Date('2013-08-10'),
-      type: 'birth',
-      involvedMembers: ['ade', 'angela', 'askia'],
+      type: 'life_event' as const,
+      participants: ['ade', 'angela', 'askia'],
       photos: ['https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=800'],
-      location: 'Atlanta, GA',
+      // location: 'Atlanta, GA',
       isPrivate: false,
-      tags: ['birth', 'first-child', 'joy']
+      tags: ['birth', 'first-child', 'joy'],
+      isRecurring: false,
+      reminderDays: [],
+      createdBy: 'ade',
+      createdAt: new Date('2013-08-10')
     },
     {
       id: '4',
       title: 'Amari Born',
       description: 'Our family is complete! Amari joined us and filled our hearts with even more love.',
       date: new Date('2016-04-22'),
-      type: 'birth',
-      involvedMembers: ['ade', 'angela', 'askia', 'amari'],
+      type: 'life_event' as const,
+      participants: ['ade', 'angela', 'askia', 'amari'],
       photos: ['https://images.unsplash.com/photo-1515488042361-ee00e0ddd4e4?w=800'],
-      location: 'Atlanta, GA',
+      // location: 'Atlanta, GA',
       isPrivate: false,
-      tags: ['birth', 'second-child', 'complete-family']
+      tags: ['birth', 'second-child', 'complete-family'],
+      isRecurring: false,
+      reminderDays: [],
+      createdBy: 'ade',
+      createdAt: new Date('2016-04-22')
     },
     {
       id: '5',
       title: 'Ade\'s Promotion',
       description: 'Ade got promoted to Senior Manager at his company. A well-deserved recognition!',
       date: new Date('2018-11-15'),
-      type: 'career',
-      involvedMembers: ['ade'],
+      type: 'achievement' as const,
+      participants: ['ade'],
       photos: [],
-      location: 'Atlanta, GA',
+      // location: 'Atlanta, GA',
       isPrivate: false,
-      tags: ['career', 'promotion', 'success']
+      tags: ['career', 'promotion', 'success'],
+      isRecurring: false,
+      reminderDays: [],
+      createdBy: 'ade',
+      createdAt: new Date('2018-11-15')
     },
     {
       id: '6',
       title: 'First Family Vacation',
       description: 'Our amazing trip to Disney World. The kids had the time of their lives!',
-      date: '2019-07-04',
-      type: 'vacation',
-      involvedMembers: ['ade', 'angela', 'askia', 'amari'],
+      date: new Date('2019-07-04'),
+      type: 'family_event' as const,
+      participants: ['ade', 'angela', 'askia', 'amari'],
       photos: [
         'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800',
         'https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=800'
       ],
-      location: 'Orlando, FL',
+      // location: 'Orlando, FL',
       isPrivate: false,
-      tags: ['vacation', 'disney', 'family-fun']
+      tags: ['vacation', 'disney', 'family-fun'],
+      isRecurring: false,
+      reminderDays: [],
+      createdBy: 'ade',
+      createdAt: new Date('2019-07-04')
     },
     {
       id: '7',
       title: 'Askia\'s First Soccer Trophy',
       description: 'Askia won their first soccer trophy! We\'re so proud of their dedication and teamwork.',
       date: new Date('2020-10-30'),
-      type: 'achievement',
-      involvedMembers: ['askia'],
+      type: 'achievement' as const,
+      participants: ['askia'],
       photos: ['https://images.unsplash.com/photo-1551698618-1dfe5d97d256?w=800'],
-      location: 'Atlanta, GA',
+      // location: 'Atlanta, GA',
       isPrivate: false,
-      tags: ['sports', 'achievement', 'soccer']
+      tags: ['sports', 'achievement', 'soccer'],
+      isRecurring: false,
+      reminderDays: [],
+      createdBy: 'ade',
+      createdAt: new Date('2020-10-30')
     },
     {
       id: '8',
       title: 'Angela\'s Master\'s Degree',
       description: 'Angela graduated with her Master\'s degree in Education. Years of hard work paid off!',
       date: new Date('2021-05-18'),
-      type: 'graduation',
-      involvedMembers: ['angela'],
+      type: 'achievement' as const,
+      participants: ['angela'],
       photos: ['https://images.unsplash.com/photo-1523050854058-8df90110c9d1?w=800'],
-      location: 'Atlanta, GA',
+      // location: 'Atlanta, GA',
       isPrivate: false,
-      tags: ['education', 'graduation', 'achievement']
+      tags: ['education', 'graduation', 'achievement'],
+      isRecurring: false,
+      reminderDays: [],
+      createdBy: 'ade',
+      createdAt: new Date('2021-05-18')
     },
     {
       id: '9',
       title: 'Family Pet Adoption',
       description: 'We adopted our beloved dog Max! He\'s been the perfect addition to our family.',
       date: new Date('2022-02-14'),
-      type: 'other',
-      involvedMembers: ['ade', 'angela', 'askia', 'amari'],
+      type: 'other' as const,
+      participants: ['ade', 'angela', 'askia', 'amari'],
       photos: ['https://images.unsplash.com/photo-1552053831-71594a27632d?w=800'],
-      location: 'Atlanta, GA',
+      // location: 'Atlanta, GA',
       isPrivate: false,
-      tags: ['pet', 'adoption', 'valentine']
+      tags: ['pet', 'adoption', 'valentine'],
+      isRecurring: false,
+      reminderDays: [],
+      createdBy: 'ade',
+      createdAt: new Date('2022-02-14')
     },
     {
       id: '10',
       title: 'Amari\'s Piano Recital',
       description: 'Amari performed beautifully at their first piano recital. Such talent and confidence!',
       date: new Date('2023-12-10'),
-      type: 'achievement',
-      involvedMembers: ['amari'],
+      type: 'achievement' as const,
+      participants: ['amari'],
       photos: ['https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=800'],
-      location: 'Atlanta, GA',
+      // location: 'Atlanta, GA',
       isPrivate: false,
-      tags: ['music', 'piano', 'performance']
+      tags: ['music', 'piano', 'performance'],
+      isRecurring: false,
+      reminderDays: [],
+      createdBy: 'ade',
+      createdAt: new Date('2023-12-10')
     }
   ];
 
@@ -204,19 +244,19 @@ export const FamilyTimeline: React.FC<FamilyTimelineProps> = ({
     return familyMembers.find(member => member.id === id);
   };
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
+  const formatDate = (date: Date | string) => {
+    const dateObj = typeof date === 'string' ? new Date(date) : date;
+    return dateObj.toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'long',
       day: 'numeric'
     });
   };
 
-  const getTimeAgo = (dateString: string) => {
-    const date = new Date(dateString);
+  const getTimeAgo = (date: Date | string) => {
+    const dateObj = typeof date === 'string' ? new Date(date) : date;
     const now = new Date();
-    const diffInMs = now.getTime() - date.getTime();
+    const diffInMs = now.getTime() - dateObj.getTime();
     const diffInYears = Math.floor(diffInMs / (365.25 * 24 * 60 * 60 * 1000));
 
     if (diffInYears === 0) {
@@ -338,18 +378,13 @@ export const FamilyTimeline: React.FC<FamilyTimelineProps> = ({
                                 <span>{getTimeAgo(milestone.date)}</span>
                               </div>
 
-                              {milestone.location && (
-                                <div className="flex items-center gap-1">
-                                  <MapPin className="w-4 h-4" />
-                                  <span>{milestone.location}</span>
-                                </div>
-                              )}
+                              {/* location field not available in FamilyMilestone type */}
 
-                              {milestone.involvedMembers.length > 0 && (
+                              {milestone.participants.length > 0 && (
                                 <div className="flex items-center gap-1">
                                   <Users className="w-4 h-4" />
                                   <span>
-                                    {milestone.involvedMembers
+                                    {milestone.participants
                                       .map((id: string) => getMemberById(id)?.firstName || 'Unknown')
                                       .join(', ')}
                                   </span>

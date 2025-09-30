@@ -368,7 +368,7 @@ const GoalForm: React.FC<GoalFormProps> = ({
                 ) : (
                   <input
                     type={formData.targetType === 'numeric' ? 'number' : 'text'}
-                    value={formData.targetValue}
+                    value={typeof formData.targetValue === 'boolean' ? '' : formData.targetValue}
                     onChange={(e) => setFormData(prev => ({ ...prev, targetValue: e.target.value }))}
                     className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                       errors.targetValue ? 'border-red-300' : 'border-gray-300'

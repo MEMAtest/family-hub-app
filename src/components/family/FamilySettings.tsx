@@ -143,7 +143,7 @@ export const FamilySettings: React.FC<FamilySettingsProps> = ({
                   </label>
                   <input
                     type="text"
-                    value={formData.homeAddress || ''}
+                    value={typeof formData.homeAddress === 'string' ? formData.homeAddress : (formData.homeAddress ? `${formData.homeAddress.street}, ${formData.homeAddress.city}` : '')}
                     onChange={(e) => handleInputChange(['homeAddress'], e.target.value)}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Enter home address"
@@ -228,7 +228,7 @@ export const FamilySettings: React.FC<FamilySettingsProps> = ({
                     Data Sharing
                   </label>
                   <select
-                    value={formData.privacy?.dataSharing || 'family_only'}
+                    value={typeof formData.privacy?.dataSharing === 'string' ? formData.privacy.dataSharing : 'family_only'}
                     onChange={(e) => handleInputChange(['privacy', 'dataSharing'], e.target.value)}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   >
@@ -259,15 +259,18 @@ export const FamilySettings: React.FC<FamilySettingsProps> = ({
                     { key: 'requireApproval', label: 'Require Approval for Changes', description: 'New family member additions require admin approval' },
                     { key: 'enableAuditLog', label: 'Activity Audit Log', description: 'Keep detailed logs of family member activities' },
                     { key: 'twoFactorAuth', label: 'Two-Factor Authentication', description: 'Require 2FA for all family members' }
-                  ].map(({ key, label, description }) => (
-                    <div key={key} className="flex items-start gap-3 p-4 border border-gray-200 rounded-lg">
-                      <input
-                        type="checkbox"
-                        id={key}
-                        checked={formData.privacy?.[key as keyof typeof formData.privacy] ?? false}
-                        onChange={(e) => handleInputChange(['privacy', key], e.target.checked)}
-                        className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500 mt-0.5"
-                      />
+                  ].map(({ key, label, description }) => {
+                    const value = formData.privacy?.[key as keyof typeof formData.privacy];
+                    const isChecked = typeof value === 'boolean' ? value : false;
+                    return (
+                      <div key={key} className="flex items-start gap-3 p-4 border border-gray-200 rounded-lg">
+                        <input
+                          type="checkbox"
+                          id={key}
+                          checked={isChecked}
+                          onChange={(e) => handleInputChange(['privacy', key], e.target.checked)}
+                          className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500 mt-0.5"
+                        />
                       <div className="flex-1">
                         <label htmlFor={key} className="block font-medium text-gray-900 cursor-pointer">
                           {label}
@@ -275,7 +278,8 @@ export const FamilySettings: React.FC<FamilySettingsProps> = ({
                         <p className="text-sm text-gray-600 mt-1">{description}</p>
                       </div>
                     </div>
-                  ))}
+                  );
+                })}
                 </div>
               </div>
             </div>
@@ -357,15 +361,18 @@ export const FamilySettings: React.FC<FamilySettingsProps> = ({
                       </div>
                     </div>
                     <div className="p-4 space-y-4">
-                      {items.map(({ key, label, description }) => (
-                        <div key={key} className="flex items-start gap-3">
-                          <input
-                            type="checkbox"
-                            id={key}
-                            checked={formData.notifications?.[key as keyof typeof formData.notifications] ?? false}
-                            onChange={(e) => handleInputChange(['notifications', key], e.target.checked)}
-                            className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500 mt-0.5"
-                          />
+                      {items.map(({ key, label, description }) => {
+                        const value = formData.notifications?.[key as keyof typeof formData.notifications];
+                        const isChecked = typeof value === 'boolean' ? value : false;
+                        return (
+                          <div key={key} className="flex items-start gap-3">
+                            <input
+                              type="checkbox"
+                              id={key}
+                              checked={isChecked}
+                              onChange={(e) => handleInputChange(['notifications', key], e.target.checked)}
+                              className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500 mt-0.5"
+                            />
                           <div className="flex-1">
                             <label htmlFor={key} className="block font-medium text-gray-900 cursor-pointer">
                               {label}
@@ -373,7 +380,8 @@ export const FamilySettings: React.FC<FamilySettingsProps> = ({
                             <p className="text-sm text-gray-600 mt-1">{description}</p>
                           </div>
                         </div>
-                      ))}
+                      );
+                    })}
                     </div>
                   </div>
                 ))}

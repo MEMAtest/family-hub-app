@@ -45,3 +45,4 @@ prisma/generated/
 # Temporary files
 *.tmp
 *.temp
+.vercel

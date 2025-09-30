@@ -182,12 +182,12 @@ const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose }) => {
   const renderDashboard = () => (
     <div className="space-y-8">
       {/* Overview Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white border border-gray-200 rounded-lg p-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">This Week</p>
-              <p className="text-2xl font-bold text-gray-900">£{weeklyStats.totalSpent}</p>
+              <p className="text-xl md:text-2xl font-bold text-gray-900">£{weeklyStats.totalSpent}</p>
             </div>
             <DollarSign className="w-8 h-8 text-green-500" />
           </div>
@@ -198,11 +198,11 @@ const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose }) => {
           </div>
         </div>
 
-        <div className="bg-white border border-gray-200 rounded-lg p-6">
+        <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Active Lists</p>
-              <p className="text-2xl font-bold text-gray-900">{activeLists.length}</p>
+              <p className="text-xl md:text-2xl font-bold text-gray-900">{activeLists.length}</p>
             </div>
             <List className="w-8 h-8 text-blue-500" />
           </div>
@@ -213,11 +213,11 @@ const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose }) => {
           </div>
         </div>
 
-        <div className="bg-white border border-gray-200 rounded-lg p-6">
+        <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Avg Savings</p>
-              <p className="text-2xl font-bold text-gray-900">£{weeklyStats.avgSavings}</p>
+              <p className="text-xl md:text-2xl font-bold text-gray-900">£{weeklyStats.avgSavings}</p>
             </div>
             <TrendingDown className="w-8 h-8 text-orange-500" />
           </div>
@@ -228,11 +228,11 @@ const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose }) => {
           </div>
         </div>
 
-        <div className="bg-white border border-gray-200 rounded-lg p-6">
+        <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Price Alerts</p>
-              <p className="text-2xl font-bold text-gray-900">{weeklyStats.priceAlerts}</p>
+              <p className="text-xl md:text-2xl font-bold text-gray-900">{weeklyStats.priceAlerts}</p>
             </div>
             <Bell className="w-8 h-8 text-red-500" />
           </div>
@@ -245,7 +245,7 @@ const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose }) => {
       </div>
 
       {/* Active Shopping Lists */}
-      <div className="bg-white border border-gray-200 rounded-lg p-6">
+      <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-semibold text-gray-900">Active Shopping Lists</h2>
           <button
@@ -294,7 +294,7 @@ const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose }) => {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Quick Actions */}
-        <div className="bg-white border border-gray-200 rounded-lg p-6">
+        <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">Quick Actions</h2>
           <div className="grid grid-cols-1 gap-3">
             {quickActions.map((action) => (
@@ -316,7 +316,7 @@ const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose }) => {
         </div>
 
         {/* Price Alerts */}
-        <div className="bg-white border border-gray-200 rounded-lg p-6">
+        <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold text-gray-900">Price Alerts</h2>
             <button
@@ -350,7 +350,7 @@ const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose }) => {
       </div>
 
       {/* Recent Activity */}
-      <div className="bg-white border border-gray-200 rounded-lg p-6">
+      <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
         <h2 className="text-xl font-semibold text-gray-900 mb-4">Recent Activity</h2>
 
         <div className="space-y-3">
@@ -381,12 +381,12 @@ const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose }) => {
   );
 
   return (
-    <div className="p-8 bg-gray-50 min-h-screen">
+    <div className="p-3 sm:p-4 md:p-6 lg:p-8 bg-gray-50 min-h-screen">
       {/* Header */}
       <div className="mb-8">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-light text-gray-900 mb-2">
+            <h1 className="text-2xl md:text-3xl font-light text-gray-900 mb-2">
               {activeView === 'dashboard' && 'Shopping Management'}
               {activeView === 'lists' && 'Shopping Lists'}
               {activeView === 'stores' && 'Store Management'}

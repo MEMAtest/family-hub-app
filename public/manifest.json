@@ -1,0 +1,37 @@
+{
+  "name": "Family Hub",
+  "short_name": "FamilyHub",
+  "description": "Comprehensive family management application",
+  "theme_color": "#3B82F6",
+  "background_color": "#ffffff",
+  "display": "standalone",
+  "orientation": "portrait",
+  "scope": "/",
+  "start_url": "/",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["productivity", "lifestyle"],
+  "shortcuts": [
+    {
+      "name": "Calendar",
+      "url": "/?view=calendar",
+      "description": "View family calendar"
+    },
+    {
+      "name": "Budget",
+      "url": "/?view=budget",
+      "description": "Check budget status"
+    },
+    {
+      "name": "Shopping",
+      "url": "/?view=shopping",
+      "description": "Shopping lists"
+    }
+  ]
+}

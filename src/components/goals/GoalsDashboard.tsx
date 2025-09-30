@@ -73,10 +73,10 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
       title: 'Family Fitness Challenge',
       description: 'Each member achieves weekly fitness targets',
       category: 'fitness',
-      type: 'family' as const,
+      type: 'family',
       participants: ['ade', 'angela', 'amari', 'askia'],
-      priority: 'high' as const,
-      status: 'active' as const,
+      priority: 'high',
+      status: 'active',
       progress: 68,
       target: { type: 'numeric', value: 100, unit: '%' },
       current: { value: 68, lastUpdated: new Date() },
@@ -96,11 +96,11 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
       title: 'Sub-22 minute 5K',
       description: 'Achieve a 5K run time under 22 minutes',
       category: 'fitness',
-      type: 'individual' as const,
+      type: 'individual',
       assignedTo: 'ade',
       participants: ['ade'],
-      priority: 'high' as const,
-      status: 'active' as const,
+      priority: 'high',
+      status: 'active',
       progress: 78,
       target: { type: 'numeric', value: 22, unit: 'minutes' },
       current: { value: 22.45, lastUpdated: new Date() },
@@ -120,11 +120,11 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
       title: 'German A2 Level',
       description: 'Achieve A2 level proficiency in German',
       category: 'education',
-      type: 'individual' as const,
+      type: 'individual',
       assignedTo: 'amari',
       participants: ['amari'],
-      priority: 'medium' as const,
-      status: 'active' as const,
+      priority: 'medium',
+      status: 'active',
       progress: 45,
       target: { type: 'milestone', value: 'A2 Certificate' },
       current: { value: 'A1 Complete', lastUpdated: new Date() },
@@ -144,10 +144,10 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
       title: 'Healthy Eating Goals',
       description: 'Plan and eat 5 home-cooked meals per week',
       category: 'health',
-      type: 'family' as const,
+      type: 'family',
       participants: ['ade', 'angela', 'amari', 'askia'],
-      priority: 'medium' as const,
-      status: 'active' as const,
+      priority: 'medium',
+      status: 'active',
       progress: 80,
       target: { type: 'numeric', value: 5, unit: 'meals/week' },
       current: { value: 4, lastUpdated: new Date() },
@@ -166,11 +166,11 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
       title: 'Learn to swim 25m',
       description: 'Complete a 25-meter swim without stopping',
       category: 'fitness',
-      type: 'individual' as const,
+      type: 'individual',
       assignedTo: 'askia',
       participants: ['askia'],
-      priority: 'medium' as const,
-      status: 'active' as const,
+      priority: 'medium',
+      status: 'active',
       progress: 60,
       target: { type: 'numeric', value: 25, unit: 'meters' },
       current: { value: 15, lastUpdated: new Date() },
@@ -187,13 +187,23 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
     }
   ];
 
-  const achievements = [
+  const achievements: Array<{
+    id: string;
+    title: string;
+    description: string;
+    type: string;
+    difficulty: 'bronze' | 'silver' | 'gold' | 'platinum' | 'legendary';
+    earnedBy: string;
+    earnedDate: Date;
+    points: number;
+    badge: { name: string; icon: string; color: string };
+  }> = [
     {
       id: '1',
       title: 'First Goal Scorer',
       description: 'Scored first goal of the season',
       type: 'sport',
-      difficulty: 'bronze' as const,
+      difficulty: 'bronze',
       earnedBy: 'amari',
       earnedDate: new Date('2024-08-15'),
       points: 100,
@@ -204,7 +214,7 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
       title: 'Swimming Badge',
       description: 'Completed 10m freestyle swim',
       type: 'fitness',
-      difficulty: 'silver' as const,
+      difficulty: 'silver',
       earnedBy: 'askia',
       earnedDate: new Date('2024-08-20'),
       points: 250,
@@ -215,7 +225,7 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
       title: 'Consistency Champion',
       description: 'Completed 4 workouts per week for 4 weeks',
       type: 'fitness',
-      difficulty: 'gold' as const,
+      difficulty: 'gold',
       earnedBy: 'ade',
       earnedDate: new Date('2024-08-25'),
       points: 500,
@@ -355,12 +365,12 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
   const renderDashboard = () => (
     <div className="space-y-8">
       {/* Overview Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-white border border-gray-200 rounded-lg p-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Active Goals</p>
-              <p className="text-3xl font-bold text-gray-900">{activeGoals}</p>
+              <p className="text-xl md:text-2xl font-bold text-gray-900">{activeGoals}</p>
             </div>
             <Target className="w-8 h-8 text-blue-500" />
           </div>
@@ -371,11 +381,11 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
           </div>
         </div>
 
-        <div className="bg-white border border-gray-200 rounded-lg p-6">
+        <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Avg Progress</p>
-              <p className="text-3xl font-bold text-gray-900">{averageProgress.toFixed(0)}%</p>
+              <p className="text-xl md:text-2xl font-bold text-gray-900">{averageProgress.toFixed(0)}%</p>
             </div>
             <TrendingUp className="w-8 h-8 text-green-500" />
           </div>
@@ -389,11 +399,11 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
           </div>
         </div>
 
-        <div className="bg-white border border-gray-200 rounded-lg p-6">
+        <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Achievements</p>
-              <p className="text-3xl font-bold text-gray-900">{totalAchievements}</p>
+              <p className="text-xl md:text-2xl font-bold text-gray-900">{totalAchievements}</p>
             </div>
             <Trophy className="w-8 h-8 text-yellow-500" />
           </div>
@@ -404,11 +414,11 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
           </div>
         </div>
 
-        <div className="bg-white border border-gray-200 rounded-lg p-6">
+        <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Total Points</p>
-              <p className="text-3xl font-bold text-gray-900">{totalPoints.toLocaleString()}</p>
+              <p className="text-xl md:text-2xl font-bold text-gray-900">{totalPoints.toLocaleString()}</p>
             </div>
             <Star className="w-8 h-8 text-purple-500" />
           </div>
@@ -421,9 +431,9 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
       </div>
 
       {/* Quick Actions */}
-      <div className="bg-white border border-gray-200 rounded-lg p-6">
+      <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
         <h2 className="text-xl font-semibold text-gray-900 mb-4">Quick Actions</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <button
             onClick={() => setShowNewGoalForm(true)}
             className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
@@ -469,7 +479,7 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Active Goals Progress */}
-        <div className="bg-white border border-gray-200 rounded-lg p-6">
+        <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold text-gray-900">Active Goals Progress</h2>
             <button
@@ -502,7 +512,7 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
         </div>
 
         {/* Recent Activity */}
-        <div className="bg-white border border-gray-200 rounded-lg p-6">
+        <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">Recent Activity</h2>
 
           <div className="space-y-4">
@@ -532,7 +542,7 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
         </div>
 
         {/* Goals by Category */}
-        <div className="bg-white border border-gray-200 rounded-lg p-6">
+        <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">Goals by Category</h2>
 
           <div className="h-64">
@@ -557,7 +567,7 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
         </div>
 
         {/* Weekly Activity */}
-        <div className="bg-white border border-gray-200 rounded-lg p-6">
+        <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">Weekly Activity</h2>
 
           <div className="h-64">
@@ -577,7 +587,7 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
       </div>
 
       {/* Recent Achievements */}
-      <div className="bg-white border border-gray-200 rounded-lg p-6">
+      <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-semibold text-gray-900">Recent Achievements</h2>
           <button
@@ -815,12 +825,12 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
   );
 
   return (
-    <div className="p-8 bg-gray-50 min-h-screen">
+    <div className="p-3 sm:p-4 md:p-6 lg:p-8 bg-gray-50 min-h-screen">
       {/* Header */}
       <div className="mb-8">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-light text-gray-900 mb-2">
+            <h1 className="text-2xl md:text-3xl font-light text-gray-900 mb-2">
               {activeView === 'dashboard' && 'Goals & Achievements'}
               {activeView === 'family' && 'Family Goals'}
               {activeView === 'individual' && 'Individual Goals'}

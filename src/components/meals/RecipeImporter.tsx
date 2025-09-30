@@ -236,7 +236,17 @@ const RecipeImporter: React.FC<RecipeImporterProps> = ({ onImport, onClose }) =>
         return { name, quantity, unit };
       }),
       instructions: imported.instructions,
-      nutritionInfo: imported.nutrition,
+      nutritionInfo: imported.nutrition ? {
+        calories: imported.nutrition.calories || 0,
+        protein: imported.nutrition.protein || 0,
+        carbs: imported.nutrition.carbs || 0,
+        fat: imported.nutrition.fat || 0,
+        fiber: imported.nutrition.fiber || 0,
+        sugar: imported.nutrition.sugar || 0,
+        sodium: imported.nutrition.sodium || 0,
+        vitamins: imported.nutrition.vitamins,
+        minerals: imported.nutrition.minerals
+      } : undefined,
       imageUrl: imported.imageUrl,
       source: imported.source,
       tags: [],

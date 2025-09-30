@@ -551,7 +551,7 @@ export const FamilyEmergencyContacts: React.FC<FamilyEmergencyContactsProps> = (
                   </label>
                   <textarea
                     rows={2}
-                    defaultValue={editingContact?.address || ''}
+                    defaultValue={typeof editingContact?.address === 'string' ? editingContact.address : (editingContact?.address ? `${editingContact.address.street}, ${editingContact.address.city}, ${editingContact.address.state} ${editingContact.address.postalCode}` : '')}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Street address, city, state, zip"
                   />

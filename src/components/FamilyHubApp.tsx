@@ -19,6 +19,11 @@ import GoalsDashboard from './goals/GoalsDashboard';
 import FamilyDashboard from './family/FamilyDashboard';
 import { NewsLanding } from './news/NewsLanding';
 import Breadcrumb from './common/Breadcrumb';
+import { schoolTerms2025_2026, getCurrentTerm, getNextSchoolEvent } from '@/data/schoolTerms';
+import { initialFamilyMembers, initialEvents, iconOptions, colorOptions } from '@/data/initialData';
+import MobileNavigation from './common/MobileNavigation';
+import { convertSchoolTermsToEvents } from '@/utils/schoolTermsToEvents';
+import { useLocalStorage } from '@/hooks/useLocalStorage';
 import conflictDetectionService, { DetectedConflict, ConflictResolution } from '@/services/conflictDetectionService';
 import { Calendar, Clock, Users, ShoppingCart, UtensilsCrossed, PoundSterling, Camera, MapPin, Plus, Edit, Trash2, Filter, Bell, Download, Share2, ChevronLeft, ChevronRight, Menu, X, Star, AlertTriangle, Navigation, StickyNote, Check, TrendingUp, PieChart, BarChart3, Home, Car, Zap, Droplets, Building2, GraduationCap, Baby, Drama, Gamepad2, Settings, Activity, Target, Flame, Coffee, Apple, Utensils, ShoppingBag, Receipt, CalendarDays, DollarSign, Newspaper, Upload, Image, Dumbbell, Heart, Brain, Smartphone, Wifi, Repeat, Save, RefreshCw, ArrowUp, ArrowDown, Eye, Grid3X3, List, Wallet, BookOpen, AlertCircle } from 'lucide-react';
 import { PieChart as RechartsPieChart, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Pie, RadialBarChart, RadialBar, Legend, AreaChart, Area } from 'recharts';
@@ -73,6 +78,7 @@ const FamilyHubContent = () => {
   const [showBudgetForm, setShowBudgetForm] = useState(false);
   const [showShoppingForm, setShowShoppingForm] = useState(false);
   const [shoppingForm, setShoppingForm] = useState({ listId: '', name: '', price: '', category: 'General' });
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // Calendar-specific state
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
@@ -84,51 +90,40 @@ const FamilyHubContent = () => {
   const [editingBudgetItem, setEditingBudgetItem] = useState(null);
   const [selectedMealDate, setSelectedMealDate] = useState(null);
 
-  // School term dates - defined at component level
-  const schoolTerms = [
-    { name: 'INSET Day', date: '2025-08-28', type: 'stewart-fleming', category: 'inset' },
-    { name: 'INSET Day', date: '2025-08-29', type: 'stewart-fleming', category: 'inset' },
-    { name: 'Autumn Term Starts', date: '2025-09-01', type: 'term-start' },
-    { name: 'Autumn Half Term', dateStart: '2025-10-20', dateEnd: '2025-10-31', type: 'stewart-fleming', category: 'half-term' },
-    { name: 'INSET Day (TPA)', date: '2025-11-03', type: 'stewart-fleming', category: 'inset' },
-    { name: 'Autumn Term Ends', date: '2025-12-19', type: 'term-end' },
-    { name: 'Christmas Break', dateStart: '2025-12-20', dateEnd: '2026-01-05', type: 'stewart-fleming', category: 'holiday' },
-    { name: 'INSET Day', date: '2026-01-05', type: 'stewart-fleming', category: 'inset' },
-    { name: 'Spring Term Starts', date: '2026-01-06', type: 'term-start' },
-    { name: 'Spring Half Term', dateStart: '2026-02-16', dateEnd: '2026-02-20', type: 'stewart-fleming', category: 'half-term' },
-    { name: 'Spring Term Ends', date: '2026-03-27', type: 'term-end' },
-    { name: 'Easter Break', dateStart: '2026-03-28', dateEnd: '2026-04-12', type: 'stewart-fleming', category: 'holiday' },
-    { name: 'Summer Term Starts', date: '2026-04-13', type: 'term-start' },
-    { name: 'Summer Half Term', dateStart: '2026-05-25', dateEnd: '2026-05-29', type: 'stewart-fleming', category: 'half-term' },
-    { name: 'INSET Day', date: '2026-06-01', type: 'stewart-fleming', category: 'inset' },
-    { name: 'Summer Term Ends', date: '2026-07-22', type: 'term-end' },
-    { name: 'Summer Break', dateStart: '2026-07-23', dateEnd: '2026-09-01', type: 'stewart-fleming', category: 'holiday' }
-  ];
+  // School term dates from data file
+  const schoolTerms = schoolTerms2025_2026.map(term => ({
+    name: term.name,
+    date: term.type === 'inset' || term.type === 'term' ? term.startDate : undefined,
+    dateStart: term.type === 'half-term' || term.type === 'break' ? term.startDate : undefined,
+    dateEnd: term.type === 'half-term' || term.type === 'break' ? term.endDate : undefined,
+    type: term.type === 'term' && term.name.includes('Starts') ? 'term-start' :
+          term.type === 'term' && term.name.includes('Ends') ? 'term-end' :
+          'stewart-fleming',
+    category: term.type
+  }));
 
-  // Icon options for family members
-  const iconOptions = [
-    '🏃', '💼', '🎓', '⚽', '🎭', '🎨', '🎵', '💻', '📚', '🔬',
-    '🍳', '🌟', '🚗', '✈️', '🏠', '🌸', '🦋', '🐝', '🎪', '🎯',
-    '💎', '🌊', '🏔️', '🔥', '⚡', '🌙', '☀️', '🌈', '🎹', '🎸',
-    '🎮', '🏋️', '🧘', '📱', '💪', '🎲', '🚴', '🏊', '⛹️', '🎾'
-  ];
+  // Use initial data from data file with localStorage persistence
+  const [people, setPeople] = useLocalStorage('familyMembers', initialFamilyMembers);
 
-  // Color options
-  const colorOptions = [
-    '#3B82F6', '#EC4899', '#10B981', '#F59E0B', '#8B5CF6', '#EF4444',
-    '#06B6D4', '#84CC16', '#F97316', '#6366F1', '#14B8A6', '#F59E0B'
-  ];
+  // Combine initial events with school term events
+  const schoolTermEvents = convertSchoolTermsToEvents(schoolTerms2025_2026);
 
-  // Enhanced family members - simplified
-  const [people, setPeople] = useState([
-    { id: 'ade', name: 'Ade', color: '#3B82F6', icon: '🏃', age: 'Adult', role: 'Parent', fitnessGoals: { steps: 10000, workouts: 4 } },
-    { id: 'angela', name: 'Angela', color: '#EC4899', icon: '💼', age: 'Adult', role: 'Parent', fitnessGoals: { steps: 8000, workouts: 3 } },
-    { id: 'askia', name: 'Askia', color: '#10B981', icon: '🎓', age: 'Preschool', role: 'Student', fitnessGoals: { activeHours: 2, activities: 5 } },
-    { id: 'amari', name: 'Amari', color: '#F59E0B', icon: '⚽', age: 'Child', role: 'Student', fitnessGoals: { activeHours: 3, activities: 6 } }
-  ]);
+  // Check if we need to add school term events to existing events
+  const [events, setEvents] = useLocalStorage<CalendarEvent[]>('calendarEvents', []);
 
-  // Enhanced events - simplified
-  const [events, setEvents] = useState<CalendarEvent[]>([
+  // Initialize with school events if empty
+  useEffect(() => {
+    if (events.length === 0 || !events.some(e => e.id.startsWith('school-'))) {
+      setEvents(prev => {
+        // Remove old school events and add new ones
+        const nonSchoolEvents = prev.filter(e => !e.id.startsWith('school-'));
+        return [...nonSchoolEvents, ...schoolTermEvents];
+      });
+    }
+  }, []);
+
+  // Keep the old events array for reference but commented out
+  const _oldDefaultEvents = [
     // This week's events (starting from Saturday Aug 30, 2025)
     {
       id: '1', title: 'Swimming Lesson', person: 'amari', date: '2025-08-31', time: '08:00',
@@ -196,10 +191,23 @@ const FamilyHubContent = () => {
       type: 'family', notes: 'Weekly grocery shop', isRecurring: true,
       priority: 'low', status: 'confirmed', createdAt: new Date(), updatedAt: new Date()
     }
-  ]);
+  ];
 
-  // Event templates for quick creation
-  const [eventTemplates, setEventTemplates] = useState<EventTemplate[]>([
+  // Event templates for quick creation - with localStorage persistence
+  const [eventTemplates, setEventTemplates] = useLocalStorage<EventTemplate[]>('eventTemplates', [
+    {
+      id: 'school-holiday',
+      name: 'School Holiday Activity',
+      title: 'School Holiday Activity',
+      duration: 180,
+      location: '',
+      type: 'family',
+      notes: 'School holiday activity for the children',
+      defaultReminders: [
+        { id: '1', type: 'notification', time: 60, enabled: true }
+      ],
+      category: 'education'
+    },
     {
       id: 'swimming-lesson',
       name: 'Swimming Lesson',
@@ -264,12 +272,12 @@ const FamilyHubContent = () => {
     }
   ]);
 
-  // Enhanced budget with income support, percentages, and prior months - simplified
-  const [budgetData, setBudgetData] = useState({
+  // Enhanced budget with income support, percentages, and prior months - with persistence
+  const [budgetData, setBudgetData] = useLocalStorage('budgetData', {
     income: {
       monthly: {
-        ade_salary: { name: 'Ade Salary', amount: 4500, category: 'Salary', person: 'ade' },
-        angela_salary: { name: 'Angela Salary', amount: 3800, category: 'Salary', person: 'angela' },
+        salary1: { name: 'Salary 1', amount: 4500, category: 'Salary', person: 'member-1' },
+        salary2: { name: 'Salary 2', amount: 3800, category: 'Salary', person: 'member-2' },
         child_benefit: { name: 'Child Benefit', amount: 145, category: 'Government', person: 'all' }
       },
       oneTime: [
@@ -285,8 +293,8 @@ const FamilyHubContent = () => {
           water: { name: 'Water', amount: 100, category: 'Essential', budgetLimit: 120 }
         },
         children: {
-          amariChildcare: { name: 'Amari Afterschool', amount: 346.50, person: 'amari', category: 'Childcare', budgetLimit: 400 },
-          askiaNursery: { name: 'Askia Nursery', amount: 1216.92, person: 'askia', category: 'Childcare', budgetLimit: 1300 },
+          childcare1: { name: 'Afterschool Care', amount: 346.50, person: 'member-4', category: 'Childcare', budgetLimit: 400 },
+          childcare2: { name: 'Nursery', amount: 1216.92, person: 'member-3', category: 'Childcare', budgetLimit: 1300 },
           amariGerman: { name: 'German Classes', amount: 140, person: 'amari', category: 'Education', budgetLimit: 150 },
           amariSwimming: { name: 'Swimming Lessons', amount: 36, person: 'amari', category: 'Sports', budgetLimit: 40 },
           amariFootball: { name: 'Football Training', amount: 43, person: 'amari', category: 'Sports', budgetLimit: 50 },
@@ -369,7 +377,7 @@ const FamilyHubContent = () => {
   });
 
   // Enhanced shopping lists with habit templates and spending tracking
-  const [shoppingLists, setShoppingLists] = useState(() => [
+  const [shoppingLists, setShoppingLists] = useLocalStorage('shoppingLists', [
     {
       id: '1',
       name: 'Weekly Groceries',
@@ -1203,7 +1211,7 @@ const FamilyHubContent = () => {
 
     const importantEvents = [
       ...schoolTerms.filter(term => {
-        const termDate = new Date(term.date || term.dateStart);
+        const termDate = new Date(term.date || term.dateStart || new Date());
         return termDate >= clientTime && termDate <= next30Days;
       }).slice(0, 3),
       ...events.filter(e => {
@@ -1241,7 +1249,7 @@ const FamilyHubContent = () => {
   };
 
   // Professional Dashboard Widget Component
-  const DashboardWidget = ({ title, children, action, className = "" }) => (
+  const DashboardWidget = ({ title, children, action, className = "" }: { title: string; children: React.ReactNode; action?: React.ReactNode; className?: string }) => (
     <div className={`bg-white border border-gray-200 ${className}`}>
       <div className="px-6 py-4 border-b border-gray-200">
         <div className="flex items-center justify-between">
@@ -1308,7 +1316,7 @@ const FamilyHubContent = () => {
       : 0;
 
     // Professional budget chart data
-    const budgetChartData = [
+    const budgetChartData: Array<{ name: string; value: number; color: string; percentage?: string }> = [
       { name: 'Household', value: 4065, color: '#374151' },
       { name: 'Children', value: 1854, color: '#6B7280' },
       { name: 'Subscriptions', value: 31, color: '#9CA3AF' },
@@ -1321,7 +1329,7 @@ const FamilyHubContent = () => {
     });
 
     return (
-      <div className="p-8 bg-gray-50 min-h-screen">
+      <div className="p-4 md:p-8 bg-gray-50 min-h-screen">
         {/* Breadcrumb Navigation */}
         <Breadcrumb
           items={getBreadcrumbItems()}
@@ -1329,14 +1337,26 @@ const FamilyHubContent = () => {
         />
 
         {/* Professional Header */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between">
+        <div className="mb-6 md:mb-8">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
-              <h1 className="text-3xl font-light text-gray-900 mb-2">Family Overview</h1>
-              <p className="text-gray-600">Omosanya Family Dashboard • {formatDateConsistent('2025-09-19')}</p>
+              <h1 className="text-2xl md:text-3xl font-light text-gray-900 mb-1 md:mb-2">Family Overview</h1>
+              <p className="text-sm md:text-base text-gray-600">Family Dashboard • {isClient ? formatDateConsistent(new Date()) : 'Loading...'}</p>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="hidden md:flex items-center gap-3">
               <NotificationBell />
+              <button
+                onClick={() => {
+                  if (confirm('Clear all data and reset? This will add school terms.')) {
+                    localStorage.clear();
+                    window.location.reload();
+                  }
+                }}
+                className="bg-red-600 text-white px-3 py-2 rounded-sm hover:bg-red-700 transition-colors text-sm font-medium flex items-center gap-2"
+              >
+                <RefreshCw size={16} />
+                Reset Data
+              </button>
               <button
                 onClick={() => setShowQuickActivityForm(true)}
                 className="bg-gray-900 text-white px-3 py-2 rounded-sm hover:bg-gray-800 transition-colors text-sm font-medium flex items-center gap-2"
@@ -1370,7 +1390,7 @@ const FamilyHubContent = () => {
         </div>
 
         {/* Key Metrics Grid */}
-        <div className="grid grid-cols-6 gap-4 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-4 mb-6 md:mb-8">
           <div
             onClick={() => setCurrentView('calendar')}
             className="bg-white border border-gray-200 p-6 cursor-pointer hover:bg-gray-50 transition-colors"
@@ -1479,21 +1499,21 @@ const FamilyHubContent = () => {
               </h3>
               <div className="space-y-3">
                 {schoolTerms.filter(term => {
-                  const termDate = new Date(term.date || term.dateStart);
+                  const termDate = new Date(term.date || term.dateStart || new Date());
                   return termDate >= new Date() && term.type === 'holiday';
-                }).slice(0, 1).map(holiday => (
-                  <div key={holiday.id} className="bg-white p-3 rounded border border-purple-200">
+                }).slice(0, 1).map((holiday, index) => (
+                  <div key={index} className="bg-white p-3 rounded border border-purple-200">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="font-medium text-purple-900">{holiday.title}</p>
+                        <p className="font-medium text-purple-900">{holiday.name}</p>
                         <p className="text-sm text-purple-700">
                           {holiday.dateStart && holiday.dateEnd
                             ? `${formatDateConsistent(holiday.dateStart)} - ${formatDateConsistent(holiday.dateEnd)}`
-                            : formatDateConsistent(holiday.date)
+                            : formatDateConsistent(holiday.date || '')
                           }
                         </p>
                         <p className="text-xs text-purple-600 mt-1">
-                          {Math.ceil((new Date(holiday.date || holiday.dateStart) - new Date()) / (1000 * 60 * 60 * 24))} days away
+                          {Math.ceil((new Date(holiday.date || holiday.dateStart || new Date()).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))} days away
                         </p>
                       </div>
                       <CalendarDays className="w-5 h-5 text-purple-500" />
@@ -1515,20 +1535,21 @@ const FamilyHubContent = () => {
               </h3>
               <div className="space-y-3">
                 {schoolTerms.filter(term => {
+                  if (!term.dateStart || !term.dateEnd) return false;
                   const startDate = new Date(term.dateStart);
                   const endDate = new Date(term.dateEnd);
                   const today = new Date();
                   return today >= startDate && today <= endDate && term.type === 'term';
-                }).slice(0, 1).map(term => (
-                  <div key={term.id} className="bg-white p-3 rounded border border-green-200">
+                }).slice(0, 1).map((term, index) => (
+                  <div key={index} className="bg-white p-3 rounded border border-green-200">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="font-medium text-green-900">{term.title}</p>
+                        <p className="font-medium text-green-900">{term.name}</p>
                         <p className="text-sm text-green-700">
-                          {formatDateConsistent(term.dateStart)} - {formatDateConsistent(term.dateEnd)}
+                          {formatDateConsistent(term.dateStart || '')} - {formatDateConsistent(term.dateEnd || '')}
                         </p>
                         <p className="text-xs text-green-600 mt-1">
-                          {Math.ceil((new Date(term.dateEnd) - new Date()) / (1000 * 60 * 60 * 24))} days remaining
+                          {Math.ceil((new Date(term.dateEnd || new Date()).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))} days remaining
                         </p>
                       </div>
                       <GraduationCap className="w-5 h-5 text-green-500" />
@@ -1550,16 +1571,16 @@ const FamilyHubContent = () => {
                 <span className="flex items-center gap-1">
                   <AlertCircle size={14} />
                   {schoolTerms.filter(term => {
-                    const termDate = new Date(term.date || term.dateStart);
-                    const daysAway = Math.ceil((termDate - new Date()) / (1000 * 60 * 60 * 24));
+                    const termDate = new Date(term.date || term.dateStart || new Date());
+                    const daysAway = Math.ceil((termDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
                     return daysAway >= 0 && daysAway <= 7;
                   }).length} events this week
                 </span>
                 <span className="flex items-center gap-1">
                   <Clock size={14} />
                   {schoolTerms.filter(term => {
-                    const termDate = new Date(term.date || term.dateStart);
-                    const daysAway = Math.ceil((termDate - new Date()) / (1000 * 60 * 60 * 24));
+                    const termDate = new Date(term.date || term.dateStart || new Date());
+                    const daysAway = Math.ceil((termDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
                     return daysAway >= 0 && daysAway <= 30;
                   }).length} events next 30 days
                 </span>
@@ -1594,7 +1615,7 @@ const FamilyHubContent = () => {
                   <span className="font-medium text-blue-900">{isClient ? getThisWeekMealsCount() : 0}/7</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-blue-700">Ade's Workouts</span>
+                  <span className="text-blue-700">Workouts This Week</span>
                   <span className="font-medium text-blue-900">{personalTracking.fitness.weeklyProgress}/{personalTracking.fitness.weeklyGoal}</span>
                 </div>
                 <div className="flex justify-between">
@@ -1643,9 +1664,9 @@ const FamilyHubContent = () => {
                 {/* Next 30 days important events */}
                 {isClient ? getUpcomingEvents().map((event, idx) => (
                   <div key={idx} className="flex justify-between items-center">
-                    <span className="text-purple-700 truncate">{event.name || event.title}</span>
+                    <span className="text-purple-700 truncate">{(event as any).name || (event as any).title}</span>
                     <span className="font-medium text-purple-900 text-xs">
-                      {new Date(event.date || event.dateStart).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                      {new Date((event as any).date || (event as any).dateStart || (event as any).startTime || new Date()).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
                     </span>
                   </div>
                 )) : (
@@ -1657,7 +1678,7 @@ const FamilyHubContent = () => {
         </DashboardWidget>
 
         {/* Charts Section */}
-        <div className="grid grid-cols-2 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 mb-6 md:mb-8">
           {/* Budget Overview Pie Chart */}
           <div className="bg-white border border-gray-200 rounded-lg">
             <div className="px-6 py-4 border-b border-gray-200">
@@ -1687,7 +1708,7 @@ const FamilyHubContent = () => {
                       cy="50%"
                       outerRadius={80}
                       dataKey="value"
-                      label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                      label={(entry: any) => `${entry.name}: ${entry.value}`}
                     >
                       {[
                         { name: 'Household', value: 4065, color: '#374151' },
@@ -1733,7 +1754,7 @@ const FamilyHubContent = () => {
                     { week: 'Week 3', events: 18, activities: 15, goals: 4 },
                     { week: 'Week 4', events: 22, activities: 18, goals: 6 },
                     { week: 'Week 5', events: 25, activities: 22, goals: 8 },
-                    { week: 'Week 6', events: thisWeekEvents.length, activities: personalTracking.fitness.weeklyProgress * 2, goals: Math.floor(avgProgress / 10) }
+                    { week: 'Week 6', events: thisWeekEvents.length, activities: personalTracking.fitness.weeklyProgress * 2, goals: Math.floor(Number(avgProgress) / 10) }
                   ]}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="week" />
@@ -1781,9 +1802,9 @@ const FamilyHubContent = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-12 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-6">
           {/* Schedule - Takes 8 columns */}
-          <div className="col-span-8 bg-white border border-gray-200">
+          <div className="lg:col-span-8 bg-white border border-gray-200">
             <div className="px-6 py-4 border-b border-gray-200">
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-medium text-gray-900">Week Schedule</h2>
@@ -1836,7 +1857,7 @@ const FamilyHubContent = () => {
           </div>
 
           {/* Budget Chart - Takes 4 columns */}
-          <div className="col-span-4 bg-white border border-gray-200">
+          <div className="lg:col-span-4 bg-white border border-gray-200">
             <div className="px-6 py-4 border-b border-gray-200">
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-medium text-gray-900">Monthly Overview</h2>
@@ -1880,10 +1901,10 @@ const FamilyHubContent = () => {
             </div>
           </div>
 
-          {/* Ade's Personal Tracking - Takes 6 columns */}
-          <div className="col-span-6 bg-white border border-gray-200">
+          {/* Personal Tracking - Takes 6 columns */}
+          <div className="lg:col-span-6 bg-white border border-gray-200">
             <div className="px-6 py-4 border-b border-gray-200">
-              <h2 className="text-lg font-medium text-gray-900">Ade's Personal Dashboard</h2>
+              <h2 className="text-lg font-medium text-gray-900">Personal Dashboard</h2>
             </div>
             <div className="p-6">
               <div className="grid grid-cols-2 gap-6">
@@ -1949,7 +1970,7 @@ const FamilyHubContent = () => {
           </div>
 
           {/* Quick News - Takes 6 columns */}
-          <div className="col-span-6 bg-white border border-gray-200">
+          <div className="lg:col-span-6 bg-white border border-gray-200">
             <div className="px-6 py-4 border-b border-gray-200">
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-medium text-gray-900">Family News</h2>
@@ -1986,9 +2007,22 @@ const FamilyHubContent = () => {
   };
 
   return (
-    <div className="h-screen bg-gray-100 flex">
-      {renderSidebar()}
-      <div className="flex-1 overflow-auto">
+    <div className="h-screen bg-gray-100 flex relative">
+      {/* Mobile Navigation */}
+      <MobileNavigation
+        currentView={currentView}
+        onViewChange={setCurrentView}
+        isMenuOpen={isMobileMenuOpen}
+        onMenuToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+      />
+
+      {/* Desktop Sidebar */}
+      <div className="hidden md:block">
+        {renderSidebar()}
+      </div>
+
+      {/* Main Content with mobile padding adjustments */}
+      <div className="flex-1 overflow-auto pt-14 pb-16 md:pt-0 md:pb-0">
         {currentView === 'dashboard' && renderDashboard()}
         {currentView === 'calendar' && (
           <CalendarMain
@@ -2025,7 +2059,7 @@ const FamilyHubContent = () => {
 
       {/* Event Form Modal */}
       <EventForm
-        event={selectedEvent}
+        event={selectedEvent || undefined}
         isOpen={showEventForm}
         onClose={closeEventForm}
         onSave={handleCalendarEventSave}
@@ -2033,7 +2067,7 @@ const FamilyHubContent = () => {
         onDelete={handleCalendarEventDelete}
         people={people}
         templates={eventTemplates}
-        defaultSlot={eventFormSlot}
+        defaultSlot={eventFormSlot || undefined}
       />
 
       {/* Template Manager Modal */}
@@ -2129,7 +2163,7 @@ const FamilyHubContent = () => {
                     value={quickActivityForm.notes}
                     onChange={(e) => setQuickActivityForm(prev => ({ ...prev, notes: e.target.value }))}
                     className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    rows="3"
+                    rows={3}
                   />
                 </div>
               </div>

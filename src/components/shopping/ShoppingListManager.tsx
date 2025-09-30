@@ -587,7 +587,9 @@ const ShoppingListManager: React.FC<ShoppingListManagerProps> = ({ onClose }) =>
                       {item.priority}
                     </span>
                     {item.isRecurring && (
-                      <Clock className="w-4 h-4 text-blue-500" title="Recurring item" />
+                      <span title="Recurring item">
+                        <Clock className="w-4 h-4 text-blue-500" />
+                      </span>
                     )}
                   </div>
                 </div>

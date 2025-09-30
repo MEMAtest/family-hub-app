@@ -138,7 +138,7 @@ const BudgetDashboard: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="p-8 bg-gray-50 min-h-screen">
+      <div className="p-3 sm:p-4 md:p-6 lg:p-8 bg-gray-50 min-h-screen">
         <div className="flex items-center justify-center h-64">
           <RefreshCw className="w-8 h-8 animate-spin text-gray-400" />
           <span className="ml-2 text-gray-600">Loading budget data...</span>
@@ -149,7 +149,7 @@ const BudgetDashboard: React.FC = () => {
 
   if (!dashboardData) {
     return (
-      <div className="p-8 bg-gray-50 min-h-screen">
+      <div className="p-3 sm:p-4 md:p-6 lg:p-8 bg-gray-50 min-h-screen">
         <div className="text-center text-gray-600">
           Unable to load budget data. Please try again.
         </div>
@@ -158,12 +158,12 @@ const BudgetDashboard: React.FC = () => {
   }
 
   return (
-    <div className="p-8 bg-gray-50 min-h-screen">
+    <div className="p-3 sm:p-4 md:p-6 lg:p-8 bg-gray-50 min-h-screen">
       {/* Header */}
       <div className="mb-8">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-light text-gray-900 mb-2">Budget Management</h1>
+            <h1 className="text-2xl md:text-3xl font-light text-gray-900 mb-2">Budget Management</h1>
             <p className="text-gray-600">
               Financial overview for {getCurrentMonthName()} {selectedYear}
             </p>
@@ -235,12 +235,12 @@ const BudgetDashboard: React.FC = () => {
       </div>
 
       {/* Key Metrics Cards */}
-      <div className="grid grid-cols-4 gap-6 mb-8">
-        <div className="bg-white border border-gray-200 p-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6 mb-4 md:mb-8">
+        <div className="bg-white border border-gray-200 p-3 sm:p-4 md:p-6">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600 uppercase tracking-wide">Total Income</p>
-              <p className="text-3xl font-light text-green-600 mt-2">
+              <p className="text-xl md:text-2xl lg:text-3xl font-light text-green-600 mt-2">
                 {formatCurrency(dashboardData.currentMonth.totalIncome)}
               </p>
             </div>
@@ -248,11 +248,11 @@ const BudgetDashboard: React.FC = () => {
           </div>
         </div>
 
-        <div className="bg-white border border-gray-200 p-6">
+        <div className="bg-white border border-gray-200 p-3 sm:p-4 md:p-6">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600 uppercase tracking-wide">Total Expenses</p>
-              <p className="text-3xl font-light text-red-600 mt-2">
+              <p className="text-xl md:text-2xl lg:text-3xl font-light text-red-600 mt-2">
                 {formatCurrency(dashboardData.currentMonth.totalExpenses)}
               </p>
             </div>
@@ -260,11 +260,11 @@ const BudgetDashboard: React.FC = () => {
           </div>
         </div>
 
-        <div className="bg-white border border-gray-200 p-6">
+        <div className="bg-white border border-gray-200 p-3 sm:p-4 md:p-6">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600 uppercase tracking-wide">Net Income</p>
-              <p className={`text-3xl font-light mt-2 ${dashboardData.currentMonth.netIncome >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              <p className={`text-xl md:text-2xl lg:text-3xl font-light mt-2 ${dashboardData.currentMonth.netIncome >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                 {formatCurrency(dashboardData.currentMonth.netIncome)}
               </p>
             </div>
@@ -272,11 +272,11 @@ const BudgetDashboard: React.FC = () => {
           </div>
         </div>
 
-        <div className="bg-white border border-gray-200 p-6">
+        <div className="bg-white border border-gray-200 p-3 sm:p-4 md:p-6">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600 uppercase tracking-wide">Savings Rate</p>
-              <p className={`text-3xl font-light mt-2 ${getHealthColor(dashboardData.currentMonth.savingsRate)}`}>
+              <p className={`text-xl md:text-2xl lg:text-3xl font-light mt-2 ${getHealthColor(dashboardData.currentMonth.savingsRate)}`}>
                 {dashboardData.currentMonth.savingsRate.toFixed(1)}%
               </p>
             </div>
@@ -307,7 +307,7 @@ const BudgetDashboard: React.FC = () => {
       </div>
 
       {/* Main Chart Display */}
-      <div className="bg-white border border-gray-200 p-6 mb-8">
+      <div className="bg-white border border-gray-200 p-3 sm:p-4 md:p-6 mb-4 md:mb-8">
         <h2 className="text-lg font-medium text-gray-900 mb-6">
           {chartTitles[activeChartType]}
         </h2>

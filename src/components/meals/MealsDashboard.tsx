@@ -115,7 +115,7 @@ const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
   const renderDashboard = () => (
     <div className="space-y-8">
       {/* Today's Meals */}
-      <div className="bg-white border border-gray-200 rounded-lg p-6">
+      <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-semibold text-gray-900">Today's Meals</h2>
           <button
@@ -144,41 +144,41 @@ const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
       </div>
 
       {/* Week Overview */}
-      <div className="bg-white border border-gray-200 rounded-lg p-6">
+      <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
         <h2 className="text-xl font-semibold text-gray-900 mb-6">This Week's Overview</h2>
 
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <div className="text-center p-4 bg-blue-50 rounded-lg">
             <Calendar className="w-8 h-8 text-blue-500 mx-auto mb-2" />
-            <p className="text-2xl font-bold text-blue-800">{weekStats.plannedMeals}</p>
+            <p className="text-xl md:text-2xl font-bold text-blue-800">{weekStats.plannedMeals}</p>
             <p className="text-sm text-blue-600">Meals Planned</p>
             <p className="text-xs text-blue-500">of {weekStats.totalMeals} total</p>
           </div>
 
           <div className="text-center p-4 bg-green-50 rounded-lg">
             <Target className="w-8 h-8 text-green-500 mx-auto mb-2" />
-            <p className="text-2xl font-bold text-green-800">{weekStats.avgNutritionScore}/10</p>
+            <p className="text-xl md:text-2xl font-bold text-green-800">{weekStats.avgNutritionScore}/10</p>
             <p className="text-sm text-green-600">Nutrition Score</p>
             <p className="text-xs text-green-500">Weekly average</p>
           </div>
 
           <div className="text-center p-4 bg-purple-50 rounded-lg">
             <ShoppingCart className="w-8 h-8 text-purple-500 mx-auto mb-2" />
-            <p className="text-2xl font-bold text-purple-800">£{weekStats.estimatedCost}</p>
+            <p className="text-xl md:text-2xl font-bold text-purple-800">£{weekStats.estimatedCost}</p>
             <p className="text-sm text-purple-600">Estimated Cost</p>
             <p className="text-xs text-purple-500">This week</p>
           </div>
 
           <div className="text-center p-4 bg-orange-50 rounded-lg">
             <Clock className="w-8 h-8 text-orange-500 mx-auto mb-2" />
-            <p className="text-2xl font-bold text-orange-800">{Math.round(weekStats.prepTimeTotal / 60)}h</p>
+            <p className="text-xl md:text-2xl font-bold text-orange-800">{Math.round(weekStats.prepTimeTotal / 60)}h</p>
             <p className="text-sm text-orange-600">Prep Time</p>
             <p className="text-xs text-orange-500">Total weekly</p>
           </div>
 
           <div className="text-center p-4 bg-red-50 rounded-lg">
             <Users className="w-8 h-8 text-red-500 mx-auto mb-2" />
-            <p className="text-2xl font-bold text-red-800">4</p>
+            <p className="text-xl md:text-2xl font-bold text-red-800">4</p>
             <p className="text-sm text-red-600">Family Size</p>
             <p className="text-xs text-red-500">Active members</p>
           </div>
@@ -187,7 +187,7 @@ const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Quick Actions */}
-        <div className="bg-white border border-gray-200 rounded-lg p-6">
+        <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">Quick Actions</h2>
           <div className="grid grid-cols-1 gap-3">
             {quickActions.map((action) => (
@@ -209,7 +209,7 @@ const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
         </div>
 
         {/* Recent Recipes */}
-        <div className="bg-white border border-gray-200 rounded-lg p-6">
+        <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold text-gray-900">Recent Recipes</h2>
             <button
@@ -246,7 +246,7 @@ const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
       </div>
 
       {/* Nutrition Highlights */}
-      <div className="bg-white border border-gray-200 rounded-lg p-6">
+      <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-semibold text-gray-900">Nutrition Highlights</h2>
           <button
@@ -259,21 +259,21 @@ const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="text-center">
-            <div className="text-3xl font-bold text-green-600 mb-1">
+            <div className="text-xl md:text-2xl font-bold text-green-600 mb-1">
               {nutritionHighlights.todayScore}/10
             </div>
             <p className="text-sm text-gray-600">Today's Score</p>
           </div>
 
           <div className="text-center">
-            <div className="text-3xl font-bold text-blue-600 mb-1">
+            <div className="text-xl md:text-2xl font-bold text-blue-600 mb-1">
               {nutritionHighlights.weeklyAvg}/10
             </div>
             <p className="text-sm text-gray-600">Weekly Average</p>
           </div>
 
           <div className="text-center">
-            <div className="text-3xl font-bold text-purple-600 mb-1">
+            <div className="text-xl md:text-2xl font-bold text-purple-600 mb-1">
               {nutritionHighlights.goalProgress}%
             </div>
             <p className="text-sm text-gray-600">Goal Progress</p>
@@ -296,12 +296,12 @@ const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
   );
 
   return (
-    <div className="p-8 bg-gray-50 min-h-screen">
+    <div className="p-3 sm:p-4 md:p-6 lg:p-8 bg-gray-50 min-h-screen">
       {/* Header */}
       <div className="mb-8">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-light text-gray-900 mb-2">
+            <h1 className="text-2xl md:text-3xl font-light text-gray-900 mb-2">
               {activeView === 'dashboard' && 'Meal Planning'}
               {activeView === 'planner' && 'Meal Planner'}
               {activeView === 'recipes' && 'Recipe Manager'}

@@ -66,40 +66,40 @@ export const FamilyPhotoManager: React.FC<FamilyPhotoManagerProps> = ({
       name: 'Family Vacations',
       description: 'Our amazing family trips and adventures',
       coverPhoto: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800',
-      createdDate: '2023-01-15',
+      createdAt: new Date('2023-01-15'),
+      updatedAt: new Date('2023-01-15'),
       photoCount: 47,
-      isPrivate: false,
-      tags: ['vacation', 'travel', 'family']
+      photos: []
     },
     {
       id: '2',
       name: 'Kids Growing Up',
       description: 'Precious moments of Askia and Amari growing up',
       coverPhoto: 'https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=800',
-      createdDate: '2023-06-20',
+      createdAt: new Date('2023-06-20'),
+      updatedAt: new Date('2023-06-20'),
       photoCount: 156,
-      isPrivate: false,
-      tags: ['kids', 'milestones', 'growth']
+      photos: []
     },
     {
       id: '3',
       name: 'Special Occasions',
       description: 'Birthdays, anniversaries, and celebrations',
       coverPhoto: 'https://images.unsplash.com/photo-1464207687429-7505649dae38?w=800',
-      createdDate: '2023-03-10',
+      createdAt: new Date('2023-03-10'),
+      updatedAt: new Date('2023-03-10'),
       photoCount: 89,
-      isPrivate: false,
-      tags: ['celebrations', 'birthdays', 'holidays']
+      photos: []
     },
     {
       id: '4',
       name: 'Daily Life',
       description: 'Beautiful moments from our everyday life',
       coverPhoto: 'https://images.unsplash.com/photo-1511895426328-dc8714191300?w=800',
-      createdDate: '2023-08-05',
+      createdAt: new Date('2023-08-05'),
+      updatedAt: new Date('2023-08-05'),
       photoCount: 234,
-      isPrivate: false,
-      tags: ['daily', 'candid', 'home']
+      photos: []
     }
   ];
 
@@ -118,7 +118,11 @@ export const FamilyPhotoManager: React.FC<FamilyPhotoManagerProps> = ({
       isPrivate: false,
       views: 45,
       likes: 12,
-      fileSize: 2.3
+      fileSize: 2.3,
+      uploadedAt: new Date('2023-07-15'),
+      peopleTagged: [],
+      albums: ['1'],
+      isFavorite: false
     },
     {
       id: '2',
@@ -134,7 +138,11 @@ export const FamilyPhotoManager: React.FC<FamilyPhotoManagerProps> = ({
       isPrivate: false,
       views: 23,
       likes: 8,
-      fileSize: 1.8
+      fileSize: 1.8,
+      uploadedAt: new Date('2023-08-20'),
+      peopleTagged: [],
+      albums: ['2'],
+      isFavorite: true
     },
     {
       id: '3',
@@ -150,7 +158,11 @@ export const FamilyPhotoManager: React.FC<FamilyPhotoManagerProps> = ({
       isPrivate: false,
       views: 67,
       likes: 18,
-      fileSize: 2.1
+      fileSize: 2.1,
+      uploadedAt: new Date('2023-12-10'),
+      peopleTagged: [],
+      albums: ['3'],
+      isFavorite: false
     },
     {
       id: '4',
@@ -166,7 +178,11 @@ export const FamilyPhotoManager: React.FC<FamilyPhotoManagerProps> = ({
       isPrivate: false,
       views: 31,
       likes: 9,
-      fileSize: 1.5
+      fileSize: 1.5,
+      uploadedAt: new Date('2024-01-14'),
+      peopleTagged: [],
+      albums: ['1'],
+      isFavorite: true
     },
     {
       id: '5',
@@ -182,7 +198,11 @@ export const FamilyPhotoManager: React.FC<FamilyPhotoManagerProps> = ({
       isPrivate: false,
       views: 89,
       likes: 25,
-      fileSize: 2.7
+      fileSize: 2.7,
+      uploadedAt: new Date('2023-10-30'),
+      peopleTagged: [],
+      albums: ['2'],
+      isFavorite: false
     },
     {
       id: '6',
@@ -198,7 +218,11 @@ export const FamilyPhotoManager: React.FC<FamilyPhotoManagerProps> = ({
       isPrivate: false,
       views: 52,
       likes: 15,
-      fileSize: 2.0
+      fileSize: 2.0,
+      uploadedAt: new Date('2023-09-18'),
+      peopleTagged: [],
+      albums: ['3'],
+      isFavorite: false
     }
   ];
 
@@ -335,10 +359,10 @@ export const FamilyPhotoManager: React.FC<FamilyPhotoManagerProps> = ({
               {photo.location && (
                 <span className="flex items-center gap-1">
                   <MapPin className="w-3 h-3" />
-                  {photo.location}
+                  {photo.location.name || `${photo.location.lat}, ${photo.location.lng}`}
                 </span>
               )}
-              <span>{formatFileSize(photo.fileSize)}</span>
+              <span>{formatFileSize(photo.fileSize || 0)}</span>
             </div>
           </div>
 
@@ -560,13 +584,13 @@ export const FamilyPhotoManager: React.FC<FamilyPhotoManagerProps> = ({
                 {selectedPhoto.location && (
                   <div className="flex items-center gap-1">
                     <MapPin className="w-4 h-4" />
-                    <span>{selectedPhoto.location}</span>
+                    <span>{selectedPhoto.location.name || `${selectedPhoto.location.lat}, ${selectedPhoto.location.lng}`}</span>
                   </div>
                 )}
                 <div className="flex items-center gap-1">
                   <Users className="w-4 h-4" />
                   <span>
-                    {selectedPhoto.people.map(id => getMemberById(id)?.firstName || 'Unknown').join(', ')}
+                    {(selectedPhoto.people || []).map(id => getMemberById(id)?.firstName || 'Unknown').join(', ')}
                   </span>
                 </div>
                 <div className="flex items-center gap-4">

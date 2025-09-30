@@ -39,35 +39,20 @@ interface NewsDashboardProps {
   onUpdatePreferences?: (preferences: Partial<NewsPreferences>) => void;
 }
 
-export const NewsDashboard: React.FC<NewsDashboardProps> = ({
-  articles: initialArticles,
-  preferences: initialPreferences,
-  onUpdatePreferences
-}) => {
-  const [articles, setArticles] = useState<NewsArticle[]>(initialArticles || mockArticles);
-  const [preferences, setPreferences] = useState<NewsPreferences>(
-    initialPreferences || mockPreferences
-  );
-  const [selectedCategory, setSelectedCategory] = useState<NewsCategory | 'all'>('all');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [viewMode, setViewMode] = useState<'cards' | 'list' | 'digest'>('cards');
-  const [showSettings, setShowSettings] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
+const mockPreferences: NewsPreferences = {
+  enabledCategories: ['general', 'local', 'family', 'education', 'safety'],
+  sources: rssNewsService.getAvailableSources(),
+  locationBased: true,
+  location: 'Atlanta, GA',
+  ageFiltering: true,
+  maxArticlesPerDay: 20,
+  notificationEnabled: true,
+  digestFrequency: 'daily',
+  keywords: ['family', 'education', 'atlanta', 'parenting'],
+  blockedKeywords: ['violence', 'inappropriate']
+};
 
-  const mockPreferences: NewsPreferences = {
-    enabledCategories: ['general', 'local', 'family', 'education', 'safety'],
-    sources: rssNewsService.getAvailableSources(),
-    locationBased: true,
-    location: 'Atlanta, GA',
-    ageFiltering: true,
-    maxArticlesPerDay: 20,
-    notificationEnabled: true,
-    digestFrequency: 'daily',
-    keywords: ['family', 'education', 'atlanta', 'parenting'],
-    blockedKeywords: ['violence', 'inappropriate']
-  };
-
-  const mockArticles: NewsArticle[] = [
+const mockArticles: NewsArticle[] = [
     {
       id: '1',
       title: 'Atlanta Public Schools Announces New Family Engagement Program',
@@ -201,7 +186,22 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({
       ageAppropriate: true,
       summary: 'I-285 construction may delay school commutes; alternative routes available.'
     }
-  ];
+];
+
+export const NewsDashboard: React.FC<NewsDashboardProps> = ({
+  articles: initialArticles,
+  preferences: initialPreferences,
+  onUpdatePreferences
+}) => {
+  const [articles, setArticles] = useState<NewsArticle[]>(initialArticles || mockArticles);
+  const [preferences, setPreferences] = useState<NewsPreferences>(
+    initialPreferences || mockPreferences
+  );
+  const [selectedCategory, setSelectedCategory] = useState<NewsCategory | 'all'>('all');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [viewMode, setViewMode] = useState<'cards' | 'list' | 'digest'>('cards');
+  const [showSettings, setShowSettings] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const categoryConfig = {
     general: { icon: Globe, color: 'blue', label: 'General News' },

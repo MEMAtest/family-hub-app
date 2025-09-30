@@ -111,7 +111,7 @@ export const FamilyRoleManager: React.FC<FamilyRoleManagerProps> = ({
     }
   };
 
-  const allPermissions: { [key in FamilyPermission]: { label: string; description: string; category: string } } = {
+  const allPermissions: Record<string, { label: string; description: string; category: string }> = {
     view_family_overview: {
       label: 'View Family Overview',
       description: 'See general family information and dashboard',
@@ -189,10 +189,10 @@ export const FamilyRoleManager: React.FC<FamilyRoleManagerProps> = ({
     }
   };
 
-  const [rolePermissions, setRolePermissions] = useState<Record<FamilyRole, FamilyPermission[]>>(() => {
-    const initial: Record<FamilyRole, FamilyPermission[]> = {} as any;
+  const [rolePermissions, setRolePermissions] = useState<Record<string, FamilyPermission[]>>(() => {
+    const initial: Record<string, FamilyPermission[]> = {};
     Object.entries(roleConfig).forEach(([role, config]) => {
-      initial[role as FamilyRole] = [...config.defaultPermissions];
+      initial[role] = [...config.defaultPermissions] as FamilyPermission[];
     });
     return initial;
   });
@@ -210,11 +210,27 @@ export const FamilyRoleManager: React.FC<FamilyRoleManagerProps> = ({
       [selectedRole]: updatedPermissions
     }));
 
-    onUpdateRolePermissions(selectedRole, updatedPermissions);
+    const roleObj: FamilyRole = {
+      id: selectedRole,
+      name: roleConfig[selectedRole as keyof typeof roleConfig]?.label || selectedRole,
+      description: `${selectedRole} role`,
+      permissions: updatedPermissions.map(p => typeof p === 'string' ? p : p.name),
+      level: selectedRole as any,
+      canManageFamily: updatedPermissions.some(p => (typeof p === 'string' ? p : p.name) === 'manage_family_members'),
+      canManageCalendar: updatedPermissions.some(p => (typeof p === 'string' ? p : p.name) === 'view_calendar'),
+      canManageBudget: updatedPermissions.some(p => (typeof p === 'string' ? p : p.name) === 'manage_financial_data'),
+      canManageGoals: updatedPermissions.some(p => (typeof p === 'string' ? p : p.name) === 'manage_goals'),
+      canManageShopping: updatedPermissions.some(p => (typeof p === 'string' ? p : p.name) === 'manage_shopping_lists'),
+      canManageMeals: updatedPermissions.some(p => (typeof p === 'string' ? p : p.name) === 'manage_meal_plans'),
+      canViewReports: updatedPermissions.some(p => (typeof p === 'string' ? p : p.name) === 'view_reports'),
+      canManageSettings: updatedPermissions.some(p => (typeof p === 'string' ? p : p.name) === 'manage_settings'),
+      restrictions: []
+    };
+    onUpdateRolePermissions(roleObj, updatedPermissions);
   };
 
-  const getMembersByRole = (role: FamilyRole) => {
-    return familyMembers.filter(member => member.role === role);
+  const getMembersByRole = (role: string) => {
+    return familyMembers.filter(member => member.role.id === role || member.role.level === role);
   };
 
   const getPermissionsByCategory = () => {
@@ -223,7 +239,12 @@ export const FamilyRoleManager: React.FC<FamilyRoleManagerProps> = ({
       if (!categories[config.category]) {
         categories[config.category] = [];
       }
-      categories[config.category].push(permission as FamilyPermission);
+      categories[config.category].push({
+        id: permission,
+        name: permission,
+        description: config.description,
+        level: permission.includes('manage') ? 'admin' : permission.includes('edit') ? 'edit' : 'view'
+      } as FamilyPermission);
     });
     return categories;
   };
@@ -274,7 +295,7 @@ export const FamilyRoleManager: React.FC<FamilyRoleManagerProps> = ({
           <div className="space-y-6">
             {Object.entries(roleConfig).map(([role, config]) => {
               const IconComponent = config.icon;
-              const members = getMembersByRole(role as FamilyRole);
+              const members = getMembersByRole(role);
 
               return (
                 <div key={role} className="border border-gray-200 rounded-lg p-4">
@@ -319,8 +340,28 @@ export const FamilyRoleManager: React.FC<FamilyRoleManagerProps> = ({
                             </div>
                           </div>
                           <select
-                            value={member.role}
-                            onChange={(e) => onUpdateMemberRole(member.id, e.target.value as FamilyRole)}
+                            value={member.role.id || member.role.level}
+                            onChange={(e) => {
+                              const roleKey = e.target.value;
+                              const roleConfig = allPermissions[roleKey];
+                              const newRole: FamilyRole = {
+                                id: roleKey,
+                                name: roleKey,
+                                description: `${roleKey} role`,
+                                permissions: [],
+                                level: roleKey as any,
+                                canManageFamily: roleKey === 'parent',
+                                canManageCalendar: roleKey !== 'guest',
+                                canManageBudget: roleKey === 'parent',
+                                canManageGoals: roleKey !== 'guest',
+                                canManageShopping: roleKey !== 'guest',
+                                canManageMeals: roleKey === 'parent',
+                                canViewReports: roleKey === 'parent',
+                                canManageSettings: roleKey === 'parent',
+                                restrictions: []
+                              };
+                              onUpdateMemberRole(member.id, newRole);
+                            }}
                             className="px-3 py-1 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                           >
                             {Object.entries(roleConfig).map(([roleKey, roleData]) => (
@@ -349,7 +390,7 @@ export const FamilyRoleManager: React.FC<FamilyRoleManagerProps> = ({
               <label className="text-sm font-medium text-gray-700">Select Role:</label>
               <select
                 value={selectedRole}
-                onChange={(e) => setSelectedRole(e.target.value as FamilyRole)}
+                onChange={(e) => setSelectedRole(e.target.value)}
                 className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               >
                 {Object.entries(roleConfig).map(([roleKey, roleData]) => (
@@ -362,15 +403,15 @@ export const FamilyRoleManager: React.FC<FamilyRoleManagerProps> = ({
 
             <div className="bg-gray-50 rounded-lg p-4 mb-6">
               <div className="flex items-center gap-3 mb-2">
-                {React.createElement(roleConfig[selectedRole].icon, {
-                  className: `w-5 h-5 text-${roleConfig[selectedRole].color}-600`
+                {React.createElement(roleConfig[selectedRole as keyof typeof roleConfig]?.icon || User, {
+                  className: `w-5 h-5 text-${roleConfig[selectedRole as keyof typeof roleConfig]?.color || 'gray'}-600`
                 })}
                 <h3 className="font-semibold text-gray-900">
-                  {roleConfig[selectedRole].label} Permissions
+                  {roleConfig[selectedRole as keyof typeof roleConfig]?.label || selectedRole} Permissions
                 </h3>
               </div>
               <p className="text-sm text-gray-600">
-                Configure what actions members with the {roleConfig[selectedRole].label.toLowerCase()} role can perform.
+                Configure what actions members with the {roleConfig[selectedRole as keyof typeof roleConfig]?.label?.toLowerCase() || selectedRole} role can perform.
               </p>
             </div>
 
@@ -382,10 +423,10 @@ export const FamilyRoleManager: React.FC<FamilyRoleManagerProps> = ({
                 <div className="p-4 space-y-3">
                   {permissions.map((permission) => {
                     const hasPermission = rolePermissions[selectedRole]?.includes(permission);
-                    const config = allPermissions[permission];
+                    const config = allPermissions[permission.id || permission.name];
 
                     return (
-                      <div key={permission} className="flex items-start gap-3">
+                      <div key={permission.id || permission.name} className="flex items-start gap-3">
                         <button
                           onClick={() => handlePermissionToggle(permission)}
                           className={`flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${

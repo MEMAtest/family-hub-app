@@ -2,8 +2,8 @@ import { Resend } from 'resend';
 import { CalendarEvent, Person } from '@/types/calendar.types';
 import { InAppNotification } from '@/types/notification.types';
 
-// Initialize Resend client
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Initialize Resend client only if API key is provided
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 export interface EmailTemplate {
   subject: string;
@@ -35,6 +35,11 @@ class EmailService {
     recipient: EmailRecipient,
     reminderTime: number // minutes before event
   ): Promise<boolean> {
+    if (!resend) {
+      console.warn('Email service not configured: RESEND_API_KEY is missing');
+      return false;
+    }
+
     try {
       const template = this.generateEventReminderTemplate(event, reminderTime);
 
@@ -61,6 +66,11 @@ class EmailService {
     conflictData: ConflictData,
     recipients: EmailRecipient[]
   ): Promise<boolean> {
+    if (!resend) {
+      console.warn('Email service not configured: RESEND_API_KEY is missing');
+      return false;
+    }
+
     try {
       const template = this.generateConflictAlertTemplate(conflictData);
 
@@ -92,6 +102,11 @@ class EmailService {
     recipient: EmailRecipient,
     date: Date
   ): Promise<boolean> {
+    if (!resend) {
+      console.warn('Email service not configured: RESEND_API_KEY is missing');
+      return false;
+    }
+
     try {
       const template = this.generateDailyDigestTemplate(events, notifications, date);
 
@@ -120,6 +135,11 @@ class EmailService {
     recipient: EmailRecipient,
     weekStart: Date
   ): Promise<boolean> {
+    if (!resend) {
+      console.warn('Email service not configured: RESEND_API_KEY is missing');
+      return false;
+    }
+
     try {
       const template = this.generateWeeklySummaryTemplate(events, people, weekStart);
 
@@ -583,6 +603,11 @@ View detailed analytics in Family Hub: ${process.env.NEXT_PUBLIC_APP_URL || 'htt
    * Test email sending capability
    */
   async testEmail(recipient: EmailRecipient): Promise<boolean> {
+    if (!resend) {
+      console.warn('Email service not configured: RESEND_API_KEY is missing');
+      return false;
+    }
+
     try {
       const response = await resend.emails.send({
         from: this.fromEmail,

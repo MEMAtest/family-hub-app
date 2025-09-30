@@ -1,7 +1,21 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { FamilyMember, FamilyRole, MedicalInfo, ContactInfo, PersonalPreferences } from '@/types/family.types';
+import {
+  FamilyMember,
+  FamilyRole,
+  MedicalInfo,
+  ContactInfo,
+  PersonalPreferences,
+  HealthcareProvider,
+  MemberPreferences,
+  Address,
+  EmergencyContact,
+  Allergy,
+  Medication,
+  MedicalCondition,
+  InsuranceInfo
+} from '@/types/family.types';
 import { User, Mail, Phone, Calendar, Users, Shield, Heart, UserPlus, X, Save, Plus, Trash2 } from 'lucide-react';
 
 interface FamilyMemberFormProps {
@@ -59,7 +73,7 @@ export const FamilyMemberForm: React.FC<FamilyMemberFormProps> = ({
           street: '',
           city: '',
           state: '',
-          zipCode: '',
+          postalCode: '',
           country: '',
           type: 'work' as const,
           isPrimary: true
@@ -71,7 +85,9 @@ export const FamilyMemberForm: React.FC<FamilyMemberFormProps> = ({
       insuranceInfo: {
         provider: '',
         policyNumber: '',
-        groupNumber: ''
+        groupNumber: '',
+        memberId: '',
+        effectiveDate: new Date()
       },
       lastUpdated: new Date()
     },
@@ -87,15 +103,19 @@ export const FamilyMemberForm: React.FC<FamilyMemberFormProps> = ({
       },
       privacy: {
         profileVisibility: 'family',
-        shareLocation: false,
-        shareCalendar: true,
-        sharePhotos: true
+        activityVisibility: 'family',
+        locationSharing: false,
+        photoTagging: true,
+        contactSharing: true,
+        dataCollection: false
       },
       accessibility: {
-        screenReaderSupport: false,
-        highContrast: false,
         fontSize: 'medium',
-        reducedMotion: false
+        highContrast: false,
+        reducedMotion: false,
+        screenReader: false,
+        voiceCommands: false,
+        keyboardNavigation: true
       },
       theme: {
         mode: 'light',
@@ -215,11 +235,39 @@ export const FamilyMemberForm: React.FC<FamilyMemberFormProps> = ({
   const addMedicalItem = (type: 'allergies' | 'medications' | 'conditions', value: string) => {
     if (!value.trim()) return;
 
+    let newItem: any;
+    if (type === 'allergies') {
+      newItem = {
+        id: Date.now().toString(),
+        allergen: value.trim(),
+        severity: 'moderate' as const,
+        symptoms: [],
+      } as Allergy;
+    } else if (type === 'medications') {
+      newItem = {
+        id: Date.now().toString(),
+        name: value.trim(),
+        dosage: '',
+        frequency: '',
+        prescribedBy: '',
+        startDate: new Date(),
+        purpose: '',
+      } as Medication;
+    } else if (type === 'conditions') {
+      newItem = {
+        id: Date.now().toString(),
+        condition: value.trim(),
+        diagnosedDate: new Date(),
+        status: 'active' as const,
+        treatment: '',
+      } as MedicalCondition;
+    }
+
     setFormData(prev => ({
       ...prev,
       medicalInfo: {
         ...prev.medicalInfo!,
-        [type]: [...(prev.medicalInfo?.[type as keyof typeof prev.medicalInfo] || []), value.trim()]
+        [type]: [...(Array.isArray(prev.medicalInfo?.[type as keyof MedicalInfo]) ? prev.medicalInfo[type as keyof MedicalInfo] as any[] : []), newItem]
       }
     }));
   };
@@ -350,16 +398,83 @@ export const FamilyMemberForm: React.FC<FamilyMemberFormProps> = ({
                   Family Role
                 </label>
                 <select
-                  value={formData.role || 'child'}
-                  onChange={(e) => handleInputChange('role', e.target.value as unknown as FamilyRole)}
+                  value={formData.role?.level || 'child'}
+                  onChange={(e) => {
+                    const level = e.target.value as 'admin' | 'parent' | 'teen' | 'child' | 'guest';
+                    const roleMap: Record<string, FamilyRole> = {
+                      parent: {
+                        id: 'parent',
+                        name: 'Parent',
+                        description: 'Parent member',
+                        permissions: ['manage_children'],
+                        level: 'parent',
+                        canManageFamily: true,
+                        canManageCalendar: true,
+                        canManageBudget: true,
+                        canManageGoals: true,
+                        canManageShopping: true,
+                        canManageMeals: true,
+                        canViewReports: true,
+                        canManageSettings: true,
+                        restrictions: []
+                      },
+                      child: {
+                        id: 'child',
+                        name: 'Child',
+                        description: 'Child member',
+                        permissions: [],
+                        level: 'child',
+                        canManageFamily: false,
+                        canManageCalendar: false,
+                        canManageBudget: false,
+                        canManageGoals: false,
+                        canManageShopping: false,
+                        canManageMeals: false,
+                        canViewReports: false,
+                        canManageSettings: false,
+                        restrictions: []
+                      },
+                      teen: {
+                        id: 'teen',
+                        name: 'Teen',
+                        description: 'Teen member',
+                        permissions: ['view_own'],
+                        level: 'teen',
+                        canManageFamily: false,
+                        canManageCalendar: true,
+                        canManageBudget: false,
+                        canManageGoals: true,
+                        canManageShopping: true,
+                        canManageMeals: false,
+                        canViewReports: false,
+                        canManageSettings: false,
+                        restrictions: []
+                      },
+                      guest: {
+                        id: 'guest',
+                        name: 'Guest',
+                        description: 'Guest member',
+                        permissions: [],
+                        level: 'guest',
+                        canManageFamily: false,
+                        canManageCalendar: false,
+                        canManageBudget: false,
+                        canManageGoals: false,
+                        canManageShopping: false,
+                        canManageMeals: false,
+                        canViewReports: false,
+                        canManageSettings: false,
+                        restrictions: []
+                      }
+                    };
+                    handleInputChange('role', roleMap[level] || roleMap['child']);
+                  }}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 >
                   <option value="parent">Parent</option>
                   <option value="child">Child</option>
-                  <option value="guardian">Guardian</option>
-                  <option value="grandparent">Grandparent</option>
-                  <option value="sibling">Sibling</option>
-                  <option value="other">Other</option>
+                  <option value="teen">Teen</option>
+                  <option value="guest">Guest</option>
                 </select>
               </div>
             </div>
@@ -557,27 +672,45 @@ export const FamilyMemberForm: React.FC<FamilyMemberFormProps> = ({
               </div>
             </div>
 
-            {['allergies', 'medications', 'medicalConditions'].map((type) => (
+            {['allergies', 'medications', 'conditions'].map((type) => (
               <div key={type}>
                 <label className="block text-sm font-medium text-gray-700 mb-2 capitalize">
-                  {type.replace(/([A-Z])/g, ' $1').trim()}
+                  {type === 'conditions' ? 'Medical Conditions' : type}
                 </label>
 
                 <div className="space-y-2">
-                  {(formData.medicalInfo?.[type as keyof MedicalInfo] as string[] || []).map((item, index) => (
-                    <div key={index} className="flex items-center gap-2">
-                      <span className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm">
-                        {item}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => removeMedicalItem(type as any, index)}
-                        className="p-1 text-red-600 hover:bg-red-50 rounded"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ))}
+                  {(() => {
+                    const items = formData.medicalInfo?.[type as keyof MedicalInfo];
+                    if (!Array.isArray(items)) return null;
+
+                    return items.map((item: any, index: number) => {
+                      let displayText = '';
+                      if (type === 'allergies' && typeof item === 'object') {
+                        displayText = item.allergen || '';
+                      } else if (type === 'medications' && typeof item === 'object') {
+                        displayText = item.name || '';
+                      } else if (type === 'conditions' && typeof item === 'object') {
+                        displayText = item.condition || '';
+                      } else if (typeof item === 'string') {
+                        displayText = item;
+                      }
+
+                      return (
+                        <div key={index} className="flex items-center gap-2">
+                          <span className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm">
+                            {displayText}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => removeMedicalItem(type as any, index)}
+                            className="p-1 text-red-600 hover:bg-red-50 rounded"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      );
+                    });
+                  })()}
 
                   <div className="flex gap-2">
                     <input
@@ -636,7 +769,7 @@ export const FamilyMemberForm: React.FC<FamilyMemberFormProps> = ({
                 <input
                   type="text"
                   placeholder="Doctor address"
-                  value={formData.medicalInfo?.doctorContact?.address || ''}
+                  value={typeof formData.medicalInfo?.primaryDoctor?.address === 'string' ? formData.medicalInfo.primaryDoctor.address : (formData.medicalInfo?.primaryDoctor?.address ? `${formData.medicalInfo.primaryDoctor.address.street}` : '')}
                   onChange={(e) => handleNestedChange(['medicalInfo', 'doctorContact', 'address'], e.target.value)}
                   className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
@@ -681,18 +814,21 @@ export const FamilyMemberForm: React.FC<FamilyMemberFormProps> = ({
                   { key: 'email', label: 'Email notifications' },
                   { key: 'sms', label: 'SMS notifications' },
                   { key: 'push', label: 'Push notifications' },
-                  { key: 'reminders', label: 'Reminders' }
-                ].map(({ key, label }) => (
-                  <label key={key} className="flex items-center gap-3">
-                    <input
-                      type="checkbox"
-                      checked={formData.preferences?.notifications?.[key as keyof typeof formData.preferences.notifications] ?? false}
-                      onChange={(e) => handleNestedChange(['preferences', 'notifications', key], e.target.checked)}
-                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                    />
-                    <span className="text-sm text-gray-700">{label}</span>
-                  </label>
-                ))}
+                  { key: 'inApp', label: 'In-app notifications' }
+                ].map(({ key, label }) => {
+                  const typedKey = key as 'email' | 'sms' | 'push' | 'inApp';
+                  return (
+                    <label key={key} className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        checked={formData.preferences?.notifications?.[typedKey] ?? false}
+                        onChange={(e) => handleNestedChange(['preferences', 'notifications', key], e.target.checked)}
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <span className="text-sm text-gray-700">{label}</span>
+                    </label>
+                  );
+                })}
               </div>
             </div>
 
@@ -717,18 +853,23 @@ export const FamilyMemberForm: React.FC<FamilyMemberFormProps> = ({
                 <div className="space-y-3">
                   {[
                     { key: 'locationSharing', label: 'Enable location sharing' },
-                    { key: 'activitySharing', label: 'Share activity updates' }
-                  ].map(({ key, label }) => (
-                    <label key={key} className="flex items-center gap-3">
-                      <input
-                        type="checkbox"
-                        checked={formData.preferences?.privacy?.[key as keyof typeof formData.preferences.privacy] ?? false}
-                        onChange={(e) => handleNestedChange(['preferences', 'privacy', key], e.target.checked)}
-                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                      />
-                      <span className="text-sm text-gray-700">{label}</span>
-                    </label>
-                  ))}
+                    { key: 'photoTagging', label: 'Allow photo tagging' },
+                    { key: 'contactSharing', label: 'Share contact information' },
+                    { key: 'dataCollection', label: 'Allow data collection' }
+                  ].map(({ key, label }) => {
+                    const typedKey = key as 'locationSharing' | 'photoTagging' | 'contactSharing' | 'dataCollection';
+                    return (
+                      <label key={key} className="flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          checked={formData.preferences?.privacy?.[typedKey] ?? false}
+                          onChange={(e) => handleNestedChange(['preferences', 'privacy', key], e.target.checked)}
+                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                        />
+                        <span className="text-sm text-gray-700">{label}</span>
+                      </label>
+                    );
+                  })}
                 </div>
               </div>
             </div>
