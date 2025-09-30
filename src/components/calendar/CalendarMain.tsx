@@ -97,7 +97,15 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
   const [view, setView] = useState<ExtendedView>(Views.MONTH)
   const [showFilters, setShowFilters] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
-  const [selectedPeople, setSelectedPeople] = useState<string[]>(people.map(p => p.id))
+  // Include all people plus member-4 for school events
+  const [selectedPeople, setSelectedPeople] = useState<string[]>(() => {
+    const peopleIds = people.map(p => p.id);
+    // Always include member-4 for school events even if not in people array yet
+    if (!peopleIds.includes('member-4')) {
+      peopleIds.push('member-4');
+    }
+    return peopleIds;
+  })
   const [selectedCategories, setSelectedCategories] = useState<string[]>([
     'sport', 'meeting', 'fitness', 'social', 'education', 'family', 'other', 'appointment', 'work', 'personal'
   ])
@@ -111,10 +119,14 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
   // Convert calendar events to Big Calendar format
   const bigCalendarEvents = useMemo((): BigCalendarEvent[] => {
     return events
-      .filter(event =>
-        selectedPeople.includes(event.person) &&
-        selectedCategories.includes(event.type)
-      )
+      .filter(event => {
+        // Debug logging for October events
+        if (event.date && event.date.startsWith('2025-10')) {
+          console.log('Processing October event:', event.title, 'Person:', event.person, 'Selected?', selectedPeople.includes(event.person));
+        }
+        return selectedPeople.includes(event.person) &&
+               selectedCategories.includes(event.type);
+      })
       .map(event => {
         const eventStart = moment(`${event.date} ${event.time}`, 'YYYY-MM-DD HH:mm').toDate()
         const eventEnd = moment(eventStart).add(event.duration, 'minutes').toDate()
