@@ -13,7 +13,9 @@ class DatabaseService {
       const families = await this.fetchAPI('/families');
       if (families && families.length > 0) {
         this.familyId = families[0].id;
-        localStorage.setItem('familyId', this.familyId);
+        if (this.familyId) {
+          localStorage.setItem('familyId', this.familyId);
+        }
         console.log('Database connected: Family ID', this.familyId);
 
         // Sync initial data from database
