@@ -1371,6 +1371,25 @@ const FamilyHubContent = () => {
                 Reset Data
               </button>
               <button
+                onClick={() => {
+                  const events = localStorage.getItem('calendarEvents');
+                  if (events) {
+                    const parsed = JSON.parse(events);
+                    const octoberEvents = parsed.filter((e: any) => e.date && e.date.startsWith('2025-10'));
+                    console.log('Total events:', parsed.length);
+                    console.log('October events:', octoberEvents);
+                    console.log('School events:', parsed.filter((e: any) => e.id && e.id.startsWith('school-')));
+                    alert(`Total: ${parsed.length} events\nOctober: ${octoberEvents.length} events\nSchool: ${parsed.filter((e: any) => e.id && e.id.startsWith('school-')).length} events\nCheck console for details`);
+                  } else {
+                    alert('No events in localStorage');
+                  }
+                }}
+                className="bg-blue-600 text-white px-3 py-2 rounded-sm hover:bg-blue-700 transition-colors text-sm font-medium flex items-center gap-2"
+              >
+                <AlertCircle size={16} />
+                Debug
+              </button>
+              <button
                 onClick={() => setShowQuickActivityForm(true)}
                 className="bg-gray-900 text-white px-3 py-2 rounded-sm hover:bg-gray-800 transition-colors text-sm font-medium flex items-center gap-2"
               >
