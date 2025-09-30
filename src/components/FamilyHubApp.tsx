@@ -25,6 +25,7 @@ import MobileNavigation from './common/MobileNavigation';
 // Conversion handled by DataInitializer component
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import conflictDetectionService, { DetectedConflict, ConflictResolution } from '@/services/conflictDetectionService';
+import databaseService from '@/services/databaseService';
 import { Calendar, Clock, Users, ShoppingCart, UtensilsCrossed, PoundSterling, Camera, MapPin, Plus, Edit, Trash2, Filter, Bell, Download, Share2, ChevronLeft, ChevronRight, Menu, X, Star, AlertTriangle, Navigation, StickyNote, Check, TrendingUp, PieChart, BarChart3, Home, Car, Zap, Droplets, Building2, GraduationCap, Baby, Drama, Gamepad2, Settings, Activity, Target, Flame, Coffee, Apple, Utensils, ShoppingBag, Receipt, CalendarDays, DollarSign, Newspaper, Upload, Image, Dumbbell, Heart, Brain, Smartphone, Wifi, Repeat, Save, RefreshCw, ArrowUp, ArrowDown, Eye, Grid3X3, List, Wallet, BookOpen, AlertCircle } from 'lucide-react';
 import { PieChart as RechartsPieChart, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Pie, RadialBarChart, RadialBar, Legend, AreaChart, Area } from 'recharts';
 
@@ -54,6 +55,30 @@ const useClientTime = () => {
 const FamilyHubContent = () => {
   // Client-only time management
   const { clientTime, isClient } = useClientTime();
+
+  // Database connection state
+  const [databaseStatus, setDatabaseStatus] = useState({ connected: false, familyId: null, mode: 'localStorage' });
+
+  // Initialize database service on mount
+  useEffect(() => {
+    const initDatabase = async () => {
+      try {
+        const connected = await databaseService.initialize();
+        const status = databaseService.getStatus();
+        setDatabaseStatus(status);
+        console.log('Database status:', status);
+
+        if (connected) {
+          // Sync data from database to localStorage
+          await databaseService.syncFromDatabase();
+        }
+      } catch (error) {
+        console.error('Failed to initialize database:', error);
+      }
+    };
+
+    initDatabase();
+  }, []);
 
   // Notification context
   const { scheduleEventReminders, cancelEventReminders, showNotification } = useNotifications();
@@ -679,7 +704,7 @@ const FamilyHubContent = () => {
   const budgetTotals = calculateBudgetTotals(); // Moved outside render to prevent loops
 
   // Event management
-  const handleEventSubmit = (e: React.FormEvent) => {
+  const handleEventSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const newEvent: CalendarEvent = {
       id: editingEvent?.id || generateId('event'),
@@ -701,17 +726,25 @@ const FamilyHubContent = () => {
     };
 
     if (editingEvent) {
-      setEvents(prevEvents => {
-        const updated = prevEvents.map(event => event.id === editingEvent.id ? newEvent : event);
-        console.log('Updated event, total events:', updated.length);
-        return updated;
-      });
+      // Update event in database and localStorage
+      const success = await databaseService.updateEvent(editingEvent.id, newEvent);
+      if (success) {
+        setEvents(prevEvents => {
+          const updated = prevEvents.map(event => event.id === editingEvent.id ? newEvent : event);
+          console.log('Updated event, total events:', updated.length);
+          return updated;
+        });
+      }
     } else {
-      setEvents(prevEvents => {
-        const updated = [...prevEvents, newEvent];
-        console.log('Added new event, total events:', updated.length);
-        return updated;
-      });
+      // Save new event to database and localStorage
+      const savedEvent = await databaseService.saveEvent(newEvent);
+      if (savedEvent) {
+        setEvents(prevEvents => {
+          const updated = [...prevEvents, savedEvent];
+          console.log('Added new event, total events:', updated.length);
+          return updated;
+        });
+      }
     }
 
     setShowEventForm(false);
@@ -806,17 +839,21 @@ const FamilyHubContent = () => {
       }
     }
 
-    setEvents(prevEvents => {
-      const updated = prevEvents.map(event => {
-        if (event.id === id) {
-          return updatedEvent;
-        }
-        return event;
+    // Update event in database and localStorage
+    const success = await databaseService.updateEvent(id, updatedEvent);
+    if (success) {
+      setEvents(prevEvents => {
+        const updated = prevEvents.map(event => {
+          if (event.id === id) {
+            return updatedEvent;
+          }
+          return event;
+        });
+        console.log('Events before update:', prevEvents.find(e => e.id === id));
+        console.log('Events after update:', updated.find(e => e.id === id));
+        return updated;
       });
-      console.log('Events before update:', prevEvents.find(e => e.id === id));
-      console.log('Events after update:', updated.find(e => e.id === id));
-      return updated;
-    });
+    }
 
     // Reschedule notification reminders if date/time changed
     if (updates.date || updates.time) {
@@ -849,8 +886,12 @@ const FamilyHubContent = () => {
   const handleCalendarEventDelete = async (id: string) => {
     const eventToDelete = events.find(event => event.id === id);
 
-    setEvents(prevEvents => prevEvents.filter(event => event.id !== id));
-    setSelectedEvent(null);
+    // Delete event from database and localStorage
+    const success = await databaseService.deleteEvent(id);
+    if (success) {
+      setEvents(prevEvents => prevEvents.filter(event => event.id !== id));
+      setSelectedEvent(null);
+    }
 
     // Cancel notification reminders for the deleted event
     try {
@@ -1021,9 +1062,10 @@ const FamilyHubContent = () => {
   };
 
   // Family member management
-  const handleFamilySubmit = (e: React.FormEvent) => {
+  const handleFamilySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (editingMember) {
+      // For now, just update localStorage as we don't have update member API yet
       setPeople(people.map(p => p.id === editingMember.id ? { ...editingMember, ...familyForm } : p));
       setEditingMember(null);
     } else {
@@ -1032,8 +1074,13 @@ const FamilyHubContent = () => {
         ...familyForm,
         fitnessGoals: familyForm.age === 'Adult' ? { steps: 8000, workouts: 3 } : { activeHours: 2, activities: 4 }
       };
-      // @ts-ignore - Complex nested type compatibility issue
-      setPeople([...people, newMember]);
+
+      // Save new member to database and localStorage
+      const savedMember = await databaseService.saveMember(newMember);
+      if (savedMember) {
+        // @ts-ignore - Complex nested type compatibility issue
+        setPeople([...people, savedMember]);
+      }
     }
     setShowFamilyForm(false);
     setFamilyForm({ name: '', color: colorOptions[0], icon: iconOptions[0], age: 'Adult', role: 'Family Member' });
@@ -1362,7 +1409,15 @@ const FamilyHubContent = () => {
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
               <h1 className="text-2xl md:text-3xl font-light text-gray-900 mb-1 md:mb-2">Family Overview</h1>
-              <p className="text-sm md:text-base text-gray-600">Family Dashboard • {isClient ? formatDateConsistent(new Date()) : 'Loading...'}</p>
+              <div className="flex items-center gap-3">
+                <p className="text-sm md:text-base text-gray-600">Family Dashboard • {isClient ? formatDateConsistent(new Date()) : 'Loading...'}</p>
+                <div className="flex items-center gap-1.5">
+                  <div className={`w-2 h-2 rounded-full ${databaseStatus.connected ? 'bg-green-500' : 'bg-yellow-500'} animate-pulse`} />
+                  <span className="text-xs text-gray-500">
+                    {databaseStatus.connected ? 'Database Connected' : 'Local Storage'}
+                  </span>
+                </div>
+              </div>
             </div>
             <div className="hidden md:flex items-center gap-3">
               <NotificationBell />
