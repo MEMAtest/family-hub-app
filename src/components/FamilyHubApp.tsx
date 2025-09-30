@@ -19,10 +19,10 @@ import GoalsDashboard from './goals/GoalsDashboard';
 import FamilyDashboard from './family/FamilyDashboard';
 import { NewsLanding } from './news/NewsLanding';
 import Breadcrumb from './common/Breadcrumb';
-import { schoolTerms2025_2026, getCurrentTerm, getNextSchoolEvent } from '@/data/schoolTerms';
+// School terms are now loaded from calendar events via DataInitializer
 import { initialFamilyMembers, initialEvents, iconOptions, colorOptions } from '@/data/initialData';
 import MobileNavigation from './common/MobileNavigation';
-import { convertSchoolTermsToEvents } from '@/utils/schoolTermsToEvents';
+// Conversion handled by DataInitializer component
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import conflictDetectionService, { DetectedConflict, ConflictResolution } from '@/services/conflictDetectionService';
 import { Calendar, Clock, Users, ShoppingCart, UtensilsCrossed, PoundSterling, Camera, MapPin, Plus, Edit, Trash2, Filter, Bell, Download, Share2, ChevronLeft, ChevronRight, Menu, X, Star, AlertTriangle, Navigation, StickyNote, Check, TrendingUp, PieChart, BarChart3, Home, Car, Zap, Droplets, Building2, GraduationCap, Baby, Drama, Gamepad2, Settings, Activity, Target, Flame, Coffee, Apple, Utensils, ShoppingBag, Receipt, CalendarDays, DollarSign, Newspaper, Upload, Image, Dumbbell, Heart, Brain, Smartphone, Wifi, Repeat, Save, RefreshCw, ArrowUp, ArrowDown, Eye, Grid3X3, List, Wallet, BookOpen, AlertCircle } from 'lucide-react';
@@ -90,37 +90,50 @@ const FamilyHubContent = () => {
   const [editingBudgetItem, setEditingBudgetItem] = useState(null);
   const [selectedMealDate, setSelectedMealDate] = useState(null);
 
-  // School term dates from data file
-  const schoolTerms = schoolTerms2025_2026.map(term => ({
-    name: term.name,
-    date: term.type === 'inset' || term.type === 'term' ? term.startDate : undefined,
-    dateStart: term.type === 'half-term' || term.type === 'break' ? term.startDate : undefined,
-    dateEnd: term.type === 'half-term' || term.type === 'break' ? term.endDate : undefined,
-    type: term.type === 'term' && term.name.includes('Starts') ? 'term-start' :
-          term.type === 'term' && term.name.includes('Ends') ? 'term-end' :
-          'stewart-fleming',
-    category: term.type
-  }));
+  // Placeholder for schoolTerms - will be populated after events is defined
+  // This needs to be defined here for TypeScript but will be recalculated below
 
   // Use initial data from data file with localStorage persistence
   const [people, setPeople] = useLocalStorage('familyMembers', initialFamilyMembers);
 
-  // Combine initial events with school term events
-  const schoolTermEvents = convertSchoolTermsToEvents(schoolTerms2025_2026);
-
-  // Check if we need to add school term events to existing events
+  // Events state with localStorage persistence
   const [events, setEvents] = useLocalStorage<CalendarEvent[]>('calendarEvents', []);
 
-  // Initialize with school events if empty
-  useEffect(() => {
-    if (events.length === 0 || !events.some(e => e.id.startsWith('school-'))) {
-      setEvents(prev => {
-        // Remove old school events and add new ones
-        const nonSchoolEvents = prev.filter(e => !e.id.startsWith('school-'));
-        return [...nonSchoolEvents, ...schoolTermEvents];
-      });
-    }
-  }, []);
+  // Get school events from calendar events and convert to term format
+  const schoolTerms = events
+    .filter(event => event.id && event.id.startsWith('school-'))
+    .map(event => {
+      // Parse the notes to get date range info
+      const isHalfTerm = event.title.includes('Half Term');
+      const isBreak = event.title.includes('Break') || event.title.includes('Holiday');
+      const isINSET = event.title.includes('INSET');
+      const isTermStart = event.title.includes('Start');
+      const isTermEnd = event.title.includes('End');
+
+      // Extract date range from notes if available
+      const notesMatch = event.notes?.match(/from ([\d-]+) to ([\d-]+)/);
+
+      return {
+        name: event.title.replace(/[\ud83c\udfeb\ud83c\udfd6\ufe0f\ud83d\udcda\ud83c\udf92\ud83c\udf89\ud83d\udc64]/g, '').replace(/\(.+?\)/, '').trim(),
+        date: !isHalfTerm && !isBreak ? event.date : undefined,
+        dateStart: isHalfTerm || isBreak ? (notesMatch ? notesMatch[1] : event.date) : event.date,
+        dateEnd: isHalfTerm || isBreak ? (notesMatch ? notesMatch[2] : undefined) : undefined,
+        type: isINSET ? 'inset' :
+              isHalfTerm ? 'half-term' :
+              isBreak ? 'break' :
+              isTermStart ? 'term-start' :
+              isTermEnd ? 'term-end' : 'term',
+        category: isINSET ? 'inset' :
+                  (isHalfTerm || isBreak) ? 'holiday' : 'term'
+      };
+    })
+    .sort((a, b) => {
+      const dateA = new Date(a.date || a.dateStart || '2025-01-01');
+      const dateB = new Date(b.date || b.dateStart || '2025-01-01');
+      return dateA.getTime() - dateB.getTime();
+    });
+
+  // Note: School events are now initialized by DataInitializer component
 
   // Keep the old events array for reference but commented out
   const _oldDefaultEvents = [
