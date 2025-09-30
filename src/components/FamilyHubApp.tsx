@@ -57,7 +57,7 @@ const FamilyHubContent = () => {
   const { clientTime, isClient } = useClientTime();
 
   // Database connection state
-  const [databaseStatus, setDatabaseStatus] = useState({ connected: false, familyId: null, mode: 'localStorage' });
+  const [databaseStatus, setDatabaseStatus] = useState<{ connected: boolean; familyId: string | null; mode: string }>({ connected: false, familyId: null, mode: 'localStorage' });
 
   // Initialize database service on mount
   useEffect(() => {
