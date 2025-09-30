@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Family Hub Test Script</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; }
+        button { margin: 10px 5px; padding: 10px 20px; font-size: 16px; cursor: pointer; }
+        .success { background-color: #4CAF50; color: white; }
+        .warning { background-color: #ff9800; color: white; }
+        .danger { background-color: #f44336; color: white; }
+        .info { background-color: #2196F3; color: white; }
+        .result { margin: 10px 0; padding: 10px; border: 1px solid #ddd; background: #f9f9f9; }
+        pre { background: #f4f4f4; padding: 10px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>Family Hub Test Suite</h1>
+    <p>Open this page alongside your Family Hub app at http://localhost:3004</p>
+
+    <h2>Test Actions</h2>
+
+    <button class="danger" onclick="clearAllData()">1. Clear All Data</button>
+    <button class="info" onclick="checkInitialData()">2. Check Initial Data</button>
+    <button class="success" onclick="addTestEvent()">3. Add Test Event</button>
+    <button class="info" onclick="checkEventPersistence()">4. Check Event Saved</button>
+    <button class="warning" onclick="simulateRefresh()">5. Simulate Refresh</button>
+    <button class="info" onclick="checkAfterRefresh()">6. Check After Refresh</button>
+    <button class="info" onclick="checkOctoberEvents()">7. Check October Events</button>
+    <button class="info" onclick="checkSchoolHolidays()">8. Check School Holidays</button>
+
+    <h2>Test Results</h2>
+    <div id="results"></div>
+
+    <script>
+        function addResult(title, data, type = 'info') {
+            const resultsDiv = document.getElementById('results');
+            const resultDiv = document.createElement('div');
+            resultDiv.className = 'result';
+            resultDiv.innerHTML = `
+                <strong>${title}</strong>
+                <pre>${JSON.stringify(data, null, 2)}</pre>
+            `;
+            resultsDiv.insertBefore(resultDiv, resultsDiv.firstChild);
+        }
+
+        function clearAllData() {
+            localStorage.clear();
+            addResult('Cleared all localStorage', { success: true }, 'danger');
+            alert('All data cleared! Now reload the Family Hub app.');
+        }
+
+        function checkInitialData() {
+            const events = localStorage.getItem('calendarEvents');
+            const members = localStorage.getItem('familyMembers');
+
+            if (!events || !members) {
+                addResult('Initial Data Check', {
+                    error: 'No data found. Please reload the app first.',
+                    hasEvents: !!events,
+                    hasMembers: !!members
+                }, 'warning');
+                return;
+            }
+
+            const parsedEvents = JSON.parse(events);
+            const parsedMembers = JSON.parse(members);
+            const schoolEvents = parsedEvents.filter(e => e.id && e.id.startsWith('school-'));
+            const octoberEvents = parsedEvents.filter(e => e.date && e.date.startsWith('2025-10'));
+
+            addResult('Initial Data Check', {
+                totalEvents: parsedEvents.length,
+                schoolEvents: schoolEvents.length,
+                octoberEvents: octoberEvents.length,
+                octoberEventDetails: octoberEvents.map(e => ({ title: e.title, date: e.date })),
+                totalMembers: parsedMembers.length,
+                members: parsedMembers.map(m => ({ id: m.id, name: m.name }))
+            }, 'info');
+        }
+
+        function addTestEvent() {
+            const events = localStorage.getItem('calendarEvents');
+            if (!events) {
+                alert('No events found. Please reload the app first.');
+                return;
+            }
+
+            const parsedEvents = JSON.parse(events);
+            const testEvent = {
+                id: 'test-' + Date.now(),
+                title: 'Test Event - ' + new Date().toLocaleTimeString(),
+                person: 'member-1',
+                date: '2025-10-15',
+                time: '14:00',
+                duration: 60,
+                location: 'Test Location',
+                recurring: 'none',
+                cost: 0,
+                type: 'other',
+                notes: 'This is a test event added at ' + new Date().toLocaleString(),
+                isRecurring: false,
+                priority: 'medium',
+                status: 'confirmed',
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            };
+
+            parsedEvents.push(testEvent);
+            localStorage.setItem('calendarEvents', JSON.stringify(parsedEvents));
+
+            addResult('Added Test Event', {
+                event: testEvent,
+                totalEvents: parsedEvents.length
+            }, 'success');
+        }
+
+        function checkEventPersistence() {
+            const events = localStorage.getItem('calendarEvents');
+            if (!events) {
+                addResult('Event Persistence Check', { error: 'No events in localStorage' }, 'danger');
+                return;
+            }
+
+            const parsedEvents = JSON.parse(events);
+            const testEvents = parsedEvents.filter(e => e.id && e.id.startsWith('test-'));
+
+            addResult('Event Persistence Check', {
+                totalEvents: parsedEvents.length,
+                testEvents: testEvents.length,
+                testEventDetails: testEvents.map(e => ({
+                    id: e.id,
+                    title: e.title,
+                    date: e.date,
+                    createdAt: e.createdAt
+                }))
+            }, testEvents.length > 0 ? 'success' : 'warning');
+        }
+
+        function simulateRefresh() {
+            // Just check data is still there
+            const beforeEvents = localStorage.getItem('calendarEvents');
+
+            addResult('Before Refresh', {
+                hasData: !!beforeEvents,
+                eventCount: beforeEvents ? JSON.parse(beforeEvents).length : 0
+            }, 'warning');
+
+            alert('Now manually refresh the Family Hub app and then click "Check After Refresh"');
+        }
+
+        function checkAfterRefresh() {
+            const events = localStorage.getItem('calendarEvents');
+            if (!events) {
+                addResult('After Refresh Check', { error: 'No events found!' }, 'danger');
+                return;
+            }
+
+            const parsedEvents = JSON.parse(events);
+            const testEvents = parsedEvents.filter(e => e.id && e.id.startsWith('test-'));
+            const schoolEvents = parsedEvents.filter(e => e.id && e.id.startsWith('school-'));
+
+            addResult('After Refresh Check', {
+                totalEvents: parsedEvents.length,
+                testEventsStillPresent: testEvents.length,
+                schoolEventsStillPresent: schoolEvents.length,
+                success: testEvents.length > 0
+            }, testEvents.length > 0 ? 'success' : 'danger');
+        }
+
+        function checkOctoberEvents() {
+            const events = localStorage.getItem('calendarEvents');
+            if (!events) {
+                addResult('October Events Check', { error: 'No events found' }, 'danger');
+                return;
+            }
+
+            const parsedEvents = JSON.parse(events);
+            const octoberEvents = parsedEvents.filter(e => e.date && e.date.startsWith('2025-10'));
+
+            addResult('October Events Check', {
+                octoberEventCount: octoberEvents.length,
+                octoberEvents: octoberEvents.map(e => ({
+                    title: e.title,
+                    date: e.date,
+                    person: e.person,
+                    type: e.type,
+                    notes: e.notes
+                }))
+            }, octoberEvents.length > 0 ? 'success' : 'danger');
+        }
+
+        function checkSchoolHolidays() {
+            const events = localStorage.getItem('calendarEvents');
+            if (!events) {
+                addResult('School Holidays Check', { error: 'No events found' }, 'danger');
+                return;
+            }
+
+            const parsedEvents = JSON.parse(events);
+            const schoolEvents = parsedEvents.filter(e => e.id && e.id.startsWith('school-'));
+            const halfTerms = schoolEvents.filter(e => e.title.includes('Half Term'));
+            const insetDays = schoolEvents.filter(e => e.title.includes('INSET'));
+
+            addResult('School Holidays Check', {
+                totalSchoolEvents: schoolEvents.length,
+                halfTerms: halfTerms.map(e => ({ title: e.title, date: e.date, notes: e.notes })),
+                insetDays: insetDays.map(e => ({ title: e.title, date: e.date })),
+                autumnHalfTerm: halfTerms.find(e => e.title.includes('Autumn'))
+            }, schoolEvents.length > 0 ? 'success' : 'danger');
+        }
+    </script>
+</body>
+</html>
