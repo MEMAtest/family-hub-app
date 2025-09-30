@@ -227,7 +227,7 @@ class DatabaseService {
         body: JSON.stringify({
           name: member.name,
           role: member.role || 'Family Member',
-          ageGroup: member.age || 'Adult',
+          ageGroup: 'age' in member ? member.age : 'Adult',
           color: member.color,
           icon: member.icon,
           fitnessGoals: member.fitnessGoals || {},
