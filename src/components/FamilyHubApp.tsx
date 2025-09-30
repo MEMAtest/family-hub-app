@@ -701,9 +701,17 @@ const FamilyHubContent = () => {
     };
 
     if (editingEvent) {
-      setEvents(events.map(event => event.id === editingEvent.id ? newEvent : event));
+      setEvents(prevEvents => {
+        const updated = prevEvents.map(event => event.id === editingEvent.id ? newEvent : event);
+        console.log('Updated event, total events:', updated.length);
+        return updated;
+      });
     } else {
-      setEvents([...events, newEvent]);
+      setEvents(prevEvents => {
+        const updated = [...prevEvents, newEvent];
+        console.log('Added new event, total events:', updated.length);
+        return updated;
+      });
     }
 
     setShowEventForm(false);
@@ -1523,39 +1531,49 @@ const FamilyHubContent = () => {
         {/* School Holidays Spotlight */}
         <DashboardWidget title="School Holidays & Term Dates" className="mb-6" action={null}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Current/Next Holiday */}
+            {/* Upcoming School Holidays */}
             <div className="bg-purple-50 border border-purple-200 p-4 rounded-lg">
               <h3 className="font-semibold text-purple-800 mb-3 flex items-center gap-2">
-                <GraduationCap size={16} />
-                Next School Holiday
+                <CalendarDays size={16} />
+                Upcoming School Holidays
               </h3>
               <div className="space-y-3">
-                {schoolTerms.filter(term => {
-                  const termDate = new Date(term.date || term.dateStart || new Date());
-                  return termDate >= new Date() && term.type === 'holiday';
-                }).slice(0, 1).map((holiday, index) => (
-                  <div key={index} className="bg-white p-3 rounded border border-purple-200">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-medium text-purple-900">{holiday.name}</p>
-                        <p className="text-sm text-purple-700">
-                          {holiday.dateStart && holiday.dateEnd
-                            ? `${formatDateConsistent(holiday.dateStart)} - ${formatDateConsistent(holiday.dateEnd)}`
-                            : formatDateConsistent(holiday.date || '')
-                          }
-                        </p>
-                        <p className="text-xs text-purple-600 mt-1">
-                          {Math.ceil((new Date(holiday.date || holiday.dateStart || new Date()).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))} days away
-                        </p>
+                {(() => {
+                  const upcomingHolidays = schoolTerms.filter(term => {
+                    const termDate = term.date ? new Date(term.date) : term.dateStart ? new Date(term.dateStart) : null;
+                    if (!termDate) return false;
+                    const daysAway = Math.ceil((termDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+                    return daysAway >= 0 && (term.type === 'half-term' || term.type === 'break' || term.type === 'inset');
+                  }).slice(0, 3);
+
+                  if (upcomingHolidays.length === 0) {
+                    return (
+                      <div className="bg-white p-3 rounded border border-purple-200">
+                        <p className="text-purple-700">No upcoming holidays scheduled</p>
                       </div>
-                      <CalendarDays className="w-5 h-5 text-purple-500" />
+                    );
+                  }
+
+                  return upcomingHolidays.map((holiday, index) => (
+                    <div key={index} className="bg-white p-3 rounded border border-purple-200">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-medium text-purple-900">{holiday.name}</p>
+                          <p className="text-sm text-purple-700">
+                            {holiday.dateStart && holiday.dateEnd
+                              ? `${formatDateConsistent(holiday.dateStart)} - ${formatDateConsistent(holiday.dateEnd)}`
+                              : formatDateConsistent(holiday.date || '')
+                            }
+                          </p>
+                          <p className="text-xs text-purple-600 mt-1">
+                            {Math.ceil((new Date(holiday.date || holiday.dateStart || new Date()).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))} days away
+                          </p>
+                        </div>
+                        <GraduationCap className="w-5 h-5 text-purple-500" />
+                      </div>
                     </div>
-                  </div>
-                )) || (
-                  <div className="bg-white p-3 rounded border border-purple-200">
-                    <p className="text-purple-700">No upcoming holidays scheduled</p>
-                  </div>
-                )}
+                  ));
+                })()}
               </div>
             </div>
 
