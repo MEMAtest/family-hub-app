@@ -222,15 +222,16 @@ class DatabaseService {
     }
 
     try {
+      const memberData: any = member;
       const dbMember = await this.fetchAPI(`${API_BASE}/${this.familyId}/members`, {
         method: 'POST',
         body: JSON.stringify({
-          name: member.name,
-          role: member.role || 'Family Member',
-          ageGroup: 'age' in member ? member.age : 'Adult',
-          color: member.color,
-          icon: member.icon,
-          fitnessGoals: member.fitnessGoals || {},
+          name: memberData.name,
+          role: memberData.role || 'Family Member',
+          ageGroup: memberData.age || 'Adult',
+          color: memberData.color,
+          icon: memberData.icon,
+          fitnessGoals: memberData.fitnessGoals || {},
         }),
       });
 
