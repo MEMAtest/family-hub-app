@@ -309,8 +309,15 @@ const MealPlanner: React.FC<MealPlannerProps> = ({ onClose }) => {
     setWeekPlan(null);
     localStorage.removeItem(`mealPlan-week-${currentDate.toISOString().split('T')[0]}`);
     setShowClearConfirm(false);
-    // Optionally reload the week to show empty state
-    loadWeekPlan();
+    // Reset to empty week plan
+    setWeekPlan({
+      id: `week-${currentDate.toISOString().split('T')[0]}`,
+      familyId: 'family1',
+      weekStartDate: currentDate,
+      weekEndDate: new Date(currentDate.getTime() + 6 * 24 * 60 * 60 * 1000),
+      days: [],
+      createdAt: new Date()
+    });
   };
 
   const handleRecipeSelect = (recipe: MealRecipe) => {
