@@ -9,8 +9,13 @@ class DatabaseService {
 
   async initialize() {
     try {
-      // Get or create family
-      const families = await this.fetchAPI('/api/families');
+      // Get or create family with timeout
+      const families = await Promise.race([
+        this.fetchAPI('/api/families'),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Database initialization timeout')), 5000)
+        )
+      ]);
       console.log('Fetched families:', families);
 
       if (families && families.length > 0) {
@@ -25,8 +30,18 @@ class DatabaseService {
           localStorage.setItem('familyMembers', JSON.stringify(families[0].members));
         }
 
-        // Sync initial data from database
-        await this.syncFromDatabase();
+        // Sync initial data from database with timeout
+        try {
+          await Promise.race([
+            this.syncFromDatabase(),
+            new Promise((_, reject) =>
+              setTimeout(() => reject(new Error('Database sync timeout')), 3000)
+            )
+          ]);
+        } catch (syncError) {
+          console.warn('Database sync failed, continuing with localStorage:', syncError);
+        }
+
         this.syncEnabled = true;
         return true;
       } else {
@@ -44,13 +59,20 @@ class DatabaseService {
 
   private async fetchAPI(endpoint: string, options: RequestInit = {}) {
     try {
+      // Add timeout to fetch request
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
       const response = await fetch(`${endpoint}`, {
         ...options,
+        signal: controller.signal,
         headers: {
           'Content-Type': 'application/json',
           ...options.headers,
         },
       });
+
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         throw new Error(`API error: ${response.status}`);
@@ -58,6 +80,10 @@ class DatabaseService {
 
       return await response.json();
     } catch (error) {
+      if (error.name === 'AbortError') {
+        console.error('API request timed out:', endpoint);
+        throw new Error(`Request timeout: ${endpoint}`);
+      }
       console.error('API request failed:', error);
       throw error;
     }

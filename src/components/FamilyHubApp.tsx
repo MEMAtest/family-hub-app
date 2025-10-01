@@ -59,51 +59,66 @@ const FamilyHubContent = () => {
   // Database connection state
   const [databaseStatus, setDatabaseStatus] = useState<{ connected: boolean; familyId: string | null; mode: string }>({ connected: false, familyId: null, mode: 'localStorage' });
 
-  // Initialize database service on mount (client side only)
+  // Initialize database service on mount (client side only) - non-blocking
   useEffect(() => {
     const initDatabase = async () => {
       // Only run on client side
       if (typeof window === 'undefined') return;
 
       try {
-        const connected = await databaseService.initialize();
-        const status = databaseService.getStatus();
-        setDatabaseStatus(status);
-        console.log('Database status:', status);
+        // Start database initialization in background without waiting
+        databaseService.initialize()
+          .then((connected) => {
+            const status = databaseService.getStatus();
+            setDatabaseStatus(status);
+            console.log('Database status:', status);
 
-        if (connected) {
-          // Sync data from database to localStorage
-          await databaseService.syncFromDatabase();
+            if (connected) {
+              // Sync data from database to localStorage in background
+              databaseService.syncFromDatabase()
+                .then(() => {
+                  // After syncing, reload events from localStorage
+                  const syncedEvents = localStorage.getItem('calendarEvents');
+                  if (syncedEvents) {
+                    try {
+                      const eventsData = JSON.parse(syncedEvents);
+                      setEvents(eventsData);
+                      console.log('Loaded', eventsData.length, 'events from database sync');
+                    } catch (e) {
+                      console.error('Failed to parse synced events:', e);
+                    }
+                  }
 
-          // After syncing, reload events from localStorage
-          const syncedEvents = localStorage.getItem('calendarEvents');
-          if (syncedEvents) {
-            try {
-              const eventsData = JSON.parse(syncedEvents);
-              setEvents(eventsData);
-              console.log('Loaded', eventsData.length, 'events from database sync');
-            } catch (e) {
-              console.error('Failed to parse synced events:', e);
+                  // Also reload family members
+                  const syncedMembers = localStorage.getItem('familyMembers');
+                  if (syncedMembers) {
+                    try {
+                      const membersData = JSON.parse(syncedMembers);
+                      setPeople(membersData);
+                      console.log('Loaded', membersData.length, 'family members from database sync');
+                    } catch (e) {
+                      console.error('Failed to parse synced members:', e);
+                    }
+                  }
+                })
+                .catch((syncError) => {
+                  console.warn('Database sync failed:', syncError);
+                });
             }
-          }
+          })
+          .catch((error) => {
+            console.error('Failed to initialize database:', error);
+            // Ensure we still set a status even if initialization fails
+            setDatabaseStatus({ connected: false, familyId: null, mode: 'localStorage' });
+          });
 
-          // Also reload family members
-          const syncedMembers = localStorage.getItem('familyMembers');
-          if (syncedMembers) {
-            try {
-              const membersData = JSON.parse(syncedMembers);
-              setPeople(membersData);
-              console.log('Loaded', membersData.length, 'family members from database sync');
-            } catch (e) {
-              console.error('Failed to parse synced members:', e);
-            }
-          }
-        }
       } catch (error) {
-        console.error('Failed to initialize database:', error);
+        console.error('Failed to start database initialization:', error);
+        setDatabaseStatus({ connected: false, familyId: null, mode: 'localStorage' });
       }
     };
 
+    // Run database initialization immediately without waiting
     initDatabase();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
