@@ -34,11 +34,16 @@
     user-select: auto;
   }
 
-  /* iOS bounce effect prevention */
+  /* iOS bounce effect prevention - use a safer approach */
   @supports (-webkit-touch-callout: none) {
+    html, body {
+      height: 100%;
+      overflow-x: hidden;
+    }
+
     body {
-      position: fixed;
-      width: 100%;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior-y: none;
     }
   }
 
@@ -225,6 +230,46 @@
 
   .gradient-error {
     background: linear-gradient(135deg, theme('colors.error.500') 0%, theme('colors.error.600') 100%);
+  }
+
+  /* Mobile-specific optimizations */
+  .mobile-padding {
+    @apply px-4 sm:px-6 lg:px-8;
+  }
+
+  .mobile-container {
+    @apply w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
+  }
+
+  .mobile-grid {
+    @apply grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4;
+  }
+
+  .mobile-hidden {
+    @apply hidden md:block;
+  }
+
+  .mobile-only {
+    @apply block md:hidden;
+  }
+
+  .touch-friendly {
+    @apply min-h-[44px] min-w-[44px] touch-manipulation;
+  }
+
+  .prevent-zoom {
+    touch-action: manipulation;
+  }
+
+  /* Fix viewport issues on mobile browsers */
+  .full-height {
+    height: 100vh;
+    height: 100dvh; /* Dynamic viewport height */
+  }
+
+  .safe-height {
+    min-height: 100vh;
+    min-height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
   }
 }
 

@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Family Hub - Mobile Test</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            background: #f8fafc;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .container { max-width: 400px; margin: 0 auto; }
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .button {
+            display: block;
+            width: 100%;
+            padding: 15px;
+            background: #3b82f6;
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            text-align: center;
+            margin: 10px 0;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        .button:hover { background: #2563eb; }
+        .test-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin: 20px 0;
+        }
+        .test-item {
+            padding: 15px;
+            background: #f1f5f9;
+            border-radius: 8px;
+            text-align: center;
+            font-size: 14px;
+        }
+        .status {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .status.good { background: #dcfce7; color: #166534; }
+        .status.bad { background: #fecaca; color: #991b1b; }
+        .info { font-size: 14px; color: #64748b; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <h1>🏠 Family Hub - Mobile Test</h1>
+            <p class="info">Test the application across different browsers and devices</p>
+        </div>
+
+        <div class="card">
+            <h2>🔗 Application Links</h2>
+            <a href="https://family-hub-app.vercel.app" class="button">Production App</a>
+            <a href="http://localhost:3000" class="button">Local Development</a>
+        </div>
+
+        <div class="card">
+            <h2>📱 Device & Browser Info</h2>
+            <div class="test-grid">
+                <div class="test-item">
+                    <strong>Screen Size</strong><br>
+                    <span id="screen-size">Loading...</span>
+                </div>
+                <div class="test-item">
+                    <strong>User Agent</strong><br>
+                    <span id="user-agent">Loading...</span>
+                </div>
+                <div class="test-item">
+                    <strong>Touch Support</strong><br>
+                    <span id="touch-support">Loading...</span>
+                </div>
+                <div class="test-item">
+                    <strong>Orientation</strong><br>
+                    <span id="orientation">Loading...</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>🔧 Functionality Tests</h2>
+            <div id="test-results">
+                <div class="test-item">
+                    <strong>Local Storage</strong><br>
+                    <span id="localStorage-test" class="status">Testing...</span>
+                </div>
+                <div class="test-item">
+                    <strong>Fetch API</strong><br>
+                    <span id="fetch-test" class="status">Testing...</span>
+                </div>
+                <div class="test-item">
+                    <strong>ES6 Support</strong><br>
+                    <span id="es6-test" class="status">Testing...</span>
+                </div>
+                <div class="test-item">
+                    <strong>CSS Grid</strong><br>
+                    <span id="css-grid-test" class="status">Testing...</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>📊 Performance</h2>
+            <div class="test-grid">
+                <div class="test-item">
+                    <strong>Load Time</strong><br>
+                    <span id="load-time">Measuring...</span>
+                </div>
+                <div class="test-item">
+                    <strong>Memory Usage</strong><br>
+                    <span id="memory-usage">Measuring...</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>🌐 Cross-Browser Notes</h2>
+            <div class="info">
+                <p><strong>Chrome/Edge:</strong> Full feature support</p>
+                <p><strong>Safari:</strong> Check Web Share API, localStorage</p>
+                <p><strong>Firefox:</strong> Check CSS Grid, modern JS features</p>
+                <p><strong>Mobile:</strong> Test touch interactions, viewport scaling</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Device and browser detection
+        document.getElementById('screen-size').textContent = `${window.screen.width}x${window.screen.height}`;
+        document.getElementById('user-agent').textContent = navigator.userAgent.split(' ').slice(-2).join(' ');
+        document.getElementById('touch-support').textContent = 'ontouchstart' in window ? 'Yes' : 'No';
+        document.getElementById('orientation').textContent = window.orientation !== undefined ? `${window.orientation}°` : 'Unknown';
+
+        // Functionality tests
+        function runTests() {
+            // Local Storage test
+            try {
+                localStorage.setItem('test', 'test');
+                localStorage.removeItem('test');
+                document.getElementById('localStorage-test').textContent = 'Supported';
+                document.getElementById('localStorage-test').className = 'status good';
+            } catch (e) {
+                document.getElementById('localStorage-test').textContent = 'Failed';
+                document.getElementById('localStorage-test').className = 'status bad';
+            }
+
+            // Fetch API test
+            if (typeof fetch !== 'undefined') {
+                document.getElementById('fetch-test').textContent = 'Supported';
+                document.getElementById('fetch-test').className = 'status good';
+            } else {
+                document.getElementById('fetch-test').textContent = 'Not Supported';
+                document.getElementById('fetch-test').className = 'status bad';
+            }
+
+            // ES6 support test
+            try {
+                eval('const test = () => {}; class Test {}');
+                document.getElementById('es6-test').textContent = 'Supported';
+                document.getElementById('es6-test').className = 'status good';
+            } catch (e) {
+                document.getElementById('es6-test').textContent = 'Limited';
+                document.getElementById('es6-test').className = 'status bad';
+            }
+
+            // CSS Grid test
+            if (CSS.supports('display', 'grid')) {
+                document.getElementById('css-grid-test').textContent = 'Supported';
+                document.getElementById('css-grid-test').className = 'status good';
+            } else {
+                document.getElementById('css-grid-test').textContent = 'Not Supported';
+                document.getElementById('css-grid-test').className = 'status bad';
+            }
+        }
+
+        // Performance measurements
+        function measurePerformance() {
+            const loadTime = performance.now();
+            document.getElementById('load-time').textContent = `${Math.round(loadTime)}ms`;
+
+            if (performance.memory) {
+                const memory = performance.memory.usedJSHeapSize / 1024 / 1024;
+                document.getElementById('memory-usage').textContent = `${memory.toFixed(1)}MB`;
+            } else {
+                document.getElementById('memory-usage').textContent = 'Not Available';
+            }
+        }
+
+        // Run tests
+        runTests();
+        measurePerformance();
+
+        // Update orientation on change
+        window.addEventListener('orientationchange', () => {
+            setTimeout(() => {
+                document.getElementById('orientation').textContent = window.orientation !== undefined ? `${window.orientation}°` : 'Unknown';
+            }, 100);
+        });
+    </script>
+</body>
+</html>
