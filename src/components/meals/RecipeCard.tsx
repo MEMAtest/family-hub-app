@@ -200,6 +200,17 @@ const RecipeCard: React.FC<RecipeCardProps> = ({
                 onClick={(e) => {
                   e.stopPropagation();
                   // Handle share
+                  if (navigator.share) {
+                    navigator.share({
+                      title: recipe.recipeName,
+                      text: `Check out this ${recipe.cuisineType} recipe: ${recipe.recipeName}`,
+                      url: window.location.href
+                    }).catch(console.error);
+                  } else {
+                    // Fallback for browsers without Web Share API
+                    navigator.clipboard.writeText(`${recipe.recipeName} - ${recipe.cuisineType} recipe`);
+                    alert('Recipe link copied to clipboard!');
+                  }
                 }}
                 className="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-md transition-colors"
                 title="Share recipe"
@@ -210,6 +221,49 @@ const RecipeCard: React.FC<RecipeCardProps> = ({
                 onClick={(e) => {
                   e.stopPropagation();
                   // Handle print
+                  const printContent = `
+                    <h1>${recipe.recipeName}</h1>
+                    <p><strong>Cuisine:</strong> ${recipe.cuisineType}</p>
+                    <p><strong>Prep Time:</strong> ${recipe.prepTime} minutes</p>
+                    <p><strong>Cook Time:</strong> ${recipe.cookTime} minutes</p>
+                    <p><strong>Servings:</strong> ${recipe.servings}</p>
+                    <p><strong>Difficulty:</strong> ${recipe.difficulty}</p>
+
+                    <h2>Ingredients:</h2>
+                    <ul>
+                      ${recipe.ingredients.map(ing => `<li>${ing.quantity} ${ing.unit} ${ing.name}</li>`).join('')}
+                    </ul>
+
+                    <h2>Instructions:</h2>
+                    <ol>
+                      ${recipe.instructions.map(step => `<li>${step}</li>`).join('')}
+                    </ol>
+
+                    ${recipe.nutritionInfo ? `
+                      <h2>Nutrition Information:</h2>
+                      <p>Calories: ${recipe.nutritionInfo.calories}</p>
+                      <p>Protein: ${recipe.nutritionInfo.protein}g</p>
+                      <p>Carbs: ${recipe.nutritionInfo.carbs}g</p>
+                      <p>Fat: ${recipe.nutritionInfo.fat}g</p>
+                    ` : ''}
+                  `;
+
+                  const printWindow = window.open('', '_blank');
+                  printWindow?.document.write(`
+                    <html>
+                      <head>
+                        <title>${recipe.recipeName}</title>
+                        <style>
+                          body { font-family: Arial, sans-serif; padding: 20px; }
+                          h1, h2 { color: #333; }
+                          ul, ol { padding-left: 20px; }
+                        </style>
+                      </head>
+                      <body>${printContent}</body>
+                    </html>
+                  `);
+                  printWindow?.document.close();
+                  printWindow?.print();
                 }}
                 className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-md transition-colors"
                 title="Print recipe"

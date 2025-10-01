@@ -10,17 +10,29 @@ class DatabaseService {
   async initialize() {
     try {
       // Get or create family
-      const families = await this.fetchAPI('/families');
+      const families = await this.fetchAPI('/api/families');
+      console.log('Fetched families:', families);
+
       if (families && families.length > 0) {
         this.familyId = families[0].id;
-        if (this.familyId) {
+        if (this.familyId && typeof window !== 'undefined') {
           localStorage.setItem('familyId', this.familyId);
         }
         console.log('Database connected: Family ID', this.familyId);
 
+        // Store family members in localStorage
+        if (families[0].members && typeof window !== 'undefined') {
+          localStorage.setItem('familyMembers', JSON.stringify(families[0].members));
+        }
+
         // Sync initial data from database
         await this.syncFromDatabase();
+        this.syncEnabled = true;
         return true;
+      } else {
+        console.log('No families found in database');
+        this.syncEnabled = false;
+        return false;
       }
     } catch (error) {
       console.error('Database initialization failed:', error);
@@ -58,7 +70,7 @@ class DatabaseService {
     try {
       // Fetch family members
       const members = await this.fetchAPI(`${API_BASE}/${this.familyId}/members`);
-      if (members) {
+      if (members && typeof window !== 'undefined') {
         localStorage.setItem('familyMembers', JSON.stringify(members));
       }
 
@@ -91,7 +103,9 @@ class DatabaseService {
             updatedAt: e.updatedAt,
           };
         });
-        localStorage.setItem('calendarEvents', JSON.stringify(formattedEvents));
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('calendarEvents', JSON.stringify(formattedEvents));
+        }
       }
 
       console.log('Data synced from database');
@@ -102,14 +116,21 @@ class DatabaseService {
 
   // Save event to database
   async saveEvent(event: CalendarEvent): Promise<CalendarEvent | null> {
+    console.log('saveEvent called with:', event);
+    console.log('Database status:', { familyId: this.familyId, syncEnabled: this.syncEnabled });
+
     if (!this.familyId || !this.syncEnabled) {
+      console.log('No database connection, saving to localStorage only');
       // Just save to localStorage
-      const events = JSON.parse(localStorage.getItem('calendarEvents') || '[]');
-      events.push(event);
-      localStorage.setItem('calendarEvents', JSON.stringify(events));
+      if (typeof window !== 'undefined') {
+        const events = JSON.parse(localStorage.getItem('calendarEvents') || '[]');
+        events.push(event);
+        localStorage.setItem('calendarEvents', JSON.stringify(events));
+      }
       return event;
     }
 
+    console.log('Attempting to save to database with familyId:', this.familyId);
     try {
       const dbEvent = await this.fetchAPI(`${API_BASE}/${this.familyId}/events`, {
         method: 'POST',
@@ -119,33 +140,53 @@ class DatabaseService {
           description: '',
           eventDate: event.date,
           eventTime: event.time,
-          durationMinutes: event.duration,
-          location: event.location,
-          cost: event.cost,
-          eventType: event.type,
-          recurringPattern: event.recurring,
-          isRecurring: event.isRecurring,
-          notes: event.notes,
+          durationMinutes: event.duration || 60,
+          location: event.location || '',
+          cost: event.cost || 0,
+          eventType: event.type || 'other',
+          recurringPattern: event.recurring || 'none',
+          isRecurring: event.isRecurring || false,
+          notes: event.notes || '',
         }),
       });
 
-      if (dbEvent) {
+      if (dbEvent && dbEvent.id) {
+        console.log('Event saved to database successfully:', dbEvent);
+
+        // Create the event in the app format with the database ID
+        const savedEvent = {
+          ...event,
+          id: dbEvent.id,
+          createdAt: dbEvent.createdAt,
+          updatedAt: dbEvent.updatedAt,
+        };
+
         // Update localStorage as well
-        const events = JSON.parse(localStorage.getItem('calendarEvents') || '[]');
-        events.push(event);
-        localStorage.setItem('calendarEvents', JSON.stringify(events));
+        if (typeof window !== 'undefined') {
+          const events = JSON.parse(localStorage.getItem('calendarEvents') || '[]');
+          events.push(savedEvent);
+          localStorage.setItem('calendarEvents', JSON.stringify(events));
+        }
+        return savedEvent;
+      } else {
+        console.warn('Database returned no event, falling back to localStorage');
+        if (typeof window !== 'undefined') {
+          const events = JSON.parse(localStorage.getItem('calendarEvents') || '[]');
+          events.push(event);
+          localStorage.setItem('calendarEvents', JSON.stringify(events));
+        }
         return event;
       }
     } catch (error) {
       console.error('Failed to save event to database:', error);
       // Fall back to localStorage
-      const events = JSON.parse(localStorage.getItem('calendarEvents') || '[]');
-      events.push(event);
-      localStorage.setItem('calendarEvents', JSON.stringify(events));
+      if (typeof window !== 'undefined') {
+        const events = JSON.parse(localStorage.getItem('calendarEvents') || '[]');
+        events.push(event);
+        localStorage.setItem('calendarEvents', JSON.stringify(events));
+      }
       return event;
     }
-
-    return null;
   }
 
   // Update event in database
@@ -255,6 +296,152 @@ class DatabaseService {
     }
 
     return null;
+  }
+
+  // Save goal to database
+  async saveGoal(goal: any): Promise<any | null> {
+    if (!this.familyId || !this.syncEnabled) {
+      // Just save to localStorage
+      if (typeof window !== 'undefined') {
+        const goals = JSON.parse(localStorage.getItem('familyGoals') || '[]');
+        goals.push(goal);
+        localStorage.setItem('familyGoals', JSON.stringify(goals));
+      }
+      return goal;
+    }
+
+    try {
+      const dbGoal = await this.fetchAPI(`${API_BASE}/${this.familyId}/goals`, {
+        method: 'POST',
+        body: JSON.stringify({
+          title: goal.title,
+          description: goal.description,
+          type: goal.type,
+          targetValue: goal.targetValue || '',
+          deadline: goal.deadline,
+          participants: goal.participants || [],
+          milestones: goal.milestones || [],
+        }),
+      });
+
+      if (dbGoal && dbGoal.id) {
+        console.log('Goal saved to database successfully:', dbGoal);
+
+        // Update localStorage as well
+        if (typeof window !== 'undefined') {
+          const goals = JSON.parse(localStorage.getItem('familyGoals') || '[]');
+          goals.push({ ...goal, id: dbGoal.id });
+          localStorage.setItem('familyGoals', JSON.stringify(goals));
+        }
+        return { ...goal, id: dbGoal.id };
+      }
+    } catch (error) {
+      console.error('Failed to save goal to database:', error);
+      // Fall back to localStorage
+      if (typeof window !== 'undefined') {
+        const goals = JSON.parse(localStorage.getItem('familyGoals') || '[]');
+        goals.push(goal);
+        localStorage.setItem('familyGoals', JSON.stringify(goals));
+      }
+    }
+    return goal;
+  }
+
+  // Save budget income to database
+  async saveBudgetIncome(income: any): Promise<any | null> {
+    if (!this.familyId || !this.syncEnabled) {
+      // Just save to localStorage
+      if (typeof window !== 'undefined') {
+        const incomes = JSON.parse(localStorage.getItem('budgetIncome') || '[]');
+        incomes.push(income);
+        localStorage.setItem('budgetIncome', JSON.stringify(incomes));
+      }
+      return income;
+    }
+
+    try {
+      const dbIncome = await this.fetchAPI(`${API_BASE}/${this.familyId}/budget/income`, {
+        method: 'POST',
+        body: JSON.stringify({
+          incomeName: income.incomeName,
+          amount: income.amount,
+          category: income.category,
+          isRecurring: income.isRecurring,
+          paymentDate: income.paymentDate,
+          personId: income.personId,
+        }),
+      });
+
+      if (dbIncome && dbIncome.id) {
+        console.log('Income saved to database successfully:', dbIncome);
+
+        // Update localStorage as well
+        if (typeof window !== 'undefined') {
+          const incomes = JSON.parse(localStorage.getItem('budgetIncome') || '[]');
+          incomes.push({ ...income, id: dbIncome.id });
+          localStorage.setItem('budgetIncome', JSON.stringify(incomes));
+        }
+        return { ...income, id: dbIncome.id };
+      }
+    } catch (error) {
+      console.error('Failed to save income to database:', error);
+      // Fall back to localStorage
+      if (typeof window !== 'undefined') {
+        const incomes = JSON.parse(localStorage.getItem('budgetIncome') || '[]');
+        incomes.push(income);
+        localStorage.setItem('budgetIncome', JSON.stringify(incomes));
+      }
+    }
+    return income;
+  }
+
+  // Save budget expense to database
+  async saveBudgetExpense(expense: any): Promise<any | null> {
+    if (!this.familyId || !this.syncEnabled) {
+      // Just save to localStorage
+      if (typeof window !== 'undefined') {
+        const expenses = JSON.parse(localStorage.getItem('budgetExpenses') || '[]');
+        expenses.push(expense);
+        localStorage.setItem('budgetExpenses', JSON.stringify(expenses));
+      }
+      return expense;
+    }
+
+    try {
+      const dbExpense = await this.fetchAPI(`${API_BASE}/${this.familyId}/budget/expenses`, {
+        method: 'POST',
+        body: JSON.stringify({
+          expenseName: expense.expenseName,
+          amount: expense.amount,
+          category: expense.category,
+          budgetLimit: expense.budgetLimit,
+          isRecurring: expense.isRecurring,
+          paymentDate: expense.paymentDate,
+          personId: expense.personId,
+        }),
+      });
+
+      if (dbExpense && dbExpense.id) {
+        console.log('Expense saved to database successfully:', dbExpense);
+
+        // Update localStorage as well
+        if (typeof window !== 'undefined') {
+          const expenses = JSON.parse(localStorage.getItem('budgetExpenses') || '[]');
+          expenses.push({ ...expense, id: dbExpense.id });
+          localStorage.setItem('budgetExpenses', JSON.stringify(expenses));
+        }
+        return { ...expense, id: dbExpense.id };
+      }
+    } catch (error) {
+      console.error('Failed to save expense to database:', error);
+      // Fall back to localStorage
+      if (typeof window !== 'undefined') {
+        const expenses = JSON.parse(localStorage.getItem('budgetExpenses') || '[]');
+        expenses.push(expense);
+        localStorage.setItem('budgetExpenses', JSON.stringify(expenses));
+      }
+    }
+    return expense;
   }
 
   // Check if database is connected

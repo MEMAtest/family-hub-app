@@ -52,6 +52,7 @@ export function useLocalStorage<T>(key: string, initialValue: T): [T, (value: T 
         console.log(`Chrome sync check error for ${key}:`, error);
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]); // Only on key change
 
   // Return a wrapped version of useState's setter function that ...

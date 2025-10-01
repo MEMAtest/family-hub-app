@@ -35,6 +35,7 @@ import { PieChart, Pie, Cell, BarChart, Bar, LineChart, Line, XAxis, YAxis, Cart
 import GoalForm from './GoalForm';
 import AchievementTracker from './AchievementTracker';
 import GoalAnalytics from './GoalAnalytics';
+import databaseService from '@/services/databaseService';
 
 interface GoalsDashboardProps {
   onClose?: () => void;
@@ -904,9 +905,26 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
       {showNewGoalForm && (
         <GoalForm
           onClose={() => setShowNewGoalForm(false)}
-          onSave={(goalData) => {
-            // Add new goal logic here
-            console.log('New goal:', goalData);
+          onSave={async (goalData) => {
+            try {
+              const newGoal = {
+                id: `goal-${Date.now()}`,
+                ...goalData,
+                createdAt: new Date().toISOString(),
+                currentProgress: 0,
+              };
+
+              console.log('Saving new goal:', newGoal);
+              const savedGoal = await databaseService.saveGoal(newGoal);
+
+              if (savedGoal) {
+                console.log('Goal saved successfully:', savedGoal);
+                // You would typically update local state here
+                // setGoals(prev => [...prev, savedGoal]);
+              }
+            } catch (error) {
+              console.error('Failed to save goal:', error);
+            }
             setShowNewGoalForm(false);
           }}
           familyMembers={familyMembers}

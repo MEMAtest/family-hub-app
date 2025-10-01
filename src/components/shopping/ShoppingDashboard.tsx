@@ -25,13 +25,32 @@ import {
 import ShoppingListManager from './ShoppingListManager';
 import StoreManager from './StoreManager';
 import PriceTracker from './PriceTracker';
+import ShoppingAnalytics from './ShoppingAnalytics';
 
 interface ShoppingDashboardProps {
   onClose?: () => void;
+  onSubViewChange?: (view: string) => void;
+  currentSubView?: string;
 }
 
-const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose }) => {
+const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose, onSubViewChange, currentSubView }) => {
   const [activeView, setActiveView] = useState<'dashboard' | 'lists' | 'stores' | 'prices' | 'analytics'>('dashboard');
+
+  // Sync with parent's subView
+  React.useEffect(() => {
+    if (currentSubView === '') {
+      setActiveView('dashboard');
+    } else if (currentSubView && ['lists', 'stores', 'prices', 'analytics'].includes(currentSubView)) {
+      setActiveView(currentSubView as any);
+    }
+  }, [currentSubView]);
+
+  // Report sub-view changes to parent
+  React.useEffect(() => {
+    if (onSubViewChange) {
+      onSubViewChange(activeView === 'dashboard' ? '' : activeView);
+    }
+  }, [activeView, onSubViewChange]);
 
   // Mock data for dashboard widgets
   const activeLists = [
@@ -133,14 +152,26 @@ const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose }) => {
       title: 'Scan Receipt',
       description: 'Add items from receipt',
       icon: <Scan className="w-6 h-6 text-blue-500" />,
-      onClick: () => {}
+      onClick: () => {
+        // Simulate receipt scanning functionality
+        console.log('Opening receipt scanner...');
+        alert('Receipt scanner would open here. This feature scans receipts to automatically add items to your shopping list.');
+      }
     },
     {
       id: 'quick-add',
       title: 'Quick Add Items',
       description: 'Add items with voice or text',
       icon: <ShoppingCart className="w-6 h-6 text-purple-500" />,
-      onClick: () => {}
+      onClick: () => {
+        // Simulate quick add functionality
+        const items = prompt('Enter items separated by commas:');
+        if (items) {
+          const itemList = items.split(',').map(item => item.trim());
+          console.log('Quick adding items:', itemList);
+          alert(`Added ${itemList.length} items to your shopping list: ${itemList.join(', ')}`);
+        }
+      }
     },
     {
       id: 'price-compare',
@@ -455,13 +486,7 @@ const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose }) => {
       {activeView === 'lists' && <ShoppingListManager onClose={() => setActiveView('dashboard')} />}
       {activeView === 'stores' && <StoreManager onClose={() => setActiveView('dashboard')} />}
       {activeView === 'prices' && <PriceTracker onClose={() => setActiveView('dashboard')} />}
-      {activeView === 'analytics' && (
-        <div className="bg-white border border-gray-200 rounded-lg p-8 text-center">
-          <BarChart3 className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">Shopping Analytics</h3>
-          <p className="text-gray-600">Coming soon - detailed shopping analytics and insights</p>
-        </div>
-      )}
+      {activeView === 'analytics' && <ShoppingAnalytics onClose={() => setActiveView('dashboard')} />}
     </div>
   );
 };

@@ -31,6 +31,7 @@ import AddExpenseModal from './modals/AddExpenseModal';
 import AddSavingsGoalModal from './modals/AddSavingsGoalModal';
 import BudgetSettingsModal from './modals/BudgetSettingsModal';
 import AdvancedReportsDashboard from './reports/AdvancedReportsDashboard';
+import databaseService from '@/services/databaseService';
 
 const BudgetDashboard: React.FC = () => {
   const [dashboardData, setDashboardData] = useState<BudgetDashboardData | null>(null);
@@ -45,6 +46,34 @@ const BudgetDashboard: React.FC = () => {
   const [showAddSavingsGoal, setShowAddSavingsGoal] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showAdvancedReports, setShowAdvancedReports] = useState(false);
+
+  // Lists state
+  const [incomeList, setIncomeList] = useState<any[]>([]);
+  const [expenseList, setExpenseList] = useState<any[]>([]);
+
+  // Load saved income and expenses from localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedIncome = localStorage.getItem('budgetIncome');
+      const savedExpenses = localStorage.getItem('budgetExpenses');
+
+      if (savedIncome) {
+        try {
+          setIncomeList(JSON.parse(savedIncome));
+        } catch (e) {
+          console.error('Error loading saved income:', e);
+        }
+      }
+
+      if (savedExpenses) {
+        try {
+          setExpenseList(JSON.parse(savedExpenses));
+        } catch (e) {
+          console.error('Error loading saved expenses:', e);
+        }
+      }
+    }
+  }, []);
 
   // Mock data for development
   const mockData: BudgetDashboardData = {
@@ -314,12 +343,86 @@ const BudgetDashboard: React.FC = () => {
         <SelectedChart data={dashboardData} />
       </div>
 
+      {/* Income & Expense Lists */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        {/* Income List */}
+        <div className="bg-white border border-gray-200 p-6">
+          <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
+            <span className="w-3 h-3 bg-green-500 rounded-full mr-2"></span>
+            Income ({incomeList.length})
+          </h3>
+          {incomeList.length === 0 ? (
+            <p className="text-gray-500 text-center py-8">No income items added yet</p>
+          ) : (
+            <div className="space-y-3">
+              {incomeList.map((income, index) => (
+                <div key={income.id || index} className="flex justify-between items-center p-3 bg-green-50 rounded-lg border">
+                  <div>
+                    <h4 className="font-medium text-gray-900">{income.incomeName}</h4>
+                    <p className="text-sm text-gray-600">{income.category}</p>
+                    {income.isRecurring && <span className="text-xs text-green-600 bg-green-100 px-2 py-1 rounded">Recurring</span>}
+                  </div>
+                  <div className="text-right">
+                    <p className="font-semibold text-green-600">£{income.amount?.toLocaleString()}</p>
+                    {income.paymentDate && <p className="text-xs text-gray-500">{income.paymentDate}</p>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Expense List */}
+        <div className="bg-white border border-gray-200 p-6">
+          <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
+            <span className="w-3 h-3 bg-red-500 rounded-full mr-2"></span>
+            Expenses ({expenseList.length})
+          </h3>
+          {expenseList.length === 0 ? (
+            <p className="text-gray-500 text-center py-8">No expense items added yet</p>
+          ) : (
+            <div className="space-y-3">
+              {expenseList.map((expense, index) => (
+                <div key={expense.id || index} className="flex justify-between items-center p-3 bg-red-50 rounded-lg border">
+                  <div>
+                    <h4 className="font-medium text-gray-900">{expense.expenseName}</h4>
+                    <p className="text-sm text-gray-600">{expense.category}</p>
+                    {expense.isRecurring && <span className="text-xs text-red-600 bg-red-100 px-2 py-1 rounded">Recurring</span>}
+                  </div>
+                  <div className="text-right">
+                    <p className="font-semibold text-red-600">£{expense.amount?.toLocaleString()}</p>
+                    {expense.paymentDate && <p className="text-xs text-gray-500">{expense.paymentDate}</p>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Modals */}
       <AddIncomeModal
         isOpen={showAddIncome}
         onClose={() => setShowAddIncome(false)}
-        onSave={(data) => {
-          console.log('Save income:', data);
+        onSave={async (data) => {
+          try {
+            const newIncome = {
+              id: `income-${Date.now()}`,
+              ...data,
+              createdAt: new Date().toISOString(),
+            };
+
+            console.log('Saving new income:', newIncome);
+            const savedIncome = await databaseService.saveBudgetIncome(newIncome);
+
+            if (savedIncome) {
+              console.log('Income saved successfully:', savedIncome);
+              // Update local state to show the new income
+              setIncomeList(prev => [...prev, savedIncome]);
+            }
+          } catch (error) {
+            console.error('Failed to save income:', error);
+          }
           setShowAddIncome(false);
         }}
       />
@@ -327,8 +430,25 @@ const BudgetDashboard: React.FC = () => {
       <AddExpenseModal
         isOpen={showAddExpense}
         onClose={() => setShowAddExpense(false)}
-        onSave={(data) => {
-          console.log('Save expense:', data);
+        onSave={async (data) => {
+          try {
+            const newExpense = {
+              id: `expense-${Date.now()}`,
+              ...data,
+              createdAt: new Date().toISOString(),
+            };
+
+            console.log('Saving new expense:', newExpense);
+            const savedExpense = await databaseService.saveBudgetExpense(newExpense);
+
+            if (savedExpense) {
+              console.log('Expense saved successfully:', savedExpense);
+              // Update local state to show the new expense
+              setExpenseList(prev => [...prev, savedExpense]);
+            }
+          } catch (error) {
+            console.error('Failed to save expense:', error);
+          }
           setShowAddExpense(false);
         }}
       />

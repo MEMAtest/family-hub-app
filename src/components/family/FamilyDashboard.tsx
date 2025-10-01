@@ -1147,19 +1147,23 @@ const FamilyDashboard: React.FC<FamilyDashboardProps> = ({ onClose }) => {
 
       {/* New Member Form Modal */}
       {showNewMemberForm && (
-        <FamilyMemberForm
-          member={(selectedMember ? familyMembers.find(m => m.id === selectedMember) : undefined) as any}
-          onCancel={() => {
-            setShowNewMemberForm(false);
-            setSelectedMember(null);
-          }}
-          onSave={(memberData) => {
-            console.log(selectedMember ? 'Edit member:' : 'New member:', memberData);
-            setShowNewMemberForm(false);
-            setSelectedMember(null);
-          }}
-          isEditing={!!selectedMember}
-        />
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <FamilyMemberForm
+              member={(selectedMember ? familyMembers.find(m => m.id === selectedMember) : undefined) as any}
+              onCancel={() => {
+                setShowNewMemberForm(false);
+                setSelectedMember(null);
+              }}
+              onSave={(memberData) => {
+                console.log(selectedMember ? 'Edit member:' : 'New member:', memberData);
+                setShowNewMemberForm(false);
+                setSelectedMember(null);
+              }}
+              isEditing={!!selectedMember}
+            />
+          </div>
+        </div>
       )}
 
       {/* Member Details Modal */}

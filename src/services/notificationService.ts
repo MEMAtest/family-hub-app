@@ -23,8 +23,11 @@ class FamilyHubNotificationService implements NotificationService {
 
   constructor() {
     this.settings = this.getDefaultSettings();
-    this.initializeServiceWorker();
-    this.loadPersistedData();
+    // Only initialize in browser environment
+    if (typeof window !== 'undefined') {
+      this.initializeServiceWorker();
+      this.loadPersistedData();
+    }
   }
 
   /**

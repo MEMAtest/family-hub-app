@@ -59,9 +59,12 @@ const FamilyHubContent = () => {
   // Database connection state
   const [databaseStatus, setDatabaseStatus] = useState<{ connected: boolean; familyId: string | null; mode: string }>({ connected: false, familyId: null, mode: 'localStorage' });
 
-  // Initialize database service on mount
+  // Initialize database service on mount (client side only)
   useEffect(() => {
     const initDatabase = async () => {
+      // Only run on client side
+      if (typeof window === 'undefined') return;
+
       try {
         const connected = await databaseService.initialize();
         const status = databaseService.getStatus();
@@ -71,6 +74,30 @@ const FamilyHubContent = () => {
         if (connected) {
           // Sync data from database to localStorage
           await databaseService.syncFromDatabase();
+
+          // After syncing, reload events from localStorage
+          const syncedEvents = localStorage.getItem('calendarEvents');
+          if (syncedEvents) {
+            try {
+              const eventsData = JSON.parse(syncedEvents);
+              setEvents(eventsData);
+              console.log('Loaded', eventsData.length, 'events from database sync');
+            } catch (e) {
+              console.error('Failed to parse synced events:', e);
+            }
+          }
+
+          // Also reload family members
+          const syncedMembers = localStorage.getItem('familyMembers');
+          if (syncedMembers) {
+            try {
+              const membersData = JSON.parse(syncedMembers);
+              setPeople(membersData);
+              console.log('Loaded', membersData.length, 'family members from database sync');
+            } catch (e) {
+              console.error('Failed to parse synced members:', e);
+            }
+          }
         }
       } catch (error) {
         console.error('Failed to initialize database:', error);
@@ -78,6 +105,7 @@ const FamilyHubContent = () => {
     };
 
     initDatabase();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Notification context
@@ -94,9 +122,16 @@ const FamilyHubContent = () => {
 
   // Core state
   const [currentView, setCurrentView] = useState('dashboard');
+  const [currentSubView, setCurrentSubView] = useState<string>(''); // Track sub-views within main views
   const [calendarView, setCalendarView] = useState('month'); // month, week, day
   const [currentDate, setCurrentDate] = useState(new Date('2025-09-19'));
   const [selectedPerson, setSelectedPerson] = useState('all');
+
+  // Helper function to change view and reset sub-view
+  const changeView = (view: string) => {
+    setCurrentView(view);
+    setCurrentSubView('');
+  };
   const [showEventForm, setShowEventForm] = useState(false);
   const [showFamilyForm, setShowFamilyForm] = useState(false);
   const [showMealForm, setShowMealForm] = useState(false);
@@ -1291,7 +1326,7 @@ const FamilyHubContent = () => {
     return importantEvents;
   };
 
-  // Generate breadcrumb items based on current view
+  // Generate breadcrumb items based on current view and sub-view
   const getBreadcrumbItems = () => {
     const viewNames = {
       'dashboard': 'Dashboard',
@@ -1304,16 +1339,50 @@ const FamilyHubContent = () => {
       'news': 'News'
     };
 
+    const subViewNames: Record<string, Record<string, string>> = {
+      'shopping': {
+        'lists': 'Lists',
+        'stores': 'Stores',
+        'prices': 'Price Tracking',
+        'analytics': 'Analytics'
+      },
+      'budget': {
+        'overview': 'Overview',
+        'income': 'Income',
+        'expenses': 'Expenses',
+        'savings': 'Savings',
+        'analytics': 'Analytics'
+      },
+      'meals': {
+        'planner': 'Planner',
+        'recipes': 'Recipes',
+        'nutrition': 'Nutrition',
+        'analytics': 'Analytics'
+      }
+    };
+
     if (currentView === 'dashboard') {
       return [];
     }
 
-    return [
+    const items = [
       {
         label: viewNames[currentView as keyof typeof viewNames] || currentView.charAt(0).toUpperCase() + currentView.slice(1),
-        isActive: true
+        isActive: !currentSubView,
+        onClick: () => setCurrentSubView('')
       }
     ];
+
+    // Add sub-view if present
+    if (currentSubView && subViewNames[currentView] && subViewNames[currentView][currentSubView]) {
+      items.push({
+        label: subViewNames[currentView][currentSubView],
+        isActive: true,
+        onClick: () => {} // No-op for active item
+      });
+    }
+
+    return items;
   };
 
   // Professional Dashboard Widget Component
@@ -1354,7 +1423,7 @@ const FamilyHubContent = () => {
         ].map(item => (
           <button
             key={item.id}
-            onClick={() => setCurrentView(item.id)}
+            onClick={() => changeView(item.id)}
             className={`w-full p-3 mb-2 mx-1 rounded-xl transition-all duration-300 group relative ${
               currentView === item.id
                 ? `bg-gradient-to-r ${item.gradient} text-white shadow-lg transform scale-105`
@@ -1451,7 +1520,7 @@ const FamilyHubContent = () => {
         {/* Key Metrics Grid */}
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-4 mb-6 md:mb-8">
           <div
-            onClick={() => setCurrentView('calendar')}
+            onClick={() => changeView('calendar')}
             className="bg-white border border-gray-200 p-6 cursor-pointer hover:bg-gray-50 transition-colors"
           >
             <div className="flex items-center justify-between">
@@ -1465,7 +1534,7 @@ const FamilyHubContent = () => {
           </div>
 
           <div
-            onClick={() => setCurrentView('budget')}
+            onClick={() => changeView('budget')}
             className="bg-white border border-gray-200 p-6 cursor-pointer hover:bg-gray-50 transition-colors"
           >
             <div className="flex items-center justify-between">
@@ -1489,7 +1558,7 @@ const FamilyHubContent = () => {
           </div>
 
           <div
-            onClick={() => setCurrentView('meals')}
+            onClick={() => changeView('meals')}
             className="bg-white border border-gray-200 p-6 cursor-pointer hover:bg-gray-50 transition-colors"
           >
             <div className="flex items-center justify-between">
@@ -1503,7 +1572,7 @@ const FamilyHubContent = () => {
           </div>
 
           <div
-            onClick={() => setCurrentView('shopping')}
+            onClick={() => changeView('shopping')}
             className="bg-white border border-gray-200 p-6 cursor-pointer hover:bg-gray-50 transition-colors"
           >
             <div className="flex items-center justify-between">
@@ -1519,7 +1588,7 @@ const FamilyHubContent = () => {
           </div>
 
           <div
-            onClick={() => setCurrentView('family')}
+            onClick={() => changeView('family')}
             className="bg-white border border-gray-200 p-6 cursor-pointer hover:bg-gray-50 transition-colors"
           >
             <div className="flex items-center justify-between">
@@ -1533,7 +1602,7 @@ const FamilyHubContent = () => {
           </div>
 
           <div
-            onClick={() => setCurrentView('news')}
+            onClick={() => changeView('news')}
             className="bg-white border border-gray-200 p-6 cursor-pointer hover:bg-gray-50 transition-colors"
           >
             <div className="flex items-center justify-between">
@@ -1655,7 +1724,7 @@ const FamilyHubContent = () => {
                 </span>
               </div>
               <button
-                onClick={() => setCurrentView('calendar')}
+                onClick={() => changeView('calendar')}
                 className="text-sm text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1"
               >
                 View Calendar
@@ -1754,7 +1823,7 @@ const FamilyHubContent = () => {
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-medium text-gray-900">Budget Overview</h2>
                 <button
-                  onClick={() => setCurrentView('budget')}
+                  onClick={() => changeView('budget')}
                   className="text-sm text-gray-600 hover:text-gray-900 transition-colors"
                 >
                   View details →
@@ -1807,7 +1876,7 @@ const FamilyHubContent = () => {
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-medium text-gray-900">Family Activity Trends</h2>
                 <button
-                  onClick={() => setCurrentView('goals')}
+                  onClick={() => changeView('goals')}
                   className="text-sm text-gray-600 hover:text-gray-900 transition-colors"
                 >
                   View goals →
@@ -1878,7 +1947,7 @@ const FamilyHubContent = () => {
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-medium text-gray-900">Week Schedule</h2>
                 <button
-                  onClick={() => setCurrentView('calendar')}
+                  onClick={() => changeView('calendar')}
                   className="text-sm text-gray-600 hover:text-gray-900 transition-colors"
                 >
                   View all →
@@ -1931,7 +2000,7 @@ const FamilyHubContent = () => {
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-medium text-gray-900">Monthly Overview</h2>
                 <button
-                  onClick={() => setCurrentView('budget')}
+                  onClick={() => changeView('budget')}
                   className="text-sm text-gray-600 hover:text-gray-900 transition-colors"
                 >
                   Manage →
@@ -2044,7 +2113,7 @@ const FamilyHubContent = () => {
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-medium text-gray-900">Family News</h2>
                 <button
-                  onClick={() => setCurrentView('news')}
+                  onClick={() => changeView('news')}
                   className="text-sm text-gray-600 hover:text-gray-900 transition-colors"
                 >
                   View all →
@@ -2097,7 +2166,7 @@ const FamilyHubContent = () => {
           <div className="px-4 md:px-8 pt-4">
             <Breadcrumb
               items={getBreadcrumbItems()}
-              onHomeClick={() => setCurrentView('dashboard')}
+              onHomeClick={() => changeView('dashboard')}
             />
           </div>
         )}
@@ -2121,7 +2190,7 @@ const FamilyHubContent = () => {
         )}
         {currentView === 'budget' && <BudgetDashboard />}
         {currentView === 'meals' && <MealsDashboard />}
-        {currentView === 'shopping' && <ShoppingDashboard />}
+        {currentView === 'shopping' && <ShoppingDashboard onSubViewChange={setCurrentSubView} currentSubView={currentSubView} />}
         {currentView === 'goals' && <GoalsDashboard />}
         {currentView === 'family' && <FamilyDashboard />}
         {currentView === 'news' && <NewsLanding />}
