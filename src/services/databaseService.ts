@@ -80,7 +80,7 @@ class DatabaseService {
 
       return await response.json();
     } catch (error) {
-      if (error.name === 'AbortError') {
+      if (error instanceof Error && error.name === 'AbortError') {
         console.error('API request timed out:', endpoint);
         throw new Error(`Request timeout: ${endpoint}`);
       }
