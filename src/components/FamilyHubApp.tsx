@@ -1398,11 +1398,6 @@ const FamilyHubContent = () => {
 
     return (
       <div className="p-4 md:p-8 bg-gray-50 min-h-screen">
-        {/* Breadcrumb Navigation */}
-        <Breadcrumb
-          items={getBreadcrumbItems()}
-          onHomeClick={() => setCurrentView('dashboard')}
-        />
 
         {/* Professional Header */}
         <div className="mb-6 md:mb-8">
@@ -2097,6 +2092,15 @@ const FamilyHubContent = () => {
 
       {/* Main Content with mobile padding adjustments */}
       <div className="flex-1 overflow-auto pt-14 pb-16 md:pt-0 md:pb-0">
+        {/* Breadcrumb Navigation for all views except dashboard */}
+        {currentView !== 'dashboard' && (
+          <div className="px-4 md:px-8 pt-4">
+            <Breadcrumb
+              items={getBreadcrumbItems()}
+              onHomeClick={() => setCurrentView('dashboard')}
+            />
+          </div>
+        )}
         {currentView === 'dashboard' && renderDashboard()}
         {currentView === 'calendar' && (
           <CalendarMain

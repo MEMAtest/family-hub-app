@@ -18,7 +18,9 @@ import {
   Utensils,
   Coffee,
   Sandwich,
-  Moon
+  Moon,
+  Trash2,
+  AlertCircle
 } from 'lucide-react';
 import MealCalendar from './MealCalendar';
 import RecipeCard from './RecipeCard';
@@ -34,6 +36,7 @@ const MealPlanner: React.FC<MealPlannerProps> = ({ onClose }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [showRecipeSelector, setShowRecipeSelector] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<{ date: Date; mealType: string } | null>(null);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   // Mock data for development
   const mockRecipes: MealRecipe[] = [
@@ -301,6 +304,15 @@ const MealPlanner: React.FC<MealPlannerProps> = ({ onClose }) => {
     setShowRecipeSelector(true);
   };
 
+  const clearWeekPlan = () => {
+    // Clear the current week's meal plan
+    setWeekPlan(null);
+    localStorage.removeItem(`mealPlan-week-${currentDate.toISOString().split('T')[0]}`);
+    setShowClearConfirm(false);
+    // Optionally reload the week to show empty state
+    loadWeekPlan();
+  };
+
   const handleRecipeSelect = (recipe: MealRecipe) => {
     if (selectedSlot) {
       // Create new meal plan
@@ -369,6 +381,13 @@ const MealPlanner: React.FC<MealPlannerProps> = ({ onClose }) => {
             <button className="flex items-center space-x-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-sm hover:bg-gray-50 transition-colors">
               <Filter className="w-4 h-4" />
               <span>Filter</span>
+            </button>
+            <button
+              onClick={() => setShowClearConfirm(true)}
+              className="flex items-center space-x-2 px-4 py-2 border border-red-300 text-red-700 rounded-sm hover:bg-red-50 transition-colors"
+            >
+              <Trash2 className="w-4 h-4" />
+              <span>Clear Week</span>
             </button>
             <button className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-sm hover:bg-blue-700 transition-colors">
               <Download className="w-4 h-4" />
@@ -483,6 +502,35 @@ const MealPlanner: React.FC<MealPlannerProps> = ({ onClose }) => {
       )}
 
       {/* Recipe Selector Modal */}
+      {/* Clear Confirmation Modal */}
+      {showClearConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+          <div className="bg-white rounded-lg p-6 max-w-md mx-4">
+            <div className="flex items-center gap-3 mb-4">
+              <AlertCircle className="w-6 h-6 text-red-500" />
+              <h3 className="text-lg font-medium text-gray-900">Clear Week's Meal Plan?</h3>
+            </div>
+            <p className="text-gray-600 mb-6">
+              This will remove all planned meals for the current week. This action cannot be undone.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setShowClearConfirm(false)}
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-sm hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={clearWeekPlan}
+                className="px-4 py-2 bg-red-600 text-white rounded-sm hover:bg-red-700"
+              >
+                Clear Week
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showRecipeSelector && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
           <div className="bg-white rounded-lg w-full max-w-4xl mx-4 max-h-[80vh] overflow-hidden">
