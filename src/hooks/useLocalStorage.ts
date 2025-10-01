@@ -1,27 +1,31 @@
 import { useState, useEffect } from 'react';
 
 export function useLocalStorage<T>(key: string, initialValue: T): [T, (value: T | ((val: T) => T)) => void] {
-  // State to store our value
-  // Pass initial state function to useState so logic is only executed once
-  const [storedValue, setStoredValue] = useState<T>(() => {
-    if (typeof window === 'undefined') {
-      return initialValue;
-    }
+  // Always start with initialValue to avoid hydration mismatch
+  const [storedValue, setStoredValue] = useState<T>(initialValue);
+  const [isInitialized, setIsInitialized] = useState(false);
 
-    try {
-      // Get from local storage by key
-      const item = window.localStorage.getItem(key);
-      // Parse stored json or if none return initialValue
-      return item ? JSON.parse(item) : initialValue;
-    } catch (error) {
-      // If error also return initialValue
-      console.log(`Error loading ${key} from localStorage:`, error);
-      return initialValue;
+  // Initialize from localStorage only on client side after hydration
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !isInitialized) {
+      try {
+        const item = window.localStorage.getItem(key);
+        if (item) {
+          const parsed = JSON.parse(item);
+          setStoredValue(parsed);
+        }
+        setIsInitialized(true);
+      } catch (error) {
+        console.log(`Error loading ${key} from localStorage:`, error);
+        setIsInitialized(true);
+      }
     }
-  });
+  }, [key, isInitialized]);
 
   // Listen for storage events (for cross-tab sync and Chrome compatibility)
   useEffect(() => {
+    if (!isInitialized) return;
+
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === key && e.newValue !== null) {
         try {
@@ -34,26 +38,7 @@ export function useLocalStorage<T>(key: string, initialValue: T): [T, (value: T 
 
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
-  }, [key]);
-
-  // Chrome-specific: Force a re-read on mount
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const item = window.localStorage.getItem(key);
-        if (item) {
-          const parsed = JSON.parse(item);
-          // Only update if different from current value
-          if (JSON.stringify(parsed) !== JSON.stringify(storedValue)) {
-            setStoredValue(parsed);
-          }
-        }
-      } catch (error) {
-        console.log(`Chrome sync check error for ${key}:`, error);
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]); // Only on key change
+  }, [key, isInitialized]);
 
   // Return a wrapped version of useState's setter function that ...
   // ... persists the new value to localStorage.
@@ -65,8 +50,8 @@ export function useLocalStorage<T>(key: string, initialValue: T): [T, (value: T 
       // Save state
       setStoredValue(valueToStore);
 
-      // Save to local storage
-      if (typeof window !== 'undefined') {
+      // Save to local storage only if initialized
+      if (typeof window !== 'undefined' && isInitialized) {
         window.localStorage.setItem(key, JSON.stringify(valueToStore));
 
         // Chrome fix: Dispatch a custom event for immediate updates
