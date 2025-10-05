@@ -46,3 +46,8 @@ prisma/generated/
 *.tmp
 *.temp
 .vercel
+
+# Test and utility scripts (root level only)
+/test-*.ts
+/add-*.ts
+/check-*.ts
