@@ -128,7 +128,7 @@ interface DatabaseSlice {
 }
 
 // Combined state
-type FamilyState = PeopleSlice & CalendarSlice & ViewSlice & BudgetSlice & MealPlanningSlice & ShoppingSlice & GoalsSlice & DatabaseSlice;
+export type FamilyState = PeopleSlice & CalendarSlice & ViewSlice & BudgetSlice & MealPlanningSlice & ShoppingSlice & GoalsSlice & DatabaseSlice;
 
 // =================================================================
 // SLICE CREATORS

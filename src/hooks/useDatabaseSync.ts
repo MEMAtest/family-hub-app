@@ -2,12 +2,12 @@
 
 import { useEffect } from 'react';
 import databaseService from '@/services/databaseService';
-import { useFamilyStore } from '@/store/familyStore';
+import { useFamilyStore, FamilyState } from '@/store/familyStore';
 
 export const useDatabaseSync = () => {
-  const setDatabaseStatus = useFamilyStore(state => state.setDatabaseStatus);
-  const setEvents = useFamilyStore(state => state.setEvents);
-  const setPeople = useFamilyStore(state => state.setPeople);
+  const setDatabaseStatus = useFamilyStore((state: FamilyState) => state.setDatabaseStatus);
+  const setEvents = useFamilyStore((state: FamilyState) => state.setEvents);
+  const setPeople = useFamilyStore((state: FamilyState) => state.setPeople);
 
   useEffect(() => {
     const initDatabase = async () => {
