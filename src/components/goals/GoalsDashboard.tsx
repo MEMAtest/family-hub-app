@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Target,
   Plus,
@@ -29,7 +29,10 @@ import {
   Eye,
   Edit,
   Trash2,
-  Share
+  Share,
+  Menu,
+  X,
+  ChevronDown
 } from 'lucide-react';
 import { PieChart, Pie, Cell, BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, RadialBarChart, RadialBar, Legend } from 'recharts';
 import GoalForm from './GoalForm';
@@ -42,12 +45,29 @@ interface GoalsDashboardProps {
 }
 
 const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
+  const [isMobile, setIsMobile] = useState(false);
   const [activeView, setActiveView] = useState<'dashboard' | 'family' | 'individual' | 'achievements' | 'analytics'>('dashboard');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'completed' | 'paused'>('all');
   const [filterType, setFilterType] = useState<'all' | 'family' | 'individual'>('all');
   const [showNewGoalForm, setShowNewGoalForm] = useState(false);
   const [selectedPerson, setSelectedPerson] = useState<string>('all');
+
+  // Mobile states
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
+
+  // Mobile detection
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 1024);
+    };
+
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   // Mock data for goals system
   const familyMembers = [
@@ -266,6 +286,166 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
 
   const [goals, setGoals] = useState(mockGoals);
 
+  // Mobile Header Component
+  const renderMobileHeader = () => (
+    <div className="lg:hidden bg-white border-b border-gray-200 px-4 py-3 sticky top-0 z-40 pwa-safe-top">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-3">
+          <Target className="w-6 h-6 text-blue-600" />
+          <h1 className="mobile-title">Goals</h1>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowMobileFilters(!showMobileFilters)}
+            className="mobile-btn-secondary flex items-center gap-1 px-3 py-2"
+          >
+            <Filter className="w-4 h-4" />
+            <ChevronDown className={`w-4 h-4 transition-transform ${showMobileFilters ? 'rotate-180' : ''}`} />
+          </button>
+          <button
+            onClick={() => setShowMobileMenu(true)}
+            className="mobile-btn-secondary p-2"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+        </div>
+      </div>
+
+      {/* View Tabs - Mobile */}
+      <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg overflow-x-auto">
+        {[
+          { id: 'dashboard', label: 'Overview', icon: BarChart3 },
+          { id: 'family', label: 'Family', icon: Users },
+          { id: 'individual', label: 'Personal', icon: User },
+          { id: 'achievements', label: 'Badges', icon: Trophy },
+          { id: 'analytics', label: 'Stats', icon: TrendingUp }
+        ].map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            onClick={() => setActiveView(id as any)}
+            className={`flex items-center gap-1 px-3 py-2 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
+              activeView === id
+                ? 'bg-white text-blue-600 shadow-sm'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <Icon className="w-3 h-3" />
+            <span>{label}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Mobile Filters Dropdown */}
+      {showMobileFilters && (
+        <div className="absolute left-4 right-4 top-full bg-white border border-gray-200 rounded-xl shadow-lg z-50 p-4 space-y-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <input
+              type="text"
+              placeholder="Search goals..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="mobile-input pl-10"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value as any)}
+              className="mobile-select"
+            >
+              <option value="all">All Status</option>
+              <option value="active">Active</option>
+              <option value="completed">Completed</option>
+              <option value="paused">Paused</option>
+            </select>
+            <select
+              value={filterType}
+              onChange={(e) => setFilterType(e.target.value as any)}
+              className="mobile-select"
+            >
+              <option value="all">All Types</option>
+              <option value="family">Family</option>
+              <option value="individual">Individual</option>
+            </select>
+          </div>
+          <select
+            value={selectedPerson}
+            onChange={(e) => setSelectedPerson(e.target.value)}
+            className="mobile-select w-full"
+          >
+            <option value="all">All Members</option>
+            {familyMembers.map(person => (
+              <option key={person.id} value={person.id}>{person.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
+    </div>
+  );
+
+  // Mobile Menu Overlay Component
+  const renderMobileMenu = () => {
+    if (!showMobileMenu) return null;
+
+    return (
+      <div className="lg:hidden fixed inset-0 bg-black bg-opacity-50 z-50" onClick={() => setShowMobileMenu(false)}>
+        <div className="absolute right-0 top-0 h-full w-80 bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-center justify-between p-4 border-b border-gray-200 pwa-safe-top">
+            <h2 className="text-lg font-semibold text-gray-900">Goals Menu</h2>
+            <button
+              onClick={() => setShowMobileMenu(false)}
+              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+          <div className="p-4 space-y-4">
+            <button
+              onClick={() => {
+                setShowNewGoalForm(true);
+                setShowMobileMenu(false);
+              }}
+              className="mobile-btn-primary w-full flex items-center gap-3"
+            >
+              <Plus className="w-5 h-5" />
+              New Goal
+            </button>
+
+            <div className="border-t border-gray-200 pt-4">
+              <h3 className="text-sm font-medium text-gray-900 mb-3">View Options</h3>
+              <div className="space-y-2">
+                {[
+                  { id: 'dashboard', label: 'Dashboard Overview', icon: BarChart3 },
+                  { id: 'family', label: 'Family Goals', icon: Users },
+                  { id: 'individual', label: 'Individual Goals', icon: User },
+                  { id: 'achievements', label: 'Achievements', icon: Trophy },
+                  { id: 'analytics', label: 'Analytics', icon: TrendingUp }
+                ].map(({ id, label, icon: Icon }) => (
+                  <button
+                    key={id}
+                    onClick={() => {
+                      setActiveView(id as any);
+                      setShowMobileMenu(false);
+                    }}
+                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-left ${
+                      activeView === id
+                        ? 'bg-blue-50 text-blue-600'
+                        : 'text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    <Icon className="w-4 h-4" />
+                    <span className="text-sm">{label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const filteredGoals = goals.filter(goal => {
     const matchesSearch = goal.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          goal.description.toLowerCase().includes(searchTerm.toLowerCase());
@@ -366,65 +546,111 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
   const renderDashboard = () => (
     <div className="space-y-8">
       {/* Overview Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
+      <div className={`grid gap-6 ${
+        isMobile
+          ? 'grid-cols-2'
+          : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4'
+      }`}>
+        <div className={`bg-white border border-gray-200 rounded-lg ${
+          isMobile ? 'p-3' : 'p-3 sm:p-4 md:p-6'
+        }`}>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600">Active Goals</p>
-              <p className="text-xl md:text-2xl font-bold text-gray-900">{activeGoals}</p>
+              <p className={`text-gray-600 ${
+                isMobile ? 'text-xs' : 'text-sm'
+              }`}>Active Goals</p>
+              <p className={`font-bold text-gray-900 ${
+                isMobile ? 'text-lg' : 'text-xl md:text-2xl'
+              }`}>{activeGoals}</p>
             </div>
-            <Target className="w-8 h-8 text-blue-500" />
+            <Target className={`text-blue-500 ${
+              isMobile ? 'w-6 h-6' : 'w-8 h-8'
+            }`} />
           </div>
           <div className="mt-2">
-            <span className="text-sm text-gray-500">
+            <span className={`text-gray-500 ${
+              isMobile ? 'text-xs' : 'text-sm'
+            }`}>
               {totalGoals} total goals
             </span>
           </div>
         </div>
 
-        <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
+        <div className={`bg-white border border-gray-200 rounded-lg ${
+          isMobile ? 'p-3' : 'p-3 sm:p-4 md:p-6'
+        }`}>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600">Avg Progress</p>
-              <p className="text-xl md:text-2xl font-bold text-gray-900">{averageProgress.toFixed(0)}%</p>
+              <p className={`text-gray-600 ${
+                isMobile ? 'text-xs' : 'text-sm'
+              }`}>Avg Progress</p>
+              <p className={`font-bold text-gray-900 ${
+                isMobile ? 'text-lg' : 'text-xl md:text-2xl'
+              }`}>{averageProgress.toFixed(0)}%</p>
             </div>
-            <TrendingUp className="w-8 h-8 text-green-500" />
+            <TrendingUp className={`text-green-500 ${
+              isMobile ? 'w-6 h-6' : 'w-8 h-8'
+            }`} />
           </div>
           <div className="mt-2">
-            <div className="w-full bg-gray-200 rounded-full h-2">
+            <div className={`w-full bg-gray-200 rounded-full ${
+              isMobile ? 'h-1.5' : 'h-2'
+            }`}>
               <div
-                className="bg-green-500 h-2 rounded-full transition-all duration-300"
+                className={`bg-green-500 rounded-full transition-all duration-300 ${
+                  isMobile ? 'h-1.5' : 'h-2'
+                }`}
                 style={{ width: `${averageProgress}%` }}
               ></div>
             </div>
           </div>
         </div>
 
-        <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
+        <div className={`bg-white border border-gray-200 rounded-lg ${
+          isMobile ? 'p-3' : 'p-3 sm:p-4 md:p-6'
+        }`}>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600">Achievements</p>
-              <p className="text-xl md:text-2xl font-bold text-gray-900">{totalAchievements}</p>
+              <p className={`text-gray-600 ${
+                isMobile ? 'text-xs' : 'text-sm'
+              }`}>Achievements</p>
+              <p className={`font-bold text-gray-900 ${
+                isMobile ? 'text-lg' : 'text-xl md:text-2xl'
+              }`}>{totalAchievements}</p>
             </div>
-            <Trophy className="w-8 h-8 text-yellow-500" />
+            <Trophy className={`text-yellow-500 ${
+              isMobile ? 'w-6 h-6' : 'w-8 h-8'
+            }`} />
           </div>
           <div className="mt-2">
-            <span className="text-sm text-gray-500">
+            <span className={`text-gray-500 ${
+              isMobile ? 'text-xs' : 'text-sm'
+            }`}>
               {achievements.filter(a => new Date(a.earnedDate).getMonth() === new Date().getMonth()).length} this month
             </span>
           </div>
         </div>
 
-        <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
+        <div className={`bg-white border border-gray-200 rounded-lg ${
+          isMobile ? 'p-3' : 'p-3 sm:p-4 md:p-6'
+        }`}>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600">Total Points</p>
-              <p className="text-xl md:text-2xl font-bold text-gray-900">{totalPoints.toLocaleString()}</p>
+              <p className={`text-gray-600 ${
+                isMobile ? 'text-xs' : 'text-sm'
+              }`}>Total Points</p>
+              <p className={`font-bold text-gray-900 ${
+                isMobile ? 'text-lg' : 'text-xl md:text-2xl'
+              }`}>{isMobile ? `${Math.round(totalPoints / 1000)}k` : totalPoints.toLocaleString()}</p>
             </div>
-            <Star className="w-8 h-8 text-purple-500" />
+            <Star className={`text-purple-500 ${
+              isMobile ? 'w-6 h-6' : 'w-8 h-8'
+            }`} />
           </div>
           <div className="mt-2">
-            <span className="text-sm text-green-600">
+            <span className={`text-green-600 ${
+              isMobile ? 'text-xs' : 'text-sm'
+            }`}>
               +320 this week
             </span>
           </div>
@@ -432,77 +658,123 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
       </div>
 
       {/* Quick Actions */}
-      <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">Quick Actions</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className={`bg-white border border-gray-200 rounded-lg ${
+        isMobile ? 'p-3' : 'p-3 sm:p-4 md:p-6'
+      }`}>
+        <h2 className={`font-semibold text-gray-900 mb-4 ${
+          isMobile ? 'text-lg' : 'text-xl'
+        }`}>Quick Actions</h2>
+        <div className={`grid gap-4 ${
+          isMobile ? 'grid-cols-2' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4'
+        }`}>
           <button
             onClick={() => setShowNewGoalForm(true)}
-            className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+            className={`flex items-center border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors ${
+              isMobile ? 'flex-col space-y-2 p-3 text-center' : 'space-x-3 p-4'
+            }`}
           >
-            <Plus className="w-6 h-6 text-green-500" />
-            <div className="text-left">
-              <h3 className="font-medium text-gray-900">New Goal</h3>
-              <p className="text-sm text-gray-600">Create a new goal</p>
+            <Plus className={`text-green-500 ${
+              isMobile ? 'w-5 h-5' : 'w-6 h-6'
+            }`} />
+            <div className={isMobile ? '' : 'text-left'}>
+              <h3 className={`font-medium text-gray-900 ${
+                isMobile ? 'text-sm' : ''
+              }`}>New Goal</h3>
+              {!isMobile && (
+                <p className="text-sm text-gray-600">Create a new goal</p>
+              )}
             </div>
           </button>
 
           <button
             onClick={() => setActiveView('achievements')}
-            className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+            className={`flex items-center border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors ${
+              isMobile ? 'flex-col space-y-2 p-3 text-center' : 'space-x-3 p-4'
+            }`}
           >
-            <Award className="w-6 h-6 text-yellow-500" />
-            <div className="text-left">
-              <h3 className="font-medium text-gray-900">Achievements</h3>
-              <p className="text-sm text-gray-600">View all badges</p>
+            <Award className={`text-yellow-500 ${
+              isMobile ? 'w-5 h-5' : 'w-6 h-6'
+            }`} />
+            <div className={isMobile ? '' : 'text-left'}>
+              <h3 className={`font-medium text-gray-900 ${
+                isMobile ? 'text-sm' : ''
+              }`}>Achievements</h3>
+              {!isMobile && (
+                <p className="text-sm text-gray-600">View all badges</p>
+              )}
             </div>
           </button>
 
           <button
             onClick={() => setActiveView('analytics')}
-            className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+            className={`flex items-center border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors ${
+              isMobile ? 'flex-col space-y-2 p-3 text-center' : 'space-x-3 p-4'
+            }`}
           >
-            <BarChart3 className="w-6 h-6 text-blue-500" />
-            <div className="text-left">
-              <h3 className="font-medium text-gray-900">Analytics</h3>
-              <p className="text-sm text-gray-600">View progress data</p>
+            <BarChart3 className={`text-blue-500 ${
+              isMobile ? 'w-5 h-5' : 'w-6 h-6'
+            }`} />
+            <div className={isMobile ? '' : 'text-left'}>
+              <h3 className={`font-medium text-gray-900 ${
+                isMobile ? 'text-sm' : ''
+              }`}>Analytics</h3>
+              {!isMobile && (
+                <p className="text-sm text-gray-600">View progress data</p>
+              )}
             </div>
           </button>
 
-          <button className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-            <Users className="w-6 h-6 text-purple-500" />
-            <div className="text-left">
-              <h3 className="font-medium text-gray-900">Team Challenge</h3>
-              <p className="text-sm text-gray-600">Start a challenge</p>
+          <button className={`flex items-center border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors ${
+            isMobile ? 'flex-col space-y-2 p-3 text-center' : 'space-x-3 p-4'
+          }`}>
+            <Users className={`text-purple-500 ${
+              isMobile ? 'w-5 h-5' : 'w-6 h-6'
+            }`} />
+            <div className={isMobile ? '' : 'text-left'}>
+              <h3 className={`font-medium text-gray-900 ${
+                isMobile ? 'text-sm' : ''
+              }`}>Team Challenge</h3>
+              {!isMobile && (
+                <p className="text-sm text-gray-600">Start a challenge</p>
+              )}
             </div>
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className={`grid gap-8 ${
+        isMobile ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-2'
+      }`}>
         {/* Active Goals Progress */}
-        <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
+        <div className={`bg-white border border-gray-200 rounded-lg ${
+          isMobile ? 'p-3' : 'p-3 sm:p-4 md:p-6'
+        }`}>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold text-gray-900">Active Goals Progress</h2>
+            <h2 className={`font-semibold text-gray-900 ${
+              isMobile ? 'text-lg' : 'text-xl'
+            }`}>Active Goals Progress</h2>
             <button
               onClick={() => setActiveView('family')}
-              className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+              className={`text-blue-600 hover:text-blue-800 font-medium ${
+                isMobile ? 'text-xs' : 'text-sm'
+              }`}
             >
               View All →
             </button>
           </div>
 
-          <div className="h-64">
+          <div className={isMobile ? 'h-48' : 'h-64'}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={progressChartData.slice(0, 5)}>
+              <BarChart data={progressChartData.slice(0, isMobile ? 3 : 5)}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis
                   dataKey="name"
-                  tick={{ fontSize: 12 }}
+                  tick={{ fontSize: isMobile ? 10 : 12 }}
                   angle={-45}
                   textAnchor="end"
-                  height={60}
+                  height={isMobile ? 50 : 60}
                 />
-                <YAxis tick={{ fontSize: 12 }} />
+                <YAxis tick={{ fontSize: isMobile ? 10 : 12 }} />
                 <Tooltip
                   formatter={(value: any, name: string) => [`${value}%`, 'Progress']}
                 />
@@ -640,70 +912,80 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
 
   const renderGoalsList = () => (
     <div className="space-y-6">
-      {/* Filters and Search */}
-      <div className="flex flex-col md:flex-row gap-4">
-        <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-          <input
-            type="text"
-            placeholder="Search goals..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
+      {/* Filters and Search - Desktop Only (Mobile uses header dropdown) */}
+      {!isMobile && (
+        <div className="flex flex-col md:flex-row gap-4">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <input
+              type="text"
+              placeholder="Search goals..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <select
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value as any)}
+            className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="all">All Status</option>
+            <option value="active">Active</option>
+            <option value="completed">Completed</option>
+            <option value="paused">Paused</option>
+          </select>
+
+          <select
+            value={filterType}
+            onChange={(e) => setFilterType(e.target.value as any)}
+            className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="all">All Types</option>
+            <option value="family">Family Goals</option>
+            <option value="individual">Individual Goals</option>
+          </select>
+
+          <select
+            value={selectedPerson}
+            onChange={(e) => setSelectedPerson(e.target.value)}
+            className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="all">All Members</option>
+            {familyMembers.map(person => (
+              <option key={person.id} value={person.id}>{person.name}</option>
+            ))}
+          </select>
+
+          <button
+            onClick={() => setShowNewGoalForm(true)}
+            className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          >
+            <Plus className="w-4 h-4" />
+            <span>New Goal</span>
+          </button>
         </div>
-
-        <select
-          value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value as any)}
-          className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="all">All Status</option>
-          <option value="active">Active</option>
-          <option value="completed">Completed</option>
-          <option value="paused">Paused</option>
-        </select>
-
-        <select
-          value={filterType}
-          onChange={(e) => setFilterType(e.target.value as any)}
-          className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="all">All Types</option>
-          <option value="family">Family Goals</option>
-          <option value="individual">Individual Goals</option>
-        </select>
-
-        <select
-          value={selectedPerson}
-          onChange={(e) => setSelectedPerson(e.target.value)}
-          className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="all">All Members</option>
-          {familyMembers.map(person => (
-            <option key={person.id} value={person.id}>{person.name}</option>
-          ))}
-        </select>
-
-        <button
-          onClick={() => setShowNewGoalForm(true)}
-          className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-        >
-          <Plus className="w-4 h-4" />
-          <span>New Goal</span>
-        </button>
-      </div>
+      )}
 
       {/* Goals Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className={`grid gap-6 ${
+        isMobile ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'
+      }`}>
         {filteredGoals.map((goal) => {
           const category = goalCategories.find(c => c.id === goal.category);
           const completedMilestones = goal.milestones.filter(m => m.isCompleted).length;
 
           return (
-            <div key={goal.id} className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow">
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center space-x-2">
+            <div key={goal.id} className={`bg-white border border-gray-200 rounded-lg hover:shadow-md transition-shadow ${
+              isMobile ? 'p-4' : 'p-6'
+            }`}>
+              <div className={`flex items-start justify-between ${
+                isMobile ? 'mb-3' : 'mb-4'
+              }`}>
+                <div className={`flex items-center ${
+                  isMobile ? 'space-x-1' : 'space-x-2'
+                }`}>
                   <span style={{ color: category?.color }}>{category?.icon}</span>
                   <span className={`px-2 py-1 rounded-full text-xs ${getStatusColor(goal.status)}`}>
                     {goal.status}
@@ -715,16 +997,20 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
 
                 <div className="flex items-center space-x-1">
                   <button className="text-gray-400 hover:text-gray-600">
-                    <Eye className="w-4 h-4" />
+                    <Eye className={isMobile ? 'w-3 h-3' : 'w-4 h-4'} />
                   </button>
                   <button className="text-gray-400 hover:text-gray-600">
-                    <Edit className="w-4 h-4" />
+                    <Edit className={isMobile ? 'w-3 h-3' : 'w-4 h-4'} />
                   </button>
                 </div>
               </div>
 
-              <h3 className="font-semibold text-gray-900 mb-2">{goal.title}</h3>
-              <p className="text-sm text-gray-600 mb-4">{goal.description}</p>
+              <h3 className={`font-semibold text-gray-900 mb-2 ${
+                isMobile ? 'text-base' : ''
+              }`}>{goal.title}</h3>
+              <p className={`text-gray-600 mb-4 ${
+                isMobile ? 'text-sm line-clamp-2' : 'text-sm'
+              }`}>{goal.description}</p>
 
               {/* Progress Bar */}
               <div className="mb-4">
@@ -826,41 +1112,46 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
   );
 
   return (
-    <div className="p-3 sm:p-4 md:p-6 lg:p-8 bg-gray-50 min-h-screen">
-      {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-light text-gray-900 mb-2">
-              {activeView === 'dashboard' && 'Goals & Achievements'}
-              {activeView === 'family' && 'Family Goals'}
-              {activeView === 'individual' && 'Individual Goals'}
-              {activeView === 'achievements' && 'Achievements & Badges'}
-              {activeView === 'analytics' && 'Goal Analytics'}
-            </h1>
-            <p className="text-gray-600">
-              {activeView === 'dashboard' && 'Track your family\'s goals and celebrate achievements'}
-              {activeView === 'family' && 'Collaborate on family goals and challenges'}
-              {activeView === 'individual' && 'Personal goals and individual progress'}
-              {activeView === 'achievements' && 'View earned badges and celebrate success'}
-              {activeView === 'analytics' && 'Analyze goal patterns and performance'}
-            </p>
+    <div className={`bg-gray-50 min-h-screen ${isMobile ? 'pb-safe-bottom' : 'p-3 sm:p-4 md:p-6 lg:p-8'}`}>
+      {/* Mobile Header */}
+      {isMobile && renderMobileHeader()}
+
+      {/* Desktop Header */}
+      {!isMobile && (
+        <div className="mb-8">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl md:text-3xl font-light text-gray-900 mb-2">
+                {activeView === 'dashboard' && 'Goals & Achievements'}
+                {activeView === 'family' && 'Family Goals'}
+                {activeView === 'individual' && 'Individual Goals'}
+                {activeView === 'achievements' && 'Achievements & Badges'}
+                {activeView === 'analytics' && 'Goal Analytics'}
+              </h1>
+              <p className="text-gray-600">
+                {activeView === 'dashboard' && 'Track your family\'s goals and celebrate achievements'}
+                {activeView === 'family' && 'Collaborate on family goals and challenges'}
+                {activeView === 'individual' && 'Personal goals and individual progress'}
+                {activeView === 'achievements' && 'View earned badges and celebrate success'}
+                {activeView === 'analytics' && 'Analyze goal patterns and performance'}
+              </p>
+            </div>
+
+            {activeView !== 'dashboard' && (
+              <button
+                onClick={() => setActiveView('dashboard')}
+                className="flex items-center space-x-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-sm hover:bg-gray-50 transition-colors"
+              >
+                <BarChart3 className="w-4 h-4" />
+                <span>Dashboard</span>
+              </button>
+            )}
           </div>
-
-          {activeView !== 'dashboard' && (
-            <button
-              onClick={() => setActiveView('dashboard')}
-              className="flex items-center space-x-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-sm hover:bg-gray-50 transition-colors"
-            >
-              <BarChart3 className="w-4 h-4" />
-              <span>Dashboard</span>
-            </button>
-          )}
         </div>
-      </div>
+      )}
 
-      {/* Navigation Tabs */}
-      {activeView === 'dashboard' && (
+      {/* Navigation Tabs - Desktop Only */}
+      {!isMobile && activeView === 'dashboard' && (
         <div className="mb-6">
           <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg w-fit">
             <button
@@ -896,10 +1187,15 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
       )}
 
       {/* Content */}
-      {activeView === 'dashboard' && renderDashboard()}
-      {(activeView === 'family' || activeView === 'individual') && renderGoalsList()}
-      {activeView === 'achievements' && <AchievementTracker achievements={achievements} familyMembers={familyMembers} />}
-      {activeView === 'analytics' && <GoalAnalytics goals={goals} achievements={achievements} />}
+      <div className={isMobile ? 'px-4' : ''}>
+        {activeView === 'dashboard' && renderDashboard()}
+        {(activeView === 'family' || activeView === 'individual') && renderGoalsList()}
+        {activeView === 'achievements' && <AchievementTracker achievements={achievements} familyMembers={familyMembers} />}
+        {activeView === 'analytics' && <GoalAnalytics goals={goals} achievements={achievements} />}
+      </div>
+
+      {/* Mobile Menu Overlay */}
+      {renderMobileMenu()}
 
       {/* New Goal Form Modal */}
       {showNewGoalForm && (

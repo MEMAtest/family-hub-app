@@ -158,14 +158,16 @@ class DatabaseService {
 
     console.log('Attempting to save to database with familyId:', this.familyId);
     try {
+      // Combine date and time into ISO 8601 DateTime format
+      const eventDateTime = new Date(`${event.date}T${event.time}`).toISOString();
+      
       const dbEvent = await this.fetchAPI(`${API_BASE}/${this.familyId}/events`, {
         method: 'POST',
         body: JSON.stringify({
           personId: event.person,
           title: event.title,
           description: '',
-          eventDate: event.date,
-          eventTime: event.time,
+          eventDateTime: eventDateTime,
           durationMinutes: event.duration || 60,
           location: event.location || '',
           cost: event.cost || 0,
@@ -230,11 +232,28 @@ class DatabaseService {
     }
 
     try {
+      // Map UI fields to API/Prisma fields
+      const eventData: any = { ...event };
+
+      // Ensure dates are properly formatted
+      if (eventData.date) {
+        eventData.eventDate = eventData.date;
+        delete eventData.date;
+      }
+      if (eventData.time) {
+        eventData.eventTime = eventData.time;
+        delete eventData.time;
+      }
+      if (eventData.person) {
+        eventData.personId = eventData.person;
+        delete eventData.person;
+      }
+
       await this.fetchAPI(`${API_BASE}/${this.familyId}/events`, {
         method: 'PUT',
         body: JSON.stringify({
           id,
-          ...event,
+          ...eventData,
         }),
       });
 

@@ -180,7 +180,7 @@ const createViewSlice: StateCreator<FamilyState, [], [], ViewSlice> = (set) => (
   currentView: 'dashboard',
   currentSubView: '',
   calendarView: 'month',
-  currentDate: new Date('2025-09-19'),
+  currentDate: new Date(), // Fix 5: Default to current date instead of hardcoded 2025
   selectedPerson: 'all',
   setCurrentView: (view) => set({ currentView: view, currentSubView: '' }),
   setCurrentSubView: (subView) => set({ currentSubView: subView }),

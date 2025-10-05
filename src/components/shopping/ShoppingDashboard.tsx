@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ShoppingCart,
   Plus,
@@ -20,7 +20,9 @@ import {
   Store,
   Scan,
   Receipt,
-  Bell
+  Bell,
+  Menu,
+  X
 } from 'lucide-react';
 import ShoppingListManager from './ShoppingListManager';
 import StoreManager from './StoreManager';
@@ -34,7 +36,21 @@ interface ShoppingDashboardProps {
 }
 
 const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose, onSubViewChange, currentSubView }) => {
+  const [isMobile, setIsMobile] = useState(false);
   const [activeView, setActiveView] = useState<'dashboard' | 'lists' | 'stores' | 'prices' | 'analytics'>('dashboard');
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
+
+  // Mobile detection
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 1024);
+    };
+
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   // Sync with parent's subView
   React.useEffect(() => {
@@ -210,23 +226,149 @@ const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose, onSubVie
     return `${Math.floor(hours / 24)}d ago`;
   };
 
+  // Mobile Header Component
+  const renderMobileHeader = () => (
+    <div className="lg:hidden bg-white border-b border-gray-200 px-4 py-3 sticky top-0 z-40 pwa-safe-top">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-3">
+          <ShoppingCart className="w-6 h-6 text-blue-600" />
+          <h1 className="mobile-title">Shopping</h1>
+        </div>
+        <button
+          onClick={() => setShowMobileMenu(true)}
+          className="mobile-btn-secondary p-2"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
+      </div>
+
+      {/* View Tabs - Mobile */}
+      {activeView === 'dashboard' && (
+        <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg overflow-x-auto">
+          {[
+            { id: 'lists', label: 'Lists', icon: List },
+            { id: 'stores', label: 'Stores', icon: Store },
+            { id: 'prices', label: 'Prices', icon: TrendingDown },
+            { id: 'analytics', label: 'Analytics', icon: BarChart3 }
+          ].map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              onClick={() => setActiveView(id as any)}
+              className="flex items-center gap-1 px-3 py-2 text-xs font-medium text-gray-600 hover:text-gray-900 hover:bg-white rounded-md transition-colors whitespace-nowrap"
+            >
+              <Icon className="w-3 h-3" />
+              <span>{label}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  // Mobile Menu Overlay Component
+  const renderMobileMenu = () => {
+    if (!showMobileMenu) return null;
+
+    return (
+      <div className="lg:hidden fixed inset-0 bg-black bg-opacity-50 z-50" onClick={() => setShowMobileMenu(false)}>
+        <div className="absolute right-0 top-0 h-full w-80 bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-center justify-between p-4 border-b border-gray-200 pwa-safe-top">
+            <h2 className="text-lg font-semibold text-gray-900">Shopping Menu</h2>
+            <button
+              onClick={() => setShowMobileMenu(false)}
+              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+          <div className="p-4 space-y-4">
+            <div className="border-b border-gray-200 pb-4">
+              <h3 className="text-sm font-medium text-gray-900 mb-3">Quick Actions</h3>
+              <div className="space-y-2">
+                {quickActions.map((action) => (
+                  <button
+                    key={action.id}
+                    onClick={() => {
+                      action.onClick();
+                      setShowMobileMenu(false);
+                    }}
+                    className="w-full flex items-center gap-3 px-3 py-2 text-left text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
+                  >
+                    <div className="flex-shrink-0">
+                      {action.icon}
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-medium">{action.title}</h4>
+                      <p className="text-xs text-gray-500">{action.description}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-sm font-medium text-gray-900 mb-3">View Options</h3>
+              <div className="space-y-2">
+                {[
+                  { id: 'dashboard', label: 'Dashboard Overview', icon: BarChart3 },
+                  { id: 'lists', label: 'Shopping Lists', icon: List },
+                  { id: 'stores', label: 'Store Management', icon: Store },
+                  { id: 'prices', label: 'Price Tracking', icon: TrendingDown },
+                  { id: 'analytics', label: 'Shopping Analytics', icon: BarChart3 }
+                ].map(({ id, label, icon: Icon }) => (
+                  <button
+                    key={id}
+                    onClick={() => {
+                      setActiveView(id as any);
+                      setShowMobileMenu(false);
+                    }}
+                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-left ${
+                      activeView === id
+                        ? 'bg-blue-50 text-blue-600'
+                        : 'text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    <Icon className="w-4 h-4" />
+                    <span className="text-sm">{label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderDashboard = () => (
-    <div className="space-y-8">
+    <div className={isMobile ? 'space-y-6' : 'space-y-8'}>
       {/* Overview Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
+      <div className={`grid gap-4 ${
+        isMobile ? 'grid-cols-2' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4'
+      }`}>
+        <div className={`bg-white border border-gray-200 rounded-lg ${
+          isMobile ? 'p-3' : 'p-3 sm:p-4 md:p-6'
+        }`}>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600">This Week</p>
-              <p className="text-xl md:text-2xl font-bold text-gray-900">£{weeklyStats.totalSpent}</p>
+              <p className={`text-gray-600 ${
+                isMobile ? 'text-xs' : 'text-sm'
+              }`}>This Week</p>
+              <p className={`font-bold text-gray-900 ${
+                isMobile ? 'text-lg' : 'text-xl md:text-2xl'
+              }`}>£{weeklyStats.totalSpent}</p>
             </div>
-            <DollarSign className="w-8 h-8 text-green-500" />
+            <DollarSign className={`text-green-500 ${
+              isMobile ? 'w-6 h-6' : 'w-8 h-8'
+            }`} />
           </div>
-          <div className="mt-2">
-            <span className="text-sm text-gray-500">
-              £{weeklyStats.budgetRemaining} remaining
-            </span>
-          </div>
+          {!isMobile && (
+            <div className="mt-2">
+              <span className="text-sm text-gray-500">
+                £{weeklyStats.budgetRemaining} remaining
+              </span>
+            </div>
+          )}
         </div>
 
         <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
@@ -412,41 +554,46 @@ const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose, onSubVie
   );
 
   return (
-    <div className="p-3 sm:p-4 md:p-6 lg:p-8 bg-gray-50 min-h-screen">
-      {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-light text-gray-900 mb-2">
-              {activeView === 'dashboard' && 'Shopping Management'}
-              {activeView === 'lists' && 'Shopping Lists'}
-              {activeView === 'stores' && 'Store Management'}
-              {activeView === 'prices' && 'Price Tracking'}
-              {activeView === 'analytics' && 'Shopping Analytics'}
-            </h1>
-            <p className="text-gray-600">
-              {activeView === 'dashboard' && 'Manage your family\'s shopping and save money'}
-              {activeView === 'lists' && 'Create and manage your shopping lists'}
-              {activeView === 'stores' && 'Manage your preferred stores and locations'}
-              {activeView === 'prices' && 'Track prices and find the best deals'}
-              {activeView === 'analytics' && 'Analyze your shopping patterns and savings'}
-            </p>
+    <div className={`bg-gray-50 min-h-screen ${isMobile ? 'pb-safe-bottom' : 'p-3 sm:p-4 md:p-6 lg:p-8'}`}>
+      {/* Mobile Header */}
+      {isMobile && renderMobileHeader()}
+
+      {/* Desktop Header */}
+      {!isMobile && (
+        <div className="mb-8">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl md:text-3xl font-light text-gray-900 mb-2">
+                {activeView === 'dashboard' && 'Shopping Management'}
+                {activeView === 'lists' && 'Shopping Lists'}
+                {activeView === 'stores' && 'Store Management'}
+                {activeView === 'prices' && 'Price Tracking'}
+                {activeView === 'analytics' && 'Shopping Analytics'}
+              </h1>
+              <p className="text-gray-600">
+                {activeView === 'dashboard' && 'Manage your family\'s shopping and save money'}
+                {activeView === 'lists' && 'Create and manage your shopping lists'}
+                {activeView === 'stores' && 'Manage your preferred stores and locations'}
+                {activeView === 'prices' && 'Track prices and find the best deals'}
+                {activeView === 'analytics' && 'Analyze your shopping patterns and savings'}
+              </p>
+            </div>
+
+            {activeView !== 'dashboard' && (
+              <button
+                onClick={() => setActiveView('dashboard')}
+                className="flex items-center space-x-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-sm hover:bg-gray-50 transition-colors"
+              >
+                <BarChart3 className="w-4 h-4" />
+                <span>Dashboard</span>
+              </button>
+            )}
           </div>
-
-          {activeView !== 'dashboard' && (
-            <button
-              onClick={() => setActiveView('dashboard')}
-              className="flex items-center space-x-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-sm hover:bg-gray-50 transition-colors"
-            >
-              <BarChart3 className="w-4 h-4" />
-              <span>Dashboard</span>
-            </button>
-          )}
         </div>
-      </div>
+      )}
 
-      {/* Navigation Tabs */}
-      {activeView === 'dashboard' && (
+      {/* Navigation Tabs - Desktop Only */}
+      {!isMobile && activeView === 'dashboard' && (
         <div className="mb-6">
           <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg w-fit">
             <button
@@ -482,11 +629,16 @@ const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose, onSubVie
       )}
 
       {/* Content */}
-      {activeView === 'dashboard' && renderDashboard()}
-      {activeView === 'lists' && <ShoppingListManager onClose={() => setActiveView('dashboard')} />}
-      {activeView === 'stores' && <StoreManager onClose={() => setActiveView('dashboard')} />}
-      {activeView === 'prices' && <PriceTracker onClose={() => setActiveView('dashboard')} />}
-      {activeView === 'analytics' && <ShoppingAnalytics onClose={() => setActiveView('dashboard')} />}
+      <div className={isMobile ? 'px-4' : ''}>
+        {activeView === 'dashboard' && renderDashboard()}
+        {activeView === 'lists' && <ShoppingListManager onClose={() => setActiveView('dashboard')} />}
+        {activeView === 'stores' && <StoreManager onClose={() => setActiveView('dashboard')} />}
+        {activeView === 'prices' && <PriceTracker onClose={() => setActiveView('dashboard')} />}
+        {activeView === 'analytics' && <ShoppingAnalytics onClose={() => setActiveView('dashboard')} />}
+      </div>
+
+      {/* Mobile Menu Overlay */}
+      {renderMobileMenu()}
     </div>
   );
 };

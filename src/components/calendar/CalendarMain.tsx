@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useMemo, useCallback } from 'react'
+import React, { useState, useMemo, useCallback, useEffect } from 'react'
 import { Calendar, momentLocalizer, View, Views } from 'react-big-calendar'
 
 type ExtendedView = View | 'YEAR';
@@ -94,6 +94,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
   onEventsSync,
   onWorkEventCreate
 }) => {
+  const [isMobile, setIsMobile] = useState(false)
   const [view, setView] = useState<ExtendedView>(Views.MONTH)
   const [showFilters, setShowFilters] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
@@ -115,6 +116,18 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
   const [importType, setImportType] = useState<'pdf' | 'csv'>('pdf')
   const [dragFeedback, setDragFeedback] = useState<string | null>(null)
   const [showWorkStatusManager, setShowWorkStatusManager] = useState(false)
+  const [showMobileMenu, setShowMobileMenu] = useState(false)
+
+  // Detect mobile device
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768)
+    }
+
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
 
   // Convert calendar events to Big Calendar format
   const bigCalendarEvents = useMemo((): BigCalendarEvent[] => {
@@ -345,10 +358,109 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
     };
   }, [events, currentDate, view, selectedPeople, selectedCategories, people]);
 
-  return (
-    <div className="h-full flex flex-col bg-white">
-      {/* Calendar Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 sm:p-4 md:p-6 border-b border-gray-200 gap-3">
+  // Mobile Calendar Header Component
+  const renderMobileHeader = () => (
+    <div className="lg:hidden bg-white border-b border-gray-200 px-4 py-3 sticky top-0 z-40 pwa-safe-top">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-3">
+          <CalendarDays className="w-6 h-6 text-blue-600" />
+          <h1 className="mobile-title">Calendar</h1>
+        </div>
+        <button
+          onClick={() => setShowMobileMenu(!showMobileMenu)}
+          className="p-2 hover:bg-gray-100 rounded-lg touch-target"
+        >
+          <Settings className="w-5 h-5 text-gray-600" />
+        </button>
+      </div>
+
+      {/* Mobile Date Navigation */}
+      <div className="flex items-center justify-between mb-3">
+        <button
+          onClick={() => {
+            const unit = view === 'YEAR' ? 'year' : view.toLowerCase() as any;
+            handleNavigate(moment(currentDate).subtract(1, unit).toDate());
+          }}
+          className="p-2 hover:bg-gray-100 rounded-lg touch-target"
+        >
+          <ChevronLeft className="w-5 h-5" />
+        </button>
+
+        <div className="flex-1 text-center">
+          <span className="mobile-title">
+            {view === Views.MONTH && moment(currentDate).format('MMMM YYYY')}
+            {view === Views.WEEK && `Week of ${moment(currentDate).startOf('week').format('MMM D')}`}
+            {view === Views.DAY && moment(currentDate).format('MMM D, YYYY')}
+            {view === Views.AGENDA && 'Agenda'}
+            {view === 'YEAR' && moment(currentDate).format('YYYY')}
+          </span>
+        </div>
+
+        <button
+          onClick={() => {
+            const unit = view === 'YEAR' ? 'year' : view.toLowerCase() as any;
+            handleNavigate(moment(currentDate).add(1, unit).toDate());
+          }}
+          className="p-2 hover:bg-gray-100 rounded-lg touch-target"
+        >
+          <ChevronRight className="w-5 h-5" />
+        </button>
+      </div>
+
+      {/* Mobile View Switcher */}
+      <div className="grid grid-cols-4 gap-1 bg-gray-100 rounded-lg p-1">
+        {[
+          { view: Views.DAY, label: 'Day' },
+          { view: Views.WEEK, label: 'Week' },
+          { view: Views.MONTH, label: 'Month' },
+          { view: Views.AGENDA, label: 'List' }
+        ].map(({ view: viewType, label }) => (
+          <button
+            key={viewType}
+            onClick={() => setView(viewType)}
+            className={`py-2 px-1 text-sm rounded-md transition-colors touch-target ${
+              view === viewType
+                ? 'bg-white text-gray-900 shadow-sm font-medium'
+                : 'text-gray-600'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* Mobile Quick Actions */}
+      <div className="flex items-center justify-between mt-3">
+        <button
+          onClick={() => handleNavigate(new Date())}
+          className="mobile-btn-secondary text-sm"
+        >
+          Today
+        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className={`p-2 rounded-lg touch-target transition-colors ${
+              showFilters ? 'bg-blue-100 text-blue-600' : 'hover:bg-gray-100 text-gray-600'
+            }`}
+          >
+            <Filter className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => onEventCreate({ start: new Date(), end: moment().add(1, 'hour').toDate() })}
+            className="mobile-btn-primary flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Add</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Desktop Calendar Header Component
+  const renderDesktopHeader = () => (
+    <div className="hidden lg:flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 sm:p-4 md:p-6 border-b border-gray-200 gap-3">
         <div className="flex items-center space-x-4">
           <div className="flex items-center space-x-2">
             <CalendarDays className="w-6 h-6 text-blue-600" />
@@ -480,21 +592,102 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
             <span>New Event</span>
           </button>
         </div>
+    </div>
+  );
+
+  // Mobile Menu Overlay
+  const renderMobileMenuOverlay = () => (
+    showMobileMenu && (
+      <div className="lg:hidden fixed inset-0 z-50 bg-black bg-opacity-50" onClick={() => setShowMobileMenu(false)}>
+        <div className="absolute top-0 right-0 w-80 max-w-[90vw] h-full bg-white shadow-xl" onClick={e => e.stopPropagation()}>
+          <div className="p-4 border-b border-gray-200 pwa-safe-top">
+            <div className="flex items-center justify-between">
+              <h2 className="mobile-title">Calendar Settings</h2>
+              <button
+                onClick={() => setShowMobileMenu(false)}
+                className="p-2 hover:bg-gray-100 rounded-lg touch-target"
+              >
+                <X className="w-5 h-5 text-gray-600" />
+              </button>
+            </div>
+          </div>
+
+          <div className="p-4 space-y-4">
+            {onTemplateManage && (
+              <button
+                onClick={() => {
+                  onTemplateManage()
+                  setShowMobileMenu(false)
+                }}
+                className="w-full flex items-center gap-3 p-3 text-left hover:bg-gray-50 rounded-lg touch-target"
+              >
+                <Bookmark className="w-5 h-5 text-gray-600" />
+                <span>Manage Templates</span>
+              </button>
+            )}
+
+            <button
+              onClick={() => {
+                setShowWorkStatusManager(true)
+                setShowMobileMenu(false)
+              }}
+              className="w-full flex items-center gap-3 p-3 text-left hover:bg-gray-50 rounded-lg touch-target"
+            >
+              <Building2 className="w-5 h-5 text-gray-600" />
+              <span>Log Work Status</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setShowSettings(!showSettings)
+                setShowMobileMenu(false)
+              }}
+              className="w-full flex items-center gap-3 p-3 text-left hover:bg-gray-50 rounded-lg touch-target"
+            >
+              <Upload className="w-5 h-5 text-gray-600" />
+              <span>Sync & Import</span>
+            </button>
+
+            <button
+              onClick={() => {
+                // Add export functionality
+                setShowMobileMenu(false)
+              }}
+              className="w-full flex items-center gap-3 p-3 text-left hover:bg-gray-50 rounded-lg touch-target"
+            >
+              <Download className="w-5 h-5 text-gray-600" />
+              <span>Export Calendar</span>
+            </button>
+          </div>
+        </div>
       </div>
+    )
+  )
+
+  return (
+    <div className="h-full flex flex-col bg-white">
+      {/* Mobile Header */}
+      {isMobile && renderMobileHeader()}
+
+      {/* Desktop Header */}
+      {!isMobile && renderDesktopHeader()}
+
+      {/* Mobile Menu Overlay */}
+      {isMobile && renderMobileMenuOverlay()}
 
       {/* Filters Panel */}
       {showFilters && (
-        <div className="p-4 border-b border-gray-200 bg-gray-50">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className={`p-4 border-b border-gray-200 bg-gray-50 ${isMobile ? 'pwa-safe-top' : ''}`}>
+          <div className={`grid gap-4 ${isMobile ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-2'}`}>
             {/* People Filter */}
             <div>
-              <h3 className="text-sm font-medium text-gray-700 mb-2">Family Members</h3>
-              <div className="flex flex-wrap gap-2">
+              <h3 className={`font-medium text-gray-700 mb-2 ${isMobile ? 'mobile-subtitle' : 'text-sm'}`}>Family Members</h3>
+              <div className={`flex flex-wrap gap-2 ${isMobile ? 'gap-3' : ''}`}>
                 {people.map(person => (
                   <button
                     key={person.id}
                     onClick={() => togglePersonFilter(person.id)}
-                    className={`flex items-center space-x-2 px-3 py-1 rounded-full text-sm transition-colors ${
+                    className={`flex items-center space-x-2 px-3 py-1 rounded-full transition-colors ${isMobile ? 'py-2 px-4 text-base touch-target' : 'text-sm'} ${
                       selectedPeople.includes(person.id)
                         ? 'text-white'
                         : 'bg-white text-gray-600 hover:bg-gray-100'
@@ -511,13 +704,13 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
 
             {/* Categories Filter */}
             <div>
-              <h3 className="text-sm font-medium text-gray-700 mb-2">Categories</h3>
-              <div className="flex flex-wrap gap-2">
+              <h3 className={`font-medium text-gray-700 mb-2 ${isMobile ? 'mobile-subtitle' : 'text-sm'}`}>Categories</h3>
+              <div className={`flex flex-wrap gap-2 ${isMobile ? 'gap-3' : ''}`}>
                 {Object.entries(categoryColors).map(([category, colorClass]) => (
                   <button
                     key={category}
                     onClick={() => toggleCategoryFilter(category)}
-                    className={`px-3 py-1 rounded-full text-sm transition-colors ${
+                    className={`px-3 py-1 rounded-full transition-colors ${isMobile ? 'py-2 px-4 text-base touch-target' : 'text-sm'} ${
                       selectedCategories.includes(category)
                         ? colorClass
                         : 'bg-white text-gray-600 hover:bg-gray-100'
@@ -656,7 +849,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
       )}
 
       {/* Month Analytics Panel */}
-      {view === Views.MONTH && monthAnalytics && (
+      {view === Views.MONTH && monthAnalytics && !isMobile && (
         <div className="border-b border-gray-200 bg-gray-50 p-4">
           <div className="mb-4">
             <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
@@ -739,8 +932,8 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
       )}
 
       {/* Calendar Component */}
-      <div className="flex-1 p-6">
-        <div className="h-full relative">
+      <div className={`flex-1 ${isMobile ? 'p-2 pwa-safe-bottom' : 'p-6'}`}>
+        <div className={`h-full relative ${isMobile ? 'mobile-calendar-container' : ''}`}>
           {view === 'YEAR' ? (
             <YearView
               events={events}
@@ -765,48 +958,55 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
             onNavigate={handleNavigate}
             onSelectSlot={handleSelectSlot}
             onSelectEvent={handleSelectEvent}
-            onEventDrop={handleEventDrop}
-            onEventResize={handleEventResize}
-            onDragStart={(args) => {
+            onEventDrop={!isMobile ? handleEventDrop : undefined}
+            onEventResize={!isMobile ? handleEventResize : undefined}
+            onDragStart={!isMobile ? (args) => {
               console.log('Drag started:', args)
-            }}
+            } : undefined}
             selectable
-            resizable
-            draggableAccessor={() => true}
+            resizable={!isMobile}
+            draggableAccessor={() => !isMobile}
             eventPropGetter={eventStyleGetter}
-            popup
-            popupOffset={30}
-            className="family-hub-calendar"
+            popup={!isMobile}
+            popupOffset={isMobile ? 0 : 30}
+            className={`family-hub-calendar ${isMobile ? 'mobile-calendar' : ''}`}
             formats={{
-              timeGutterFormat: 'HH:mm',
+              timeGutterFormat: isMobile ? 'HH:mm' : 'HH:mm',
               eventTimeRangeFormat: ({ start, end }) =>
-                `${moment(start).format('HH:mm')} - ${moment(end).format('HH:mm')}`,
+                `${moment(start).format(isMobile ? 'HH:mm' : 'HH:mm')} - ${moment(end).format(isMobile ? 'HH:mm' : 'HH:mm')}`,
               agendaTimeFormat: 'HH:mm',
-              agendaDateFormat: 'ddd MMM DD',
+              agendaDateFormat: isMobile ? 'MMM DD' : 'ddd MMM DD',
+              dayHeaderFormat: isMobile ? 'ddd' : 'dddd MMM DD',
+              monthHeaderFormat: isMobile ? 'MMM YYYY' : 'MMMM YYYY'
             }}
             min={moment().hour(6).minute(0).toDate()}
             max={moment().hour(23).minute(59).toDate()}
-            step={15}
-            timeslots={4}
+            step={isMobile ? 30 : 15}
+            timeslots={isMobile ? 2 : 4}
             dayLayoutAlgorithm="no-overlap"
             components={{
               event: ({ event }: { event: any }) => (
                 <div
-                  onMouseEnter={(e) => {
+                  onMouseEnter={!isMobile ? (e) => {
                     const rect = e.currentTarget.getBoundingClientRect();
                     setHoveredEvent((event as any).resource!);
                     setTooltipPosition({
                       x: rect.left + rect.width / 2,
                       y: rect.top - 10
                     });
-                  }}
-                  onMouseLeave={() => {
+                  } : undefined}
+                  onMouseLeave={!isMobile ? () => {
                     setHoveredEvent(null);
                     setTooltipPosition(null);
-                  }}
-                  className="h-full w-full cursor-pointer"
+                  } : undefined}
+                  onTouchStart={isMobile ? () => {
+                    setHoveredEvent((event as any).resource!);
+                  } : undefined}
+                  className={`h-full w-full cursor-pointer ${isMobile ? 'mobile-event touch-target' : ''}`}
                 >
-                  {(event as any).title}
+                  <span className={isMobile ? 'text-xs' : 'text-sm'}>
+                    {(event as any).title}
+                  </span>
                 </div>
               )
             }}
@@ -814,12 +1014,14 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
           )}
 
           {/* Event Tooltip */}
-          {hoveredEvent && tooltipPosition && view !== 'YEAR' && (
+          {hoveredEvent && ((!isMobile && tooltipPosition) || isMobile) && view !== 'YEAR' && (
             <div
-              className="fixed z-50 bg-white border border-gray-200 rounded-lg shadow-lg p-4 max-w-sm"
-              style={{
-                left: tooltipPosition.x - 150,
-                top: tooltipPosition.y - 10,
+              className={`fixed z-50 bg-white border border-gray-200 rounded-lg shadow-lg p-4 max-w-sm ${
+                isMobile ? 'bottom-0 left-0 right-0 m-4 rounded-t-2xl pwa-safe-bottom' : ''
+              }`}
+              style={isMobile ? {} : {
+                left: tooltipPosition!.x - 150,
+                top: tooltipPosition!.y - 10,
                 transform: 'translateY(-100%)'
               }}
             >
@@ -931,10 +1133,22 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                 </div>
               </div>
 
-              {/* Tooltip arrow */}
-              <div
-                className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-white"
-              />
+              {/* Tooltip arrow - only on desktop */}
+              {!isMobile && (
+                <div
+                  className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-white"
+                />
+              )}
+
+              {/* Mobile close button */}
+              {isMobile && (
+                <button
+                  onClick={() => setHoveredEvent(null)}
+                  className="absolute top-2 right-2 p-2 hover:bg-gray-100 rounded-lg touch-target"
+                >
+                  <X className="w-4 h-4 text-gray-600" />
+                </button>
+              )}
             </div>
           )}
 

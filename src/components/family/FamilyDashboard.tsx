@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Users,
   Plus,
@@ -46,12 +46,25 @@ interface FamilyDashboardProps {
 }
 
 const FamilyDashboard: React.FC<FamilyDashboardProps> = ({ onClose }) => {
+  const [isMobile, setIsMobile] = useState(false)
   const [activeView, setActiveView] = useState<'dashboard' | 'members' | 'settings' | 'timeline' | 'analytics'>('dashboard');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRole, setFilterRole] = useState<string>('all');
   const [showNewMemberForm, setShowNewMemberForm] = useState(false);
   const [selectedMember, setSelectedMember] = useState<string | null>(null);
   const [showMemberDetails, setShowMemberDetails] = useState(false);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
+
+  // Detect mobile device
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768)
+    }
+
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
 
   // Mock family data
   const familyInfo = {
@@ -339,14 +352,14 @@ const FamilyDashboard: React.FC<FamilyDashboardProps> = ({ onClose }) => {
   };
 
   const renderDashboard = () => (
-    <div className="space-y-8">
+    <div className={`space-y-${isMobile ? '6' : '8'}`}>
       {/* Family Overview */}
-      <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
-        <div className="flex items-center justify-between mb-6">
+      <div className={`bg-white border border-gray-200 rounded-lg ${isMobile ? 'p-4' : 'p-3 sm:p-4 md:p-6'}`}>
+        <div className={`${isMobile ? 'space-y-4' : 'flex items-center justify-between'} mb-6`}>
           <div>
-            <h2 className="text-2xl font-semibold text-gray-900">{familyInfo.name}</h2>
-            <p className="text-gray-600">{familyInfo.description}</p>
-            <div className="flex items-center space-x-4 mt-2 text-sm text-gray-500">
+            <h2 className={`${isMobile ? 'mobile-title' : 'text-2xl'} font-semibold text-gray-900`}>{familyInfo.name}</h2>
+            <p className={`text-gray-600 ${isMobile ? 'mobile-subtitle' : ''}`}>{familyInfo.description}</p>
+            <div className={`flex ${isMobile ? 'flex-col space-y-2' : 'items-center space-x-4'} mt-2 text-sm text-gray-500`}>
               <span className="flex items-center space-x-1">
                 <MapPin className="w-3 h-3" />
                 <span>{familyInfo.address.city}, {familyInfo.address.country}</span>
@@ -359,7 +372,7 @@ const FamilyDashboard: React.FC<FamilyDashboardProps> = ({ onClose }) => {
           </div>
           <button
             onClick={() => setActiveView('settings')}
-            className="flex items-center space-x-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50"
+            className={`flex items-center space-x-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 ${isMobile ? 'w-full justify-center touch-target' : ''}`}
           >
             <Settings className="w-4 h-4" />
             <span>Settings</span>
@@ -367,7 +380,7 @@ const FamilyDashboard: React.FC<FamilyDashboardProps> = ({ onClose }) => {
         </div>
 
         {/* Family Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className={`grid ${isMobile ? 'grid-cols-2 gap-4' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6'}`}>
           <div className="text-center p-4 bg-blue-50 rounded-lg">
             <Users className="w-8 h-8 text-blue-500 mx-auto mb-2" />
             <p className="text-xl md:text-2xl font-bold text-blue-800">{familyStatistics.totalMembers}</p>
@@ -392,18 +405,18 @@ const FamilyDashboard: React.FC<FamilyDashboardProps> = ({ onClose }) => {
       </div>
 
       {/* Family Members Overview */}
-      <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-semibold text-gray-900">Family Members</h2>
+      <div className={`bg-white border border-gray-200 rounded-lg ${isMobile ? 'p-4' : 'p-3 sm:p-4 md:p-6'}`}>
+        <div className={`${isMobile ? 'space-y-3' : 'flex items-center justify-between'} mb-6`}>
+          <h2 className={`${isMobile ? 'mobile-subtitle' : 'text-xl'} font-semibold text-gray-900`}>Family Members</h2>
           <button
             onClick={() => setActiveView('members')}
-            className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+            className={`text-sm text-blue-600 hover:text-blue-800 font-medium ${isMobile ? 'touch-target' : ''}`}
           >
             Manage All →
           </button>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className={`grid ${isMobile ? 'grid-cols-1 gap-3' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4'}`}>
           {familyMembers.map(member => (
             <div key={member.id} className="border border-gray-200 rounded-lg p-4">
               <div className="flex items-center space-x-3 mb-3">
@@ -595,9 +608,9 @@ const FamilyDashboard: React.FC<FamilyDashboardProps> = ({ onClose }) => {
   );
 
   const renderMembersList = () => (
-    <div className="space-y-6">
+    <div className={`space-y-${isMobile ? '4' : '6'}`}>
       {/* Controls */}
-      <div className="flex flex-col md:flex-row gap-4">
+      <div className={`flex ${isMobile ? 'flex-col' : 'flex-col md:flex-row'} gap-4`}>
         <div className="flex-1 relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
           <input
@@ -605,32 +618,34 @@ const FamilyDashboard: React.FC<FamilyDashboardProps> = ({ onClose }) => {
             placeholder="Search family members..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className={`w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${isMobile ? 'mobile-input' : ''}`}
           />
         </div>
 
-        <select
-          value={filterRole}
-          onChange={(e) => setFilterRole(e.target.value)}
-          className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="all">All Roles</option>
-          {familyRoles.map(role => (
-            <option key={role.id} value={role.level}>{role.name}</option>
-          ))}
-        </select>
+        <div className={`flex gap-3 ${isMobile ? 'flex-col' : ''}`}>
+          <select
+            value={filterRole}
+            onChange={(e) => setFilterRole(e.target.value)}
+            className={`px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${isMobile ? 'mobile-select' : ''}`}
+          >
+            <option value="all">All Roles</option>
+            {familyRoles.map(role => (
+              <option key={role.id} value={role.level}>{role.name}</option>
+            ))}
+          </select>
 
-        <button
-          onClick={() => setShowNewMemberForm(true)}
-          className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Add Member</span>
-        </button>
+          <button
+            onClick={() => setShowNewMemberForm(true)}
+            className={`flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 ${isMobile ? 'mobile-btn-primary justify-center' : ''}`}
+          >
+            <Plus className="w-4 h-4" />
+            <span>Add Member</span>
+          </button>
+        </div>
       </div>
 
       {/* Members Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className={`grid ${isMobile ? 'grid-cols-1 gap-4' : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'}`}>
         {filteredMembers.map(member => (
           <div key={member.id} className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6 hover:shadow-md transition-shadow">
             <div className="flex items-start justify-between mb-4">
@@ -761,48 +776,166 @@ const FamilyDashboard: React.FC<FamilyDashboardProps> = ({ onClose }) => {
     </div>
   );
 
-  return (
-    <div className="p-3 sm:p-4 md:p-6 lg:p-8 bg-gray-50 min-h-screen">
-      {/* Breadcrumb Navigation */}
-      <Breadcrumb
-        items={getFamilyBreadcrumbItems()}
-        onHomeClick={onClose || (() => {})}
-      />
-
-      {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-center justify-between">
+  // Mobile Header Component
+  const renderMobileHeader = () => (
+    <div className="lg:hidden bg-white border-b border-gray-200 px-4 py-3 sticky top-0 z-40 pwa-safe-top">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Users className="w-6 h-6 text-blue-600" />
           <div>
-            <h1 className="text-2xl md:text-3xl font-light text-gray-900 mb-2">
-              {activeView === 'dashboard' && 'Family Management'}
-              {activeView === 'members' && 'Family Members'}
-              {activeView === 'settings' && 'Family Settings'}
-              {activeView === 'timeline' && 'Family Timeline'}
-              {activeView === 'analytics' && 'Family Analytics'}
+            <h1 className="mobile-title">
+              {activeView === 'dashboard' && 'Family'}
+              {activeView === 'members' && 'Members'}
+              {activeView === 'settings' && 'Settings'}
+              {activeView === 'timeline' && 'Timeline'}
+              {activeView === 'analytics' && 'Analytics'}
             </h1>
-            <p className="text-gray-600">
-              {activeView === 'dashboard' && 'Manage your family members and settings'}
-              {activeView === 'members' && 'View and manage all family members'}
-              {activeView === 'settings' && 'Configure family preferences and settings'}
-              {activeView === 'timeline' && 'View family history and milestones'}
-              {activeView === 'analytics' && 'Analyze family engagement and activity'}
-            </p>
+            <p className="mobile-subtitle">Family Hub</p>
           </div>
-
-          {activeView !== 'dashboard' && (
-            <button
-              onClick={() => setActiveView('dashboard')}
-              className="flex items-center space-x-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-sm hover:bg-gray-50 transition-colors"
-            >
-              <BarChart3 className="w-4 h-4" />
-              <span>Dashboard</span>
-            </button>
-          )}
         </div>
+        <button
+          onClick={() => setShowMobileMenu(!showMobileMenu)}
+          className="p-2 hover:bg-gray-100 rounded-lg touch-target"
+        >
+          <MoreHorizontal className="w-5 h-5 text-gray-600" />
+        </button>
       </div>
 
-      {/* Navigation Tabs */}
+      {/* Mobile Navigation Tabs */}
       {activeView === 'dashboard' && (
+        <div className="mt-3 flex overflow-x-auto gap-2 pb-2">
+          {[
+            { id: 'members', icon: Users, label: 'Members' },
+            { id: 'timeline', icon: Clock, label: 'Timeline' },
+            { id: 'analytics', icon: BarChart3, label: 'Analytics' },
+            { id: 'settings', icon: Settings, label: 'Settings' }
+          ].map(({ id, icon: Icon, label }) => (
+            <button
+              key={id}
+              onClick={() => setActiveView(id as any)}
+              className="flex items-center gap-2 px-3 py-2 bg-gray-100 text-gray-600 rounded-lg whitespace-nowrap touch-target hover:bg-gray-200 transition-colors"
+            >
+              <Icon className="w-4 h-4" />
+              <span className="text-sm">{label}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+
+  // Mobile Menu Overlay
+  const renderMobileMenuOverlay = () => (
+    showMobileMenu && (
+      <div className="lg:hidden fixed inset-0 z-50 bg-black bg-opacity-50" onClick={() => setShowMobileMenu(false)}>
+        <div className="absolute top-0 right-0 w-80 max-w-[90vw] h-full bg-white shadow-xl" onClick={e => e.stopPropagation()}>
+          <div className="p-4 border-b border-gray-200 pwa-safe-top">
+            <div className="flex items-center justify-between">
+              <h2 className="mobile-title">Family Options</h2>
+              <button
+                onClick={() => setShowMobileMenu(false)}
+                className="p-2 hover:bg-gray-100 rounded-lg touch-target"
+              >
+                <X className="w-5 h-5 text-gray-600" />
+              </button>
+            </div>
+          </div>
+
+          <div className="p-4 space-y-4">
+            <button
+              onClick={() => {
+                setShowNewMemberForm(true)
+                setShowMobileMenu(false)
+              }}
+              className="w-full flex items-center gap-3 p-3 text-left hover:bg-gray-50 rounded-lg touch-target"
+            >
+              <Plus className="w-5 h-5 text-gray-600" />
+              <span>Add Family Member</span>
+            </button>
+
+            {activeView !== 'dashboard' && (
+              <button
+                onClick={() => {
+                  setActiveView('dashboard')
+                  setShowMobileMenu(false)
+                }}
+                className="w-full flex items-center gap-3 p-3 text-left hover:bg-gray-50 rounded-lg touch-target"
+              >
+                <BarChart3 className="w-5 h-5 text-gray-600" />
+                <span>Dashboard</span>
+              </button>
+            )}
+
+            {onClose && (
+              <button
+                onClick={() => {
+                  onClose()
+                  setShowMobileMenu(false)
+                }}
+                className="w-full flex items-center gap-3 p-3 text-left hover:bg-gray-50 rounded-lg touch-target"
+              >
+                <X className="w-5 h-5 text-gray-600" />
+                <span>Close Family View</span>
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    )
+  )
+
+  return (
+    <div className={`${isMobile ? 'bg-gray-50 min-h-screen' : 'p-3 sm:p-4 md:p-6 lg:p-8 bg-gray-50 min-h-screen'}`}>
+      {/* Mobile Header */}
+      {isMobile && renderMobileHeader()}
+
+      {/* Desktop Breadcrumb Navigation */}
+      {!isMobile && (
+        <Breadcrumb
+          items={getFamilyBreadcrumbItems()}
+          onHomeClick={onClose || (() => {})}
+        />
+      )}
+
+      {/* Mobile Menu Overlay */}
+      {isMobile && renderMobileMenuOverlay()}
+
+      {/* Desktop Header */}
+      {!isMobile && (
+        <div className="mb-8">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl md:text-3xl font-light text-gray-900 mb-2">
+                {activeView === 'dashboard' && 'Family Management'}
+                {activeView === 'members' && 'Family Members'}
+                {activeView === 'settings' && 'Family Settings'}
+                {activeView === 'timeline' && 'Family Timeline'}
+                {activeView === 'analytics' && 'Family Analytics'}
+              </h1>
+              <p className="text-gray-600">
+                {activeView === 'dashboard' && 'Manage your family members and settings'}
+                {activeView === 'members' && 'View and manage all family members'}
+                {activeView === 'settings' && 'Configure family preferences and settings'}
+                {activeView === 'timeline' && 'View family history and milestones'}
+                {activeView === 'analytics' && 'Analyze family engagement and activity'}
+              </p>
+            </div>
+
+            {activeView !== 'dashboard' && (
+              <button
+                onClick={() => setActiveView('dashboard')}
+                className="flex items-center space-x-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-sm hover:bg-gray-50 transition-colors"
+              >
+                <BarChart3 className="w-4 h-4" />
+                <span>Dashboard</span>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Desktop Navigation Tabs */}
+      {!isMobile && activeView === 'dashboard' && (
         <div className="mb-6">
           <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg w-fit">
             <button
@@ -838,7 +971,8 @@ const FamilyDashboard: React.FC<FamilyDashboardProps> = ({ onClose }) => {
       )}
 
       {/* Content */}
-      {activeView === 'dashboard' && renderDashboard()}
+      <div className={isMobile ? 'p-4 pwa-safe-bottom' : ''}>
+        {activeView === 'dashboard' && renderDashboard()}
       {activeView === 'members' && renderMembersList()}
       {activeView === 'settings' && (
         <FamilySettings
@@ -1144,11 +1278,12 @@ const FamilyDashboard: React.FC<FamilyDashboardProps> = ({ onClose }) => {
           </div>
         </div>
       )}
+      </div>
 
       {/* New Member Form Modal */}
       {showNewMemberForm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+          <div className={`bg-white ${isMobile ? 'rounded-t-3xl w-full h-[90vh] mt-auto' : 'rounded-lg w-full max-w-4xl max-h-[90vh]'} overflow-y-auto`}>
             <FamilyMemberForm
               member={(selectedMember ? familyMembers.find(m => m.id === selectedMember) : undefined) as any}
               onCancel={() => {
@@ -1169,7 +1304,7 @@ const FamilyDashboard: React.FC<FamilyDashboardProps> = ({ onClose }) => {
       {/* Member Details Modal */}
       {showMemberDetails && selectedMember && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className={`bg-white ${isMobile ? 'rounded-t-3xl w-full h-[90vh] mt-auto' : 'rounded-lg max-w-2xl w-full max-h-[90vh]'} overflow-y-auto`}>
             <div className="p-6">
               {(() => {
                 const member = familyMembers.find(m => m.id === selectedMember);

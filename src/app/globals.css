@@ -8,14 +8,19 @@
 /* Global base styles */
 @layer base {
   html {
-    font-family: var(--font-inter), sans-serif;
+    font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     -webkit-tap-highlight-color: transparent;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   body {
     @apply bg-gray-50 text-gray-900 antialiased;
     overscroll-behavior: none;
+    -webkit-overscroll-behavior: none;
     -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
     user-select: none;
   }
 
@@ -31,6 +36,8 @@
   /* Prevent text selection on interactive elements */
   button, a, input, select, textarea {
     -webkit-user-select: auto;
+    -moz-user-select: auto;
+    -ms-user-select: auto;
     user-select: auto;
   }
 
@@ -44,6 +51,7 @@
     body {
       -webkit-overflow-scrolling: touch;
       overscroll-behavior-y: none;
+      -webkit-overscroll-behavior-y: none;
     }
   }
 
@@ -70,11 +78,18 @@
   /* Dashboard widget base styles */
   .dashboard-widget {
     @apply bg-white rounded-lg shadow-md border border-gray-200 p-6 hover:shadow-card-hover transition-shadow duration-200;
+    -webkit-transition: box-shadow 0.2s ease;
+    -moz-transition: box-shadow 0.2s ease;
+    -o-transition: box-shadow 0.2s ease;
+    transition: box-shadow 0.2s ease;
   }
 
   /* Button variants */
   .btn-primary {
     @apply bg-primary-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 transition-colors duration-200;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
   }
 
   .btn-secondary {
@@ -96,6 +111,9 @@
   /* Form input styles */
   .form-input {
     @apply block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors duration-200;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
   }
 
   .form-label {
@@ -199,6 +217,7 @@
 @layer utilities {
   .text-balance {
     text-wrap: balance;
+    -webkit-text-wrap: balance;
   }
 
   .scrollbar-hide {
@@ -213,6 +232,8 @@
   /* Glass morphism effect */
   .glass {
     @apply bg-white bg-opacity-80 backdrop-blur-sm border border-white border-opacity-20;
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
   }
 
   /* Gradient backgrounds */
@@ -246,30 +267,208 @@
   }
 
   .mobile-hidden {
-    @apply hidden md:block;
+    @apply hidden lg:block;
   }
 
   .mobile-only {
-    @apply block md:hidden;
+    @apply block lg:hidden;
   }
 
   .touch-friendly {
     @apply min-h-[44px] min-w-[44px] touch-manipulation;
+    -webkit-touch-callout: none;
   }
 
   .prevent-zoom {
     touch-action: manipulation;
+    -ms-touch-action: manipulation;
+  }
+
+  /* Enhanced mobile touch targets */
+  .touch-target {
+    @apply min-h-[48px] min-w-[48px] touch-manipulation;
+  }
+
+  .touch-large {
+    @apply min-h-[56px] min-w-[56px] touch-manipulation;
   }
 
   /* Fix viewport issues on mobile browsers */
   .full-height {
     height: 100vh;
+    height: -webkit-fill-available;
     height: 100dvh; /* Dynamic viewport height */
   }
 
   .safe-height {
     min-height: 100vh;
     min-height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  }
+
+  /* Mobile-first responsive containers */
+  .mobile-card {
+    @apply bg-white rounded-xl border border-gray-200 shadow-sm;
+  }
+
+  .mobile-section {
+    @apply p-4 sm:p-6;
+  }
+
+  .mobile-header {
+    @apply px-4 py-3 border-b border-gray-200 bg-white sticky top-0 z-40;
+  }
+
+  /* Mobile typography */
+  .mobile-title {
+    @apply text-lg sm:text-xl font-semibold text-gray-900;
+  }
+
+  .mobile-subtitle {
+    @apply text-sm text-gray-600;
+  }
+
+  .mobile-body {
+    @apply text-sm sm:text-base text-gray-700;
+  }
+
+  /* Mobile button variants */
+  .mobile-btn-primary {
+    @apply bg-blue-600 text-white px-4 py-3 rounded-xl font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 touch-friendly active:scale-95;
+  }
+
+  .mobile-btn-secondary {
+    @apply bg-gray-100 text-gray-700 px-4 py-3 rounded-xl font-medium hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all duration-200 touch-friendly active:scale-95;
+  }
+
+  .mobile-btn-ghost {
+    @apply text-gray-600 px-4 py-3 rounded-xl font-medium hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all duration-200 touch-friendly active:scale-95;
+  }
+
+  /* Mobile form elements */
+  .mobile-input {
+    @apply block w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200 text-base;
+  }
+
+  .mobile-select {
+    @apply block w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200 text-base bg-white;
+  }
+
+  .mobile-textarea {
+    @apply block w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200 text-base resize-none;
+  }
+
+  /* Mobile grid systems */
+  .mobile-grid-1 {
+    @apply grid grid-cols-1 gap-4;
+  }
+
+  .mobile-grid-2 {
+    @apply grid grid-cols-1 sm:grid-cols-2 gap-4;
+  }
+
+  .mobile-grid-3 {
+    @apply grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4;
+  }
+
+  .mobile-grid-4 {
+    @apply grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4;
+  }
+
+  /* Mobile spacing */
+  .mobile-space-y {
+    @apply space-y-4 sm:space-y-6;
+  }
+
+  .mobile-space-x {
+    @apply space-x-3 sm:space-x-4;
+  }
+
+  /* Mobile chart containers */
+  .mobile-chart {
+    @apply h-48 sm:h-64 w-full;
+  }
+
+  .mobile-chart-large {
+    @apply h-64 sm:h-80 w-full;
+  }
+
+  /* Mobile modal optimizations */
+  .mobile-modal {
+    @apply fixed inset-0 z-50 overflow-y-auto;
+  }
+
+  .mobile-modal-content {
+    @apply bg-white rounded-t-3xl sm:rounded-xl shadow-xl w-full sm:max-w-lg mx-auto mt-auto sm:mt-20 max-h-[90vh] overflow-y-auto;
+  }
+
+  .mobile-modal-header {
+    @apply px-4 py-4 border-b border-gray-200 bg-gray-50 rounded-t-3xl sm:rounded-t-xl;
+  }
+
+  /* Progressive Web App optimizations */
+  .pwa-safe-area {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+
+  .pwa-safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .pwa-safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* Improved scrollbar for mobile */
+  .mobile-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(156, 163, 175, 0.5) transparent;
+  }
+
+  .mobile-scrollbar::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .mobile-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .mobile-scrollbar::-webkit-scrollbar-thumb {
+    background-color: rgba(156, 163, 175, 0.5);
+    border-radius: 3px;
+  }
+
+  /* Mobile-specific animations */
+  .mobile-fade-in {
+    animation: mobileFadeIn 0.3s ease-out forwards;
+  }
+
+  .mobile-slide-up {
+    animation: mobileSlideUp 0.3s ease-out forwards;
+  }
+
+  @keyframes mobileFadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes mobileSlideUp {
+    from {
+      opacity: 0;
+      transform: translateY(50px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 }
 
@@ -368,4 +567,373 @@
 
 .family-hub-calendar .rbc-time-content {
   @apply border-gray-200;
+}
+
+/* Enhanced Touch Interactions & Mobile Optimizations */
+.touch-responsive {
+  @apply transition-all duration-150 ease-out active:scale-95 hover:scale-105;
+  -webkit-transition: all 0.15s ease-out;
+  -moz-transition: all 0.15s ease-out;
+  -o-transition: all 0.15s ease-out;
+  transition: all 0.15s ease-out;
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+}
+
+.touch-ripple {
+  @apply relative overflow-hidden;
+}
+
+.touch-ripple::before {
+  content: '';
+  @apply absolute inset-0 bg-current opacity-0 pointer-events-none transition-opacity duration-200;
+  border-radius: inherit;
+}
+
+.touch-ripple:active::before {
+  @apply opacity-10;
+}
+
+/* Advanced touch targets */
+.touch-target-large {
+  @apply min-h-[56px] min-w-[56px] touch-manipulation;
+}
+
+.touch-target-xl {
+  @apply min-h-[64px] min-w-[64px] touch-manipulation;
+}
+
+/* Gesture-friendly elements */
+.swipe-container {
+  @apply touch-pan-x overflow-x-auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.swipe-container::-webkit-scrollbar {
+  display: none;
+}
+
+.swipe-item {
+  @apply flex-shrink-0;
+  scroll-snap-align: start;
+}
+
+/* Enhanced mobile inputs */
+.mobile-input {
+  @apply text-base px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent touch-manipulation;
+}
+
+.mobile-textarea {
+  @apply text-base px-4 py-3 border border-gray-300 rounded-xl resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent touch-manipulation min-h-[120px];
+}
+
+/* Mobile-optimized selects */
+.mobile-select {
+  @apply text-base px-4 py-3 border border-gray-300 rounded-xl bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent touch-manipulation appearance-none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
+  background-position: right 12px center;
+  background-repeat: no-repeat;
+  background-size: 16px;
+  padding-right: 48px;
+}
+
+/* Haptic feedback simulation */
+.haptic-light {
+  @apply transition-transform duration-75;
+}
+
+.haptic-light:active {
+  transform: scale(0.98);
+}
+
+.haptic-medium {
+  @apply transition-transform duration-100 active:scale-95;
+}
+
+.haptic-heavy {
+  @apply transition-transform duration-150;
+}
+
+.haptic-heavy:active {
+  transform: scale(0.90);
+}
+
+/* Mobile-friendly hover states (only on non-touch devices) */
+@media (hover: hover) and (pointer: fine) {
+  .hover-lift:hover {
+    @apply transform translate-y-[-2px] shadow-lg;
+  }
+
+  .hover-glow:hover {
+    @apply shadow-lg ring-2 ring-blue-200;
+  }
+}
+
+/* Touch-friendly spacing utilities */
+.mobile-safe-spacing {
+  @apply p-4 sm:p-6 lg:p-8;
+}
+
+.mobile-safe-margin {
+  @apply m-4 sm:m-6 lg:m-8;
+}
+
+/* Accessibility enhancements for mobile */
+.focus-visible-mobile {
+  @apply focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2;
+}
+
+/* Pull-to-refresh indicator */
+.pull-to-refresh {
+  @apply absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-full transition-transform duration-300 ease-out;
+}
+
+.pull-to-refresh.active {
+  @apply translate-y-4;
+}
+
+/* Mobile-optimized animations */
+@media (prefers-reduced-motion: no-preference) {
+  .mobile-slide-up {
+    animation: mobile-slide-up 0.3s ease-out;
+  }
+
+  .mobile-fade-in {
+    animation: mobile-fade-in 0.3s ease-out;
+  }
+
+  .mobile-scale-in {
+    animation: mobile-scale-in 0.2s ease-out;
+  }
+}
+
+@keyframes mobile-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes mobile-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes mobile-scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Device-specific optimizations */
+@supports (backdrop-filter: blur(10px)) {
+  .mobile-glass {
+    @apply bg-white/80 backdrop-blur-sm;
+  }
+}
+
+/* iOS-specific optimizations */
+@supports (-webkit-touch-callout: none) {
+  .ios-safe-area {
+    padding-top: max(env(safe-area-inset-top), 44px);
+    padding-bottom: max(env(safe-area-inset-bottom), 34px);
+  }
+
+  .ios-bounce-fix {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+}
+
+/* Android-specific optimizations */
+.android-ripple {
+  @apply relative overflow-hidden;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Performance optimizations for mobile */
+.gpu-accelerated {
+  -webkit-transform: translateZ(0);
+  -moz-transform: translateZ(0);
+  -ms-transform: translateZ(0);
+  transform: translateZ(0);
+  will-change: transform;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+
+.mobile-smooth-scroll {
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+  -webkit-scroll-behavior: smooth;
+}
+
+/* Mobile Calendar Specific Styles */
+@media (max-width: 768px) {
+  .mobile-calendar-container {
+    @apply overflow-hidden;
+  }
+
+  .mobile-calendar .rbc-calendar {
+    @apply text-sm;
+  }
+
+  .mobile-calendar .rbc-month-view {
+    @apply text-xs;
+  }
+
+  .mobile-calendar .rbc-header {
+    @apply py-2 px-1 text-xs font-medium;
+  }
+
+  .mobile-calendar .rbc-date-cell {
+    @apply p-1;
+  }
+
+  .mobile-calendar .rbc-date-cell > a {
+    @apply text-sm p-1;
+  }
+
+  .mobile-calendar .rbc-event {
+    @apply text-xs px-1 py-0.5 rounded;
+    font-size: 10px !important;
+    line-height: 1.2 !important;
+  }
+
+  .mobile-calendar .rbc-time-view {
+    @apply text-xs;
+  }
+
+  .mobile-calendar .rbc-time-gutter .rbc-timeslot-group {
+    @apply text-xs;
+  }
+
+  .mobile-calendar .rbc-time-content {
+    @apply text-xs;
+  }
+
+  .mobile-calendar .rbc-agenda-view {
+    @apply text-sm;
+  }
+
+  .mobile-calendar .rbc-agenda-date-cell {
+    @apply text-xs p-2;
+  }
+
+  .mobile-calendar .rbc-agenda-time-cell {
+    @apply text-xs p-2;
+  }
+
+  .mobile-calendar .rbc-agenda-event-cell {
+    @apply text-sm p-2;
+  }
+
+  .mobile-calendar .rbc-toolbar {
+    @apply hidden;
+  }
+
+  .mobile-calendar .rbc-month-row + .rbc-month-row {
+    border-top: 1px solid #e5e7eb;
+  }
+
+  .mobile-calendar .rbc-day-bg + .rbc-day-bg {
+    border-left: 1px solid #e5e7eb;
+  }
+
+  .mobile-calendar .rbc-time-header-gutter {
+    @apply min-w-0 w-12;
+  }
+
+  .mobile-calendar .rbc-time-header-cell {
+    @apply text-xs px-1;
+  }
+
+  .mobile-event {
+    @apply touch-manipulation;
+    -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
+  }
+
+  .mobile-event:active {
+    @apply bg-opacity-80;
+  }
+
+  /* Override react-big-calendar mobile issues */
+  .mobile-calendar .rbc-month-view .rbc-row {
+    min-height: 60px;
+  }
+
+  .mobile-calendar .rbc-week-view .rbc-time-slot {
+    min-height: 40px;
+  }
+
+  .mobile-calendar .rbc-day-view .rbc-time-slot {
+    min-height: 40px;
+  }
+
+  /* Mobile calendar navigation improvements */
+  .mobile-calendar .rbc-btn-group {
+    @apply hidden;
+  }
+
+  .mobile-calendar .rbc-toolbar-label {
+    @apply hidden;
+  }
+
+  /* Better mobile event spacing */
+  .mobile-calendar .rbc-event-label {
+    @apply truncate;
+  }
+
+  .mobile-calendar .rbc-event-content {
+    @apply overflow-hidden text-ellipsis;
+  }
+
+  /* Improved touch targets for mobile calendar */
+  .mobile-calendar .rbc-date-cell button {
+    @apply min-h-[40px] min-w-[40px] touch-manipulation;
+  }
+
+  .mobile-calendar .rbc-event {
+    @apply min-h-[32px] touch-manipulation;
+  }
+
+  /* Reduce clutter on mobile views */
+  .mobile-calendar .rbc-time-header {
+    @apply text-xs;
+  }
+
+  .mobile-calendar .rbc-time-gutter {
+    @apply w-12;
+  }
+
+  .mobile-calendar .rbc-time-slot {
+    @apply border-gray-100;
+  }
+
+  /* Agenda view mobile optimizations */
+  .mobile-calendar .rbc-agenda-table {
+    @apply text-sm;
+  }
+
+  .mobile-calendar .rbc-agenda-content {
+    @apply p-0;
+  }
 }

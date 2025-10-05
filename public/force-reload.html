@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Force Reload Calendar Events</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .card {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        button {
+            background: #3B82F6;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background: #2563EB;
+        }
+        .danger {
+            background: #EF4444;
+        }
+        .danger:hover {
+            background: #DC2626;
+        }
+        .success {
+            background: #10B981;
+        }
+        .success:hover {
+            background: #059669;
+        }
+        #status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 6px;
+            display: none;
+        }
+        .success-msg {
+            background: #D1FAE5;
+            color: #065F46;
+            border: 1px solid #10B981;
+        }
+        .info-msg {
+            background: #DBEAFE;
+            color: #1E40AF;
+            border: 1px solid #3B82F6;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>🔄 Force Reload Calendar Events</h1>
+        <p>If your calendar events aren't showing up, use these tools to force a reload from the database.</p>
+
+        <h3>Step 1: Clear Cache</h3>
+        <button onclick="clearCache()" class="danger">Clear All Cache & Local Storage</button>
+
+        <h3>Step 2: Reload Data</h3>
+        <button onclick="reloadFromDB()" class="success">Reload from Database</button>
+
+        <h3>Step 3: Go to App</h3>
+        <button onclick="goToApp()">Open Calendar</button>
+
+        <div id="status"></div>
+    </div>
+
+    <script>
+        function showStatus(message, isSuccess = true) {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.className = isSuccess ? 'success-msg' : 'info-msg';
+            status.style.display = 'block';
+        }
+
+        function clearCache() {
+            // Clear all localStorage
+            localStorage.clear();
+
+            // Clear all sessionStorage
+            sessionStorage.clear();
+
+            showStatus('✅ All cache cleared! Now click "Reload from Database"');
+        }
+
+        async function reloadFromDB() {
+            try {
+                // Get family ID
+                const familiesResponse = await fetch('/api/families');
+                const families = await familiesResponse.json();
+
+                if (!families || families.length === 0) {
+                    showStatus('⚠️ No family found. Please create a family first.', false);
+                    return;
+                }
+
+                const familyId = families[0].id;
+
+                // Fetch events
+                const eventsResponse = await fetch(`/api/families/${familyId}/events`);
+                const events = await eventsResponse.json();
+
+                // Fetch members
+                const membersResponse = await fetch(`/api/families/${familyId}/members`);
+                const members = await membersResponse.json();
+
+                // Store in localStorage
+                localStorage.setItem('calendarEvents', JSON.stringify(events));
+                localStorage.setItem('familyMembers', JSON.stringify(members));
+                localStorage.setItem('families', JSON.stringify(families));
+
+                // Update Zustand store
+                const storeData = {
+                    state: {
+                        people: members,
+                        events: events,
+                        databaseStatus: {
+                            connected: true,
+                            familyId: familyId,
+                            mode: 'database'
+                        }
+                    },
+                    version: 0
+                };
+
+                localStorage.setItem('family-hub-storage', JSON.stringify(storeData));
+
+                showStatus(`✅ Loaded ${events.length} events and ${members.length} family members! Now click "Open Calendar"`);
+            } catch (error) {
+                showStatus(`❌ Error: ${error.message}`, false);
+            }
+        }
+
+        function goToApp() {
+            window.location.href = '/';
+        }
+    </script>
+</body>
+</html>

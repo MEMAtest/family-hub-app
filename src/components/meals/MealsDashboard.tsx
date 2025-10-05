@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Calendar,
   ChefHat,
@@ -17,7 +17,9 @@ import {
   Sandwich,
   Moon,
   Star,
-  BarChart3
+  BarChart3,
+  Menu,
+  X
 } from 'lucide-react';
 import MealPlanner from './MealPlanner';
 import RecipeManager from './RecipeManager';
@@ -28,7 +30,21 @@ interface MealsDashboardProps {
 }
 
 const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
+  const [isMobile, setIsMobile] = useState(false);
   const [activeView, setActiveView] = useState<'dashboard' | 'planner' | 'recipes' | 'nutrition'>('dashboard');
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
+
+  // Mobile detection
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 1024);
+    };
+
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   // Mock data for dashboard widgets
   const todaysMeals = {
@@ -126,29 +142,159 @@ const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
     }
   };
 
+  // Mobile Header Component
+  const renderMobileHeader = () => (
+    <div className="lg:hidden bg-white border-b border-gray-200 px-4 py-3 sticky top-0 z-40 pwa-safe-top">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-3">
+          <ChefHat className="w-6 h-6 text-blue-600" />
+          <h1 className="mobile-title">Meals</h1>
+        </div>
+        <button
+          onClick={() => setShowMobileMenu(true)}
+          className="mobile-btn-secondary p-2"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
+      </div>
+
+      {/* View Tabs - Mobile */}
+      {activeView === 'dashboard' && (
+        <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg overflow-x-auto">
+          {[
+            { id: 'planner', label: 'Planner', icon: Calendar },
+            { id: 'recipes', label: 'Recipes', icon: Book },
+            { id: 'nutrition', label: 'Nutrition', icon: Activity }
+          ].map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              onClick={() => setActiveView(id as any)}
+              className="flex items-center gap-1 px-3 py-2 text-xs font-medium text-gray-600 hover:text-gray-900 hover:bg-white rounded-md transition-colors whitespace-nowrap"
+            >
+              <Icon className="w-3 h-3" />
+              <span>{label}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  // Mobile Menu Overlay Component
+  const renderMobileMenu = () => {
+    if (!showMobileMenu) return null;
+
+    return (
+      <div className="lg:hidden fixed inset-0 bg-black bg-opacity-50 z-50" onClick={() => setShowMobileMenu(false)}>
+        <div className="absolute right-0 top-0 h-full w-80 bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-center justify-between p-4 border-b border-gray-200 pwa-safe-top">
+            <h2 className="text-lg font-semibold text-gray-900">Meals Menu</h2>
+            <button
+              onClick={() => setShowMobileMenu(false)}
+              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+          <div className="p-4 space-y-4">
+            <div className="border-b border-gray-200 pb-4">
+              <h3 className="text-sm font-medium text-gray-900 mb-3">Quick Actions</h3>
+              <div className="space-y-2">
+                {quickActions.map((action) => (
+                  <button
+                    key={action.id}
+                    onClick={() => {
+                      action.onClick();
+                      setShowMobileMenu(false);
+                    }}
+                    className="w-full flex items-center gap-3 px-3 py-2 text-left text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
+                  >
+                    <div className="flex-shrink-0">
+                      {action.icon}
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-medium">{action.title}</h4>
+                      <p className="text-xs text-gray-500">{action.description}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-sm font-medium text-gray-900 mb-3">View Options</h3>
+              <div className="space-y-2">
+                {[
+                  { id: 'dashboard', label: 'Dashboard Overview', icon: BarChart3 },
+                  { id: 'planner', label: 'Meal Planner', icon: Calendar },
+                  { id: 'recipes', label: 'Recipe Manager', icon: Book },
+                  { id: 'nutrition', label: 'Nutrition Tracker', icon: Activity }
+                ].map(({ id, label, icon: Icon }) => (
+                  <button
+                    key={id}
+                    onClick={() => {
+                      setActiveView(id as any);
+                      setShowMobileMenu(false);
+                    }}
+                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-left ${
+                      activeView === id
+                        ? 'bg-blue-50 text-blue-600'
+                        : 'text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    <Icon className="w-4 h-4" />
+                    <span className="text-sm">{label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderDashboard = () => (
-    <div className="space-y-8">
+    <div className={isMobile ? 'space-y-6' : 'space-y-8'}>
       {/* Today's Meals */}
-      <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-semibold text-gray-900">Today's Meals</h2>
+      <div className={`bg-white border border-gray-200 rounded-lg ${
+        isMobile ? 'p-3' : 'p-3 sm:p-4 md:p-6'
+      }`}>
+        <div className={`flex items-center justify-between ${
+          isMobile ? 'mb-4' : 'mb-6'
+        }`}>
+          <h2 className={`font-semibold text-gray-900 ${
+            isMobile ? 'text-lg' : 'text-xl'
+          }`}>Today's Meals</h2>
           <button
             onClick={() => setActiveView('planner')}
-            className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+            className={`text-blue-600 hover:text-blue-800 font-medium ${
+              isMobile ? 'text-xs' : 'text-sm'
+            }`}
           >
             View Full Plan →
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className={`grid gap-4 ${
+          isMobile ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-3'
+        }`}>
           {Object.entries(todaysMeals).map(([mealType, meal]) => (
-            <div key={mealType} className="border border-gray-200 rounded-lg p-4">
+            <div key={mealType} className={`border border-gray-200 rounded-lg ${
+              isMobile ? 'p-3' : 'p-4'
+            }`}>
               <div className="flex items-center space-x-2 mb-2">
                 {getMealIcon(mealType)}
-                <span className="font-medium text-gray-900 capitalize">{mealType}</span>
+                <span className={`font-medium text-gray-900 capitalize ${
+                  isMobile ? 'text-sm' : ''
+                }`}>{mealType}</span>
               </div>
-              <h3 className="font-medium text-gray-900">{meal.name}</h3>
-              <div className="flex items-center justify-between text-sm text-gray-600 mt-2">
+              <h3 className={`font-medium text-gray-900 ${
+                isMobile ? 'text-sm' : ''
+              }`}>{meal.name}</h3>
+              <div className={`flex items-center justify-between text-gray-600 mt-2 ${
+                isMobile ? 'text-xs' : 'text-sm'
+              }`}>
                 <span>{meal.time}</span>
                 <span>{meal.calories} cal</span>
               </div>
@@ -158,43 +304,99 @@ const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
       </div>
 
       {/* Week Overview */}
-      <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
-        <h2 className="text-xl font-semibold text-gray-900 mb-6">This Week's Overview</h2>
+      <div className={`bg-white border border-gray-200 rounded-lg ${
+        isMobile ? 'p-3' : 'p-3 sm:p-4 md:p-6'
+      }`}>
+        <h2 className={`font-semibold text-gray-900 ${
+          isMobile ? 'text-lg mb-4' : 'text-xl mb-6'
+        }`}>This Week's Overview</h2>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-          <div className="text-center p-4 bg-blue-50 rounded-lg">
-            <Calendar className="w-8 h-8 text-blue-500 mx-auto mb-2" />
-            <p className="text-xl md:text-2xl font-bold text-blue-800">{weekStats.plannedMeals}</p>
-            <p className="text-sm text-blue-600">Meals Planned</p>
-            <p className="text-xs text-blue-500">of {weekStats.totalMeals} total</p>
+        <div className={`grid gap-4 ${
+          isMobile ? 'grid-cols-2' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-5'
+        }`}>
+          <div className={`text-center bg-blue-50 rounded-lg ${
+            isMobile ? 'p-3' : 'p-4'
+          }`}>
+            <Calendar className={`text-blue-500 mx-auto mb-2 ${
+              isMobile ? 'w-6 h-6' : 'w-8 h-8'
+            }`} />
+            <p className={`font-bold text-blue-800 ${
+              isMobile ? 'text-lg' : 'text-xl md:text-2xl'
+            }`}>{weekStats.plannedMeals}</p>
+            <p className={`text-blue-600 ${
+              isMobile ? 'text-xs' : 'text-sm'
+            }`}>Meals Planned</p>
+            {!isMobile && (
+              <p className="text-xs text-blue-500">of {weekStats.totalMeals} total</p>
+            )}
           </div>
 
-          <div className="text-center p-4 bg-green-50 rounded-lg">
-            <Target className="w-8 h-8 text-green-500 mx-auto mb-2" />
-            <p className="text-xl md:text-2xl font-bold text-green-800">{weekStats.avgNutritionScore}/10</p>
-            <p className="text-sm text-green-600">Nutrition Score</p>
-            <p className="text-xs text-green-500">Weekly average</p>
+          <div className={`text-center bg-green-50 rounded-lg ${
+            isMobile ? 'p-3' : 'p-4'
+          }`}>
+            <Target className={`text-green-500 mx-auto mb-2 ${
+              isMobile ? 'w-6 h-6' : 'w-8 h-8'
+            }`} />
+            <p className={`font-bold text-green-800 ${
+              isMobile ? 'text-lg' : 'text-xl md:text-2xl'
+            }`}>{weekStats.avgNutritionScore}/10</p>
+            <p className={`text-green-600 ${
+              isMobile ? 'text-xs' : 'text-sm'
+            }`}>Nutrition Score</p>
+            {!isMobile && (
+              <p className="text-xs text-green-500">Weekly average</p>
+            )}
           </div>
 
-          <div className="text-center p-4 bg-purple-50 rounded-lg">
-            <ShoppingCart className="w-8 h-8 text-purple-500 mx-auto mb-2" />
-            <p className="text-xl md:text-2xl font-bold text-purple-800">£{weekStats.estimatedCost}</p>
-            <p className="text-sm text-purple-600">Estimated Cost</p>
-            <p className="text-xs text-purple-500">This week</p>
+          <div className={`text-center bg-purple-50 rounded-lg ${
+            isMobile ? 'p-3' : 'p-4'
+          }`}>
+            <ShoppingCart className={`text-purple-500 mx-auto mb-2 ${
+              isMobile ? 'w-6 h-6' : 'w-8 h-8'
+            }`} />
+            <p className={`font-bold text-purple-800 ${
+              isMobile ? 'text-lg' : 'text-xl md:text-2xl'
+            }`}>£{weekStats.estimatedCost}</p>
+            <p className={`text-purple-600 ${
+              isMobile ? 'text-xs' : 'text-sm'
+            }`}>Estimated Cost</p>
+            {!isMobile && (
+              <p className="text-xs text-purple-500">This week</p>
+            )}
           </div>
 
-          <div className="text-center p-4 bg-orange-50 rounded-lg">
-            <Clock className="w-8 h-8 text-orange-500 mx-auto mb-2" />
-            <p className="text-xl md:text-2xl font-bold text-orange-800">{Math.round(weekStats.prepTimeTotal / 60)}h</p>
-            <p className="text-sm text-orange-600">Prep Time</p>
-            <p className="text-xs text-orange-500">Total weekly</p>
+          <div className={`text-center bg-orange-50 rounded-lg ${
+            isMobile ? 'p-3' : 'p-4'
+          }`}>
+            <Clock className={`text-orange-500 mx-auto mb-2 ${
+              isMobile ? 'w-6 h-6' : 'w-8 h-8'
+            }`} />
+            <p className={`font-bold text-orange-800 ${
+              isMobile ? 'text-lg' : 'text-xl md:text-2xl'
+            }`}>{Math.round(weekStats.prepTimeTotal / 60)}h</p>
+            <p className={`text-orange-600 ${
+              isMobile ? 'text-xs' : 'text-sm'
+            }`}>Prep Time</p>
+            {!isMobile && (
+              <p className="text-xs text-orange-500">Total weekly</p>
+            )}
           </div>
 
-          <div className="text-center p-4 bg-red-50 rounded-lg">
-            <Users className="w-8 h-8 text-red-500 mx-auto mb-2" />
-            <p className="text-xl md:text-2xl font-bold text-red-800">4</p>
-            <p className="text-sm text-red-600">Family Size</p>
-            <p className="text-xs text-red-500">Active members</p>
+          <div className={`text-center bg-red-50 rounded-lg ${
+            isMobile ? 'p-3' : 'p-4'
+          }`}>
+            <Users className={`text-red-500 mx-auto mb-2 ${
+              isMobile ? 'w-6 h-6' : 'w-8 h-8'
+            }`} />
+            <p className={`font-bold text-red-800 ${
+              isMobile ? 'text-lg' : 'text-xl md:text-2xl'
+            }`}>4</p>
+            <p className={`text-red-600 ${
+              isMobile ? 'text-xs' : 'text-sm'
+            }`}>Family Size</p>
+            {!isMobile && (
+              <p className="text-xs text-red-500">Active members</p>
+            )}
           </div>
         </div>
       </div>
@@ -310,42 +512,52 @@ const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
   );
 
   return (
-    <div className="p-3 sm:p-4 md:p-6 lg:p-8 bg-gray-50 min-h-screen">
-      {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-light text-gray-900 mb-2">
-              {activeView === 'dashboard' && 'Meal Planning'}
-              {activeView === 'planner' && 'Meal Planner'}
-              {activeView === 'recipes' && 'Recipe Manager'}
-              {activeView === 'nutrition' && 'Nutrition Tracker'}
-            </h1>
-            <p className="text-gray-600">
-              {activeView === 'dashboard' && 'Manage your family\'s meals and nutrition'}
-              {activeView === 'planner' && 'Plan your weekly meals and shopping'}
-              {activeView === 'recipes' && 'Organize and manage your recipe collection'}
-              {activeView === 'nutrition' && 'Track nutritional intake and goals'}
-            </p>
-          </div>
+    <div className={`bg-gray-50 min-h-screen ${isMobile ? 'pb-safe-bottom' : 'p-3 sm:p-4 md:p-6 lg:p-8'}`}>
+      {/* Mobile Header */}
+      {isMobile && renderMobileHeader()}
 
-          {activeView !== 'dashboard' && (
-            <button
-              onClick={() => setActiveView('dashboard')}
-              className="flex items-center space-x-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-sm hover:bg-gray-50 transition-colors"
-            >
-              <BarChart3 className="w-4 h-4" />
-              <span>Dashboard</span>
-            </button>
-          )}
+      {/* Desktop Header */}
+      {!isMobile && (
+        <div className="mb-8">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl md:text-3xl font-light text-gray-900 mb-2">
+                {activeView === 'dashboard' && 'Meal Planning'}
+                {activeView === 'planner' && 'Meal Planner'}
+                {activeView === 'recipes' && 'Recipe Manager'}
+                {activeView === 'nutrition' && 'Nutrition Tracker'}
+              </h1>
+              <p className="text-gray-600">
+                {activeView === 'dashboard' && 'Manage your family\'s meals and nutrition'}
+                {activeView === 'planner' && 'Plan your weekly meals and shopping'}
+                {activeView === 'recipes' && 'Organize and manage your recipe collection'}
+                {activeView === 'nutrition' && 'Track nutritional intake and goals'}
+              </p>
+            </div>
+
+            {activeView !== 'dashboard' && (
+              <button
+                onClick={() => setActiveView('dashboard')}
+                className="flex items-center space-x-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-sm hover:bg-gray-50 transition-colors"
+              >
+                <BarChart3 className="w-4 h-4" />
+                <span>Dashboard</span>
+              </button>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Content */}
-      {activeView === 'dashboard' && renderDashboard()}
-      {activeView === 'planner' && <MealPlanner onClose={() => setActiveView('dashboard')} />}
-      {activeView === 'recipes' && <RecipeManager onClose={() => setActiveView('dashboard')} />}
-      {activeView === 'nutrition' && <NutritionTracker onClose={() => setActiveView('dashboard')} />}
+      <div className={isMobile ? 'px-4' : ''}>
+        {activeView === 'dashboard' && renderDashboard()}
+        {activeView === 'planner' && <MealPlanner onClose={() => setActiveView('dashboard')} />}
+        {activeView === 'recipes' && <RecipeManager onClose={() => setActiveView('dashboard')} />}
+        {activeView === 'nutrition' && <NutritionTracker onClose={() => setActiveView('dashboard')} />}
+      </div>
+
+      {/* Mobile Menu Overlay */}
+      {renderMobileMenu()}
     </div>
   );
 };

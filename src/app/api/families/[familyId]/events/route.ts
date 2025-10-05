@@ -37,8 +37,7 @@ export async function POST(
       personId,
       title,
       description,
-      eventDate,
-      eventTime,
+      eventDateTime,
       durationMinutes,
       location,
       cost,
@@ -48,14 +47,17 @@ export async function POST(
       notes,
     } = body;
 
+    // Parse the combined eventDateTime ISO string
+    const dateTime = new Date(eventDateTime);
+
     const event = await prisma.calendarEvent.create({
       data: {
         familyId: params.familyId,
         personId,
         title,
         description,
-        eventDate: new Date(eventDate),
-        eventTime: new Date(`${eventDate}T${eventTime}`),
+        eventDate: dateTime,
+        eventTime: dateTime,
         durationMinutes: durationMinutes || 60,
         location,
         cost: cost || 0,
@@ -83,10 +85,33 @@ export async function PUT(
 ) {
   try {
     const body = await request.json();
-    const { id, ...updateData } = body;
+    const { id, date, time, person, ...rest } = body;
 
-    if (updateData.eventDate) {
-      updateData.eventDate = new Date(updateData.eventDate);
+    //  Map UI fields to Prisma columns
+    const updateData: any = { ...rest };
+
+    // Map date/time fields
+    if (date) {
+      const eventDate = new Date(date);
+      if (time) {
+        const [hours, minutes] = time.split(':');
+        eventDate.setHours(parseInt(hours), parseInt(minutes));
+      }
+      updateData.eventDate = eventDate;
+      updateData.eventTime = eventDate;
+    } else if (body.eventDate) {
+      updateData.eventDate = new Date(body.eventDate);
+    }
+
+    if (body.eventTime) {
+      updateData.eventTime = new Date(body.eventTime);
+    }
+
+    // Map person to personId
+    if (person) {
+      updateData.personId = person;
+    } else if (body.personId) {
+      updateData.personId = body.personId;
     }
 
     const event = await prisma.calendarEvent.update({
