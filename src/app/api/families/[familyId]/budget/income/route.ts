@@ -37,10 +37,26 @@ export async function POST(
     const { familyId } = params;
     const body = await request.json();
 
+    // Handle personId - if it's not a valid database ID or doesn't exist, set to null
+    let validPersonId = body.personId;
+
+    if (validPersonId && validPersonId !== 'null' && validPersonId !== 'undefined') {
+      // Check if the person exists
+      const personExists = await prisma.familyMember.findUnique({
+        where: { id: validPersonId }
+      });
+
+      if (!personExists) {
+        validPersonId = null;
+      }
+    } else {
+      validPersonId = null;
+    }
+
     const income = await prisma.budgetIncome.create({
       data: {
         familyId: familyId,
-        personId: body.personId,
+        personId: validPersonId,
         incomeName: body.incomeName,
         amount: parseFloat(body.amount),
         category: body.category,
