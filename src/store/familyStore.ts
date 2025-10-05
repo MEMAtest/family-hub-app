@@ -369,12 +369,12 @@ export const useFamilyStore = create<FamilyState>()(
     }),
     {
       name: 'family-storage',
+      version: 2, // Increment this to clear old cache
       partialize: (state) => ({
-        // DO NOT persist people and events - they must load fresh from database
-        // people: state.people,
-        // events: state.events,
+        people: state.people,
+        events: state.events,
         eventTemplates: state.eventTemplates,
-        // budgetData: state.budgetData, // DO NOT persist budget - load from API
+        budgetData: state.budgetData,
         mealPlanning: state.mealPlanning,
         shoppingLists: state.shoppingLists,
         goalsData: state.goalsData,
