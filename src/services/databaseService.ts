@@ -145,8 +145,18 @@ class DatabaseService {
     console.log('saveEvent called with:', event);
     console.log('Database status:', { familyId: this.familyId, syncEnabled: this.syncEnabled });
 
+    // Try to get familyId from localStorage if not set
+    if (!this.familyId && typeof window !== 'undefined') {
+      const storedFamilyId = localStorage.getItem('familyId');
+      if (storedFamilyId) {
+        this.familyId = storedFamilyId;
+        console.log('Recovered familyId from localStorage:', this.familyId);
+      }
+    }
+
     if (!this.familyId || !this.syncEnabled) {
-      console.log('No database connection, saving to localStorage only');
+      console.log('❌ NO DATABASE CONNECTION - saving to localStorage only');
+      console.log('   familyId:', this.familyId, 'syncEnabled:', this.syncEnabled);
       // Just save to localStorage
       if (typeof window !== 'undefined') {
         const events = JSON.parse(localStorage.getItem('calendarEvents') || '[]');
@@ -394,7 +404,14 @@ class DatabaseService {
 
   // Save budget income to database
   async saveBudgetIncome(income: any): Promise<any | null> {
+    // Try to recover familyId
+    if (!this.familyId && typeof window !== 'undefined') {
+      const storedFamilyId = localStorage.getItem('familyId');
+      if (storedFamilyId) this.familyId = storedFamilyId;
+    }
+
     if (!this.familyId || !this.syncEnabled) {
+      console.log('❌ NO DATABASE - saving income to localStorage only');
       // Just save to localStorage
       if (typeof window !== 'undefined') {
         const incomes = JSON.parse(localStorage.getItem('budgetIncome') || '[]');
@@ -442,7 +459,14 @@ class DatabaseService {
 
   // Save budget expense to database
   async saveBudgetExpense(expense: any): Promise<any | null> {
+    // Try to recover familyId
+    if (!this.familyId && typeof window !== 'undefined') {
+      const storedFamilyId = localStorage.getItem('familyId');
+      if (storedFamilyId) this.familyId = storedFamilyId;
+    }
+
     if (!this.familyId || !this.syncEnabled) {
+      console.log('❌ NO DATABASE - saving expense to localStorage only');
       // Just save to localStorage
       if (typeof window !== 'undefined') {
         const expenses = JSON.parse(localStorage.getItem('budgetExpenses') || '[]');
