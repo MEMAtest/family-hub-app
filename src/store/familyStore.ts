@@ -379,6 +379,14 @@ export const useFamilyStore = create<FamilyState>()(
         shoppingLists: state.shoppingLists,
         goalsData: state.goalsData,
       }),
+      migrate: (persistedState: any, version: number) => {
+        // If migrating from version 1 or earlier, clear old data and return fresh state
+        if (version < 2) {
+          console.log('Migrating from version', version, 'to version 2 - clearing old cache');
+          return {} as any; // Return empty state to force fresh load from database
+        }
+        return persistedState;
+      },
     }
   )
 );
