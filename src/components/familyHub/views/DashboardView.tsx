@@ -227,7 +227,7 @@ export const DashboardView = () => {
     },
     {
       key: 'budget',
-      label: 'Monthly Budget',
+      label: 'Net Income',
       value: `£${budgetTotals.net.toLocaleString(undefined, { maximumFractionDigits: 0 })}`,
       subtext: `Income £${budgetTotals.income.toLocaleString(undefined, { maximumFractionDigits: 0 })}`,
       icon: DollarSign,
@@ -297,17 +297,20 @@ export const DashboardView = () => {
             {upcomingEvents.length === 0 && (
               <p className="text-sm text-gray-500">No upcoming events scheduled.</p>
             )}
-            {upcomingEvents.map((event) => (
-              <div key={event.id} className="flex items-center justify-between rounded-md border border-gray-100 bg-gray-50 p-3">
-                <div>
-                  <p className="text-sm font-medium text-gray-900">{event.title}</p>
-                  <p className="text-xs text-gray-500">
-                    {event.date} at {event.time} • {event.location || 'TBC'}
-                  </p>
+            {upcomingEvents.map((event) => {
+              const person = members.find((m) => m.id === event.person);
+              return (
+                <div key={event.id} className="flex items-center justify-between rounded-md border border-gray-100 bg-gray-50 p-3">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">{event.title}</p>
+                    <p className="text-xs text-gray-500">
+                      {event.date} at {event.time} • {event.location || 'TBC'}
+                    </p>
+                  </div>
+                  <span className="text-xs text-gray-400">{person?.name || 'Family'}</span>
                 </div>
-                <span className="text-xs text-gray-400">{event.person}</span>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
