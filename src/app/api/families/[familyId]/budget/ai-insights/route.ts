@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import Anthropic from '@anthropic-ai/sdk';
+import { deduplicateRecurringItems, filterBudgetItemsByMonth } from '@/utils/budgetMonthFilter';
 
 const prisma = new PrismaClient();
 
@@ -15,9 +16,12 @@ export async function GET(
 ) {
   try {
     const { familyId } = params;
+    const { searchParams } = new URL(request.url);
+    const month = searchParams.get('month');
+    const year = searchParams.get('year');
 
     // Get family budget data
-    const [income, expenses, family] = await Promise.all([
+    const [incomeRaw, expensesRaw, family] = await Promise.all([
       prisma.budgetIncome.findMany({
         where: { familyId },
         include: { person: true }
@@ -30,6 +34,21 @@ export async function GET(
         where: { id: familyId }
       })
     ]);
+
+    // Apply deduplication
+    let income = deduplicateRecurringItems(incomeRaw);
+    let expenses = deduplicateRecurringItems(expensesRaw);
+
+    // Apply month filtering if parameters provided
+    if (month && year) {
+      const monthNum = parseInt(month);
+      const yearNum = parseInt(year);
+
+      if (!isNaN(monthNum) && !isNaN(yearNum)) {
+        income = filterBudgetItemsByMonth(income, monthNum, yearNum);
+        expenses = filterBudgetItemsByMonth(expenses, monthNum, yearNum);
+      }
+    }
 
     if (!family) {
       return NextResponse.json(

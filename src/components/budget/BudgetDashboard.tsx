@@ -111,9 +111,12 @@ const BudgetDashboard: React.FC = () => {
 
         // Fallback: Fetch from API if not in store
         console.log('Fetching budget data from API');
+        // Pass month and year parameters to filter data
+        const monthParam = selectedMonth;
+        const yearParam = selectedYear;
         const [incomeData, expenseData] = await Promise.all([
-          fetch(`/api/families/${familyId}/budget/income`).then(res => res.json()),
-          fetch(`/api/families/${familyId}/budget/expenses`).then(res => res.json())
+          fetch(`/api/families/${familyId}/budget/income?month=${monthParam}&year=${yearParam}`).then(res => res.json()),
+          fetch(`/api/families/${familyId}/budget/expenses?month=${monthParam}&year=${yearParam}`).then(res => res.json())
         ]);
 
         if (Array.isArray(incomeData)) {
@@ -151,7 +154,7 @@ const BudgetDashboard: React.FC = () => {
     };
 
     loadBudgetData();
-  }, [familyId, budgetData]); // Reload when familyId or budgetData changes
+  }, [familyId, budgetData, selectedMonth, selectedYear]); // Reload when familyId, budgetData, or month/year changes
 
   // Mock data for development
   const mockData: BudgetDashboardData = {

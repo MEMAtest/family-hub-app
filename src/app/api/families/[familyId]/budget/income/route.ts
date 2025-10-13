@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
+import { deduplicateRecurringItems, filterBudgetItemsByMonth } from '@/utils/budgetMonthFilter';
 
 const prisma = new PrismaClient();
 
@@ -9,8 +10,11 @@ export async function GET(
 ) {
   try {
     const { familyId } = params;
+    const { searchParams } = new URL(request.url);
+    const month = searchParams.get('month');
+    const year = searchParams.get('year');
 
-    const income = await prisma.budgetIncome.findMany({
+    let income = await prisma.budgetIncome.findMany({
       where: {
         familyId: familyId
       },
@@ -18,6 +22,19 @@ export async function GET(
         createdAt: 'desc'
       }
     });
+
+    // Apply deduplication first
+    income = deduplicateRecurringItems(income);
+
+    // If month/year parameters are provided, filter by month
+    if (month && year) {
+      const monthNum = parseInt(month);
+      const yearNum = parseInt(year);
+
+      if (!isNaN(monthNum) && !isNaN(yearNum)) {
+        income = filterBudgetItemsByMonth(income, monthNum, yearNum);
+      }
+    }
 
     return NextResponse.json(income);
   } catch (error) {

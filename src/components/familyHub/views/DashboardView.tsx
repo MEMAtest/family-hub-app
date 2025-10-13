@@ -98,9 +98,14 @@ export const DashboardView = () => {
       if (!familyId) return;
 
       try {
+        // Get current month and year
+        const now = new Date();
+        const currentMonth = now.getMonth() + 1;
+        const currentYear = now.getFullYear();
+
         const [incomeRes, expensesRes] = await Promise.all([
-          fetch(`/api/families/${familyId}/budget/income`),
-          fetch(`/api/families/${familyId}/budget/expenses`)
+          fetch(`/api/families/${familyId}/budget/income?month=${currentMonth}&year=${currentYear}`),
+          fetch(`/api/families/${familyId}/budget/expenses?month=${currentMonth}&year=${currentYear}`)
         ]);
 
         const incomeList = await incomeRes.json();
