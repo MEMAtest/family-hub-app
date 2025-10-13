@@ -2,6 +2,8 @@ import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
 import ErrorBoundary from '@/components/common/ErrorBoundary'
+import { ThemeProvider } from '@/contexts/ThemeContext'
+import { ThemeToggle } from '@/components/common/ThemeToggle'
 
 const inter = Inter({
   subsets: ['latin'],
@@ -125,9 +127,12 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={inter.variable}>
-      <body className={`${inter.className} antialiased bg-gray-50 text-gray-900`}>
+      <body className={`${inter.className} antialiased bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors`}>
         <ErrorBoundary>
-          {children}
+          <ThemeProvider>
+            <ThemeToggle />
+            {children}
+          </ThemeProvider>
         </ErrorBoundary>
       </body>
     </html>

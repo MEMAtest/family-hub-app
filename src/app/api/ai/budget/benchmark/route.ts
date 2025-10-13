@@ -12,7 +12,7 @@ import {
 } from '@/data/ukBudgetBenchmarks';
 
 type BenchmarkComparison = {
-  category: string;
+  category: string | null;
   actual: number;
   benchmark: number | null;
   difference: number | null;
