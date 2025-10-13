@@ -11,6 +11,14 @@ import {
   mapToBenchmarkCategory,
 } from '@/data/ukBudgetBenchmarks';
 
+type BenchmarkComparison = {
+  category: string;
+  actual: number;
+  benchmark: number | null;
+  difference: number | null;
+  status: 'no-benchmark' | 'at-par' | 'above' | 'below';
+};
+
 const DEFAULT_MONTHS = 3;
 const MAX_MONTHS = 6;
 
@@ -167,7 +175,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const comparisons = categorySpending.map((item) => {
+    const comparisons: BenchmarkComparison[] = categorySpending.map((item) => {
       const benchmark = getBenchmarkSpend(item.category, family.members.length);
       const normalisedCategory = mapToBenchmarkCategory(item.category);
 
@@ -197,15 +205,26 @@ export async function POST(req: NextRequest) {
       .sort((a, b) => b.amount - a.amount)
       .slice(0, 5);
 
-    const aiAnalysis = await aiService.compareToAverages({
-      familySize: family.members.length || 2,
-      location: 'United Kingdom',
-      categorySpending: topCategoriesForAI.map((item) => ({
-        category: mapToBenchmarkCategory(item.category) ?? item.category,
-        amount: item.amount,
-      })),
-      monthlyIncome: monthlyIncome,
-    });
+    let aiAnalysis: string;
+    try {
+      aiAnalysis = await aiService.compareToAverages({
+        familySize: family.members.length || 2,
+        location: 'United Kingdom',
+        categorySpending: topCategoriesForAI.map((item) => ({
+          category: mapToBenchmarkCategory(item.category) ?? item.category,
+          amount: item.amount,
+        })),
+        monthlyIncome: monthlyIncome,
+      });
+    } catch (aiError) {
+      console.error('Benchmark AI service error:', aiError);
+      aiAnalysis = buildFallbackBenchmarkAnalysis({
+        comparisons,
+        familySize: family.members.length || 2,
+        monthsAnalyzed: monthsToAnalyse,
+        monthlyIncome,
+      });
+    }
 
     const totalBenchmark = sumByCategory(
       categorySpending
@@ -239,3 +258,99 @@ export async function POST(req: NextRequest) {
   }
 }
 
+function buildFallbackBenchmarkAnalysis({
+  comparisons,
+  familySize,
+  monthsAnalyzed,
+  monthlyIncome,
+}: {
+  comparisons: BenchmarkComparison[];
+  familySize: number;
+  monthsAnalyzed: number;
+  monthlyIncome: number;
+}): string {
+  const comparable = comparisons.filter(
+    (item) => item.benchmark !== null && item.difference !== null
+  );
+
+  if (!comparable.length) {
+    return `We reviewed the past ${monthsAnalyzed} month${monthsAnalyzed === 1 ? '' : 's'} for your ${familySize}-person household. We could not match your categories to UK benchmarks yet, but once more expenses are classified we will surface relevant comparisons automatically.`;
+  }
+
+  const above = comparable
+    .filter((item) => (item.difference ?? 0) > 0)
+    .sort((a, b) => (b.difference ?? 0) - (a.difference ?? 0));
+  const below = comparable
+    .filter((item) => (item.difference ?? 0) < 0)
+    .sort((a, b) => (a.difference ?? 0) - (b.difference ?? 0));
+  const atPar = comparable.filter((item) => (item.difference ?? 0) === 0);
+  const noBench = comparisons.filter((item) => item.status === 'no-benchmark');
+
+  const parts: string[] = [
+    `We reviewed the last ${monthsAnalyzed} month${monthsAnalyzed === 1 ? '' : 's'} for your ${familySize}-person household.`,
+  ];
+
+  if (monthlyIncome > 0) {
+    parts.push(`Average monthly income recorded: £${monthlyIncome.toFixed(2)}.`);
+  }
+
+  if (above.length) {
+    parts.push(
+      `Spending is above typical UK households in ${formatComparisonList(
+        above,
+        'above'
+      )}.`
+    );
+  }
+
+  if (below.length) {
+    parts.push(
+      `You are below the UK average in ${formatComparisonList(
+        below,
+        'below'
+      )}.`
+    );
+  }
+
+  if (!above.length && atPar.length) {
+    parts.push('Most tracked categories are currently in line with UK averages.');
+  }
+
+  if (noBench.length) {
+    const categories = noBench
+      .slice(0, 2)
+      .map((item) => item.category)
+      .join(', ');
+    parts.push(
+      `We do not yet have national data for ${categories}; these will appear once comparable UK figures are available.`
+    );
+  }
+
+  parts.push(
+    'Consider trimming the categories running above average and reinvesting the savings into your goals.'
+  );
+
+  return parts.join(' ');
+}
+
+function formatComparisonList(
+  items: BenchmarkComparison[],
+  direction: 'above' | 'below'
+): string {
+  return items
+    .slice(0, 3)
+    .map((item) => {
+      const difference = item.difference ?? 0;
+      const absoluteDiff = Math.abs(difference);
+      const percent =
+        item.benchmark && item.benchmark > 0
+          ? Math.round((absoluteDiff / item.benchmark) * 100)
+          : null;
+      const prefix = direction === 'above' ? '+' : '-';
+      const percentLabel =
+        percent !== null ? ` (~${percent}% ${direction === 'above' ? 'higher' : 'lower'})` : '';
+
+      return `${item.category}: ${prefix}£${absoluteDiff.toFixed(2)}${percentLabel}`;
+    })
+    .join('; ');
+}
