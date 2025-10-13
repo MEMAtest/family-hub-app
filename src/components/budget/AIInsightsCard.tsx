@@ -320,6 +320,7 @@ export const AIInsightsCard: React.FC<AIInsightsCardProps> = ({
         familySize: result.summary.familySize || 'Unknown'
       });
 
+      // Fetch benchmark (optional feature - will fail gracefully if issues)
       await fetchBenchmark();
     } catch (err) {
       console.error('Error fetching AI insights:', err);
