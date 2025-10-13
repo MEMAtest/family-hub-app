@@ -292,17 +292,16 @@ export const AIInsightsCard: React.FC<AIInsightsCardProps> = ({
     setBenchmarkMetadata(null);
 
     try {
-      const response = await fetch('/api/ai/budget/insights', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          familyId,
-          month,
-          year,
-        }),
-      });
+      // Build query parameters
+      const params = new URLSearchParams();
+      if (month) params.append('month', String(month));
+      if (year) params.append('year', String(year));
+      const queryString = params.toString();
+
+      // Use the correct GET endpoint
+      const url = `/api/families/${familyId}/budget/ai-insights${queryString ? `?${queryString}` : ''}`;
+
+      const response = await fetch(url);
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -312,7 +311,14 @@ export const AIInsightsCard: React.FC<AIInsightsCardProps> = ({
       const result = await response.json();
       setInsights(result.insights);
       setRecommendations(result.recommendations);
-      setData(result.data);
+
+      // Map the summary data to the expected format
+      setData({
+        totalIncome: result.summary.totalIncome,
+        totalExpenses: result.summary.totalExpenses,
+        monthName: month && year ? new Date(year, month - 1).toLocaleDateString('en', { month: 'long', year: 'numeric' }) : 'All Time',
+        familySize: result.summary.familySize || 'Unknown'
+      });
 
       await fetchBenchmark();
     } catch (err) {
