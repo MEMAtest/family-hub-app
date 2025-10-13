@@ -91,6 +91,9 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
   const deleteEventTemplateStore = useFamilyStore((state) => state.deleteEventTemplate);
   const members = useFamilyStore((state) => state.people);
 
+  // Debug logging
+  console.log('📆 CalendarContext: events from store:', events.length);
+
   const { scheduleEventReminders, cancelEventReminders, showNotification } = useNotifications();
 
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);

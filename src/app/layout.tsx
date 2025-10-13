@@ -21,12 +21,40 @@ export const metadata: Metadata = {
     title: 'Family Hub',
     startupImage: [
       {
-        media: '(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3)',
-        url: '/splash-390x844.png'
+        url: '/apple-splash-1170x2532.png',
+        media: '(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3)'
       },
       {
-        media: '(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3)',
-        url: '/splash-375x812.png'
+        url: '/apple-splash-1284x2778.png',
+        media: '(device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3)'
+      },
+      {
+        url: '/apple-splash-1125x2436.png',
+        media: '(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3)'
+      },
+      {
+        url: '/apple-splash-828x1792.png',
+        media: '(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2)'
+      },
+      {
+        url: '/apple-splash-1242x2208.png',
+        media: '(device-width: 414px) and (device-height: 736px) and (-webkit-device-pixel-ratio: 3)'
+      },
+      {
+        url: '/apple-splash-1536x2048.png',
+        media: '(device-width: 768px) and (device-height: 1024px) and (-webkit-device-pixel-ratio: 2)'
+      },
+      {
+        url: '/apple-splash-1668x2224.png',
+        media: '(device-width: 834px) and (device-height: 1112px) and (-webkit-device-pixel-ratio: 2)'
+      },
+      {
+        url: '/apple-splash-1668x2388.png',
+        media: '(device-width: 834px) and (device-height: 1194px) and (-webkit-device-pixel-ratio: 2)'
+      },
+      {
+        url: '/apple-splash-2048x2732.png',
+        media: '(device-width: 1024px) and (device-height: 1366px) and (-webkit-device-pixel-ratio: 2)'
       }
     ]
   },
@@ -38,11 +66,18 @@ export const metadata: Metadata = {
   icons: {
     icon: [
       { url: '/icon.svg', type: 'image/svg+xml' },
-      { url: '/icon-192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/icon-192x192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/icon-256x256.png', sizes: '256x256', type: 'image/png' },
+      { url: '/icon-384x384.png', sizes: '384x384', type: 'image/png' },
       { url: '/icon-512.png', sizes: '512x512', type: 'image/png' }
     ],
     apple: [
-      { url: '/icon.svg', type: 'image/svg+xml' }
+      { url: '/icon-152x152.png', sizes: '152x152', type: 'image/png' },
+      { url: '/icon-167x167.png', sizes: '167x167', type: 'image/png' },
+      { url: '/icon-180x180.png', sizes: '180x180', type: 'image/png' }
+    ],
+    other: [
+      { rel: 'mask-icon', url: '/icon.svg', color: '#2563EB' }
     ]
   },
   openGraph: {

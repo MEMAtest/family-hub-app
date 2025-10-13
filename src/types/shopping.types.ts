@@ -188,6 +188,29 @@ export interface ProductAlternative {
   quality: 'same' | 'better' | 'lower';
 }
 
+export interface AIShoppingSavings {
+  summary: string;
+  estimatedSavings?: {
+    weekly?: number | null;
+    monthly?: number | null;
+  };
+  listRecommendations: Array<{
+    listName: string;
+    actions: string[];
+    storeSuggestions?: string[];
+    estimatedSavings?: number | null;
+  }>;
+  substitutions: Array<{
+    originalItem: string;
+    alternative: string;
+    reason: string;
+    savings?: number | null;
+    store?: string;
+  }>;
+  stockAlerts?: string[];
+  nextActions?: string[];
+}
+
 // Price Intelligence
 export interface PriceIntelligence {
   tracking: {

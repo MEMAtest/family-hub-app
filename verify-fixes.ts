@@ -20,7 +20,7 @@ async function verifyFixes() {
   }
 
   let passedTests = 0;
-  let totalTests = 6;
+  const totalTests = 6;
 
   // Fix 1: Event API Mapping
   console.log('1️⃣  FIX 1: Event API Field Mapping');

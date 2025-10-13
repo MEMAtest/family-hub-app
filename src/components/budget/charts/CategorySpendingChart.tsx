@@ -13,9 +13,10 @@ import { BudgetDashboardData } from '@/types/budget.types';
 
 interface CategorySpendingChartProps {
   data: BudgetDashboardData;
+  onCategorySelect?: (category: string) => void;
 }
 
-const CategorySpendingChart: React.FC<CategorySpendingChartProps> = ({ data }) => {
+const CategorySpendingChart: React.FC<CategorySpendingChartProps> = ({ data, onCategorySelect }) => {
   const RADIAN = Math.PI / 180;
 
   const renderCustomizedLabel = ({
@@ -75,24 +76,34 @@ const CategorySpendingChart: React.FC<CategorySpendingChartProps> = ({ data }) =
   };
 
   return (
-    <div className="w-full h-96">
-      <div className="grid grid-cols-2 gap-8">
+    <div className="w-full">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Pie Chart */}
         <div className="flex flex-col">
-          <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
+          <ResponsiveContainer width="100%" height={400}>
+            <PieChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
               <Pie
                 data={data.categorySpending as any}
                 cx="50%"
                 cy="50%"
                 labelLine={false}
                 label={renderCustomizedLabel}
-                outerRadius={80}
+                outerRadius={100}
                 fill="#8884d8"
                 dataKey="value"
+                onClick={(entry: any) => {
+                  if (onCategorySelect && entry && entry.name) {
+                    onCategorySelect(entry.name);
+                  }
+                }}
+                cursor={onCategorySelect ? 'pointer' : 'default'}
               >
                 {data.categorySpending.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.color} />
+                  <Cell
+                    key={`cell-${index}`}
+                    fill={entry.color}
+                    style={{ cursor: onCategorySelect ? 'pointer' : 'default' }}
+                  />
                 ))}
               </Pie>
               <Tooltip content={<CustomTooltip />} />
@@ -103,9 +114,14 @@ const CategorySpendingChart: React.FC<CategorySpendingChartProps> = ({ data }) =
 
         {/* Category Details */}
         <div className="space-y-4">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Category Breakdown</h3>
+          <h3 className="text-lg font-medium text-gray-900 mb-4">Expenses Category Summary</h3>
           {data.categorySpending.map((category, index) => (
-            <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+            <button
+              key={index}
+              type="button"
+              onClick={() => onCategorySelect?.(category.name)}
+              className="flex items-center justify-between w-full p-3 bg-gray-50 rounded-lg text-left transition hover:bg-gray-100"
+            >
               <div className="flex items-center">
                 <div
                   className="w-4 h-4 rounded-full mr-3"
@@ -121,7 +137,7 @@ const CategorySpendingChart: React.FC<CategorySpendingChartProps> = ({ data }) =
                   {category.percentage.toFixed(1)}%
                 </p>
               </div>
-            </div>
+            </button>
           ))}
 
           {/* Total */}

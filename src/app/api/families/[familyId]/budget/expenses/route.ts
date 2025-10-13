@@ -62,7 +62,12 @@ export async function POST(
         category: body.category,
         budgetLimit: body.budgetLimit ? parseFloat(body.budgetLimit) : null,
         isRecurring: body.isRecurring || false,
-        paymentDate: body.paymentDate ? new Date(body.paymentDate) : null
+        recurringFrequency: body.recurringFrequency || null,
+        recurringStartDate: body.recurringStartDate ? new Date(body.recurringStartDate) : null,
+        recurringEndDate: body.recurringEndDate ? new Date(body.recurringEndDate) : null,
+        paymentDate: body.paymentDate ? new Date(body.paymentDate) : null,
+        isReceiptScan: body.isReceiptScan || false,
+        receiptScanDate: body.receiptScanDate ? new Date(body.receiptScanDate) : null
       }
     });
 
@@ -87,7 +92,9 @@ export async function PUT(request: NextRequest) {
         ...updateData,
         amount: updateData.amount ? parseFloat(updateData.amount) : undefined,
         budgetLimit: updateData.budgetLimit ? parseFloat(updateData.budgetLimit) : undefined,
-        paymentDate: updateData.paymentDate ? new Date(updateData.paymentDate) : undefined
+        paymentDate: updateData.paymentDate ? new Date(updateData.paymentDate) : undefined,
+        recurringStartDate: updateData.recurringStartDate ? new Date(updateData.recurringStartDate) : undefined,
+        recurringEndDate: updateData.recurringEndDate ? new Date(updateData.recurringEndDate) : undefined
       }
     });
 

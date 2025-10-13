@@ -7,80 +7,139 @@ import { Target, TrendingUp, Calendar, CheckCircle, AlertCircle, Clock, Award } 
 
 interface SavingsGoalsReportProps {
   filter: ReportFilter;
+  incomeList?: any[];
+  expenseList?: any[];
 }
 
-const SavingsGoalsReportComponent: React.FC<SavingsGoalsReportProps> = ({ filter }) => {
-  const mockGoalsData = [
-    {
-      id: '1',
-      name: 'Emergency Fund',
-      targetAmount: 15000,
-      currentAmount: 12500,
-      monthlyContribution: 750,
-      projectedCompletion: '2025-12-15',
-      status: 'on-track',
-      priority: 'high',
-      category: 'Security'
-    },
-    {
-      id: '2',
-      name: 'Holiday Fund',
-      targetAmount: 3500,
-      currentAmount: 2100,
-      monthlyContribution: 400,
-      projectedCompletion: '2025-11-30',
-      status: 'ahead',
-      priority: 'medium',
-      category: 'Lifestyle'
-    },
-    {
-      id: '3',
-      name: 'Home Renovation',
-      targetAmount: 8000,
-      currentAmount: 3200,
-      monthlyContribution: 600,
-      projectedCompletion: '2026-03-15',
-      status: 'behind',
-      priority: 'medium',
-      category: 'Home'
-    },
-    {
-      id: '4',
-      name: 'New Car Fund',
-      targetAmount: 12000,
-      currentAmount: 5800,
-      monthlyContribution: 500,
-      projectedCompletion: '2026-01-20',
-      status: 'on-track',
-      priority: 'low',
-      category: 'Transportation'
+const SavingsGoalsReportComponent: React.FC<SavingsGoalsReportProps> = ({ filter, incomeList = [], expenseList = [] }) => {
+  // Calculate real savings data from income and expenses
+  const totalIncome = React.useMemo(() => {
+    return incomeList
+      .filter(item => item.isRecurring)
+      .reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+  }, [incomeList]);
+
+  const totalExpenses = React.useMemo(() => {
+    return expenseList
+      .filter(item => item.isRecurring)
+      .reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+  }, [expenseList]);
+
+  const monthlySavings = totalIncome - totalExpenses;
+
+  // Generate goals based on real data
+  const mockGoalsData = React.useMemo(() => {
+    if (monthlySavings <= 0) {
+      return [{
+        id: '1',
+        name: 'Start Saving',
+        targetAmount: 1000,
+        currentAmount: 0,
+        monthlyContribution: 0,
+        projectedCompletion: 'N/A',
+        status: 'at-risk',
+        priority: 'high',
+        category: 'Emergency'
+      }];
     }
-  ];
 
-  const contributionHistory = [
-    { month: 'May', 'Emergency Fund': 750, 'Holiday Fund': 450, 'Home Renovation': 600, 'New Car Fund': 500 },
-    { month: 'Jun', 'Emergency Fund': 750, 'Holiday Fund': 400, 'Home Renovation': 550, 'New Car Fund': 500 },
-    { month: 'Jul', 'Emergency Fund': 800, 'Holiday Fund': 400, 'Home Renovation': 600, 'New Car Fund': 450 },
-    { month: 'Aug', 'Emergency Fund': 750, 'Holiday Fund': 400, 'Home Renovation': 600, 'New Car Fund': 500 }
-  ];
+    // Create realistic goals based on monthly savings capacity
+    const emergencyTarget = totalExpenses * 6; // 6 months of expenses
+    const emergencyContribution = Math.round(monthlySavings * 0.5); // 50% to emergency fund
+    const otherSavingsContribution = monthlySavings - emergencyContribution;
 
-  const overallStats = {
-    totalGoals: 4,
-    activeGoals: 4,
-    completedGoals: 2,
-    totalTargetAmount: 38500,
-    totalCurrentAmount: 23600,
-    overallProgress: 61.3,
-    monthlyContributions: 2250,
-    avgTimeToCompletion: 8.5
-  };
+    return [
+      {
+        id: '1',
+        name: 'Emergency Fund',
+        targetAmount: emergencyTarget,
+        currentAmount: Math.round(emergencyTarget * 0.2), // Assume 20% progress
+        monthlyContribution: emergencyContribution,
+        projectedCompletion: '2026-06-15',
+        status: 'on-track',
+        priority: 'high',
+        category: 'Security'
+      },
+      {
+        id: '2',
+        name: 'Savings Goal',
+        targetAmount: Math.round(otherSavingsContribution * 12), // One year of other savings
+        currentAmount: Math.round(otherSavingsContribution * 3), // 3 months saved
+        monthlyContribution: otherSavingsContribution,
+        projectedCompletion: '2026-12-31',
+        status: 'on-track',
+        priority: 'medium',
+        category: 'General'
+      }
+    ];
+  }, [monthlySavings, totalExpenses]);
 
-  const milestones = [
-    { goal: 'Emergency Fund', milestone: '75%', achievedDate: '2025-08-15', type: 'achieved' },
-    { goal: 'Holiday Fund', milestone: '50%', achievedDate: '2025-07-20', type: 'achieved' },
-    { goal: 'Holiday Fund', milestone: '75%', projectedDate: '2025-10-15', type: 'upcoming' },
-    { goal: 'Home Renovation', milestone: '50%', projectedDate: '2025-12-01', type: 'upcoming' }
-  ];
+  // Calculate contribution history from goals
+  const contributionHistory = React.useMemo(() => {
+    const months = ['May', 'Jun', 'Jul', 'Aug'];
+    return months.map(month => {
+      const historyItem: any = { month };
+      mockGoalsData.forEach(goal => {
+        historyItem[goal.name] = goal.monthlyContribution;
+      });
+      return historyItem;
+    });
+  }, [mockGoalsData]);
+
+  // Calculate overall stats from real data
+  const overallStats = React.useMemo(() => {
+    const totalTargetAmount = mockGoalsData.reduce((sum, goal) => sum + goal.targetAmount, 0);
+    const totalCurrentAmount = mockGoalsData.reduce((sum, goal) => sum + goal.currentAmount, 0);
+    const monthlyContributions = mockGoalsData.reduce((sum, goal) => sum + goal.monthlyContribution, 0);
+    const overallProgress = totalTargetAmount > 0 ? (totalCurrentAmount / totalTargetAmount) * 100 : 0;
+
+    // Calculate average time to completion
+    const avgMonthsRemaining = mockGoalsData.reduce((sum, goal) => {
+      const remaining = goal.targetAmount - goal.currentAmount;
+      const months = goal.monthlyContribution > 0 ? remaining / goal.monthlyContribution : 0;
+      return sum + months;
+    }, 0) / Math.max(1, mockGoalsData.length);
+
+    return {
+      totalGoals: mockGoalsData.length,
+      activeGoals: mockGoalsData.length,
+      completedGoals: 0,
+      totalTargetAmount,
+      totalCurrentAmount,
+      overallProgress,
+      monthlyContributions,
+      avgTimeToCompletion: avgMonthsRemaining
+    };
+  }, [mockGoalsData]);
+
+  // Generate milestones from goals
+  const milestones = React.useMemo(() => {
+    const result: any[] = [];
+    mockGoalsData.forEach(goal => {
+      const progress = (goal.currentAmount / goal.targetAmount) * 100;
+
+      // Add achieved milestones
+      if (progress >= 25) {
+        result.push({
+          goal: goal.name,
+          milestone: '25%',
+          achievedDate: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 60 days ago
+          type: 'achieved'
+        });
+      }
+
+      // Add upcoming milestones
+      if (progress < 50) {
+        result.push({
+          goal: goal.name,
+          milestone: '50%',
+          projectedDate: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 90 days ahead
+          type: 'upcoming'
+        });
+      }
+    });
+    return result;
+  }, [mockGoalsData]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(amount);

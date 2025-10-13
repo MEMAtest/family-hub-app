@@ -60,6 +60,7 @@ export interface GoalsData {
 
 interface PeopleSlice {
   people: FamilyMember[];
+  familyMembers: FamilyMember[];
   setPeople: (people: FamilyMember[]) => void;
   addPerson: (person: FamilyMember) => void;
   updatePerson: (id: string, updates: Partial<FamilyMember>) => void;
@@ -94,7 +95,7 @@ interface ViewSlice {
 
 interface BudgetSlice {
   budgetData: BudgetData | null;
-  setBudgetData: (data: BudgetData) => void;
+  setBudgetData: (data: BudgetData | null) => void;
   updateBudgetData: (updates: Partial<BudgetData>) => void;
 }
 
@@ -136,15 +137,22 @@ export type FamilyState = PeopleSlice & CalendarSlice & ViewSlice & BudgetSlice 
 
 const createPeopleSlice: StateCreator<FamilyState, [], [], PeopleSlice> = (set) => ({
   people: [],
-  setPeople: (people) => set({ people }),
-  addPerson: (person) => set((state) => ({ people: [...state.people, person] })),
+  familyMembers: [],
+  setPeople: (people) => set({ people, familyMembers: people }),
+  addPerson: (person) =>
+    set((state) => ({
+      people: [...state.people, person],
+      familyMembers: [...state.familyMembers, person],
+    })),
   updatePerson: (id, updates) =>
     set((state) => ({
       people: state.people.map((p) => (p.id === id ? { ...p, ...updates } : p)),
+      familyMembers: state.familyMembers.map((p) => (p.id === id ? { ...p, ...updates } : p)),
     })),
   deletePerson: (id) =>
     set((state) => ({
       people: state.people.filter((p) => p.id !== id),
+      familyMembers: state.familyMembers.filter((p) => p.id !== id),
     })),
 });
 
@@ -190,50 +198,7 @@ const createViewSlice: StateCreator<FamilyState, [], [], ViewSlice> = (set) => (
 });
 
 const createBudgetSlice: StateCreator<FamilyState, [], [], BudgetSlice> = (set) => ({
-  budgetData: {
-    income: {
-      monthly: {
-        salary1: { name: 'Salary 1', amount: 4500, category: 'Salary', person: 'member-1' },
-        salary2: { name: 'Salary 2', amount: 3800, category: 'Salary', person: 'member-2' },
-        child_benefit: { name: 'Child Benefit', amount: 145, category: 'Government', person: 'all' }
-      },
-      oneTime: [
-        { id: 'income1', name: 'Freelance Project', amount: 1200, date: '2025-08-15', category: 'Freelance', person: 'ade' }
-      ]
-    },
-    expenses: {
-      recurringMonthly: {
-        household: {
-          mortgage: { name: 'Mortgage (Halifax)', amount: 3500, category: 'Essential', budgetLimit: 3500 },
-          councilTax: { name: 'Council Tax', amount: 146, category: 'Essential', budgetLimit: 150 },
-          utilities: { name: 'Energy (Octopus)', amount: 319, category: 'Essential', budgetLimit: 350 },
-          water: { name: 'Water', amount: 100, category: 'Essential', budgetLimit: 120 }
-        },
-        children: {
-          childcare1: { name: 'Afterschool Care', amount: 346.50, person: 'member-4', category: 'Childcare', budgetLimit: 400 },
-          childcare2: { name: 'Nursery', amount: 1216.92, person: 'member-3', category: 'Childcare', budgetLimit: 1300 },
-          amariGerman: { name: 'German Classes', amount: 140, person: 'amari', category: 'Education', budgetLimit: 150 },
-          amariSwimming: { name: 'Swimming Lessons', amount: 36, person: 'amari', category: 'Sports', budgetLimit: 40 },
-          amariFootball: { name: 'Football Training', amount: 43, person: 'amari', category: 'Sports', budgetLimit: 50 },
-          amariDrama: { name: 'Drama Classes', amount: 35, person: 'amari', category: 'Education', budgetLimit: 40 }
-        },
-        subscriptions: {
-          netflix: { name: 'Netflix', amount: 15.99, category: 'Entertainment', budgetLimit: 20 },
-          spotify: { name: 'Spotify Family', amount: 14.99, category: 'Entertainment', budgetLimit: 20 }
-        }
-      },
-      oneTimeSpends: [
-        { id: 'spend1', name: 'School Books', amount: 85.50, date: '2025-08-01', category: 'Education', person: 'amari' },
-        { id: 'spend2', name: 'Football Boots', amount: 65.00, date: '2025-08-02', category: 'Sports', person: 'amari' }
-      ]
-    },
-    priorMonths: {
-      '2025-07': { totalIncome: 8345, totalExpenses: 6180, netIncome: 2165, categories: { household: 4065, children: 1817, subscriptions: 31, oneTime: 267 } },
-      '2025-06': { totalIncome: 8445, totalExpenses: 6350, netIncome: 2095, categories: { household: 4065, children: 1854, subscriptions: 31, oneTime: 400 } }
-    },
-    budgetLimits: { groceries: 600, entertainment: 200, clothing: 300, miscellaneous: 150, dining: 250 },
-    actualSpend: { groceries: 487.32, entertainment: 156.78, clothing: 89.99, miscellaneous: 234.50, dining: 180.25 }
-  },
+  budgetData: null,
   setBudgetData: (data) => set({ budgetData: data }),
   updateBudgetData: (updates) =>
     set((state) => ({
@@ -369,9 +334,10 @@ export const useFamilyStore = create<FamilyState>()(
     }),
     {
       name: 'family-storage',
-      version: 2, // Increment this to clear old cache
+      version: 3, // Increment this to clear old cache
       partialize: (state) => ({
         people: state.people,
+        familyMembers: state.familyMembers,
         events: state.events,
         eventTemplates: state.eventTemplates,
         budgetData: state.budgetData,
@@ -381,8 +347,8 @@ export const useFamilyStore = create<FamilyState>()(
       }),
       migrate: (persistedState: any, version: number) => {
         // If migrating from version 1 or earlier, clear old data and return fresh state
-        if (version < 2) {
-          console.log('Migrating from version', version, 'to version 2 - clearing old cache');
+        if (version < 3) {
+          console.log('Migrating from version', version, 'to version 3 - clearing old cache and syncing family members');
           return {} as any; // Return empty state to force fresh load from database
         }
         return persistedState;

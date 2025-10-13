@@ -22,12 +22,16 @@ import {
   Receipt,
   Bell,
   Menu,
-  X
+  X,
+  RefreshCw
 } from 'lucide-react';
 import ShoppingListManager from './ShoppingListManager';
 import StoreManager from './StoreManager';
 import PriceTracker from './PriceTracker';
 import ShoppingAnalytics from './ShoppingAnalytics';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { useFamilyStore } from '@/store/familyStore';
+import { AIShoppingSavings } from '@/types/shopping.types';
 
 interface ShoppingDashboardProps {
   onClose?: () => void;
@@ -36,21 +40,13 @@ interface ShoppingDashboardProps {
 }
 
 const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose, onSubViewChange, currentSubView }) => {
-  const [isMobile, setIsMobile] = useState(false);
+  const isMobile = useMediaQuery('(max-width: 1023px)');
+  const familyId = useFamilyStore((state) => state.databaseStatus.familyId);
   const [activeView, setActiveView] = useState<'dashboard' | 'lists' | 'stores' | 'prices' | 'analytics'>('dashboard');
   const [showMobileMenu, setShowMobileMenu] = useState(false);
-
-  // Mobile detection
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 1024);
-    };
-
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
+  const [aiSuggestions, setAiSuggestions] = useState<AIShoppingSavings | null>(null);
+  const [isGeneratingSuggestions, setIsGeneratingSuggestions] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
 
   // Sync with parent's subView
   React.useEffect(() => {
@@ -68,92 +64,77 @@ const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose, onSubVie
     }
   }, [activeView, onSubViewChange]);
 
-  // Mock data for dashboard widgets
-  const activeLists = [
-    {
-      id: '1',
-      name: 'Weekly Groceries',
-      store: 'Tesco',
-      itemCount: 12,
-      completedItems: 3,
-      estimatedTotal: 85.50,
-      scheduledDate: new Date('2024-01-15'),
-      priority: 'high' as const
-    },
-    {
-      id: '2',
-      name: 'Household Items',
-      store: 'ASDA',
-      itemCount: 6,
-      completedItems: 1,
-      estimatedTotal: 45.20,
-      scheduledDate: new Date('2024-01-16'),
-      priority: 'medium' as const
-    },
-    {
-      id: '3',
-      name: 'School Supplies',
-      store: 'WHSmith',
-      itemCount: 8,
-      completedItems: 0,
-      estimatedTotal: 32.90,
-      scheduledDate: new Date('2024-01-18'),
-      priority: 'low' as const
-    }
-  ];
+  // These would come from API - placeholders for future implementation
+  const activeLists: Array<{
+    id: string;
+    name: string;
+    store: string;
+    itemCount: number;
+    completedItems: number;
+    estimatedTotal: number;
+    scheduledDate: Date;
+    priority: 'high' | 'medium' | 'low';
+  }> = [];
 
   const weeklyStats = {
-    totalSpent: 127.45,
-    budgetRemaining: 72.55,
-    listsCompleted: 3,
-    totalLists: 5,
-    avgSavings: 15.30,
-    priceAlerts: 2
+    totalSpent: 0,
+    budgetRemaining: 0,
+    listsCompleted: 0,
+    totalLists: 0,
+    avgSavings: 0,
+    priceAlerts: 0
   };
 
-  const recentActivity = [
-    {
-      id: '1',
-      type: 'list_completed' as const,
-      message: 'Completed "Emergency Shopping" list',
-      timestamp: new Date('2024-01-14T10:30:00'),
-      amount: 23.45
-    },
-    {
-      id: '2',
-      type: 'price_alert' as const,
-      message: 'Price drop alert: Organic Bananas at Sainsbury\'s',
-      timestamp: new Date('2024-01-14T08:15:00'),
-      savings: 1.20
-    },
-    {
-      id: '3',
-      type: 'item_added' as const,
-      message: 'Added 5 items to "Weekly Groceries"',
-      timestamp: new Date('2024-01-13T16:45:00')
-    }
-  ];
+  const recentActivity: Array<{
+    id: string;
+    type: 'list_completed' | 'price_alert' | 'item_added';
+    message: string;
+    timestamp: Date;
+    amount?: number;
+    savings?: number;
+  }> = [];
 
-  const priceAlerts = [
-    {
-      id: '1',
-      item: 'Organic Bananas',
-      currentPrice: 2.80,
-      targetPrice: 2.50,
-      store: 'Sainsbury\'s',
-      savings: 0.30,
-      type: 'price_drop' as const
-    },
-    {
-      id: '2',
-      item: 'Washing Powder 2kg',
-      currentPrice: 8.99,
-      targetPrice: 7.50,
-      store: 'Tesco',
-      savings: 1.49,
-      type: 'price_drop' as const
+  const priceAlerts: Array<{
+    id: string;
+    item: string;
+    currentPrice: number;
+    targetPrice: number;
+    store: string;
+    savings: number;
+    type: 'price_drop';
+  }> = [];
+
+  const handleGenerateSuggestions = async () => {
+    if (!familyId) {
+      alert('Family ID not available yet. Please try again.');
+      return;
     }
-  ];
+
+    setIsGeneratingSuggestions(true);
+    setAiError(null);
+
+    try {
+      const response = await fetch(`/api/families/${familyId}/shopping-lists/ai-optimize`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({}),
+      });
+
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error || 'AI service returned an error');
+      }
+
+      setAiSuggestions(payload.optimisation);
+    } catch (error) {
+      console.error('Failed to generate shopping suggestions', error);
+      setAiError(error instanceof Error ? error.message : 'Failed to generate suggestions');
+    } finally {
+      setIsGeneratingSuggestions(false);
+    }
+  };
 
   const quickActions = [
     {
@@ -162,6 +143,17 @@ const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose, onSubVie
       description: 'Start a new shopping list',
       icon: <Plus className="w-6 h-6 text-green-500" />,
       onClick: () => setActiveView('lists')
+    },
+    {
+      id: 'ai-optimise',
+      title: 'AI Savings Suggestions',
+      description: 'Optimise stores, swaps, and budget',
+      icon: <TrendingUp className="w-6 h-6 text-purple-500" />,
+      onClick: () => {
+        if (!isGeneratingSuggestions) {
+          handleGenerateSuggestions();
+        }
+      }
     },
     {
       id: 'scan-receipt',
@@ -429,43 +421,56 @@ const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose, onSubVie
           </button>
         </div>
 
-        <div className="space-y-4">
-          {activeLists.map((list) => (
-            <div key={list.id} className="border border-gray-200 rounded-lg p-4">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center space-x-3">
-                  <h3 className="font-medium text-gray-900">{list.name}</h3>
-                  <span className={`px-2 py-1 rounded-full text-xs border ${getPriorityColor(list.priority)}`}>
-                    {list.priority}
-                  </span>
+        {activeLists.length === 0 ? (
+          <div className="text-center py-8">
+            <ShoppingCart className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+            <p className="text-gray-600 mb-3">No active shopping lists</p>
+            <button
+              onClick={() => setActiveView('lists')}
+              className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+            >
+              Create your first list →
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {activeLists.map((list) => (
+              <div key={list.id} className="border border-gray-200 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center space-x-3">
+                    <h3 className="font-medium text-gray-900">{list.name}</h3>
+                    <span className={`px-2 py-1 rounded-full text-xs border ${getPriorityColor(list.priority)}`}>
+                      {list.priority}
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-medium text-gray-900">£{list.estimatedTotal}</p>
+                    <p className="text-sm text-gray-500">{list.store}</p>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <p className="font-medium text-gray-900">£{list.estimatedTotal}</p>
-                  <p className="text-sm text-gray-500">{list.store}</p>
-                </div>
-              </div>
 
-              <div className="flex items-center justify-between text-sm text-gray-600">
-                <div className="flex items-center space-x-4">
-                  <span>{list.completedItems}/{list.itemCount} items</span>
-                  <span className="flex items-center space-x-1">
-                    <Calendar className="w-3 h-3" />
-                    <span>{list.scheduledDate.toLocaleDateString()}</span>
-                  </span>
-                </div>
-                <div className="w-24 bg-gray-200 rounded-full h-2">
-                  <div
-                    className="bg-blue-500 h-2 rounded-full"
-                    style={{ width: `${(list.completedItems / list.itemCount) * 100}%` }}
-                  ></div>
+                <div className="flex items-center justify-between text-sm text-gray-600">
+                  <div className="flex items-center space-x-4">
+                    <span>{list.completedItems}/{list.itemCount} items</span>
+                    <span className="flex items-center space-x-1">
+                      <Calendar className="w-3 h-3" />
+                      <span>{list.scheduledDate.toLocaleDateString()}</span>
+                    </span>
+                  </div>
+                  <div className="w-24 bg-gray-200 rounded-full h-2">
+                    <div
+                      className="bg-blue-500 h-2 rounded-full"
+                      style={{ width: `${(list.completedItems / list.itemCount) * 100}%` }}
+                    ></div>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Quick Actions */}
         <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">Quick Actions</h2>
@@ -488,6 +493,111 @@ const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose, onSubVie
           </div>
         </div>
 
+        {/* AI Suggestions */}
+        <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900">AI Savings Suggestions</h2>
+              <p className="text-sm text-gray-600">Optimise lists, stores, and swaps</p>
+            </div>
+            <button
+              onClick={handleGenerateSuggestions}
+              disabled={isGeneratingSuggestions}
+              className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium ${
+                isGeneratingSuggestions ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-purple-600 text-white hover:bg-purple-700'
+              }`}
+            >
+              {isGeneratingSuggestions ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" /> Working…
+                </>
+              ) : (
+                <>
+                  <TrendingUp className="w-4 h-4" /> Refresh Tips
+                </>
+              )}
+            </button>
+          </div>
+
+          {aiError && (
+            <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+              Unable to get suggestions: {aiError}
+            </div>
+          )}
+
+          {aiSuggestions ? (
+            <div className="space-y-4 text-sm text-gray-700">
+              <p>{aiSuggestions.summary}</p>
+
+              {aiSuggestions.estimatedSavings && (aiSuggestions.estimatedSavings.weekly || aiSuggestions.estimatedSavings.monthly) && (
+                <div className="flex items-center justify-between rounded-lg border border-green-200 bg-green-50 p-3 text-green-700">
+                  <div>
+                    <p className="text-xs uppercase tracking-wide font-semibold">Estimated savings</p>
+                    <p className="text-sm">
+                      {(aiSuggestions.estimatedSavings.weekly ?? null) !== null && `Weekly: £${aiSuggestions.estimatedSavings.weekly?.toFixed(2)}`}
+                      {(aiSuggestions.estimatedSavings.weekly ?? null) !== null && (aiSuggestions.estimatedSavings.monthly ?? null) !== null && ' • '}
+                      {(aiSuggestions.estimatedSavings.monthly ?? null) !== null && `Monthly: £${aiSuggestions.estimatedSavings.monthly?.toFixed(2)}`}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {aiSuggestions.listRecommendations.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-900 mb-2">List actions</h3>
+                  <ul className="space-y-2">
+                    {aiSuggestions.listRecommendations.map((rec, index) => (
+                      <li key={`${rec.listName}-${index}`} className="border border-gray-200 rounded-lg p-3">
+                        <p className="font-medium text-gray-900">{rec.listName}</p>
+                        <ul className="list-disc pl-4 text-xs text-gray-600 mt-1 space-y-1">
+                          {rec.actions.map((action, idx) => (
+                            <li key={idx}>{action}</li>
+                          ))}
+                        </ul>
+                        {rec.storeSuggestions && rec.storeSuggestions.length > 0 && (
+                          <p className="text-xs text-purple-600 mt-2">Stores: {rec.storeSuggestions.join(', ')}</p>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {aiSuggestions.substitutions.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-900 mb-2">Smart swaps</h3>
+                  <ul className="space-y-2 text-xs text-gray-600">
+                    {aiSuggestions.substitutions.map((swap, index) => (
+                      <li key={`${swap.originalItem}-${index}`} className="border border-gray-200 rounded-lg p-2">
+                        <p className="font-medium text-gray-900 text-sm">{swap.originalItem} → {swap.alternative}</p>
+                        <p>{swap.reason}</p>
+                        {(swap.savings ?? null) !== null && (
+                          <p className="text-green-600 mt-1">Est. saving £{swap.savings?.toFixed(2)}</p>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {aiSuggestions.nextActions && aiSuggestions.nextActions.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-900 mb-2">Next steps</h3>
+                  <ul className="list-disc pl-4 text-xs text-gray-600 space-y-1">
+                    {aiSuggestions.nextActions.map((action, index) => (
+                      <li key={index}>{action}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="rounded-lg border border-dashed border-gray-300 p-6 text-center text-sm text-gray-500">
+              Generate AI suggestions to see store swaps, budget tweaks, and substitution ideas tailored to your current lists.
+            </div>
+          )}
+        </div>
+
         {/* Price Alerts */}
         <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
           <div className="flex items-center justify-between mb-4">
@@ -500,25 +610,38 @@ const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose, onSubVie
             </button>
           </div>
 
-          <div className="space-y-3">
-            {priceAlerts.map((alert) => (
-              <div key={alert.id} className="flex items-center justify-between p-3 bg-orange-50 border border-orange-200 rounded-lg">
-                <div>
-                  <h3 className="font-medium text-gray-900">{alert.item}</h3>
-                  <div className="flex items-center space-x-2 text-sm text-gray-600">
-                    <span>£{alert.currentPrice}</span>
-                    <span>at {alert.store}</span>
+          {priceAlerts.length === 0 ? (
+            <div className="text-center py-8">
+              <Bell className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+              <p className="text-gray-600 mb-3">No price alerts</p>
+              <button
+                onClick={() => setActiveView('prices')}
+                className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+              >
+                Set up price tracking →
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {priceAlerts.map((alert) => (
+                <div key={alert.id} className="flex items-center justify-between p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                  <div>
+                    <h3 className="font-medium text-gray-900">{alert.item}</h3>
+                    <div className="flex items-center space-x-2 text-sm text-gray-600">
+                      <span>£{alert.currentPrice}</span>
+                      <span>at {alert.store}</span>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-medium text-green-600">
+                      Save £{alert.savings}
+                    </p>
+                    <p className="text-xs text-gray-500">Target: £{alert.targetPrice}</p>
                   </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-sm font-medium text-green-600">
-                    Save £{alert.savings}
-                  </p>
-                  <p className="text-xs text-gray-500">Target: £{alert.targetPrice}</p>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -526,29 +649,37 @@ const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose, onSubVie
       <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
         <h2 className="text-xl font-semibold text-gray-900 mb-4">Recent Activity</h2>
 
-        <div className="space-y-3">
-          {recentActivity.map((activity) => (
-            <div key={activity.id} className="flex items-center space-x-4 p-3 border border-gray-200 rounded-lg">
-              <div className="flex-shrink-0">
-                {getActivityIcon(activity.type)}
-              </div>
-              <div className="flex-1">
-                <p className="text-sm text-gray-900">{activity.message}</p>
-                <p className="text-xs text-gray-500">{formatTimeAgo(activity.timestamp)}</p>
-              </div>
-              {activity.amount && (
-                <div className="text-sm font-medium text-gray-900">
-                  £{activity.amount}
+        {recentActivity.length === 0 ? (
+          <div className="text-center py-8">
+            <Clock className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+            <p className="text-gray-600">No recent activity</p>
+            <p className="text-sm text-gray-500 mt-1">Your shopping activity will appear here</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {recentActivity.map((activity) => (
+              <div key={activity.id} className="flex items-center space-x-4 p-3 border border-gray-200 rounded-lg">
+                <div className="flex-shrink-0">
+                  {getActivityIcon(activity.type)}
                 </div>
-              )}
-              {activity.savings && (
-                <div className="text-sm font-medium text-green-600">
-                  -£{activity.savings}
+                <div className="flex-1">
+                  <p className="text-sm text-gray-900">{activity.message}</p>
+                  <p className="text-xs text-gray-500">{formatTimeAgo(activity.timestamp)}</p>
                 </div>
-              )}
-            </div>
-          ))}
-        </div>
+                {activity.amount && (
+                  <div className="text-sm font-medium text-gray-900">
+                    £{activity.amount}
+                  </div>
+                )}
+                {activity.savings && (
+                  <div className="text-sm font-medium text-green-600">
+                    -£{activity.savings}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

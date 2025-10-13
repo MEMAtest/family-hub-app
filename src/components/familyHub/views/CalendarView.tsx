@@ -30,23 +30,41 @@ export const CalendarView = () => {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 bg-white px-4 py-3">
-        <div>
-          <h2 className="text-lg font-semibold text-gray-900">Family Calendar</h2>
-          <p className="text-sm text-gray-500">Drag, drop, and manage your events in one place.</p>
+      <div className="border-b border-gray-200 bg-white px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">Family Calendar</h2>
+            <p className="text-sm text-gray-500">Drag, drop, and manage your events in one place.</p>
+          </div>
+          <div className="hidden items-center gap-2 sm:flex">
+            <button
+              onClick={openTemplateManager}
+              className="inline-flex items-center gap-2 rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50"
+            >
+              <LayoutGrid className="h-4 w-4" /> Templates
+            </button>
+            <button
+              onClick={openConflictSettings}
+              className="inline-flex items-center gap-2 rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50"
+            >
+              <Settings className="h-4 w-4" /> Conflict rules
+            </button>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:hidden">
           <button
             onClick={openTemplateManager}
-            className="inline-flex items-center gap-2 rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50"
+            className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50"
           >
-            <LayoutGrid className="h-4 w-4" /> Templates
+            <LayoutGrid className="h-4 w-4" />
+            <span>Templates</span>
           </button>
           <button
             onClick={openConflictSettings}
-            className="inline-flex items-center gap-2 rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50"
+            className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50"
           >
-            <Settings className="h-4 w-4" /> Conflict rules
+            <Settings className="h-4 w-4" />
+            <span>Conflict rules</span>
           </button>
         </div>
       </div>

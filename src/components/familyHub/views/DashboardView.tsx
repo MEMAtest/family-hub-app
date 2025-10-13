@@ -1,6 +1,7 @@
 'use client'
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import { formatDate } from '@/utils/formatDate';
 import {
   Activity,
   CalendarDays,
@@ -37,7 +38,7 @@ import { useShoppingContext } from '@/contexts/familyHub/ShoppingContext';
 import { useFamilyContext } from '@/contexts/familyHub/FamilyContext';
 import { useGoalsContext } from '@/contexts/familyHub/GoalsContext';
 import { useMealsContext } from '@/contexts/familyHub/MealsContext';
-import { stewartFleming2024To2025 } from '@/data/schoolTerms';
+import { stewartFleming2025To2026, stewartFleming2026To2027 } from '@/data/schoolTerms';
 
 const StatCard = ({
   label,
@@ -45,16 +46,20 @@ const StatCard = ({
   subtext,
   icon: Icon,
   onClick,
+  className,
 }: {
   label: string;
   value: string;
   subtext?: string;
   icon: typeof Activity;
   onClick?: () => void;
+  className?: string;
 }) => (
   <button
     onClick={onClick}
-    className={`flex flex-col gap-2 rounded-lg border border-gray-200 bg-white p-4 text-left transition hover:border-blue-300 hover:shadow ${onClick ? 'cursor-pointer' : 'cursor-default'}`}
+    className={`flex flex-col gap-2 rounded-lg border border-gray-200 bg-white p-4 text-left transition hover:border-blue-300 hover:shadow ${
+      onClick ? 'cursor-pointer' : 'cursor-default'
+    } ${className ?? ''}`}
   >
     <div className="flex items-center justify-between">
       <div>
@@ -80,6 +85,9 @@ export const DashboardView = () => {
   const { goalsData, openQuickActivityForm, personalTracking } = useGoalsContext();
   const mealPlanning = mealsContext.mealPlanning;
 
+  // School year selector state
+  const [selectedSchoolYear, setSelectedSchoolYear] = useState<'2025-2026' | '2026-2027'>('2025-2026');
+
   const upcomingEvents = useMemo(() => {
     const now = new Date();
     return events
@@ -89,8 +97,13 @@ export const DashboardView = () => {
   }, [events]);
 
   const schoolTerms = useMemo(() => {
+    // Use selected school year data
+    const baseTerms = selectedSchoolYear === '2025-2026'
+      ? stewartFleming2025To2026
+      : stewartFleming2026To2027;
+
     if (events.length === 0) {
-      return stewartFleming2024To2025;
+      return baseTerms;
     }
 
     const calendarDerived = events
@@ -112,22 +125,32 @@ export const DashboardView = () => {
         };
       });
 
-    return calendarDerived.length > 0 ? calendarDerived : stewartFleming2024To2025;
-  }, [events]);
+    return calendarDerived.length > 0 ? calendarDerived : baseTerms;
+  }, [events, selectedSchoolYear]);
 
   const budgetTotals = useMemo(() => {
     if (!budgetData) {
       return { income: 0, expenses: 0, net: 0 };
     }
 
-    const income = Object.values(budgetData.income.monthly ?? {}).reduce((sum, item: any) => sum + (item.amount || 0), 0)
-      + (budgetData.income.oneTime ?? []).reduce((sum, item: any) => sum + (item.amount || 0), 0);
+    const income = Object.values(budgetData.income.monthly ?? {})
+      .filter((item: any) => item !== null && item !== undefined)
+      .reduce((sum, item: any) => sum + (item.amount || 0), 0)
+      + (budgetData.income.oneTime ?? [])
+        .filter((item: any) => item !== null && item !== undefined)
+        .reduce((sum, item: any) => sum + (item.amount || 0), 0);
 
-    const recurringExpenses = Object.values(budgetData.expenses.recurringMonthly ?? {}).reduce((sectionSum, section: any) => {
-      return sectionSum + Object.values(section).reduce((sum: number, item: any) => sum + (item.amount || 0), 0);
-    }, 0);
+    const recurringExpenses = Object.values(budgetData.expenses.recurringMonthly ?? {})
+      .filter((section: any) => section !== null && section !== undefined)
+      .reduce((sectionSum, section: any) => {
+        return sectionSum + Object.values(section)
+          .filter((item: any) => item !== null && item !== undefined)
+          .reduce((sum: number, item: any) => sum + (item.amount || 0), 0);
+      }, 0);
 
-    const oneTimeExpenses = (budgetData.expenses.oneTimeSpends ?? []).reduce((sum, item: any) => sum + (item.amount || 0), 0);
+    const oneTimeExpenses = (budgetData.expenses.oneTimeSpends ?? [])
+      .filter((item: any) => item !== null && item !== undefined)
+      .reduce((sum, item: any) => sum + (item.amount || 0), 0);
 
     const expenses = recurringExpenses + oneTimeExpenses;
 
@@ -161,16 +184,20 @@ export const DashboardView = () => {
     if (!budgetData) return [] as Array<{ category: string; amount: number }>;
 
     const recurring = Object.entries(budgetData.expenses.recurringMonthly || {}).flatMap(([group, items]) =>
-      Object.values(items as Record<string, any>).map((item: any) => ({
-        category: item.category || group,
-        amount: item.amount || 0,
-      }))
+      Object.values(items as Record<string, any>)
+        .filter((item: any) => item !== null && item !== undefined)
+        .map((item: any) => ({
+          category: item.category || group,
+          amount: item.amount || 0,
+        }))
     );
 
-    const oneTime = (budgetData.expenses.oneTimeSpends || []).map((item: any) => ({
-      category: item.category || 'One-time',
-      amount: item.amount || 0,
-    }));
+    const oneTime = (budgetData.expenses.oneTimeSpends || [])
+      .filter((item: any) => item !== null && item !== undefined)
+      .map((item: any) => ({
+        category: item.category || 'One-time',
+        amount: item.amount || 0,
+      }));
 
     const merged = [...recurring, ...oneTime];
     const totals = new Map<string, number>();
@@ -189,39 +216,69 @@ export const DashboardView = () => {
       .slice(0, 3);
   }, [schoolTerms]);
 
+  const snapshotCards = useMemo(() => ([
+    {
+      key: 'events',
+      label: 'Upcoming Events',
+      value: String(upcomingEvents.length),
+      subtext: upcomingEvents[0]?.title ? `Next: ${upcomingEvents[0].title}` : 'All caught up',
+      icon: CalendarDays,
+      onClick: () => setView('calendar' as const),
+    },
+    {
+      key: 'budget',
+      label: 'Monthly Budget',
+      value: `£${budgetTotals.net.toLocaleString(undefined, { maximumFractionDigits: 0 })}`,
+      subtext: `Income £${budgetTotals.income.toLocaleString(undefined, { maximumFractionDigits: 0 })}`,
+      icon: DollarSign,
+      onClick: () => setView('budget' as const),
+    },
+    {
+      key: 'shopping',
+      label: 'Shopping Lists',
+      value: String(lists.length),
+      subtext: `Estimated £${lists.reduce((sum, list) => sum + (list.estimatedTotal || 0), 0).toFixed(0)}`,
+      icon: ShoppingBag,
+      onClick: () => setView('shopping' as const),
+    },
+    {
+      key: 'goals',
+      label: 'Active Goals',
+      value: String(totalGoals),
+      subtext: `Avg progress ${avgGoalProgress}%`,
+      icon: Target,
+      onClick: () => setView('goals' as const),
+    },
+  ]), [avgGoalProgress, budgetTotals, lists, setView, totalGoals, upcomingEvents]);
+
   return (
     <div className="space-y-6 p-4 lg:p-8">
       <section>
         <h2 className="text-lg font-semibold text-gray-900">Today&apos;s Snapshot</h2>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <StatCard
-            label="Upcoming Events"
-            value={String(upcomingEvents.length)}
-            subtext={upcomingEvents[0]?.title ? `Next: ${upcomingEvents[0].title}` : 'All caught up'}
-            icon={CalendarDays}
-            onClick={() => setView('calendar')}
-          />
-          <StatCard
-            label="Monthly Budget"
-            value={`£${budgetTotals.net.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
-            subtext={`Income £${budgetTotals.income.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
-            icon={DollarSign}
-            onClick={() => setView('budget')}
-          />
-          <StatCard
-            label="Shopping Lists"
-            value={String(lists.length)}
-            subtext={`Estimated £${lists.reduce((sum, list) => sum + (list.estimatedTotal || 0), 0).toFixed(0)}`}
-            icon={ShoppingBag}
-            onClick={() => setView('shopping')}
-          />
-          <StatCard
-            label="Active Goals"
-            value={String(totalGoals)}
-            subtext={`Avg progress ${avgGoalProgress}%`}
-            icon={Target}
-            onClick={() => setView('goals')}
-          />
+        <div className="-mx-4 mt-4 flex snap-x gap-3 overflow-x-auto px-4 pb-2 sm:hidden">
+          {snapshotCards.map((card) => (
+            <StatCard
+              key={card.key}
+              label={card.label}
+              value={card.value}
+              subtext={card.subtext}
+              icon={card.icon}
+              onClick={card.onClick}
+              className="min-w-[220px] snap-start"
+            />
+          ))}
+        </div>
+        <div className="mt-4 hidden gap-3 sm:grid sm:grid-cols-2 xl:grid-cols-4">
+          {snapshotCards.map((card) => (
+            <StatCard
+              key={`grid-${card.key}`}
+              label={card.label}
+              value={card.value}
+              subtext={card.subtext}
+              icon={card.icon}
+              onClick={card.onClick}
+            />
+          ))}
         </div>
       </section>
 
@@ -283,27 +340,56 @@ export const DashboardView = () => {
 
       <section className="grid gap-6 lg:grid-cols-3">
         <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm lg:col-span-2">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between mb-4">
             <h3 className="flex items-center gap-2 text-base font-semibold text-gray-900">
               <GraduationCap className="h-5 w-5 text-purple-500" /> Stewart Fleming Term Dates
             </h3>
-            <span className="text-xs uppercase tracking-wide text-gray-400">Updated for 2024/25</span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setSelectedSchoolYear('2025-2026')}
+                className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                  selectedSchoolYear === '2025-2026'
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                2025/26
+              </button>
+              <button
+                onClick={() => setSelectedSchoolYear('2026-2027')}
+                className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                  selectedSchoolYear === '2026-2027'
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                2026/27
+              </button>
+            </div>
           </div>
-          <div className="mt-4 grid gap-4 md:grid-cols-2">
-            {upcomingSchoolHighlights.map((term) => (
-              <div key={term.name} className="dashboard-widget p-4">
-                <p className="text-sm font-semibold text-gray-900">{term.name}</p>
-                <p className="text-xs text-gray-500 mt-1">
-                  {term.end ? `${term.start} → ${term.end}` : term.start}
+          <div className="grid gap-4 md:grid-cols-2">
+            {upcomingSchoolHighlights.length === 0 ? (
+              <div className="col-span-2 text-center py-8">
+                <p className="text-sm text-gray-500">
+                  All term dates for {selectedSchoolYear} have passed
                 </p>
-                {term.description && (
-                  <p className="mt-2 text-xs text-gray-500">{term.description}</p>
-                )}
-                <div className="mt-3 inline-flex items-center rounded-full bg-purple-50 px-3 py-1 text-xs font-medium text-purple-700">
-                  <BookOpen className="mr-1 h-4 w-4" /> {term.type.replace('-', ' ')}
-                </div>
               </div>
-            ))}
+            ) : (
+              upcomingSchoolHighlights.map((term) => (
+                <div key={term.name} className="dashboard-widget p-4">
+                  <p className="text-sm font-semibold text-gray-900">{term.name}</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {term.end ? `${term.start} → ${term.end}` : term.start}
+                  </p>
+                  {term.description && (
+                    <p className="mt-2 text-xs text-gray-500">{term.description}</p>
+                  )}
+                  <div className="mt-3 inline-flex items-center rounded-full bg-purple-50 px-3 py-1 text-xs font-medium text-purple-700">
+                    <BookOpen className="mr-1 h-4 w-4" /> {term.type.replace('-', ' ')}
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
 
@@ -380,19 +466,39 @@ export const DashboardView = () => {
       <section className="grid gap-6 xl:grid-cols-3">
         <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm xl:col-span-2">
           <h3 className="flex items-center gap-2 text-base font-semibold text-gray-900">
-            <PieChart className="h-5 w-5 text-blue-500" /> Budget by category
+            <BarChart3 className="h-5 w-5 text-blue-500" /> Budget Overview
           </h3>
           <div className="mt-4 h-64">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={budgetCategorySeries}>
+              <BarChart data={[
+                { name: 'Income', amount: budgetTotals.income, fill: '#10B981' },
+                { name: 'Expenses', amount: budgetTotals.expenses, fill: '#EF4444' },
+                { name: 'Net', amount: budgetTotals.net, fill: budgetTotals.net >= 0 ? '#3B82F6' : '#F59E0B' }
+              ]}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-                <XAxis dataKey="category" tick={{ fontSize: 12 }} />
-                <YAxis tickFormatter={(value) => `£${value}`} width={70} />
-                <Tooltip formatter={(value: number) => `£${value.toFixed(2)}`} />
+                <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                <YAxis tickFormatter={(value) => `£${value.toLocaleString()}`} width={80} />
+                <Tooltip formatter={(value: number) => `£${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Bar dataKey="amount" fill="#2563eb" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="amount" radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
+          </div>
+          <div className="mt-4 grid grid-cols-3 gap-4 text-sm">
+            <div className="rounded-lg bg-green-50 p-3 border border-green-200">
+              <p className="text-xs text-green-700 font-medium">Total Income</p>
+              <p className="text-lg font-semibold text-green-900">£{budgetTotals.income.toLocaleString()}</p>
+            </div>
+            <div className="rounded-lg bg-red-50 p-3 border border-red-200">
+              <p className="text-xs text-red-700 font-medium">Total Expenses</p>
+              <p className="text-lg font-semibold text-red-900">£{budgetTotals.expenses.toLocaleString()}</p>
+            </div>
+            <div className={`rounded-lg p-3 border ${budgetTotals.net >= 0 ? 'bg-blue-50 border-blue-200' : 'bg-amber-50 border-amber-200'}`}>
+              <p className={`text-xs font-medium ${budgetTotals.net >= 0 ? 'text-blue-700' : 'text-amber-700'}`}>Net Income</p>
+              <p className={`text-lg font-semibold ${budgetTotals.net >= 0 ? 'text-blue-900' : 'text-amber-900'}`}>
+                £{budgetTotals.net.toLocaleString()}
+              </p>
+            </div>
           </div>
         </div>
 
@@ -405,7 +511,7 @@ export const DashboardView = () => {
               <div key={activity.id} className="rounded-lg border border-gray-100 px-3 py-2">
                 <p className="font-medium text-gray-900">{activity.type}</p>
                 <p className="text-xs text-gray-500">
-                  {new Date(activity.date).toLocaleDateString()} • {activity.duration} mins • {activity.intensity}
+                  {formatDate(activity.date)} • {activity.duration} mins • {activity.intensity}
                 </p>
                 {activity.notes && <p className="mt-1 text-xs text-gray-400">{activity.notes}</p>}
               </div>
@@ -443,7 +549,7 @@ export const DashboardView = () => {
             {upcomingMeals.map((meal) => (
               <li key={meal.date} className="rounded-lg border border-gray-100 px-3 py-2">
                 <p className="font-medium text-gray-900">{meal.name || 'Family meal'}</p>
-                <p className="text-xs text-gray-500">{new Date(meal.date).toLocaleDateString()}</p>
+                <p className="text-xs text-gray-500">{formatDate(meal.date)}</p>
               </li>
             ))}
             {upcomingMeals.length === 0 && (

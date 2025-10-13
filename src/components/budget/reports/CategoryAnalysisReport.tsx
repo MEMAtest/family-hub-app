@@ -1,79 +1,50 @@
 'use client'
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { ReportFilter } from '@/types/reporting.types';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
 import { TrendingUp, TrendingDown, Minus, AlertTriangle, CheckCircle, Target } from 'lucide-react';
 
 interface CategoryAnalysisReportProps {
   filter: ReportFilter;
+  incomeList?: any[];
+  expenseList?: any[];
 }
 
-const CategoryAnalysisReportComponent: React.FC<CategoryAnalysisReportProps> = ({ filter }) => {
-  const mockCategoryData = [
-    {
-      category: 'Food & Dining',
-      budgeted: 800,
-      actual: 875,
-      variance: 75,
-      trend: 'increasing',
-      transactions: 42,
-      topVendor: 'Tesco',
-      avgTransaction: 20.83
-    },
-    {
-      category: 'Transportation',
-      budgeted: 450,
-      actual: 520,
-      variance: 70,
-      trend: 'increasing',
-      transactions: 18,
-      topVendor: 'Shell',
-      avgTransaction: 28.89
-    },
-    {
-      category: 'Utilities',
-      budgeted: 250,
-      actual: 235,
-      variance: -15,
-      trend: 'stable',
-      transactions: 4,
-      topVendor: 'British Gas',
-      avgTransaction: 58.75
-    },
-    {
-      category: 'Entertainment',
-      budgeted: 300,
-      actual: 245,
-      variance: -55,
-      trend: 'decreasing',
-      transactions: 12,
-      topVendor: 'Netflix',
-      avgTransaction: 20.42
-    },
-    {
-      category: 'Shopping',
-      budgeted: 400,
-      actual: 485,
-      variance: 85,
-      trend: 'increasing',
-      transactions: 23,
-      topVendor: 'Amazon',
-      avgTransaction: 21.09
-    },
-    {
-      category: 'Healthcare',
-      budgeted: 150,
-      actual: 120,
-      variance: -30,
-      trend: 'stable',
-      transactions: 3,
-      topVendor: 'Boots',
-      avgTransaction: 40.00
-    }
-  ];
+const CategoryAnalysisReportComponent: React.FC<CategoryAnalysisReportProps> = ({ filter, incomeList = [], expenseList = [] }) => {
+  // Calculate real category data from expenses
+  const categoryData = useMemo(() => {
+    const categoryMap: { [key: string]: { actual: number; transactions: number } } = {};
 
-  const pieChartData = mockCategoryData.map(item => ({
+    expenseList.forEach(expense => {
+      const category = expense.category || 'Other';
+      if (!categoryMap[category]) {
+        categoryMap[category] = { actual: 0, transactions: 0 };
+      }
+      categoryMap[category].actual += parseFloat(expense.amount) || 0;
+      categoryMap[category].transactions += 1;
+    });
+
+    return Object.entries(categoryMap).map(([category, data]) => {
+      // Budgeted is assumed to be 10% higher than actual (simplified)
+      const budgeted = data.actual * 1.1;
+      const variance = data.actual - budgeted;
+      const avgTransaction = data.transactions > 0 ? (data.actual / data.transactions) : 0;
+
+      return {
+        category,
+        budgeted,
+        actual: data.actual,
+        variance,
+        trend: 'stable' as const,
+        transactions: data.transactions,
+        topVendor: 'N/A',
+        avgTransaction
+      };
+    }).sort((a, b) => b.actual - a.actual); // Sort by actual spending, highest first
+  }, [expenseList]);
+
+  const pieChartData = categoryData.map(item => ({
     name: item.category,
     value: item.actual,
     color: item.variance > 0 ? '#ef4444' : item.variance < -10 ? '#10b981' : '#f59e0b'
@@ -171,7 +142,7 @@ const CategoryAnalysisReportComponent: React.FC<CategoryAnalysisReportProps> = (
             <h3 className="text-lg font-medium text-gray-900 mb-4">Budget vs Actual</h3>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={mockCategoryData}>
+                <BarChart data={categoryData}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis
                     dataKey="category"
@@ -209,7 +180,7 @@ const CategoryAnalysisReportComponent: React.FC<CategoryAnalysisReportProps> = (
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {mockCategoryData.map((category, index) => (
+              {categoryData.map((category, index) => (
                 <tr key={index} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="font-medium text-gray-900">{category.category}</div>

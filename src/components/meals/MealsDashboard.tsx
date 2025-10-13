@@ -19,49 +19,224 @@ import {
   Star,
   BarChart3,
   Menu,
-  X
+  X,
+  Check,
+  ChevronRight,
+  Home,
+  RefreshCw
 } from 'lucide-react';
 import MealPlanner from './MealPlanner';
 import RecipeManager from './RecipeManager';
 import NutritionTracker from './NutritionTracker';
+import { useFamilyStore } from '@/store/familyStore';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { AIMealPlan } from '@/types/meals.types';
 
 interface MealsDashboardProps {
   onClose?: () => void;
 }
 
+interface QuickMealLog {
+  mealName: string;
+  mealType: 'Breakfast' | 'Lunch' | 'Dinner' | 'Snack';
+  mealDate: string;
+  protein?: string;
+  carbohydrate?: string;
+  vegetable?: string;
+  estimatedCalories?: number;
+  mealNotes?: string;
+}
+
 const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
-  const [isMobile, setIsMobile] = useState(false);
+  const familyId = useFamilyStore((state) => state.databaseStatus.familyId);
+  const familyMembers = useFamilyStore((state) => state.people);
+  const isMobile = useMediaQuery('(max-width: 1023px)');
   const [activeView, setActiveView] = useState<'dashboard' | 'planner' | 'recipes' | 'nutrition'>('dashboard');
   const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [showQuickLogModal, setShowQuickLogModal] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [recentMeals, setRecentMeals] = useState<any[]>([]);
+  const [aiMealPlan, setAiMealPlan] = useState<AIMealPlan | null>(null);
+  const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
+  const [planError, setPlanError] = useState<string | null>(null);
+  const [formData, setFormData] = useState<QuickMealLog>({
+    mealName: '',
+    mealType: 'Dinner',
+    mealDate: new Date().toISOString().split('T')[0],
+    protein: '',
+    carbohydrate: '',
+    vegetable: '',
+    estimatedCalories: undefined,
+    mealNotes: ''
+  });
 
-  // Mobile detection
+  // Fetch recent meals from API
   useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 1024);
-    };
+    if (familyId) {
+      fetchRecentMeals();
+    }
+  }, [familyId]);
 
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
+  const fetchRecentMeals = async () => {
+    if (!familyId) return;
 
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
+    setIsLoading(true);
+    try {
+      const endDate = new Date().toISOString().split('T')[0];
+      const startDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-  // Mock data for dashboard widgets
-  const todaysMeals = {
-    breakfast: { name: 'Classic Pancakes', time: '8:00 AM', calories: 320 },
-    lunch: { name: 'Caesar Salad', time: '12:30 PM', calories: 280 },
-    dinner: { name: 'Spaghetti Bolognese', time: '7:00 PM', calories: 450 }
+      const response = await fetch(`/api/families/${familyId}/meals?startDate=${startDate}&endDate=${endDate}`);
+      if (response.ok) {
+        const meals = await response.json();
+        setRecentMeals(meals);
+      }
+    } catch (error) {
+      console.error('Error fetching meals:', error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
+  const handleQuickLogMeal = async () => {
+    if (!familyId || !formData.mealName) {
+      alert('Please enter a meal name');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const response = await fetch(`/api/families/${familyId}/meals`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          mealDate: formData.mealDate,
+          mealName: formData.mealName,
+          proteinSource: formData.protein || null,
+          carbohydrateSource: formData.carbohydrate || null,
+          vegetableSource: formData.vegetable || null,
+          estimatedCalories: formData.estimatedCalories || null,
+          mealNotes: formData.mealNotes || null
+        }),
+      });
+
+      if (response.ok) {
+        // Reset form and close modal
+        setFormData({
+          mealName: '',
+          mealType: 'Dinner',
+          mealDate: new Date().toISOString().split('T')[0],
+          protein: '',
+          carbohydrate: '',
+          vegetable: '',
+          estimatedCalories: undefined,
+          mealNotes: ''
+        });
+        setShowQuickLogModal(false);
+
+        // Refresh meals list
+        await fetchRecentMeals();
+      } else {
+        const errorData = await response.json();
+        alert(`Error: ${errorData.error || 'Failed to log meal'}`);
+      }
+    } catch (error) {
+      console.error('Error logging meal:', error);
+      alert('Failed to log meal. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const formatPlanDate = (isoDate: string) => {
+    try {
+      const date = new Date(`${isoDate}T00:00:00`);
+      return date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+    } catch {
+      return isoDate;
+    }
+  };
+
+  const handleGenerateMealPlan = async () => {
+    if (!familyId) {
+      alert('Family ID not available yet. Please try again shortly.');
+      return;
+    }
+
+    setIsGeneratingPlan(true);
+    setPlanError(null);
+
+    try {
+      const response = await fetch(`/api/families/${familyId}/meals/ai-plan`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({}),
+      });
+
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload.error || 'AI service returned an error');
+      }
+
+      setAiMealPlan(payload.plan);
+    } catch (error) {
+      console.error('Failed to generate AI meal plan', error);
+      setPlanError(error instanceof Error ? error.message : 'Failed to generate meal plan');
+    } finally {
+      setIsGeneratingPlan(false);
+    }
+  };
+
+  // Get today's meals from recent meals
+  const todaysMeals = {
+    breakfast: recentMeals.find(m => m.mealDate === new Date().toISOString().split('T')[0] && m.mealName.toLowerCase().includes('breakfast')),
+    lunch: recentMeals.find(m => m.mealDate === new Date().toISOString().split('T')[0] && m.mealName.toLowerCase().includes('lunch')),
+    dinner: recentMeals.find(m => m.mealDate === new Date().toISOString().split('T')[0] && (m.mealName.toLowerCase().includes('dinner') || m.mealName.toLowerCase().includes('supper')))
+  };
+
+  // Calculate week stats from actual meal data
+  const today = new Date();
+  const weekStart = new Date(today);
+  weekStart.setDate(today.getDate() - today.getDay()); // Start of week (Sunday)
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekStart.getDate() + 6); // End of week (Saturday)
+
+  const weekMeals = recentMeals.filter(meal => {
+    const mealDate = new Date(meal.mealDate);
+    return mealDate >= weekStart && mealDate <= weekEnd;
+  });
+
   const weekStats = {
-    plannedMeals: 18,
-    totalMeals: 21,
-    avgNutritionScore: 8.2,
-    estimatedCost: 145.50,
-    prepTimeTotal: 380
+    plannedMeals: weekMeals.length,
+    totalMeals: 21, // 3 meals/day * 7 days
+    avgNutritionScore: 0, // Will be calculated from nutrition tracking when implemented
+    estimatedCost: weekMeals.reduce((sum, meal) => sum + (meal.estimatedCost || 0), 0),
+    prepTimeTotal: weekMeals.reduce((sum, meal) => sum + (meal.prepTime || 0), 0)
   };
 
   const quickActions = [
+    {
+      id: 'quick-log',
+      title: 'Quick Log Meal',
+      description: 'Quickly log what you ate',
+      icon: <Plus className="w-6 h-6 text-green-500" />,
+      onClick: () => setShowQuickLogModal(true)
+    },
+    {
+      id: 'ai-plan',
+      title: 'AI Weekly Meal Plan',
+      description: 'Let AI draft the next 7 days',
+      icon: <ChefHat className="w-6 h-6 text-purple-500" />,
+      onClick: () => {
+        if (!isGeneratingPlan) {
+          handleGenerateMealPlan();
+        }
+      }
+    },
     {
       id: 'plan-today',
       title: 'Plan Today\'s Meals',
@@ -73,7 +248,7 @@ const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
       id: 'add-recipe',
       title: 'Add New Recipe',
       description: 'Add recipe to your collection',
-      icon: <Plus className="w-6 h-6 text-green-500" />,
+      icon: <Book className="w-6 h-6 text-purple-500" />,
       onClick: () => setActiveView('recipes')
     },
     {
@@ -106,21 +281,15 @@ const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
     }
   ];
 
-  const recentRecipes = [
-    { id: '1', name: 'Classic Pancakes', rating: 4.8, cookTime: 25, difficulty: 'easy' },
-    { id: '2', name: 'Chicken Caesar Salad', rating: 4.5, cookTime: 30, difficulty: 'medium' },
-    { id: '3', name: 'Spaghetti Bolognese', rating: 4.9, cookTime: 60, difficulty: 'medium' }
-  ];
+  // Recent recipes would come from API - placeholder for future implementation
+  const recentRecipes: Array<{id: string; name: string; rating: number; cookTime: number; difficulty: string}> = [];
 
+  // Nutrition highlights would come from API - placeholder for future implementation
   const nutritionHighlights = {
-    todayScore: 8.5,
-    weeklyAvg: 8.2,
-    goalProgress: 85,
-    recommendations: [
-      'Add more fiber with whole grains',
-      'Include omega-3 rich fish twice this week',
-      'Great job staying within calorie goals!'
-    ]
+    todayScore: 0,
+    weeklyAvg: 0,
+    goalProgress: 0,
+    recommendations: [] as string[]
   };
 
   const getMealIcon = (mealType: string) => {
@@ -289,15 +458,29 @@ const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
                   isMobile ? 'text-sm' : ''
                 }`}>{mealType}</span>
               </div>
-              <h3 className={`font-medium text-gray-900 ${
-                isMobile ? 'text-sm' : ''
-              }`}>{meal.name}</h3>
-              <div className={`flex items-center justify-between text-gray-600 mt-2 ${
-                isMobile ? 'text-xs' : 'text-sm'
-              }`}>
-                <span>{meal.time}</span>
-                <span>{meal.calories} cal</span>
-              </div>
+              {meal ? (
+                <>
+                  <h3 className={`font-medium text-gray-900 ${
+                    isMobile ? 'text-sm' : ''
+                  }`}>{meal.mealName}</h3>
+                  <div className={`flex items-center justify-between text-gray-600 mt-2 ${
+                    isMobile ? 'text-xs' : 'text-sm'
+                  }`}>
+                    <span>{new Date(meal.mealDate).toLocaleDateString()}</span>
+                    {meal.estimatedCalories && <span>{meal.estimatedCalories} cal</span>}
+                  </div>
+                </>
+              ) : (
+                <div className="text-center py-4">
+                  <p className="text-gray-500 text-sm mb-2">No meal logged</p>
+                  <button
+                    onClick={() => setShowQuickLogModal(true)}
+                    className="text-blue-600 hover:text-blue-800 text-xs font-medium"
+                  >
+                    + Log meal
+                  </button>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -390,7 +573,7 @@ const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
             }`} />
             <p className={`font-bold text-red-800 ${
               isMobile ? 'text-lg' : 'text-xl md:text-2xl'
-            }`}>4</p>
+            }`}>{familyMembers.length}</p>
             <p className={`text-red-600 ${
               isMobile ? 'text-xs' : 'text-sm'
             }`}>Family Size</p>
@@ -398,14 +581,122 @@ const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
               <p className="text-xs text-red-500">Active members</p>
             )}
           </div>
+      </div>
+    </div>
+
+    {/* AI Meal Plan */}
+    <div className={`bg-white border border-gray-200 rounded-lg ${
+      isMobile ? 'p-3' : 'p-3 sm:p-4 md:p-6'
+    }`}>
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h2 className={`font-semibold text-gray-900 ${
+            isMobile ? 'text-lg' : 'text-xl'
+          }`}>AI Weekly Meal Plan</h2>
+          <p className="text-sm text-gray-600">
+            Generate a 7-day meal schedule with shopping highlights
+          </p>
         </div>
+        <button
+          onClick={handleGenerateMealPlan}
+          disabled={isGeneratingPlan}
+          className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium ${
+            isGeneratingPlan ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-purple-600 text-white hover:bg-purple-700'
+          }`}
+        >
+          {isGeneratingPlan ? (
+            <>
+              <RefreshCw className="w-4 h-4 animate-spin" /> Generating…
+            </>
+          ) : (
+            <>
+              <ChefHat className="w-4 h-4" /> Generate Plan
+            </>
+          )}
+        </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Quick Actions */}
-        <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Quick Actions</h2>
-          <div className="grid grid-cols-1 gap-3">
+      {planError && (
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          Unable to generate plan: {planError}
+        </div>
+      )}
+
+      {aiMealPlan ? (
+        <div className="space-y-6">
+          <div>
+            <p className="text-sm text-gray-500">
+              Week beginning {formatPlanDate(aiMealPlan.weekStart)}
+            </p>
+            <p className="mt-2 text-gray-700 leading-relaxed">{aiMealPlan.summary}</p>
+          </div>
+
+          <div className={`grid gap-4 ${isMobile ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2'}`}>
+            {aiMealPlan.days.map((day) => (
+              <div key={day.date} className="border border-gray-200 rounded-lg p-4">
+                <p className="text-sm font-semibold text-gray-900 mb-2">
+                  {formatPlanDate(day.date)}
+                </p>
+                <div className="space-y-3 text-sm text-gray-700">
+                  {(['breakfast', 'lunch', 'dinner'] as const).map((mealKey) => {
+                    const meal = day.meals[mealKey];
+                    if (!meal) return null;
+                    return (
+                      <div key={mealKey}>
+                        <p className="font-medium text-gray-900 capitalize">{mealKey}</p>
+                        <p>{meal.name}</p>
+                        {meal.description && (
+                          <p className="text-xs text-gray-500 mt-1">{meal.description}</p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {aiMealPlan.shoppingList.length > 0 && (
+            <div>
+              <h3 className="text-sm font-semibold text-gray-900 mb-2">Shopping Highlights</h3>
+              <ul className="grid gap-2 text-sm text-gray-700 md:grid-cols-2">
+                {aiMealPlan.shoppingList.map((item, index) => (
+                  <li key={`${item.item}-${index}`} className="flex items-start gap-2">
+                    <span className="mt-1 h-2 w-2 rounded-full bg-purple-400" />
+                    <span>
+                      <span className="font-medium text-gray-900">{item.item}</span>
+                      {item.quantity && ` – ${item.quantity}`}
+                      {item.notes && <span className="block text-xs text-gray-500">{item.notes}</span>}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {aiMealPlan.tips && aiMealPlan.tips.length > 0 && (
+            <div>
+              <h3 className="text-sm font-semibold text-gray-900 mb-2">Prep & Budget Tips</h3>
+              <ul className="list-disc pl-5 text-sm text-gray-700 space-y-1">
+                {aiMealPlan.tips.map((tip, index) => (
+                  <li key={index}>{tip}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="rounded-lg border border-dashed border-gray-300 p-6 text-center text-sm text-gray-500">
+          Tap “Generate Plan” to create a personalised 7-day meal schedule with shopping list and prep tips.
+        </div>
+      )}
+    </div>
+
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      {/* Quick Actions */}
+      <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
+        <h2 className="text-xl font-semibold text-gray-900 mb-4">Quick Actions</h2>
+        <div className="grid grid-cols-1 gap-3">
             {quickActions.map((action) => (
               <button
                 key={action.id}
@@ -436,28 +727,41 @@ const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
             </button>
           </div>
 
-          <div className="space-y-3">
-            {recentRecipes.map((recipe) => (
-              <div key={recipe.id} className="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
-                <div>
-                  <h3 className="font-medium text-gray-900">{recipe.name}</h3>
-                  <div className="flex items-center space-x-4 text-sm text-gray-600">
-                    <div className="flex items-center space-x-1">
-                      <Star className="w-3 h-3 text-yellow-400 fill-current" />
-                      <span>{recipe.rating}</span>
+          {recentRecipes.length === 0 ? (
+            <div className="text-center py-8">
+              <Book className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+              <p className="text-gray-600 mb-3">No recipes yet</p>
+              <button
+                onClick={() => setActiveView('recipes')}
+                className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+              >
+                Add your first recipe →
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {recentRecipes.map((recipe) => (
+                <div key={recipe.id} className="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
+                  <div>
+                    <h3 className="font-medium text-gray-900">{recipe.name}</h3>
+                    <div className="flex items-center space-x-4 text-sm text-gray-600">
+                      <div className="flex items-center space-x-1">
+                        <Star className="w-3 h-3 text-yellow-400 fill-current" />
+                        <span>{recipe.rating}</span>
+                      </div>
+                      <div className="flex items-center space-x-1">
+                        <Clock className="w-3 h-3" />
+                        <span>{recipe.cookTime}min</span>
+                      </div>
+                      <span className={`px-2 py-1 rounded-full text-xs ${getDifficultyColor(recipe.difficulty)}`}>
+                        {recipe.difficulty}
+                      </span>
                     </div>
-                    <div className="flex items-center space-x-1">
-                      <Clock className="w-3 h-3" />
-                      <span>{recipe.cookTime}min</span>
-                    </div>
-                    <span className={`px-2 py-1 rounded-full text-xs ${getDifficultyColor(recipe.difficulty)}`}>
-                      {recipe.difficulty}
-                    </span>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -473,40 +777,57 @@ const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
           </button>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="text-center">
-            <div className="text-xl md:text-2xl font-bold text-green-600 mb-1">
-              {nutritionHighlights.todayScore}/10
-            </div>
-            <p className="text-sm text-gray-600">Today's Score</p>
+        {nutritionHighlights.todayScore === 0 && nutritionHighlights.recommendations.length === 0 ? (
+          <div className="text-center py-8">
+            <Activity className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+            <p className="text-gray-600 mb-3">No nutrition data yet</p>
+            <button
+              onClick={() => setActiveView('nutrition')}
+              className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+            >
+              Start tracking nutrition →
+            </button>
           </div>
-
-          <div className="text-center">
-            <div className="text-xl md:text-2xl font-bold text-blue-600 mb-1">
-              {nutritionHighlights.weeklyAvg}/10
-            </div>
-            <p className="text-sm text-gray-600">Weekly Average</p>
-          </div>
-
-          <div className="text-center">
-            <div className="text-xl md:text-2xl font-bold text-purple-600 mb-1">
-              {nutritionHighlights.goalProgress}%
-            </div>
-            <p className="text-sm text-gray-600">Goal Progress</p>
-          </div>
-        </div>
-
-        <div className="mt-6">
-          <h3 className="font-medium text-gray-900 mb-3">Quick Tips</h3>
-          <div className="space-y-2">
-            {nutritionHighlights.recommendations.slice(0, 2).map((rec, index) => (
-              <div key={index} className="flex items-start space-x-2 text-sm">
-                <TrendingUp className="w-4 h-4 text-green-500 mt-0.5" />
-                <span className="text-gray-700">{rec}</span>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="text-center">
+                <div className="text-xl md:text-2xl font-bold text-green-600 mb-1">
+                  {nutritionHighlights.todayScore}/10
+                </div>
+                <p className="text-sm text-gray-600">Today's Score</p>
               </div>
-            ))}
-          </div>
-        </div>
+
+              <div className="text-center">
+                <div className="text-xl md:text-2xl font-bold text-blue-600 mb-1">
+                  {nutritionHighlights.weeklyAvg}/10
+                </div>
+                <p className="text-sm text-gray-600">Weekly Average</p>
+              </div>
+
+              <div className="text-center">
+                <div className="text-xl md:text-2xl font-bold text-purple-600 mb-1">
+                  {nutritionHighlights.goalProgress}%
+                </div>
+                <p className="text-sm text-gray-600">Goal Progress</p>
+              </div>
+            </div>
+
+            {nutritionHighlights.recommendations.length > 0 && (
+              <div className="mt-6">
+                <h3 className="font-medium text-gray-900 mb-3">Quick Tips</h3>
+                <div className="space-y-2">
+                  {nutritionHighlights.recommendations.slice(0, 2).map((rec, index) => (
+                    <div key={index} className="flex items-start space-x-2 text-sm">
+                      <TrendingUp className="w-4 h-4 text-green-500 mt-0.5" />
+                      <span className="text-gray-700">{rec}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        )}
       </div>
     </div>
   );
@@ -519,6 +840,24 @@ const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
       {/* Desktop Header */}
       {!isMobile && (
         <div className="mb-8">
+          {/* Breadcrumbs */}
+          <nav className="flex items-center space-x-2 text-sm mb-4">
+            <button
+              onClick={() => onClose && onClose()}
+              className="flex items-center text-gray-500 hover:text-gray-700"
+            >
+              <Home className="w-4 h-4 mr-1" />
+              Dashboard
+            </button>
+            <ChevronRight className="w-4 h-4 text-gray-400" />
+            <span className="text-gray-900 font-medium">
+              {activeView === 'dashboard' && 'Meals'}
+              {activeView === 'planner' && 'Meal Planner'}
+              {activeView === 'recipes' && 'Recipe Manager'}
+              {activeView === 'nutrition' && 'Nutrition Tracker'}
+            </span>
+          </nav>
+
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl md:text-3xl font-light text-gray-900 mb-2">
@@ -558,6 +897,177 @@ const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
 
       {/* Mobile Menu Overlay */}
       {renderMobileMenu()}
+
+      {/* Quick Log Meal Modal */}
+      {showQuickLogModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-semibold text-gray-900">Quick Log Meal</h2>
+                <button
+                  onClick={() => setShowQuickLogModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {/* Meal Name */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Meal Name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.mealName}
+                    onChange={(e) => setFormData({ ...formData, mealName: e.target.value })}
+                    placeholder="e.g., Chicken and Rice"
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                {/* Meal Type */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Meal Type
+                  </label>
+                  <select
+                    value={formData.mealType}
+                    onChange={(e) => setFormData({ ...formData, mealType: e.target.value as any })}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="Breakfast">Breakfast</option>
+                    <option value="Lunch">Lunch</option>
+                    <option value="Dinner">Dinner</option>
+                    <option value="Snack">Snack</option>
+                  </select>
+                </div>
+
+                {/* Date */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Date
+                  </label>
+                  <input
+                    type="date"
+                    value={formData.mealDate}
+                    onChange={(e) => setFormData({ ...formData, mealDate: e.target.value })}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                {/* Optional Fields - Collapsed by default */}
+                <details className="border border-gray-200 rounded-md">
+                  <summary className="px-4 py-2 cursor-pointer font-medium text-gray-700 hover:bg-gray-50">
+                    Optional Details
+                  </summary>
+                  <div className="p-4 space-y-4 border-t border-gray-200">
+                    {/* Protein */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Protein Source
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.protein}
+                        onChange={(e) => setFormData({ ...formData, protein: e.target.value })}
+                        placeholder="e.g., Chicken, Salmon, Tofu"
+                        className="w-full border border-gray-300 rounded-md px-3 py-2"
+                      />
+                    </div>
+
+                    {/* Carbohydrate */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Carbohydrate Source
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.carbohydrate}
+                        onChange={(e) => setFormData({ ...formData, carbohydrate: e.target.value })}
+                        placeholder="e.g., Rice, Pasta, Potato"
+                        className="w-full border border-gray-300 rounded-md px-3 py-2"
+                      />
+                    </div>
+
+                    {/* Vegetable */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Vegetable Source
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.vegetable}
+                        onChange={(e) => setFormData({ ...formData, vegetable: e.target.value })}
+                        placeholder="e.g., Broccoli, Carrots"
+                        className="w-full border border-gray-300 rounded-md px-3 py-2"
+                      />
+                    </div>
+
+                    {/* Calories */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Estimated Calories
+                      </label>
+                      <input
+                        type="number"
+                        value={formData.estimatedCalories || ''}
+                        onChange={(e) => setFormData({ ...formData, estimatedCalories: e.target.value ? parseInt(e.target.value) : undefined })}
+                        placeholder="e.g., 500"
+                        className="w-full border border-gray-300 rounded-md px-3 py-2"
+                      />
+                    </div>
+
+                    {/* Notes */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Notes
+                      </label>
+                      <textarea
+                        value={formData.mealNotes}
+                        onChange={(e) => setFormData({ ...formData, mealNotes: e.target.value })}
+                        placeholder="Any additional notes..."
+                        rows={3}
+                        className="w-full border border-gray-300 rounded-md px-3 py-2"
+                      />
+                    </div>
+                  </div>
+                </details>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => setShowQuickLogModal(false)}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors"
+                  disabled={isLoading}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleQuickLogMeal}
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  disabled={isLoading || !formData.mealName}
+                >
+                  {isLoading ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-4 h-4" />
+                      Log Meal
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

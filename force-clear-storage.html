@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Clear Family Hub Storage</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #000;
+            color: #0f0;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            margin: 10px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧹 Family Hub Storage Cleaner</h1>
+    <button onclick="clearAll()">Clear All Storage</button>
+    <button onclick="checkStorage()">Check Storage</button>
+    <pre id="output"></pre>
+
+    <script>
+        function log(msg) {
+            document.getElementById('output').textContent += msg + '\n';
+        }
+
+        function clearAll() {
+            document.getElementById('output').textContent = '';
+            log('🧹 Clearing all storage...\n');
+
+            // Get all localStorage keys
+            const keys = Object.keys(localStorage);
+            log(`Found ${keys.length} localStorage keys:\n${keys.join(', ')}\n`);
+
+            // Clear everything
+            localStorage.clear();
+            sessionStorage.clear();
+
+            log('\n✅ All storage cleared!');
+            log('\n👉 Now navigate to http://localhost:3001 and refresh');
+        }
+
+        function checkStorage() {
+            document.getElementById('output').textContent = '';
+            log('📊 Current localStorage contents:\n');
+
+            const keys = Object.keys(localStorage);
+            if (keys.length === 0) {
+                log('   (empty)\n');
+            } else {
+                keys.forEach(key => {
+                    const value = localStorage.getItem(key);
+                    if (value) {
+                        const preview = value.length > 100 ? value.slice(0, 100) + '...' : value;
+                        log(`   ${key}: ${preview}\n`);
+                    }
+                });
+            }
+        }
+
+        // Auto-check on load
+        checkStorage();
+    </script>
+</body>
+</html>

@@ -37,9 +37,11 @@ import Breadcrumb from '../../common/Breadcrumb';
 
 interface AdvancedReportsDashboardProps {
   onClose?: () => void;
+  incomeList?: any[];
+  expenseList?: any[];
 }
 
-const AdvancedReportsDashboard: React.FC<AdvancedReportsDashboardProps> = ({ onClose }) => {
+const AdvancedReportsDashboard: React.FC<AdvancedReportsDashboardProps> = ({ onClose, incomeList = [], expenseList = [] }) => {
   const [activeReport, setActiveReport] = useState<string>('overview');
   const [reportFilter, setReportFilter] = useState<ReportFilter>({
     dateRange: {
@@ -55,48 +57,117 @@ const AdvancedReportsDashboard: React.FC<AdvancedReportsDashboardProps> = ({ onC
   const [showFilters, setShowFilters] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
 
-  // Mock recent insights
-  const recentInsights: BudgetInsight[] = [
-    {
-      type: 'warning',
-      title: 'Transportation Costs Rising',
-      description: 'Transportation expenses have increased 15% over the last 3 months',
-      impact: 'medium',
-      category: 'Transportation',
-      amount: 67.50,
-      actionable: true,
-      suggestedActions: ['Review fuel consumption', 'Consider carpooling options', 'Explore public transport']
-    },
-    {
-      type: 'achievement',
-      title: 'Savings Goal Progress',
-      description: 'Emergency Fund is ahead of schedule by 2 months',
-      impact: 'high',
-      category: 'Savings',
-      amount: 650,
-      actionable: false
-    },
-    {
-      type: 'opportunity',
-      title: 'Grocery Optimization',
-      description: 'Potential monthly savings of £45 identified in food category',
-      impact: 'medium',
-      category: 'Food',
-      amount: 45,
-      actionable: true,
-      suggestedActions: ['Switch to bulk buying', 'Use store loyalty programs', 'Plan weekly menus']
-    }
-  ];
+  // Generate insights from real budget data
+  const recentInsights: BudgetInsight[] = React.useMemo(() => {
+    const insights: BudgetInsight[] = [];
 
-  // Mock report stats
-  const reportStats = {
-    totalReportsGenerated: 24,
-    lastReportDate: new Date('2025-09-19'),
-    avgMonthlySavings: 2345,
-    budgetAccuracy: 87.5,
-    goalsOnTrack: 3,
-    totalGoals: 4
-  };
+    // Calculate total income and expenses
+    const totalIncome = incomeList.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+    const totalExpenses = expenseList.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+    const netSavings = totalIncome - totalExpenses;
+
+    // Insight 1: Savings rate
+    if (totalIncome > 0) {
+      const savingsRate = (netSavings / totalIncome) * 100;
+      if (savingsRate > 20) {
+        insights.push({
+          type: 'achievement',
+          title: 'Excellent Savings Rate!',
+          description: `You're saving ${savingsRate.toFixed(1)}% of your income - well above the recommended 20%`,
+          impact: 'high',
+          category: 'Savings',
+          amount: netSavings,
+          actionable: false
+        });
+      } else if (savingsRate < 10) {
+        insights.push({
+          type: 'warning',
+          title: 'Low Savings Rate',
+          description: `Current savings rate is ${savingsRate.toFixed(1)}%. Consider reducing expenses to reach 20%`,
+          impact: 'high',
+          category: 'Savings',
+          amount: totalIncome * 0.2 - netSavings,
+          actionable: true,
+          suggestedActions: ['Review non-essential expenses', 'Set up automatic savings transfers', 'Create a monthly budget']
+        });
+      }
+    }
+
+    // Insight 2: Category analysis
+    const expensesByCategory: { [key: string]: number } = {};
+    expenseList.forEach(expense => {
+      const category = expense.category || 'Other';
+      expensesByCategory[category] = (expensesByCategory[category] || 0) + (parseFloat(expense.amount) || 0);
+    });
+
+    const topCategory = Object.entries(expensesByCategory)
+      .sort(([, a], [, b]) => b - a)[0];
+
+    if (topCategory && totalExpenses > 0) {
+      const categoryPercentage = (topCategory[1] / totalExpenses) * 100;
+      if (categoryPercentage > 30) {
+        insights.push({
+          type: 'warning',
+          title: `High ${topCategory[0]} Spending`,
+          description: `${topCategory[0]} accounts for ${categoryPercentage.toFixed(1)}% of total expenses`,
+          impact: 'medium',
+          category: topCategory[0],
+          amount: topCategory[1],
+          actionable: true,
+          suggestedActions: [
+            `Review all ${topCategory[0]} expenses for potential savings`,
+            'Compare prices with alternatives',
+            'Set a budget limit for this category'
+          ]
+        });
+      }
+    }
+
+    // Insight 3: Recurring vs one-time expenses
+    const recurringExpenses = expenseList.filter(item => item.isRecurring).length;
+    const totalExpenseItems = expenseList.length;
+    if (totalExpenseItems > 0) {
+      const recurringRatio = (recurringExpenses / totalExpenseItems) * 100;
+      if (recurringRatio > 70) {
+        insights.push({
+          type: 'achievement',
+          title: 'Stable Budget Pattern',
+          description: `${recurringRatio.toFixed(0)}% of your expenses are recurring - easy to predict and plan`,
+          impact: 'low',
+          category: 'Budget',
+          amount: 0,
+          actionable: false
+        });
+      }
+    }
+
+    return insights.slice(0, 3); // Show top 3 insights
+  }, [incomeList, expenseList]);
+
+  // Calculate real report stats from actual budget data
+  const reportStats = React.useMemo(() => {
+    const totalIncome = incomeList.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+    const totalExpenses = expenseList.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+    const netSavings = totalIncome - totalExpenses;
+
+    // Calculate recurring monthly totals
+    const recurringIncome = incomeList
+      .filter(item => item.isRecurring)
+      .reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+    const recurringExpenses = expenseList
+      .filter(item => item.isRecurring)
+      .reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+    const avgMonthlySavings = recurringIncome - recurringExpenses;
+
+    return {
+      totalReportsGenerated: 24,
+      lastReportDate: new Date(),
+      avgMonthlySavings: avgMonthlySavings,
+      budgetAccuracy: totalIncome > 0 ? ((netSavings / totalIncome) * 100) : 0,
+      goalsOnTrack: 3,
+      totalGoals: 4
+    };
+  }, [incomeList, expenseList]);
 
   const reportTypes = [
     {
@@ -298,15 +369,15 @@ const AdvancedReportsDashboard: React.FC<AdvancedReportsDashboardProps> = ({ onC
       case 'overview':
         return renderOverviewDashboard();
       case 'monthly':
-        return <MonthlyBudgetReportComponent filter={reportFilter} />;
+        return <MonthlyBudgetReportComponent filter={reportFilter} incomeList={incomeList} expenseList={expenseList} />;
       case 'yearly':
-        return <YearlyFinancialSummaryComponent filter={reportFilter} />;
+        return <YearlyFinancialSummaryComponent filter={reportFilter} incomeList={incomeList} expenseList={expenseList} />;
       case 'category':
-        return <CategoryAnalysisReportComponent filter={reportFilter} />;
+        return <CategoryAnalysisReportComponent filter={reportFilter} incomeList={incomeList} expenseList={expenseList} />;
       case 'goals':
-        return <SavingsGoalsReportComponent filter={reportFilter} />;
+        return <SavingsGoalsReportComponent filter={reportFilter} incomeList={incomeList} expenseList={expenseList} />;
       case 'forecast':
-        return <ExpenseForecastComponent filter={reportFilter} />;
+        return <ExpenseForecastComponent filter={reportFilter} incomeList={incomeList} expenseList={expenseList} />;
       default:
         return renderOverviewDashboard();
     }

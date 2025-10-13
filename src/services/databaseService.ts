@@ -114,7 +114,7 @@ class DatabaseService {
             id: e.id,
             title: e.title,
             person: e.personId,
-            date: e.eventDate.split('T')[0],
+            date: e.eventDate ? e.eventDate.split('T')[0] : new Date().toISOString().split('T')[0],
             time: `${hours}:${minutes}`,
             duration: e.durationMinutes,
             location: e.location,
@@ -516,6 +516,508 @@ class DatabaseService {
   // Check if database is connected
   isConnected(): boolean {
     return this.syncEnabled && this.familyId !== null;
+  }
+
+  // =====================
+  // MEALS METHODS
+  // =====================
+
+  // Get meals for date range
+  async getMeals(startDate?: string, endDate?: string): Promise<any[]> {
+    if (!this.familyId || !this.syncEnabled) {
+      console.warn('Database not connected, returning empty meals array');
+      return [];
+    }
+
+    try {
+      let url = `${API_BASE}/${this.familyId}/meals`;
+      const params = new URLSearchParams();
+
+      if (startDate) params.append('startDate', startDate);
+      if (endDate) params.append('endDate', endDate);
+
+      if (params.toString()) {
+        url += `?${params.toString()}`;
+      }
+
+      const meals = await this.fetchAPI(url);
+      return meals || [];
+    } catch (error) {
+      console.error('Failed to fetch meals:', error);
+      return [];
+    }
+  }
+
+  // Create meal
+  async createMeal(mealData: {
+    mealDate: string;
+    mealName: string;
+    proteinSource?: string;
+    carbohydrateSource?: string;
+    vegetableSource?: string;
+    estimatedCalories?: number;
+    mealNotes?: string;
+  }): Promise<any | null> {
+    if (!this.familyId || !this.syncEnabled) {
+      console.warn('Database not connected');
+      return null;
+    }
+
+    try {
+      const meal = await this.fetchAPI(`${API_BASE}/${this.familyId}/meals`, {
+        method: 'POST',
+        body: JSON.stringify(mealData),
+      });
+
+      return meal;
+    } catch (error) {
+      console.error('Failed to create meal:', error);
+      return null;
+    }
+  }
+
+  // Update meal
+  async updateMeal(mealId: string, mealData: any): Promise<boolean> {
+    if (!this.familyId || !this.syncEnabled) {
+      console.warn('Database not connected');
+      return false;
+    }
+
+    try {
+      await this.fetchAPI(`${API_BASE}/${this.familyId}/meals/${mealId}`, {
+        method: 'PUT',
+        body: JSON.stringify(mealData),
+      });
+
+      return true;
+    } catch (error) {
+      console.error('Failed to update meal:', error);
+      return false;
+    }
+  }
+
+  // Delete meal
+  async deleteMeal(mealId: string): Promise<boolean> {
+    if (!this.familyId || !this.syncEnabled) {
+      console.warn('Database not connected');
+      return false;
+    }
+
+    try {
+      await this.fetchAPI(`${API_BASE}/${this.familyId}/meals/${mealId}`, {
+        method: 'DELETE',
+      });
+
+      return true;
+    } catch (error) {
+      console.error('Failed to delete meal:', error);
+      return false;
+    }
+  }
+
+  // Mark meal as eaten
+  async markMealAsEaten(mealId: string, isEaten: boolean = true): Promise<boolean> {
+    if (!this.familyId || !this.syncEnabled) {
+      console.warn('Database not connected');
+      return false;
+    }
+
+    try {
+      await this.fetchAPI(`${API_BASE}/${this.familyId}/meals/${mealId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ action: isEaten ? 'mark-eaten' : 'unmark-eaten' }),
+      });
+
+      return true;
+    } catch (error) {
+      console.error('Failed to mark meal as eaten:', error);
+      return false;
+    }
+  }
+
+  // ==================== GOALS METHODS ====================
+
+  // Get family goals
+  async getGoals(): Promise<any[]> {
+    if (!this.familyId || !this.syncEnabled) {
+      console.warn('Database not connected, returning empty goals array');
+      return [];
+    }
+
+    try {
+      const goals = await this.fetchAPI(`${API_BASE}/${this.familyId}/goals`);
+      return goals || [];
+    } catch (error) {
+      console.error('Failed to fetch goals:', error);
+      return [];
+    }
+  }
+
+  // Create goal
+  async createGoal(goalData: {
+    title: string;
+    description?: string;
+    type: string;
+    targetValue?: string;
+    currentProgress?: number;
+    deadline?: string;
+    participants?: string[];
+    milestones?: any[];
+  }): Promise<any | null> {
+    if (!this.familyId || !this.syncEnabled) {
+      console.warn('Database not connected');
+      return null;
+    }
+
+    try {
+      const goal = await this.fetchAPI(`${API_BASE}/${this.familyId}/goals`, {
+        method: 'POST',
+        body: JSON.stringify(goalData),
+      });
+      return goal;
+    } catch (error) {
+      console.error('Failed to create goal:', error);
+      return null;
+    }
+  }
+
+  // Update goal
+  async updateGoal(goalId: string, goalData: any): Promise<boolean> {
+    if (!this.familyId || !this.syncEnabled) {
+      return false;
+    }
+
+    try {
+      await this.fetchAPI(`${API_BASE}/${this.familyId}/goals/${goalId}`, {
+        method: 'PUT',
+        body: JSON.stringify(goalData),
+      });
+      return true;
+    } catch (error) {
+      console.error('Failed to update goal:', error);
+      return false;
+    }
+  }
+
+  // Delete goal
+  async deleteGoal(goalId: string): Promise<boolean> {
+    if (!this.familyId || !this.syncEnabled) {
+      return false;
+    }
+
+    try {
+      await this.fetchAPI(`${API_BASE}/${this.familyId}/goals/${goalId}`, {
+        method: 'DELETE',
+      });
+      return true;
+    } catch (error) {
+      console.error('Failed to delete goal:', error);
+      return false;
+    }
+  }
+
+  // Update goal progress
+  async updateGoalProgress(goalId: string, progress: number): Promise<boolean> {
+    if (!this.familyId || !this.syncEnabled) {
+      return false;
+    }
+
+    try {
+      await this.fetchAPI(`${API_BASE}/${this.familyId}/goals/${goalId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ action: 'update-progress', progress }),
+      });
+      return true;
+    } catch (error) {
+      console.error('Failed to update goal progress:', error);
+      return false;
+    }
+  }
+
+  // Add goal milestone
+  async addGoalMilestone(
+    goalId: string,
+    milestone: {
+      title: string;
+      description?: string;
+      targetDate?: string;
+    }
+  ): Promise<boolean> {
+    if (!this.familyId || !this.syncEnabled) {
+      return false;
+    }
+
+    try {
+      await this.fetchAPI(`${API_BASE}/${this.familyId}/goals/${goalId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ action: 'add-milestone', milestone }),
+      });
+      return true;
+    } catch (error) {
+      console.error('Failed to add goal milestone:', error);
+      return false;
+    }
+  }
+
+  // Complete goal milestone
+  async completeGoalMilestone(goalId: string, milestoneId: string): Promise<boolean> {
+    if (!this.familyId || !this.syncEnabled) {
+      return false;
+    }
+
+    try {
+      await this.fetchAPI(`${API_BASE}/${this.familyId}/goals/${goalId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ action: 'complete-milestone', milestone: { id: milestoneId } }),
+      });
+      return true;
+    } catch (error) {
+      console.error('Failed to complete milestone:', error);
+      return false;
+    }
+  }
+
+  // ==================== ACHIEVEMENTS METHODS ====================
+
+  // Get achievements (optionally filtered by person)
+  async getAchievements(personId?: string): Promise<any[]> {
+    if (!this.familyId || !this.syncEnabled) {
+      console.warn('Database not connected, returning empty achievements array');
+      return [];
+    }
+
+    try {
+      let url = `${API_BASE}/${this.familyId}/achievements`;
+      if (personId) {
+        url += `?personId=${personId}`;
+      }
+
+      const achievements = await this.fetchAPI(url);
+      return achievements || [];
+    } catch (error) {
+      console.error('Failed to fetch achievements:', error);
+      return [];
+    }
+  }
+
+  // Create achievement
+  async createAchievement(achievementData: {
+    personId: string;
+    title: string;
+    description?: string;
+    category: string;
+    badge?: string;
+    pointsAwarded?: number;
+    achievedDate?: string;
+  }): Promise<any | null> {
+    if (!this.familyId || !this.syncEnabled) {
+      console.warn('Database not connected');
+      return null;
+    }
+
+    try {
+      const achievement = await this.fetchAPI(`${API_BASE}/${this.familyId}/achievements`, {
+        method: 'POST',
+        body: JSON.stringify(achievementData),
+      });
+      return achievement;
+    } catch (error) {
+      console.error('Failed to create achievement:', error);
+      return null;
+    }
+  }
+
+  // Delete achievement
+  async deleteAchievement(achievementId: string): Promise<boolean> {
+    if (!this.familyId || !this.syncEnabled) {
+      return false;
+    }
+
+    try {
+      await this.fetchAPI(`${API_BASE}/${this.familyId}/achievements/${achievementId}`, {
+        method: 'DELETE',
+      });
+      return true;
+    } catch (error) {
+      console.error('Failed to delete achievement:', error);
+      return false;
+    }
+  }
+
+  // ==================== SHOPPING METHODS ====================
+
+  // Get shopping lists (optionally active only)
+  async getShoppingLists(activeOnly: boolean = false): Promise<any[]> {
+    if (!this.familyId || !this.syncEnabled) {
+      console.warn('Database not connected, returning empty shopping lists array');
+      return [];
+    }
+
+    try {
+      let url = `${API_BASE}/${this.familyId}/shopping-lists`;
+      if (activeOnly) {
+        url += '?activeOnly=true';
+      }
+
+      const lists = await this.fetchAPI(url);
+      return lists || [];
+    } catch (error) {
+      console.error('Failed to fetch shopping lists:', error);
+      return [];
+    }
+  }
+
+  // Create shopping list
+  async createShoppingList(listData: {
+    listName: string;
+    category?: string;
+    storeChain?: string;
+    customStore?: string;
+  }): Promise<any | null> {
+    if (!this.familyId || !this.syncEnabled) {
+      console.warn('Database not connected');
+      return null;
+    }
+
+    try {
+      const list = await this.fetchAPI(`${API_BASE}/${this.familyId}/shopping-lists`, {
+        method: 'POST',
+        body: JSON.stringify(listData),
+      });
+      return list;
+    } catch (error) {
+      console.error('Failed to create shopping list:', error);
+      return null;
+    }
+  }
+
+  // Update shopping list
+  async updateShoppingList(listId: string, listData: any): Promise<boolean> {
+    if (!this.familyId || !this.syncEnabled) {
+      return false;
+    }
+
+    try {
+      await this.fetchAPI(`${API_BASE}/${this.familyId}/shopping-lists/${listId}`, {
+        method: 'PUT',
+        body: JSON.stringify(listData),
+      });
+      return true;
+    } catch (error) {
+      console.error('Failed to update shopping list:', error);
+      return false;
+    }
+  }
+
+  // Delete shopping list
+  async deleteShoppingList(listId: string): Promise<boolean> {
+    if (!this.familyId || !this.syncEnabled) {
+      return false;
+    }
+
+    try {
+      await this.fetchAPI(`${API_BASE}/${this.familyId}/shopping-lists/${listId}`, {
+        method: 'DELETE',
+      });
+      return true;
+    } catch (error) {
+      console.error('Failed to delete shopping list:', error);
+      return false;
+    }
+  }
+
+  // Get shopping items for a list
+  async getShoppingItems(listId: string): Promise<any[]> {
+    if (!this.familyId || !this.syncEnabled) {
+      console.warn('Database not connected, returning empty items array');
+      return [];
+    }
+
+    try {
+      const items = await this.fetchAPI(`${API_BASE}/${this.familyId}/shopping-lists/${listId}/items`);
+      return items || [];
+    } catch (error) {
+      console.error('Failed to fetch shopping items:', error);
+      return [];
+    }
+  }
+
+  // Add item to shopping list
+  async addShoppingItem(listId: string, itemData: {
+    itemName: string;
+    estimatedPrice?: number;
+    category?: string;
+    frequency?: string;
+    personId?: string;
+  }): Promise<any | null> {
+    if (!this.familyId || !this.syncEnabled) {
+      console.warn('Database not connected');
+      return null;
+    }
+
+    try {
+      const item = await this.fetchAPI(`${API_BASE}/${this.familyId}/shopping-lists/${listId}/items`, {
+        method: 'POST',
+        body: JSON.stringify(itemData),
+      });
+      return item;
+    } catch (error) {
+      console.error('Failed to add shopping item:', error);
+      return null;
+    }
+  }
+
+  // Update shopping item
+  async updateShoppingItem(itemId: string, itemData: any): Promise<boolean> {
+    if (!this.familyId || !this.syncEnabled) {
+      return false;
+    }
+
+    try {
+      await this.fetchAPI(`/api/shopping-items/${itemId}`, {
+        method: 'PUT',
+        body: JSON.stringify(itemData),
+      });
+      return true;
+    } catch (error) {
+      console.error('Failed to update shopping item:', error);
+      return false;
+    }
+  }
+
+  // Delete shopping item
+  async deleteShoppingItem(itemId: string): Promise<boolean> {
+    if (!this.familyId || !this.syncEnabled) {
+      return false;
+    }
+
+    try {
+      await this.fetchAPI(`/api/shopping-items/${itemId}`, {
+        method: 'DELETE',
+      });
+      return true;
+    } catch (error) {
+      console.error('Failed to delete shopping item:', error);
+      return false;
+    }
+  }
+
+  // Toggle shopping item completion
+  async toggleShoppingItem(itemId: string): Promise<boolean> {
+    if (!this.familyId || !this.syncEnabled) {
+      return false;
+    }
+
+    try {
+      await this.fetchAPI(`/api/shopping-items/${itemId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ action: 'toggle-complete' }),
+      });
+      return true;
+    } catch (error) {
+      console.error('Failed to toggle shopping item:', error);
+      return false;
+    }
   }
 
   // Get connection status

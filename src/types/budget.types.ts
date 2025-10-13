@@ -21,6 +21,9 @@ export interface BudgetIncome {
   amount: number;
   category: string;
   isRecurring: boolean;
+  recurringFrequency?: 'weekly' | 'monthly' | 'yearly'; // How often it recurs
+  recurringStartDate?: Date; // When recurring starts
+  recurringEndDate?: Date; // When recurring ends (null = indefinite)
   paymentDate?: Date;
   createdAt: Date;
 }
@@ -34,6 +37,9 @@ export interface BudgetExpense {
   category: string;
   budgetLimit?: number;
   isRecurring: boolean;
+  recurringFrequency?: 'weekly' | 'monthly' | 'yearly'; // How often it recurs
+  recurringStartDate?: Date; // When recurring starts
+  recurringEndDate?: Date; // When recurring ends (null = indefinite)
   paymentDate?: Date;
   createdAt: Date;
 }
@@ -154,6 +160,9 @@ export interface IncomeFormData {
   amount: number;
   category: string;
   isRecurring: boolean;
+  recurringFrequency?: 'weekly' | 'monthly' | 'yearly';
+  recurringStartDate?: string;
+  recurringEndDate?: string; // Optional - leave empty for indefinite
   paymentDate?: string;
   personId?: string;
 }
@@ -164,6 +173,9 @@ export interface ExpenseFormData {
   category: string;
   budgetLimit?: number;
   isRecurring: boolean;
+  recurringFrequency?: 'weekly' | 'monthly' | 'yearly';
+  recurringStartDate?: string;
+  recurringEndDate?: string; // Optional - leave empty for indefinite
   paymentDate?: string;
   personId?: string;
 }

@@ -104,15 +104,18 @@ model CalendarEvent {
 
 // Budget income table
 model BudgetIncome {
-  id          String    @id @default(cuid())
-  familyId    String    @map("family_id")
-  personId    String?   @map("person_id")
-  incomeName  String    @map("income_name")
-  amount      Float
-  category    String
-  isRecurring Boolean   @default(true) @map("is_recurring")
-  paymentDate DateTime? @map("payment_date")
-  createdAt   DateTime  @default(now()) @map("created_at")
+  id                   String    @id @default(cuid())
+  familyId             String    @map("family_id")
+  personId             String?   @map("person_id")
+  incomeName           String    @map("income_name")
+  amount               Float
+  category             String
+  isRecurring          Boolean   @default(true) @map("is_recurring")
+  recurringFrequency   String?   @map("recurring_frequency") // 'weekly', 'monthly', 'yearly'
+  recurringStartDate   DateTime? @map("recurring_start_date")
+  recurringEndDate     DateTime? @map("recurring_end_date") // null = indefinite
+  paymentDate          DateTime? @map("payment_date")
+  createdAt            DateTime  @default(now()) @map("created_at")
 
   // Relations
   family Family        @relation(fields: [familyId], references: [id], onDelete: Cascade)
@@ -123,16 +126,21 @@ model BudgetIncome {
 
 // Budget expenses table
 model BudgetExpense {
-  id          String    @id @default(cuid())
-  familyId    String    @map("family_id")
-  personId    String?   @map("person_id")
-  expenseName String    @map("expense_name")
-  amount      Float
-  category    String
-  budgetLimit Float?    @map("budget_limit")
-  isRecurring Boolean   @default(true) @map("is_recurring")
-  paymentDate DateTime? @map("payment_date")
-  createdAt   DateTime  @default(now()) @map("created_at")
+  id                   String    @id @default(cuid())
+  familyId             String    @map("family_id")
+  personId             String?   @map("person_id")
+  expenseName          String    @map("expense_name")
+  amount               Float
+  category             String
+  budgetLimit          Float?    @map("budget_limit")
+  isRecurring          Boolean   @default(true) @map("is_recurring")
+  recurringFrequency   String?   @map("recurring_frequency") // 'weekly', 'monthly', 'yearly'
+  recurringStartDate   DateTime? @map("recurring_start_date")
+  recurringEndDate     DateTime? @map("recurring_end_date") // null = indefinite
+  paymentDate          DateTime? @map("payment_date")
+  isReceiptScan        Boolean   @default(false) @map("is_receipt_scan") // Track if from receipt scanner
+  receiptScanDate      DateTime? @map("receipt_scan_date") // When the receipt was scanned
+  createdAt            DateTime  @default(now()) @map("created_at")
 
   // Relations
   family Family        @relation(fields: [familyId], references: [id], onDelete: Cascade)
@@ -266,12 +274,14 @@ model MealPlan {
 
 // Shopping lists table
 model ShoppingList {
-  id        String   @id @default(cuid())
-  familyId  String   @map("family_id")
-  listName  String   @map("list_name")
-  category  String   @default("General")
-  isActive  Boolean  @default(true) @map("is_active")
-  createdAt DateTime @default(now()) @map("created_at")
+  id          String   @id @default(cuid())
+  familyId    String   @map("family_id")
+  listName    String   @map("list_name")
+  category    String   @default("General")
+  storeChain  String?  @map("store_chain") // Tesco, Morrisons, ASDA, Sainsbury's, Lidl, Aldi, Waitrose, Co-op, Iceland, Custom
+  customStore String?  @map("custom_store") // Only used when storeChain is "Custom"
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
 
   // Relations
   family Family         @relation(fields: [familyId], references: [id], onDelete: Cascade)

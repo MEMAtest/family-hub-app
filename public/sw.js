@@ -1,28 +1,172 @@
-// Family Hub Service Worker for Push Notifications
+// Family Hub Service Worker – offline caching, install promotion helpers, push notifications
 
-const CACHE_NAME = 'family-hub-v1';
-const urlsToCache = [
-  '/'
+const APP_SHELL_CACHE = 'family-hub-app-shell-v2';
+const RUNTIME_CACHE = 'family-hub-runtime-v2';
+const MEDIA_CACHE = 'family-hub-media-v2';
+const OFFLINE_URL = '/offline.html';
+
+const PRECACHE_ASSETS = [
+  '/',
+  OFFLINE_URL,
+  '/manifest.json',
+  '/icon-192x192.png',
+  '/icon-256x256.png',
+  '/icon-384x384.png',
+  '/icon-512.png',
+  '/icon-maskable-192.png',
+  '/icon-maskable-512.png'
 ];
 
-// Install event
+const APP_SHELL_URLS = new Set([
+  '/',
+  '/manifest.json',
+  '/offline.html'
+]);
+
 self.addEventListener('install', (event) => {
+  self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then((cache) => cache.addAll(urlsToCache))
+    caches.open(APP_SHELL_CACHE)
+      .then((cache) => cache.addAll(PRECACHE_ASSETS))
+      .catch((error) => console.error('[ServiceWorker] Pre-cache failed', error))
   );
 });
 
-// Fetch event for offline support
+self.addEventListener('activate', (event) => {
+  event.waitUntil((async () => {
+    const cacheKeys = await caches.keys();
+    await Promise.all(
+      cacheKeys
+        .filter((key) => ![APP_SHELL_CACHE, RUNTIME_CACHE, MEDIA_CACHE].includes(key))
+        .map((key) => caches.delete(key))
+    );
+
+    if ('navigationPreload' in self.registration) {
+      await self.registration.navigationPreload.enable();
+    }
+
+    await self.clients.claim();
+  })());
+});
+
 self.addEventListener('fetch', (event) => {
+  const { request } = event;
+
+  if (request.method !== 'GET') {
+    return;
+  }
+
+  const url = new URL(request.url);
+  const isSameOrigin = url.origin === self.location.origin;
+  const acceptHeader = request.headers.get('accept') || '';
+
+  if (request.mode === 'navigate' || (acceptHeader.includes('text/html') && isSameOrigin)) {
+    event.respondWith(handleNavigationRequest(event));
+    return;
+  }
+
+  if (isSameOrigin && (APP_SHELL_URLS.has(url.pathname) || url.pathname.startsWith('/icon'))) {
+    event.respondWith(cacheFirst(request, APP_SHELL_CACHE));
+    return;
+  }
+
+  if (isSameOrigin && url.pathname.startsWith('/_next/static/')) {
+    event.respondWith(staleWhileRevalidate(request, RUNTIME_CACHE));
+    return;
+  }
+
+  if (request.destination === 'image' || request.destination === 'font') {
+    event.respondWith(staleWhileRevalidate(request, MEDIA_CACHE, { maxEntries: 40 }));
+    return;
+  }
+
   event.respondWith(
-    caches.match(event.request)
-      .then((response) => {
-        // Return cached version or fetch from network
-        return response || fetch(event.request);
-      })
+    fetch(request).catch(() => caches.match(request))
   );
 });
+
+async function handleNavigationRequest(event) {
+  const { request } = event;
+  try {
+    const preload = await event.preloadResponse;
+    if (preload) {
+      return preload;
+    }
+
+    const networkResponse = await fetch(request);
+    const cache = await caches.open(RUNTIME_CACHE);
+    cache.put(request, networkResponse.clone());
+    return networkResponse;
+  } catch (error) {
+    const cache = await caches.open(APP_SHELL_CACHE);
+    const cachedResponse = await cache.match(request);
+    if (cachedResponse) {
+      return cachedResponse;
+    }
+    const offlineFallback = await cache.match(OFFLINE_URL);
+    if (offlineFallback) {
+      return offlineFallback;
+    }
+    throw error;
+  }
+}
+
+async function cacheFirst(request, cacheName) {
+  const cache = await caches.open(cacheName);
+  const cachedResponse = await cache.match(request);
+  if (cachedResponse) {
+    return cachedResponse;
+  }
+
+  const networkResponse = await fetch(request);
+  if (networkResponse && networkResponse.ok) {
+    cache.put(request, networkResponse.clone());
+  }
+  return networkResponse;
+}
+
+async function staleWhileRevalidate(request, cacheName, options = {}) {
+  const cache = await caches.open(cacheName);
+  const cachedResponse = await cache.match(request);
+
+  const fetchPromise = fetch(request)
+    .then((networkResponse) => {
+      if (networkResponse && networkResponse.ok) {
+        cache.put(request, networkResponse.clone());
+        if (options.maxEntries) {
+          limitCacheEntries(cache, options.maxEntries);
+        }
+      }
+      return networkResponse;
+    })
+    .catch(() => undefined);
+
+  if (cachedResponse) {
+    fetchPromise.catch(() => undefined);
+    return cachedResponse;
+  }
+
+  const networkResponse = await fetchPromise;
+  if (networkResponse) {
+    return networkResponse;
+  }
+
+  const fallback = await cache.match(request);
+  if (fallback) {
+    return fallback;
+  }
+
+  return new Response('', { status: 503, statusText: 'Service Unavailable' });
+}
+
+async function limitCacheEntries(cache, maxEntries) {
+  const keys = await cache.keys();
+  if (keys.length <= maxEntries) {
+    return;
+  }
+  await cache.delete(keys[0]);
+  return limitCacheEntries(cache, maxEntries);
+}
 
 // Push notification event
 self.addEventListener('push', (event) => {
@@ -31,8 +175,8 @@ self.addEventListener('push', (event) => {
   let notificationData = {
     title: 'Family Hub Reminder',
     body: 'You have an upcoming event',
-    icon: '/icons/calendar-icon.png',
-    badge: '/icons/badge-icon.png',
+    icon: '/icon.svg',
+    badge: '/icon.svg',
     tag: 'family-hub-reminder',
     requireInteraction: true,
     data: {}
@@ -60,13 +204,11 @@ self.addEventListener('push', (event) => {
       actions: [
         {
           action: 'view',
-          title: 'View Event',
-          icon: '/icons/view-icon.png'
+          title: 'View Event'
         },
         {
           action: 'snooze',
-          title: 'Snooze 10m',
-          icon: '/icons/snooze-icon.png'
+          title: 'Snooze 10m'
         }
       ]
     }
@@ -164,6 +306,15 @@ async function syncPendingNotifications() {
 
 // Message handler for communication with main app
 self.addEventListener('message', (event) => {
+  if (!event.data) {
+    return;
+  }
+
+  if (event.data === 'SKIP_WAITING') {
+    self.skipWaiting();
+    return;
+  }
+
   console.log('Service worker received message:', event.data);
 
   const { type, data } = event.data;
@@ -193,8 +344,8 @@ function scheduleNotification(notificationData) {
         notificationData.title,
         {
           body: notificationData.body,
-          icon: notificationData.icon || '/icons/calendar-icon.png',
-          badge: '/icons/badge-icon.png',
+          icon: notificationData.icon || '/icon.svg',
+          badge: '/icon.svg',
           tag: notificationData.tag || 'family-hub-reminder',
           data: notificationData.data,
           requireInteraction: true

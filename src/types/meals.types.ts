@@ -174,6 +174,39 @@ export interface WeeklyNutritionSummary {
   recommendations: string[];
 }
 
+export interface AIMealPlanMeal {
+  name: string;
+  description?: string;
+  calories?: number;
+  prepTimeMinutes?: number;
+  shoppingItems?: string[];
+}
+
+export interface AIMealPlanDay {
+  date: string;
+  meals: {
+    breakfast?: AIMealPlanMeal;
+    lunch?: AIMealPlanMeal;
+    dinner?: AIMealPlanMeal;
+    snacks?: Array<{ name: string; description?: string; shoppingItems?: string[] }>;
+  };
+}
+
+export interface AIMealPlanShoppingItem {
+  item: string;
+  quantity?: string;
+  notes?: string;
+}
+
+export interface AIMealPlan {
+  weekStart: string;
+  summary: string;
+  days: AIMealPlanDay[];
+  shoppingList: AIMealPlanShoppingItem[];
+  tips?: string[];
+  nutritionHighlights?: string[];
+}
+
 // Meal Suggestions & AI
 export interface MealSuggestion {
   recipe: MealRecipe;

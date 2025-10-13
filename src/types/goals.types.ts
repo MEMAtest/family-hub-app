@@ -158,6 +158,49 @@ export interface AchievementType {
   autoAwarded: boolean;
 }
 
+export interface AIGoalCoachPlan {
+  summary: string;
+  celebration?: string[];
+  focusGoal?: {
+    title: string;
+    progress: number;
+    nextStep: string;
+    encouragement?: string;
+    targetDate?: string;
+  };
+  blockers?: string[];
+  weeklyActions?: Array<{
+    title: string;
+    owner?: string;
+    dueDate?: string;
+    motivation?: string;
+  }>;
+  checkInQuestions?: string[];
+  encouragement?: string;
+}
+
+export interface AIGoalProgressSummary {
+  summary: string;
+  metrics?: Array<{
+    label: string;
+    value: string;
+    context?: string;
+  }>;
+  goalBreakdown: Array<{
+    title: string;
+    progress: number;
+    status: string;
+    highlight?: string;
+    nextStep?: string;
+  }>;
+  momentum?: {
+    improving: string[];
+    slipping: string[];
+  };
+  riskyGoals?: string[];
+  recommendations?: string[];
+}
+
 // Family & Individual Progress Tracking
 export interface FamilyProgress {
   familyId: string;

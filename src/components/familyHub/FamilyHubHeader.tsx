@@ -24,7 +24,7 @@ export const FamilyHubHeader = ({
 }: FamilyHubHeaderProps) => {
   return (
     <header className="sticky top-0 z-30 border-b border-gray-200 bg-white/80 backdrop-blur">
-      <div className="flex items-center justify-between px-4 py-3 lg:px-8">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 lg:flex-nowrap lg:px-8">
         <div className="flex items-center gap-4">
           <button
             className="rounded-md p-2 text-gray-500 hover:bg-gray-100 lg:hidden"
@@ -41,7 +41,7 @@ export const FamilyHubHeader = ({
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           <NotificationBell />
           <button className="hidden rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 lg:inline-flex">
             <Bell className="mr-2 h-4 w-4" />

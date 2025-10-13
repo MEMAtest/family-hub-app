@@ -1,6 +1,7 @@
 'use client'
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useFamilyStore } from '@/store/familyStore';
 import {
   DollarSign,
   TrendingUp,
@@ -18,7 +19,9 @@ import {
   RefreshCw,
   Menu,
   X,
-  ChevronDown
+  ChevronDown,
+  Search,
+  Receipt
 } from 'lucide-react';
 import { BudgetDashboardData, BudgetChartType } from '@/types/budget.types';
 import MonthlyOverviewChart from './charts/MonthlyOverviewChart';
@@ -34,10 +37,19 @@ import AddExpenseModal from './modals/AddExpenseModal';
 import AddSavingsGoalModal from './modals/AddSavingsGoalModal';
 import BudgetSettingsModal from './modals/BudgetSettingsModal';
 import AdvancedReportsDashboard from './reports/AdvancedReportsDashboard';
+import { AIInsightsCard } from './AIInsightsCard';
 import databaseService from '@/services/databaseService';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { filterExpenses, filterIncome } from '@/utils/budgetFilters';
+import CategoryDrilldownPanel from './modals/CategoryDrilldownPanel';
 
 const BudgetDashboard: React.FC = () => {
-  const [isMobile, setIsMobile] = useState(false)
+  // Get budget data and family ID from store
+  const budgetData = useFamilyStore((state) => state.budgetData);
+  const databaseStatus = useFamilyStore((state) => state.databaseStatus);
+  const familyId = databaseStatus.familyId;
+
+  const isMobile = useMediaQuery('(max-width: 1023px)')
   const [dashboardData, setDashboardData] = useState<BudgetDashboardData | null>(null);
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
@@ -55,39 +67,53 @@ const BudgetDashboard: React.FC = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [showAdvancedReports, setShowAdvancedReports] = useState(false);
 
-  // Lists state
+  // Lists state - derived from budgetData
   const [incomeList, setIncomeList] = useState<any[]>([]);
   const [expenseList, setExpenseList] = useState<any[]>([]);
 
-  // Mobile detection
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 1024);
-    };
-
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
+  // Search state
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [viewTab, setViewTab] = useState<'all' | 'receipt-scans'>('all');
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [showDrilldown, setShowDrilldown] = useState(false);
 
   // Load budget data from API on component mount
   useEffect(() => {
     const loadBudgetData = async () => {
       try {
-        // Get current family from localStorage or state
-        const familiesData = localStorage.getItem('families');
-        if (!familiesData) return;
+        // Use familyId from database status
+        if (!familyId) {
+          console.log('No family ID available yet');
+          return;
+        }
 
-        const families = JSON.parse(familiesData);
-        if (!families || families.length === 0) return;
+        console.log('Loading budget data for family:', familyId);
 
-        const currentFamily = families[0]; // Use first family for now
+        // Check if budgetData is already in store (loaded by useDatabaseSync)
+        if (budgetData && (budgetData.income || budgetData.expenses)) {
+          console.log('Using budget data from store');
+          // Convert store format to lists
+          const incomeItems = [
+            ...Object.values(budgetData.income?.monthly || {}),
+            ...(budgetData.income?.oneTime || [])
+          ];
+          const expenseItems = [
+            ...Object.values(budgetData.expenses?.recurringMonthly || {}),
+            ...(budgetData.expenses?.oneTimeSpends || [])
+          ];
 
-        // Fetch income and expenses from API
+          setIncomeList(incomeItems);
+          setExpenseList(expenseItems);
+          console.log('Loaded from store:', incomeItems.length, 'income,', expenseItems.length, 'expenses');
+          setIsLoading(false);
+          return;
+        }
+
+        // Fallback: Fetch from API if not in store
+        console.log('Fetching budget data from API');
         const [incomeData, expenseData] = await Promise.all([
-          fetch(`/api/families/${currentFamily.id}/budget/income`).then(res => res.json()),
-          fetch(`/api/families/${currentFamily.id}/budget/expenses`).then(res => res.json())
+          fetch(`/api/families/${familyId}/budget/income`).then(res => res.json()),
+          fetch(`/api/families/${familyId}/budget/expenses`).then(res => res.json())
         ]);
 
         if (Array.isArray(incomeData)) {
@@ -125,7 +151,7 @@ const BudgetDashboard: React.FC = () => {
     };
 
     loadBudgetData();
-  }, []);
+  }, [familyId, budgetData]); // Reload when familyId or budgetData changes
 
   // Mock data for development
   const mockData: BudgetDashboardData = {
@@ -267,6 +293,41 @@ const BudgetDashboard: React.FC = () => {
     if (savingsRate >= 20) return 'text-green-600';
     if (savingsRate >= 10) return 'text-yellow-600';
     return 'text-red-600';
+  };
+
+  // Filter expenses based on search and view tab
+  const filteredExpenses = useMemo(
+    () => filterExpenses(expenseList, searchQuery, { viewTab }),
+    [expenseList, searchQuery, viewTab]
+  );
+
+  const filteredIncome = useMemo(
+    () => filterIncome(incomeList, searchQuery),
+    [incomeList, searchQuery]
+  );
+
+  const categoryExpensesAll = useMemo(() => {
+    if (!selectedCategory) return [];
+    return expenseList.filter(
+      (expense) => (expense.category || 'Other') === selectedCategory
+    );
+  }, [expenseList, selectedCategory]);
+
+  const categoryExpensesFiltered = useMemo(() => {
+    if (!selectedCategory) return [];
+    return filteredExpenses.filter(
+      (expense) => (expense.category || 'Other') === selectedCategory
+    );
+  }, [filteredExpenses, selectedCategory]);
+
+  const handleCategorySelect = (categoryName: string) => {
+    setSelectedCategory(categoryName);
+    setShowDrilldown(true);
+  };
+
+  const closeDrilldown = () => {
+    setShowDrilldown(false);
+    setSelectedCategory(null);
   };
 
   const SelectedChart = chartComponents[activeChartType];
@@ -618,6 +679,15 @@ const BudgetDashboard: React.FC = () => {
         </div>
       </div>
 
+      {/* AI Insights Section */}
+      <div className={isMobile ? 'px-4 mb-6' : 'mb-8'}>
+        <AIInsightsCard
+          familyId={familyId || ''}
+          month={selectedMonth}
+          year={selectedYear}
+        />
+      </div>
+
       {/* Chart Selection Tabs - Desktop Only */}
       {!isMobile && (
         <div className="mb-6">
@@ -651,7 +721,64 @@ const BudgetDashboard: React.FC = () => {
           {chartTitles[activeChartType]}
         </h2>
         <div className={isMobile ? 'mobile-chart-container' : ''}>
-          <SelectedChart data={dashboardData} />
+          {activeChartType === 'category-spending' ? (
+            <CategorySpendingChart
+              data={dashboardData}
+              onCategorySelect={handleCategorySelect}
+            />
+          ) : (
+            <SelectedChart data={dashboardData} />
+          )}
+        </div>
+      </div>
+
+      {/* Search & Tabs */}
+      <div className={`mb-6 ${isMobile ? 'px-4' : ''}`}>
+        <div className="bg-white border border-gray-200 p-4 rounded-lg">
+          {/* Search Bar */}
+          <div className="relative mb-4">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search transactions by name, category, or amount..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+
+          {/* View Tabs */}
+          <div className="flex gap-2">
+            <button
+              onClick={() => setViewTab('all')}
+              className={`flex-1 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                viewTab === 'all'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              All Transactions
+            </button>
+            <button
+              onClick={() => setViewTab('receipt-scans')}
+              className={`flex-1 px-4 py-2 text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2 ${
+                viewTab === 'receipt-scans'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              <Receipt className="w-4 h-4" />
+              Receipt Scans
+            </button>
+          </div>
         </div>
       </div>
 
@@ -662,22 +789,23 @@ const BudgetDashboard: React.FC = () => {
           : 'grid-cols-1 md:grid-cols-2'
       }`}>
         {/* Income List */}
-        <div className={`bg-white border border-gray-200 ${
-          isMobile ? 'p-4 rounded-xl' : 'p-6'
-        }`}>
-          <h3 className={`font-medium text-gray-900 mb-4 flex items-center ${
-            isMobile ? 'text-base' : 'text-lg'
+        {viewTab === 'all' && (
+          <div className={`bg-white border border-gray-200 ${
+            isMobile ? 'p-4 rounded-xl' : 'p-6'
           }`}>
-            <span className="w-3 h-3 bg-green-500 rounded-full mr-2"></span>
-            Income ({incomeList.length})
-          </h3>
-          {incomeList.length === 0 ? (
+            <h3 className={`font-medium text-gray-900 mb-4 flex items-center ${
+              isMobile ? 'text-base' : 'text-lg'
+            }`}>
+              <span className="w-3 h-3 bg-green-500 rounded-full mr-2"></span>
+              Income ({filteredIncome.length})
+            </h3>
+          {filteredIncome.length === 0 ? (
             <p className={`text-gray-500 text-center ${
               isMobile ? 'py-6 text-sm' : 'py-8'
-            }`}>No income items added yet</p>
+            }`}>{searchQuery ? 'No matching income items' : 'No income items added yet'}</p>
           ) : (
             <div className={isMobile ? 'space-y-2' : 'space-y-3'}>
-              {incomeList.map((income, index) => (
+              {filteredIncome.map((income, index) => (
                 <div key={income.id || index} className={`flex justify-between items-center bg-green-50 border ${
                   isMobile ? 'p-2 rounded-lg' : 'p-3 rounded-lg'
                 }`}>
@@ -707,24 +835,31 @@ const BudgetDashboard: React.FC = () => {
             </div>
           )}
         </div>
+        )}
 
         {/* Expense List */}
         <div className={`bg-white border border-gray-200 ${
           isMobile ? 'p-4 rounded-xl' : 'p-6'
-        }`}>
+        } ${viewTab === 'receipt-scans' ? 'md:col-span-2' : ''}`}>
           <h3 className={`font-medium text-gray-900 mb-4 flex items-center ${
             isMobile ? 'text-base' : 'text-lg'
           }`}>
             <span className="w-3 h-3 bg-red-500 rounded-full mr-2"></span>
-            Expenses ({expenseList.length})
+              {viewTab === 'receipt-scans' ? 'Receipt Scans' : 'Expenses'} ({filteredExpenses.length})
           </h3>
-          {expenseList.length === 0 ? (
+          {filteredExpenses.length === 0 ? (
             <p className={`text-gray-500 text-center ${
               isMobile ? 'py-6 text-sm' : 'py-8'
-            }`}>No expense items added yet</p>
+            }`}>
+              {viewTab === 'receipt-scans'
+                ? 'No receipt scans yet. Use the "Scan Receipt" button when adding expenses.'
+                : searchQuery
+                  ? 'No matching expense items'
+                  : 'No expense items added yet'}
+            </p>
           ) : (
             <div className={isMobile ? 'space-y-2' : 'space-y-3'}>
-              {expenseList.map((expense, index) => (
+              {filteredExpenses.map((expense, index) => (
                 <div key={expense.id || index} className={`flex justify-between items-center bg-red-50 border ${
                   isMobile ? 'p-2 rounded-lg' : 'p-3 rounded-lg'
                 }`}>
@@ -755,6 +890,15 @@ const BudgetDashboard: React.FC = () => {
           )}
         </div>
       </div>
+
+      <CategoryDrilldownPanel
+        category={selectedCategory}
+        isOpen={showDrilldown && !!selectedCategory}
+        onClose={closeDrilldown}
+        matchingExpenses={categoryExpensesFiltered}
+        allExpenses={categoryExpensesAll}
+        isMobile={isMobile}
+      />
 
       {/* Modals */}
       <AddIncomeModal

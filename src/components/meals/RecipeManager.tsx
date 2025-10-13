@@ -85,7 +85,7 @@ const RecipeManager: React.FC<RecipeManagerProps> = ({ onClose }) => {
         sugar: 3,
         sodium: 380
       },
-      imageUrl: '/images/meals/pancakes.jpg',
+      imageUrl: '',
       source: 'Family Recipe',
       tags: ['breakfast', 'family-friendly', 'quick', 'weekend'],
       rating: 4.8,
@@ -131,6 +131,7 @@ const RecipeManager: React.FC<RecipeManagerProps> = ({ onClose }) => {
         sugar: 8,
         sodium: 480
       },
+      imageUrl: '',
       tags: ['lunch', 'healthy', 'vegetarian', 'meal-prep'],
       rating: 4.6,
       isFavorite: false,
@@ -176,6 +177,7 @@ const RecipeManager: React.FC<RecipeManagerProps> = ({ onClose }) => {
         sugar: 6,
         sodium: 680
       },
+      imageUrl: '',
       tags: ['dinner', 'comfort-food', 'slow-cooker', 'hearty'],
       rating: 4.9,
       isFavorite: true,
@@ -185,13 +187,38 @@ const RecipeManager: React.FC<RecipeManagerProps> = ({ onClose }) => {
 
   useEffect(() => {
     setIsLoading(true);
-    // Simulate API call
-    setTimeout(() => {
+    // Load recipes from localStorage or use mock data
+    const savedRecipes = localStorage.getItem('family-recipes');
+    if (savedRecipes) {
+      try {
+        const parsedRecipes = JSON.parse(savedRecipes);
+        // Convert string dates back to Date objects
+        const recipesWithDates = parsedRecipes.map((r: any) => ({
+          ...r,
+          createdAt: new Date(r.createdAt)
+        }));
+        setRecipes(recipesWithDates);
+        setFilteredRecipes(recipesWithDates);
+      } catch (error) {
+        console.error('Error loading recipes from localStorage:', error);
+        setRecipes(mockRecipes);
+        setFilteredRecipes(mockRecipes);
+      }
+    } else {
+      // First time - use mock recipes
       setRecipes(mockRecipes);
       setFilteredRecipes(mockRecipes);
-      setIsLoading(false);
-    }, 1000);
+      localStorage.setItem('family-recipes', JSON.stringify(mockRecipes));
+    }
+    setIsLoading(false);
   }, []);
+
+  // Save recipes to localStorage whenever they change
+  useEffect(() => {
+    if (recipes.length > 0) {
+      localStorage.setItem('family-recipes', JSON.stringify(recipes));
+    }
+  }, [recipes]);
 
   useEffect(() => {
     filterAndSortRecipes();

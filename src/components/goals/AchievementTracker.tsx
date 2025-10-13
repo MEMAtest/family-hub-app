@@ -39,7 +39,7 @@ interface AchievementTrackerProps {
     id: string;
     name: string;
     color: string;
-    avatar: string;
+    icon: string;
   }>;
 }
 
@@ -143,7 +143,7 @@ const AchievementTracker: React.FC<AchievementTrackerProps> = ({
                   className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg"
                   style={{ backgroundColor: member.color }}
                 >
-                  {member.avatar}
+                  {member.icon}
                 </div>
               </div>
 
@@ -238,7 +238,7 @@ const AchievementTracker: React.FC<AchievementTrackerProps> = ({
                   className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold"
                   style={{ backgroundColor: person?.color }}
                 >
-                  {person?.avatar}
+                  {person?.icon}
                 </div>
                 <div>
                   <h3 className="font-semibold text-gray-900">{achievement.title}</h3>
@@ -352,7 +352,7 @@ const AchievementTracker: React.FC<AchievementTrackerProps> = ({
                         className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-sm"
                         style={{ backgroundColor: person?.color }}
                       >
-                        {person?.avatar}
+                        {person?.icon}
                       </div>
                       <span className="text-sm text-gray-900">{person?.name}</span>
                     </div>

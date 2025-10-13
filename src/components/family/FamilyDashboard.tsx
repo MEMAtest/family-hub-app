@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Users,
   Plus,
@@ -40,13 +40,14 @@ import { FamilyMemberForm } from './FamilyMemberForm';
 import { FamilySettings } from './FamilySettings';
 import { FamilyTimeline } from './FamilyTimeline';
 import Breadcrumb from '../common/Breadcrumb';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 
 interface FamilyDashboardProps {
   onClose?: () => void;
 }
 
 const FamilyDashboard: React.FC<FamilyDashboardProps> = ({ onClose }) => {
-  const [isMobile, setIsMobile] = useState(false)
+  const isMobile = useMediaQuery('(max-width: 767px)');
   const [activeView, setActiveView] = useState<'dashboard' | 'members' | 'settings' | 'timeline' | 'analytics'>('dashboard');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRole, setFilterRole] = useState<string>('all');
@@ -54,17 +55,6 @@ const FamilyDashboard: React.FC<FamilyDashboardProps> = ({ onClose }) => {
   const [selectedMember, setSelectedMember] = useState<string | null>(null);
   const [showMemberDetails, setShowMemberDetails] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
-
-  // Detect mobile device
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768)
-    }
-
-    checkMobile()
-    window.addEventListener('resize', checkMobile)
-    return () => window.removeEventListener('resize', checkMobile)
-  }, [])
 
   // Mock family data
   const familyInfo = {

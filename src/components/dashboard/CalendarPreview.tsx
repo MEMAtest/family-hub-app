@@ -2,6 +2,7 @@ import React from 'react'
 import { Calendar, Clock, MapPin, Users, ChevronRight } from 'lucide-react'
 import { CalendarEvent } from '@/types'
 import { formatEventDate } from '@/utils/dateUtils'
+import { formatDate } from '@/utils/formatDate'
 
 interface CalendarPreviewProps {
   events: CalendarEvent[]
@@ -92,7 +93,7 @@ export default function CalendarPreview({ events, onViewCalendar }: CalendarPrev
               <div className="flex-shrink-0 text-center">
                 <div className="w-12 h-12 bg-blue-50 rounded-lg flex flex-col items-center justify-center border border-blue-100">
                   <span className="text-xs font-medium text-blue-600">
-                    {new Date(event.date).toLocaleDateString('en-US', { month: 'short' })}
+                    {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][new Date(event.date).getMonth()]}
                   </span>
                   <span className="text-sm font-bold text-blue-700">
                     {new Date(event.date).getDate()}

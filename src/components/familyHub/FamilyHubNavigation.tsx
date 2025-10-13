@@ -41,6 +41,7 @@ export const FamilyHubNavigation = ({
             className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
               isActive ? 'bg-blue-600 text-white shadow' : 'text-gray-600 hover:bg-gray-100'
             }`}
+            aria-current={isActive ? 'page' : undefined}
           >
             <Icon className="h-4 w-4" />
             <span>{label}</span>
@@ -50,10 +51,33 @@ export const FamilyHubNavigation = ({
     </nav>
   );
 
+  const renderBottomNav = () => (
+    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white/95 py-2 shadow-lg backdrop-blur lg:hidden">
+      <div className="mx-auto flex max-w-4xl items-center gap-2 overflow-x-auto px-3">
+        {items.map(({ id, label, icon: Icon }) => {
+          const isActive = activeId === id;
+          return (
+            <button
+              key={`bottom-${id}`}
+              onClick={() => onSelect(id)}
+              className={`flex min-w-[84px] flex-col items-center gap-1 rounded-xl px-3 py-2 text-xs font-medium transition ${
+                isActive ? 'bg-blue-50 text-blue-600 shadow-inner' : 'text-gray-500 hover:bg-gray-100'
+              }`}
+              aria-current={isActive ? 'page' : undefined}
+            >
+              <Icon className="h-5 w-5" />
+              <span className="truncate">{label}</span>
+            </button>
+          );
+        })}
+      </div>
+    </nav>
+  );
+
   return (
     <>
       {/* Desktop */}
-      <aside className="hidden lg:flex w-64 flex-col border-r border-gray-200 bg-white p-4">
+      <aside className="hidden lg:flex w-64 flex-col border-r border-gray-200 bg-white p-4 sticky top-0 h-screen overflow-y-auto">
         <div className="flex items-center justify-between mb-6">
           <div>
             <p className="text-xs uppercase tracking-wide text-gray-500">Family Hub</p>
@@ -105,6 +129,9 @@ export const FamilyHubNavigation = ({
           </div>
         </Dialog>
       </Transition>
+
+      {/* Mobile bottom navigation */}
+      {!isMobileOpen && renderBottomNav()}
     </>
   );
 };

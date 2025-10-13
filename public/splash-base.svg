@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1170 2532" preserveAspectRatio="none">
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1E3A8A"/>
+      <stop offset="50%" stop-color="#2563EB"/>
+      <stop offset="100%" stop-color="#7C3AED"/>
+    </linearGradient>
+    <linearGradient id="orbGradient" x1="0%" y1="0%" x2="70%" y2="100%">
+      <stop offset="0%" stop-color="#93C5FD" stop-opacity="0.85"/>
+      <stop offset="100%" stop-color="#C4B5FD" stop-opacity="0.25"/>
+    </linearGradient>
+  </defs>
+  <rect width="1170" height="2532" fill="url(#bgGradient)"/>
+  <circle cx="935" cy="290" r="280" fill="url(#orbGradient)"/>
+  <circle cx="220" cy="360" r="180" fill="url(#orbGradient)" opacity="0.45"/>
+  <circle cx="300" cy="2100" r="260" fill="url(#orbGradient)" opacity="0.35"/>
+  <g transform="translate(585 1080)">
+    <path d="M-120 -200h240c22 0 40 18 40 40v340c0 22-18 40-40 40h-240c-22 0-40-18-40-40v-340c0-22 18-40 40-40z" fill="rgba(255,255,255,0.16)" />
+  </g>
+  <g font-family="'Inter', 'Segoe UI', system-ui, sans-serif" text-anchor="middle">
+    <text x="585" y="1290" font-size="120" fill="#F8FAFC" font-weight="700">Family Hub</text>
+    <text x="585" y="1405" font-size="42" fill="#DBEAFE" opacity="0.9">Organise family life with ease</text>
+  </g>
+</svg>

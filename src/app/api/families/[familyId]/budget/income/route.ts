@@ -61,6 +61,9 @@ export async function POST(
         amount: parseFloat(body.amount),
         category: body.category,
         isRecurring: body.isRecurring || false,
+        recurringFrequency: body.recurringFrequency || null,
+        recurringStartDate: body.recurringStartDate ? new Date(body.recurringStartDate) : null,
+        recurringEndDate: body.recurringEndDate ? new Date(body.recurringEndDate) : null,
         paymentDate: body.paymentDate ? new Date(body.paymentDate) : null
       }
     });
@@ -85,7 +88,9 @@ export async function PUT(request: NextRequest) {
       data: {
         ...updateData,
         amount: updateData.amount ? parseFloat(updateData.amount) : undefined,
-        paymentDate: updateData.paymentDate ? new Date(updateData.paymentDate) : undefined
+        paymentDate: updateData.paymentDate ? new Date(updateData.paymentDate) : undefined,
+        recurringStartDate: updateData.recurringStartDate ? new Date(updateData.recurringStartDate) : undefined,
+        recurringEndDate: updateData.recurringEndDate ? new Date(updateData.recurringEndDate) : undefined
       }
     });
 

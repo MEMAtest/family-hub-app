@@ -71,7 +71,7 @@ const MealPlanner: React.FC<MealPlannerProps> = ({ onClose }) => {
         sugar: 3,
         sodium: 380
       },
-      imageUrl: '/images/meals/pancakes.jpg',
+      imageUrl: '',
       tags: ['breakfast', 'family-friendly', 'quick'],
       rating: 4.8,
       isFavorite: true,
@@ -108,6 +108,7 @@ const MealPlanner: React.FC<MealPlannerProps> = ({ onClose }) => {
         sugar: 4,
         sodium: 680
       },
+      imageUrl: '',
       tags: ['lunch', 'healthy', 'protein'],
       rating: 4.5,
       isFavorite: false,
@@ -144,6 +145,7 @@ const MealPlanner: React.FC<MealPlannerProps> = ({ onClose }) => {
         sugar: 8,
         sodium: 820
       },
+      imageUrl: '',
       tags: ['dinner', 'family-favorite', 'italian'],
       rating: 4.9,
       isFavorite: true,

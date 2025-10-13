@@ -21,7 +21,7 @@ interface GoalFormProps {
   goal?: any;
   onClose: () => void;
   onSave: (goalData: GoalFormData) => void;
-  familyMembers: Array<{ id: string; name: string; color: string; avatar: string }>;
+  familyMembers: Array<{ id: string; name: string; color: string; icon: string }>;
   categories: Array<{ id: string; name: string; icon: string; color: string }>;
 }
 
@@ -285,7 +285,7 @@ const GoalForm: React.FC<GoalFormProps> = ({
                     <option value="">Select a family member</option>
                     {familyMembers.map(member => (
                       <option key={member.id} value={member.id}>
-                        {member.avatar} {member.name}
+                        {member.icon} {member.name}
                       </option>
                     ))}
                   </select>
@@ -318,7 +318,7 @@ const GoalForm: React.FC<GoalFormProps> = ({
                       className="w-6 h-6 rounded-full flex items-center justify-center text-white text-sm font-bold"
                       style={{ backgroundColor: member.color }}
                     >
-                      {member.avatar}
+                      {member.icon}
                     </div>
                     <span className="text-sm">{member.name}</span>
                   </label>

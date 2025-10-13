@@ -31,7 +31,10 @@ import {
   TrendingUp,
   Activity,
   Building2,
-  AlertTriangle
+  AlertTriangle,
+  Brain,
+  Sparkles,
+  RefreshCw
 } from 'lucide-react'
 import { CalendarEvent, BigCalendarEvent, CalendarView, Person } from '@/types/calendar.types'
 import GoogleCalendarSync from './GoogleCalendarSync'
@@ -42,6 +45,8 @@ import icalService from '@/services/icalService'
 import NotificationBell from '../notifications/NotificationBell'
 import YearView from './YearView'
 import WorkStatusManager from './WorkStatusManager'
+import { useMediaQuery } from '@/hooks/useMediaQuery'
+import { useFamilyStore } from '@/store/familyStore'
 
 // Set up moment localizer and drag-and-drop calendar
 const localizer = momentLocalizer(moment)
@@ -79,6 +84,7 @@ interface CalendarMainProps {
   onTemplateManage?: () => void
   onEventsSync?: (importedEvents: CalendarEvent[]) => void
   onWorkEventCreate?: (event: Omit<CalendarEvent, 'id' | 'createdAt' | 'updatedAt'>) => void
+  familyId?: string
 }
 
 const CalendarMain: React.FC<CalendarMainProps> = ({
@@ -92,9 +98,12 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
   onDateChange,
   onTemplateManage,
   onEventsSync,
-  onWorkEventCreate
+  onWorkEventCreate,
+  familyId: providedFamilyId
 }) => {
-  const [isMobile, setIsMobile] = useState(false)
+  const isMobile = useMediaQuery('(max-width: 767px)')
+  const storeFamilyId = useFamilyStore((state) => state.databaseStatus.familyId)
+  const familyId = providedFamilyId ?? storeFamilyId
   const [view, setView] = useState<ExtendedView>(Views.MONTH)
   const [showFilters, setShowFilters] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
@@ -117,42 +126,269 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
   const [dragFeedback, setDragFeedback] = useState<string | null>(null)
   const [showWorkStatusManager, setShowWorkStatusManager] = useState(false)
   const [showMobileMenu, setShowMobileMenu] = useState(false)
+  const [isAIConflictOpen, setIsAIConflictOpen] = useState(false)
+  const [isAIScheduleOpen, setIsAIScheduleOpen] = useState(false)
+  const [aiConflictForm, setAiConflictForm] = useState({
+    title: '',
+    date: moment(currentDate).format('YYYY-MM-DD'),
+    time: '09:00',
+    durationMinutes: 60,
+    personId: people[0]?.id ?? '',
+    location: ''
+  })
+  type AIConflictResult = {
+    summary: string;
+    conflicts: Array<{
+      newEvent: { title: string; date: string; time: string };
+      conflictingEvents: Array<{ title: string; date: string; time: string; participant: string }>;
+      severity: string;
+      recommendations: string[];
+    }>;
+  } | null
+  const [aiConflictResult, setAiConflictResult] = useState<AIConflictResult>(null)
+  const [aiConflictLoading, setAiConflictLoading] = useState(false)
+  const [aiConflictError, setAiConflictError] = useState<string | null>(null)
 
-  // Detect mobile device
+  type AIScheduleResult = {
+    summary: string;
+    recommendedSlots: Array<{
+      date: string;
+      startTime: string;
+      endTime: string;
+      confidence: number;
+      reasons: string[];
+      travelBuffer?: string;
+      participants: string[];
+    }>;
+    considerations?: string[];
+    followUp?: string[];
+  } | null
+
+  const [aiScheduleForm, setAiScheduleForm] = useState({
+    title: '',
+    durationMinutes: 60,
+    participants: people.slice(0, Math.min(2, people.length)).map((p) => p.id),
+    dateInput: moment(currentDate).format('YYYY-MM-DD'),
+    selectedDates: [moment(currentDate).format('YYYY-MM-DD')]
+  })
+  const [aiScheduleResult, setAiScheduleResult] = useState<AIScheduleResult>(null)
+  const [aiScheduleLoading, setAiScheduleLoading] = useState(false)
+  const [aiScheduleError, setAiScheduleError] = useState<string | null>(null)
+
   useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768)
+    if (isAIConflictOpen) {
+      setAiConflictError(null)
+      setAiConflictResult(null)
+      setAiConflictForm((prev) => ({
+        ...prev,
+        date: moment(currentDate).format('YYYY-MM-DD'),
+        personId: prev.personId || people[0]?.id || '',
+      }))
+    }
+  }, [isAIConflictOpen, currentDate, people])
+
+  useEffect(() => {
+    if (isAIScheduleOpen) {
+      setAiScheduleError(null)
+      setAiScheduleResult(null)
+      setAiScheduleForm((prev) => ({
+        ...prev,
+        dateInput: moment(currentDate).format('YYYY-MM-DD'),
+        selectedDates: prev.selectedDates.length ? prev.selectedDates : [moment(currentDate).format('YYYY-MM-DD')],
+        participants: prev.participants.length ? prev.participants : people.slice(0, Math.min(2, people.length)).map((p) => p.id)
+      }))
+    }
+  }, [isAIScheduleOpen, currentDate, people])
+
+  const closeAIConflictModal = () => {
+    setIsAIConflictOpen(false)
+    setAiConflictLoading(false)
+  }
+
+  const closeAIScheduleModal = () => {
+    setIsAIScheduleOpen(false)
+    setAiScheduleLoading(false)
+  }
+
+  const handleAIConflictSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault()
+    if (!familyId) {
+      setAiConflictError('Family ID is not available yet. Please try again soon.')
+      return
     }
 
-    checkMobile()
-    window.addEventListener('resize', checkMobile)
-    return () => window.removeEventListener('resize', checkMobile)
-  }, [])
+    if (!aiConflictForm.title.trim()) {
+      setAiConflictError('Please provide a title for the new event.')
+      return
+    }
+
+    setAiConflictLoading(true)
+    setAiConflictError(null)
+    setAiConflictResult(null)
+
+    try {
+      const person = people.find((p) => p.id === aiConflictForm.personId)
+      const response = await fetch(`/api/families/${familyId}/events/ai-conflicts`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          newEvent: {
+            title: aiConflictForm.title,
+            date: aiConflictForm.date,
+            time: aiConflictForm.time,
+            durationMinutes: aiConflictForm.durationMinutes,
+            location: aiConflictForm.location || undefined,
+            personName: person?.name ?? 'Family',
+          },
+        }),
+      })
+
+      const payload = await response.json()
+      if (!response.ok) {
+        throw new Error(payload.error || 'AI service returned an error')
+      }
+
+      setAiConflictResult(payload.suggestions)
+    } catch (err) {
+      console.error('AI conflict detection failed', err)
+      setAiConflictError(err instanceof Error ? err.message : 'Failed to analyse conflicts')
+    } finally {
+      setAiConflictLoading(false)
+    }
+  }
+
+  const toggleScheduleParticipant = (participantId: string) => {
+    setAiScheduleForm((prev) => {
+      const exists = prev.participants.includes(participantId)
+      return {
+        ...prev,
+        participants: exists
+          ? prev.participants.filter((id) => id !== participantId)
+          : [...prev.participants, participantId],
+      }
+    })
+  }
+
+  const addPreferredDate = () => {
+    setAiScheduleForm((prev) => {
+      const date = prev.dateInput
+      if (!date) return prev
+      if (prev.selectedDates.includes(date)) return prev
+      return {
+        ...prev,
+        selectedDates: [...prev.selectedDates, date],
+      }
+    })
+  }
+
+  const removePreferredDate = (date: string) => {
+    setAiScheduleForm((prev) => ({
+      ...prev,
+      selectedDates: prev.selectedDates.filter((d) => d !== date),
+    }))
+  }
+
+  const handleAIScheduleSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault()
+    if (!familyId) {
+      setAiScheduleError('Family ID is not available yet. Please try again soon.')
+      return
+    }
+
+    if (!aiScheduleForm.title.trim()) {
+      setAiScheduleError('Please provide a meeting title.')
+      return
+    }
+
+    if (!aiScheduleForm.participants.length) {
+      setAiScheduleError('Select at least one participant.')
+      return
+    }
+
+    if (!aiScheduleForm.selectedDates.length) {
+      setAiScheduleError('Add at least one preferred date.')
+      return
+    }
+
+    setAiScheduleLoading(true)
+    setAiScheduleError(null)
+    setAiScheduleResult(null)
+
+    try {
+      const response = await fetch(`/api/families/${familyId}/events/ai-schedule`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: aiScheduleForm.title,
+          durationMinutes: aiScheduleForm.durationMinutes,
+          preferredDates: aiScheduleForm.selectedDates,
+          participants: aiScheduleForm.participants,
+        }),
+      })
+
+      const payload = await response.json()
+      if (!response.ok) {
+        throw new Error(payload.error || 'AI service returned an error')
+      }
+
+      setAiScheduleResult(payload.suggestions)
+    } catch (err) {
+      console.error('AI scheduling failed', err)
+      setAiScheduleError(err instanceof Error ? err.message : 'Failed to suggest time slots')
+    } finally {
+      setAiScheduleLoading(false)
+    }
+  }
 
   // Convert calendar events to Big Calendar format
   const bigCalendarEvents = useMemo((): BigCalendarEvent[] => {
-    return events
-      .filter(event => {
-        // Debug logging for October events
-        if (event.date && event.date.startsWith('2025-10')) {
-          console.log('Processing October event:', event.title, 'Person:', event.person, 'Selected?', selectedPeople.includes(event.person));
-        }
-        return selectedPeople.includes(event.person) &&
-               selectedCategories.includes(event.type);
-      })
-      .map(event => {
-        const eventStart = moment(`${event.date} ${event.time}`, 'YYYY-MM-DD HH:mm').toDate()
-        const eventEnd = moment(eventStart).add(event.duration, 'minutes').toDate()
+    console.log('📊 CalendarMain rendering with:', {
+      totalEvents: events.length,
+      selectedPeople: selectedPeople.length,
+      selectedCategories: selectedCategories.length,
+    });
 
-        return {
-          id: event.id,
+    if (events.length > 0) {
+      console.log('First event sample:', events[0]);
+    }
+
+    const filtered = events.filter(event => {
+      const personMatch = selectedPeople.includes(event.person);
+      const categoryMatch = selectedCategories.includes(event.type);
+
+      // Debug logging for October events
+      if (event.date && event.date.startsWith('2025-10')) {
+        console.log('Processing October event:', {
           title: event.title,
-          start: eventStart,
-          end: eventEnd,
-          resource: event,
-          allDay: false
-        }
-      })
+          person: event.person,
+          type: event.type,
+          personMatch,
+          categoryMatch
+        });
+      }
+
+      return personMatch && categoryMatch;
+    });
+
+    console.log(`🎯 Filtered ${filtered.length} events from ${events.length} total`);
+
+    return filtered.map(event => {
+      const eventStart = moment(`${event.date} ${event.time}`, 'YYYY-MM-DD HH:mm').toDate()
+      const eventEnd = moment(eventStart).add(event.duration, 'minutes').toDate()
+
+      return {
+        id: event.id,
+        title: event.title,
+        start: eventStart,
+        end: eventEnd,
+        resource: event,
+        allDay: false
+      }
+    });
   }, [events, selectedPeople, selectedCategories])
 
   // Get person color for event styling
@@ -505,9 +741,349 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
             >
               Today
             </button>
+        </div>
+      </div>
+
+      {isAIConflictOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white w-full max-w-3xl rounded-lg shadow-xl overflow-hidden">
+            <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                  <AlertTriangle className="w-5 h-5 text-purple-500" /> AI Conflict Review
+                </h3>
+                <p className="text-sm text-gray-500">Check overlaps before adding a new event</p>
+              </div>
+              <button
+                onClick={closeAIConflictModal}
+                className="rounded-full p-2 text-gray-500 hover:bg-gray-100"
+                aria-label="Close conflict insights"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="px-6 py-5 space-y-5">
+              <form onSubmit={handleAIConflictSubmit} className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium text-gray-700">Event title</label>
+                  <input
+                    type="text"
+                    value={aiConflictForm.title}
+                    onChange={(event) => setAiConflictForm((prev) => ({ ...prev, title: event.target.value }))}
+                    className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-purple-500 focus:ring-purple-500"
+                    placeholder="e.g., Piano lesson"
+                  />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium text-gray-700">Date</label>
+                    <input
+                      type="date"
+                      value={aiConflictForm.date}
+                      onChange={(event) => setAiConflictForm((prev) => ({ ...prev, date: event.target.value }))}
+                      className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-purple-500 focus:ring-purple-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-700">Start time</label>
+                    <input
+                      type="time"
+                      value={aiConflictForm.time}
+                      onChange={(event) => setAiConflictForm((prev) => ({ ...prev, time: event.target.value }))}
+                      className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-purple-500 focus:ring-purple-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-700">Duration (minutes)</label>
+                    <input
+                      type="number"
+                      min={15}
+                      step={15}
+                      value={aiConflictForm.durationMinutes}
+                      onChange={(event) => setAiConflictForm((prev) => ({ ...prev, durationMinutes: Number(event.target.value) }))}
+                      className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-purple-500 focus:ring-purple-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-700">Who is attending?</label>
+                    <select
+                      value={aiConflictForm.personId}
+                      onChange={(event) => setAiConflictForm((prev) => ({ ...prev, personId: event.target.value }))}
+                      className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-purple-500 focus:ring-purple-500"
+                    >
+                      {people.map((person) => (
+                        <option key={person.id} value={person.id}>{person.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-700">Location (optional)</label>
+                  <input
+                    type="text"
+                    value={aiConflictForm.location}
+                    onChange={(event) => setAiConflictForm((prev) => ({ ...prev, location: event.target.value }))}
+                    className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-purple-500 focus:ring-purple-500"
+                    placeholder="Home, school, etc."
+                  />
+                </div>
+                {aiConflictError && (
+                  <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                    {aiConflictError}
+                  </div>
+                )}
+                <div className="flex justify-end">
+                  <button
+                    type="submit"
+                    disabled={aiConflictLoading}
+                    className={`inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium text-white ${
+                      aiConflictLoading ? 'bg-purple-200 cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-700'
+                    }`}
+                  >
+                    {aiConflictLoading ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" /> Checking…
+                      </>
+                    ) : (
+                      <>
+                        <Brain className="w-4 h-4" /> Analyse
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+
+              {aiConflictResult && (
+                <div className="space-y-4">
+                  <div className="rounded-lg border border-purple-200 bg-purple-50 p-4 text-sm text-purple-900">
+                    {aiConflictResult.summary}
+                  </div>
+                  {aiConflictResult.conflicts.length === 0 ? (
+                    <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">
+                      No conflicts detected. This slot looks clear!
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {aiConflictResult.conflicts.map((conflict, index) => (
+                        <div key={index} className="rounded-lg border border-gray-200 p-4">
+                          <div className="flex items-center justify-between mb-2">
+                            <p className="text-sm font-semibold text-gray-900">{conflict.newEvent.title}</p>
+                            <span className="text-xs uppercase tracking-wide text-gray-500">Severity: {conflict.severity}</span>
+                          </div>
+                          <p className="text-xs text-gray-600 mb-2">{conflict.newEvent.date} at {conflict.newEvent.time}</p>
+                          <div className="space-y-2">
+                            <p className="text-sm font-medium text-gray-900">Conflicts with:</p>
+                            <ul className="space-y-1 text-sm text-gray-700">
+                              {conflict.conflictingEvents.map((event, idx) => (
+                                <li key={idx} className="flex items-center gap-2">
+                                  <span className="h-2 w-2 rounded-full bg-red-400"></span>
+                                  <span>{event.title} • {event.date} {event.time} ({event.participant})</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                          {conflict.recommendations.length > 0 && (
+                            <div className="mt-3">
+                              <p className="text-sm font-medium text-gray-900">Recommendations</p>
+                              <ul className="list-disc pl-5 text-sm text-gray-700 space-y-1 mt-1">
+                                {conflict.recommendations.map((rec, idx) => (
+                                  <li key={idx}>{rec}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
+      )}
 
+      {isAIScheduleOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white w-full max-w-3xl rounded-lg shadow-xl overflow-hidden">
+            <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-blue-500" /> Smart Scheduling Suggestions
+                </h3>
+                <p className="text-sm text-gray-500">Find the best time that keeps everyone free</p>
+              </div>
+              <button
+                onClick={closeAIScheduleModal}
+                className="rounded-full p-2 text-gray-500 hover:bg-gray-100"
+                aria-label="Close scheduling insights"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="px-6 py-5 space-y-5">
+              <form onSubmit={handleAIScheduleSubmit} className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium text-gray-700">Meeting title</label>
+                  <input
+                    type="text"
+                    value={aiScheduleForm.title}
+                    onChange={(event) => setAiScheduleForm((prev) => ({ ...prev, title: event.target.value }))}
+                    className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500"
+                    placeholder="e.g., Family budget review"
+                  />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium text-gray-700">Duration (minutes)</label>
+                    <input
+                      type="number"
+                      min={15}
+                      step={15}
+                      value={aiScheduleForm.durationMinutes}
+                      onChange={(event) => setAiScheduleForm((prev) => ({ ...prev, durationMinutes: Number(event.target.value) }))}
+                      className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-700">Preferred date</label>
+                    <div className="mt-1 flex gap-2">
+                      <input
+                        type="date"
+                        value={aiScheduleForm.dateInput}
+                        onChange={(event) => setAiScheduleForm((prev) => ({ ...prev, dateInput: event.target.value }))}
+                        className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={addPreferredDate}
+                        className="inline-flex items-center justify-center rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50"
+                      >
+                        Add
+                      </button>
+                    </div>
+                    {aiScheduleForm.selectedDates.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {aiScheduleForm.selectedDates.map((date) => (
+                          <span key={date} className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs text-blue-700">
+                            {date}
+                            <button type="button" onClick={() => removePreferredDate(date)} className="text-blue-500 hover:text-blue-700">
+                              ×
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-sm font-medium text-gray-700 mb-2">Participants</p>
+                  <div className="grid sm:grid-cols-2 gap-2">
+                    {people.map((person) => (
+                      <label key={person.id} className="flex items-center gap-2 rounded-md border border-gray-200 px-3 py-2 text-sm cursor-pointer hover:bg-gray-50">
+                        <input
+                          type="checkbox"
+                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          checked={aiScheduleForm.participants.includes(person.id)}
+                          onChange={() => toggleScheduleParticipant(person.id)}
+                        />
+                        <span>{person.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {aiScheduleError && (
+                  <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                    {aiScheduleError}
+                  </div>
+                )}
+
+                <div className="flex justify-end">
+                  <button
+                    type="submit"
+                    disabled={aiScheduleLoading}
+                    className={`inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium text-white ${
+                      aiScheduleLoading ? 'bg-blue-200 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
+                    }`}
+                  >
+                    {aiScheduleLoading ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" /> Analysing…
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4" /> Suggest times
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+
+              {aiScheduleResult && (
+                <div className="space-y-4">
+                  <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+                    {aiScheduleResult.summary}
+                  </div>
+                  {aiScheduleResult.recommendedSlots.length > 0 && (
+                    <div className="space-y-2">
+                      <h4 className="text-sm font-semibold text-gray-900">Recommended slots</h4>
+                      <ul className="space-y-2">
+                        {aiScheduleResult.recommendedSlots.map((slot, index) => (
+                          <li key={index} className="rounded-lg border border-gray-200 p-3 text-sm text-gray-700">
+                            <div className="flex items-center justify-between">
+                              <span className="font-medium text-gray-900">{slot.date}</span>
+                              <span className="text-xs text-gray-500">Confidence {Math.round(slot.confidence * 100)}%</span>
+                            </div>
+                            <p className="text-sm text-gray-800 mt-1">
+                              {slot.startTime} - {slot.endTime}
+                            </p>
+                            {slot.travelBuffer && (
+                              <p className="text-xs text-gray-500 mt-1">{slot.travelBuffer}</p>
+                            )}
+                            {slot.reasons.length > 0 && (
+                              <ul className="list-disc pl-5 text-xs text-gray-600 space-y-1 mt-2">
+                                {slot.reasons.map((reason, idx) => (
+                                  <li key={idx}>{reason}</li>
+                                ))}
+                              </ul>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {aiScheduleResult.considerations && aiScheduleResult.considerations.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-900">Considerations</h4>
+                      <ul className="list-disc pl-5 text-xs text-gray-600 space-y-1 mt-1">
+                        {aiScheduleResult.considerations.map((item, index) => (
+                          <li key={index}>{item}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {aiScheduleResult.followUp && aiScheduleResult.followUp.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-900">Follow-up actions</h4>
+                      <ul className="list-disc pl-5 text-xs text-gray-600 space-y-1 mt-1">
+                        {aiScheduleResult.followUp.map((item, index) => (
+                          <li key={index}>{item}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
         <div className="flex items-center space-x-2">
           {/* Notification Bell */}
           <NotificationBell />
@@ -856,6 +1432,29 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
               <BarChart3 className="w-5 h-5 text-blue-600" />
               {monthAnalytics.monthName} Analytics
             </h3>
+          </div>
+
+          <div className="bg-white border border-gray-200 rounded-lg p-4 mb-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">AI Assistant</p>
+                <p className="text-sm text-gray-500">Analyse conflicts or suggest scheduling slots</p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setIsAIConflictOpen(true)}
+                  className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-xs font-medium text-purple-700 bg-purple-100 hover:bg-purple-200"
+                >
+                  <AlertTriangle className="w-4 h-4" /> Conflicts
+                </button>
+                <button
+                  onClick={() => setIsAIScheduleOpen(true)}
+                  className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-xs font-medium text-blue-700 bg-blue-100 hover:bg-blue-200"
+                >
+                  <Sparkles className="w-4 h-4" /> Smart Scheduling
+                </button>
+              </div>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-4">

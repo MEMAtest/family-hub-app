@@ -27,29 +27,60 @@ export const useDatabaseSync = () => {
 
           // Fetch directly from API instead of relying on localStorage
           try {
-            const [eventsResponse, membersResponse] = await Promise.all([
+            const [eventsResponse, membersResponse, incomeResponse, expensesResponse] = await Promise.all([
               fetch(`/api/families/${status.familyId}/events`),
-              fetch(`/api/families/${status.familyId}/members`)
+              fetch(`/api/families/${status.familyId}/members`),
+              fetch(`/api/families/${status.familyId}/budget/income`),
+              fetch(`/api/families/${status.familyId}/budget/expenses`)
             ]);
 
-            if (eventsResponse.ok && membersResponse.ok) {
+            if (eventsResponse.ok && membersResponse.ok && incomeResponse.ok && expensesResponse.ok) {
               const events = await eventsResponse.json();
               const members = await membersResponse.json();
+              const income = await incomeResponse.json();
+              const expenses = await expensesResponse.json();
 
-              console.log(`📅 Loaded ${events.length} events from database`);
-              console.log(`👥 Loaded ${members.length} members from database`);
+              console.log(`📅 API returned ${events.length} events`);
+              console.log(`👥 API returned ${members.length} members`);
+              console.log(`💰 API returned ${income.length} income items`);
+              console.log(`💸 API returned ${expenses.length} expense items`);
 
-              // Update the Zustand store directly
+              // Update store with events and members
               setEvents(events);
               setPeople(members);
 
-              // Also update localStorage for offline use
-              localStorage.setItem('calendarEvents', JSON.stringify(events));
-              localStorage.setItem('familyMembers', JSON.stringify(members));
+              // Transform and update budget data
+              const budgetData = {
+                income: {
+                  monthly: income.filter((inc: any) => inc.isRecurring).reduce((acc: any, inc: any) => {
+                    acc[inc.id] = inc;
+                    return acc;
+                  }, {}),
+                  oneTime: income.filter((inc: any) => !inc.isRecurring),
+                },
+                expenses: {
+                  recurringMonthly: expenses.filter((exp: any) => exp.isRecurring).reduce((acc: any, exp: any) => {
+                    acc[exp.id] = exp;
+                    return acc;
+                  }, {}),
+                  oneTimeSpends: expenses.filter((exp: any) => !exp.isRecurring),
+                },
+                priorMonths: {},
+                budgetLimits: {},
+                actualSpend: {},
+              };
 
-              console.log('✅ Data loaded and store updated successfully');
+              const setBudgetData = require('@/store/familyStore').useFamilyStore.getState().setBudgetData;
+              setBudgetData(budgetData);
+
+              console.log('✅ All data loaded successfully from database');
             } else {
-              console.error('Failed to fetch data from API');
+              console.error('Failed to fetch data from API', {
+                eventsStatus: eventsResponse.status,
+                membersStatus: membersResponse.status,
+                incomeStatus: incomeResponse.status,
+                expensesStatus: expensesResponse.status,
+              });
             }
           } catch (fetchError) {
             console.error('Error fetching from API:', fetchError);

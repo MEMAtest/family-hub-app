@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react';
+import { useFamilyStore } from '@/store/familyStore';
 import {
   Target,
   Plus,
@@ -32,50 +33,45 @@ import {
   Share,
   Menu,
   X,
-  ChevronDown
+  ChevronDown,
+  ChevronRight,
+  Home,
+  RefreshCw
 } from 'lucide-react';
 import { PieChart, Pie, Cell, BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, RadialBarChart, RadialBar, Legend } from 'recharts';
 import GoalForm from './GoalForm';
 import AchievementTracker from './AchievementTracker';
 import GoalAnalytics from './GoalAnalytics';
 import databaseService from '@/services/databaseService';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { AIGoalCoachPlan, AIGoalProgressSummary } from '@/types/goals.types';
 
 interface GoalsDashboardProps {
   onClose?: () => void;
 }
 
 const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
-  const [isMobile, setIsMobile] = useState(false);
+  const isMobile = useMediaQuery('(max-width: 1023px)');
   const [activeView, setActiveView] = useState<'dashboard' | 'family' | 'individual' | 'achievements' | 'analytics'>('dashboard');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'completed' | 'paused'>('all');
   const [filterType, setFilterType] = useState<'all' | 'family' | 'individual'>('all');
   const [showNewGoalForm, setShowNewGoalForm] = useState(false);
   const [selectedPerson, setSelectedPerson] = useState<string>('all');
+  const [editingGoal, setEditingGoal] = useState<any | null>(null);
 
   // Mobile states
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showMobileFilters, setShowMobileFilters] = useState(false);
+  const [goalCoachPlan, setGoalCoachPlan] = useState<AIGoalCoachPlan | null>(null);
+  const [isGeneratingCoach, setIsGeneratingCoach] = useState(false);
+  const [goalCoachError, setGoalCoachError] = useState<string | null>(null);
+  const [goalSummary, setGoalSummary] = useState<AIGoalProgressSummary | null>(null);
+  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
+  const [goalSummaryError, setGoalSummaryError] = useState<string | null>(null);
 
-  // Mobile detection
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 1024);
-    };
-
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
-
-  // Mock data for goals system
-  const familyMembers = [
-    { id: 'ade', name: 'Ade', color: '#3B82F6', avatar: '🏃' },
-    { id: 'angela', name: 'Angela', color: '#EC4899', avatar: '💼' },
-    { id: 'askia', name: 'Askia', color: '#10B981', avatar: '🎓' },
-    { id: 'amari', name: 'Amari', color: '#F59E0B', avatar: '⚽' }
-  ];
+  // Get family members from store
+  const familyMembers = useFamilyStore((state) => state.people);
 
   const goalCategories = [
     { id: 'fitness', name: 'Fitness', icon: '💪', color: '#EF4444' },
@@ -88,125 +84,7 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
     { id: 'hobby', name: 'Hobby', icon: '🎨', color: '#06B6D4' }
   ];
 
-  const mockGoals = [
-    {
-      id: '1',
-      title: 'Family Fitness Challenge',
-      description: 'Each member achieves weekly fitness targets',
-      category: 'fitness',
-      type: 'family',
-      participants: ['ade', 'angela', 'amari', 'askia'],
-      priority: 'high',
-      status: 'active',
-      progress: 68,
-      target: { type: 'numeric', value: 100, unit: '%' },
-      current: { value: 68, lastUpdated: new Date() },
-      startDate: new Date('2024-08-01'),
-      targetDate: new Date('2024-12-31'),
-      milestones: [
-        { id: '1', title: 'First Month Complete', targetValue: 25, isCompleted: true, order: 1 },
-        { id: '2', title: 'Half Way Point', targetValue: 50, isCompleted: true, order: 2 },
-        { id: '3', title: 'Three Quarters Done', targetValue: 75, isCompleted: false, order: 3 },
-        { id: '4', title: 'Goal Achieved', targetValue: 100, isCompleted: false, order: 4 }
-      ],
-      tags: ['fitness', 'family', 'challenge'],
-      createdAt: new Date('2024-08-01')
-    },
-    {
-      id: '2',
-      title: 'Sub-22 minute 5K',
-      description: 'Achieve a 5K run time under 22 minutes',
-      category: 'fitness',
-      type: 'individual',
-      assignedTo: 'ade',
-      participants: ['ade'],
-      priority: 'high',
-      status: 'active',
-      progress: 78,
-      target: { type: 'numeric', value: 22, unit: 'minutes' },
-      current: { value: 22.45, lastUpdated: new Date() },
-      startDate: new Date('2024-07-01'),
-      targetDate: new Date('2024-10-31'),
-      milestones: [
-        { id: '1', title: 'Under 24 minutes', targetValue: 24, isCompleted: true, order: 1 },
-        { id: '2', title: 'Under 23 minutes', targetValue: 23, isCompleted: true, order: 2 },
-        { id: '3', title: 'Under 22.5 minutes', targetValue: 22.5, isCompleted: true, order: 3 },
-        { id: '4', title: 'Under 22 minutes', targetValue: 22, isCompleted: false, order: 4 }
-      ],
-      tags: ['running', 'fitness', 'personal'],
-      createdAt: new Date('2024-07-01')
-    },
-    {
-      id: '3',
-      title: 'German A2 Level',
-      description: 'Achieve A2 level proficiency in German',
-      category: 'education',
-      type: 'individual',
-      assignedTo: 'amari',
-      participants: ['amari'],
-      priority: 'medium',
-      status: 'active',
-      progress: 45,
-      target: { type: 'milestone', value: 'A2 Certificate' },
-      current: { value: 'A1 Complete', lastUpdated: new Date() },
-      startDate: new Date('2024-01-15'),
-      targetDate: new Date('2024-12-15'),
-      milestones: [
-        { id: '1', title: 'A1 Foundation', targetValue: 'A1', isCompleted: true, order: 1 },
-        { id: '2', title: 'A1 Complete', targetValue: 'A1+', isCompleted: true, order: 2 },
-        { id: '3', title: 'A2 Foundation', targetValue: 'A2-', isCompleted: false, order: 3 },
-        { id: '4', title: 'A2 Complete', targetValue: 'A2', isCompleted: false, order: 4 }
-      ],
-      tags: ['language', 'education', 'german'],
-      createdAt: new Date('2024-01-15')
-    },
-    {
-      id: '4',
-      title: 'Healthy Eating Goals',
-      description: 'Plan and eat 5 home-cooked meals per week',
-      category: 'health',
-      type: 'family',
-      participants: ['ade', 'angela', 'amari', 'askia'],
-      priority: 'medium',
-      status: 'active',
-      progress: 80,
-      target: { type: 'numeric', value: 5, unit: 'meals/week' },
-      current: { value: 4, lastUpdated: new Date() },
-      startDate: new Date('2024-08-01'),
-      targetDate: new Date('2024-09-30'),
-      milestones: [
-        { id: '1', title: '3 meals per week', targetValue: 3, isCompleted: true, order: 1 },
-        { id: '2', title: '4 meals per week', targetValue: 4, isCompleted: true, order: 2 },
-        { id: '3', title: '5 meals per week', targetValue: 5, isCompleted: false, order: 3 }
-      ],
-      tags: ['health', 'nutrition', 'family'],
-      createdAt: new Date('2024-08-01')
-    },
-    {
-      id: '5',
-      title: 'Learn to swim 25m',
-      description: 'Complete a 25-meter swim without stopping',
-      category: 'fitness',
-      type: 'individual',
-      assignedTo: 'askia',
-      participants: ['askia'],
-      priority: 'medium',
-      status: 'active',
-      progress: 60,
-      target: { type: 'numeric', value: 25, unit: 'meters' },
-      current: { value: 15, lastUpdated: new Date() },
-      startDate: new Date('2024-06-01'),
-      targetDate: new Date('2024-11-30'),
-      milestones: [
-        { id: '1', title: '5 meters', targetValue: 5, isCompleted: true, order: 1 },
-        { id: '2', title: '10 meters', targetValue: 10, isCompleted: true, order: 2 },
-        { id: '3', title: '15 meters', targetValue: 15, isCompleted: true, order: 3 },
-        { id: '4', title: '25 meters', targetValue: 25, isCompleted: false, order: 4 }
-      ],
-      tags: ['swimming', 'fitness', 'milestone'],
-      createdAt: new Date('2024-06-01')
-    }
-  ];
+  const [goals, setGoals] = useState<any[]>([]);
 
   const achievements: Array<{
     id: string;
@@ -254,37 +132,177 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
     }
   ];
 
-  const recentActivity = [
-    {
-      id: '1',
-      type: 'milestone_reached',
-      personId: 'ade',
-      goalId: '2',
-      message: 'Ade reached milestone: Under 22.5 minutes for 5K run',
-      timestamp: new Date('2024-09-18T10:30:00'),
-      points: 100
-    },
-    {
-      id: '2',
-      type: 'progress_update',
-      personId: 'askia',
-      goalId: '5',
-      message: 'Askia updated swimming progress: 15 meters completed',
-      timestamp: new Date('2024-09-17T16:45:00'),
-      points: 50
-    },
-    {
-      id: '3',
-      type: 'goal_completed',
-      personId: 'amari',
-      goalId: '3',
-      message: 'Family completed weekly healthy eating goal',
-      timestamp: new Date('2024-09-16T19:00:00'),
-      points: 200
-    }
-  ];
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const [goals, setGoals] = useState(mockGoals);
+  // Get familyId from store
+  const familyId = useFamilyStore((state) => state.databaseStatus.familyId) || 'cmg741w2h0000ljcb3f6fo19g';
+
+  const handleGenerateGoalCoach = async () => {
+    if (!familyId) {
+      alert('Family ID not available yet. Please try again.');
+      return;
+    }
+
+    setIsGeneratingCoach(true);
+    setGoalCoachError(null);
+
+    try {
+      const response = await fetch(`/api/families/${familyId}/goals/ai-insights`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({}),
+      });
+
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error || 'AI service returned an error');
+      }
+
+      setGoalCoachPlan(payload.plan);
+    } catch (err) {
+      console.error('Failed to generate goal coaching plan', err);
+      setGoalCoachError(err instanceof Error ? err.message : 'Failed to generate coaching plan');
+    } finally {
+      setIsGeneratingCoach(false);
+    }
+  };
+
+  const handleGenerateGoalSummary = async () => {
+    if (!familyId) {
+      alert('Family ID not available yet. Please try again.');
+      return;
+    }
+
+    setIsGeneratingSummary(true);
+    setGoalSummaryError(null);
+    setGoalSummary(null);
+
+    try {
+      const response = await fetch(`/api/families/${familyId}/goals/ai-progress`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({}),
+      });
+
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error || 'AI service returned an error');
+      }
+
+      setGoalSummary(payload.summary);
+    } catch (err) {
+      console.error('Failed to generate goal progress summary', err);
+      setGoalSummaryError(err instanceof Error ? err.message : 'Failed to summarise progress');
+    } finally {
+      setIsGeneratingSummary(false);
+    }
+  };
+
+  // Fetch goals from API
+  useEffect(() => {
+    const fetchGoals = async () => {
+      if (!familyId) {
+        setError('No family ID available');
+        return;
+      }
+
+      try {
+        setLoading(true);
+        const response = await fetch(`/api/families/${familyId}/goals`);
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch goals');
+        }
+
+        const data = await response.json();
+
+        // Transform API data to match component's expected format
+        const transformedGoals = data.map((goal: any) => ({
+          id: goal.id,
+          title: goal.goalTitle,
+          description: goal.goalDescription,
+          category: 'personal', // Default since not in DB schema
+          type: goal.goalType,
+          participants: goal.participants || [],
+          priority: 'medium', // Default since not in DB schema
+          status: 'active', // Default since not in DB schema
+          progress: goal.currentProgress || 0,
+          target: { type: 'numeric', value: goal.targetValue },
+          current: { value: goal.currentProgress, lastUpdated: new Date(goal.updatedAt) },
+          startDate: goal.createdAt ? new Date(goal.createdAt) : new Date(),
+          targetDate: goal.deadline ? new Date(goal.deadline) : null,
+          milestones: goal.milestones || [],
+          tags: [], // Not in DB schema
+          createdAt: goal.createdAt ? new Date(goal.createdAt) : new Date()
+        }));
+
+        setGoals(transformedGoals);
+        setError(null);
+      } catch (err) {
+        console.error('Error fetching goals:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load goals');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchGoals();
+  }, [familyId]);
+
+  // Update goal function
+  const updateGoal = async (goalId: string, updates: any) => {
+    if (!familyId) {
+      alert('No family ID available');
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/families/${familyId}/goals/${goalId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updates),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update goal');
+      }
+
+      const updatedGoal = await response.json();
+
+      // Transform and update local state
+      const transformedGoal = {
+        id: updatedGoal.id,
+        title: updatedGoal.goalTitle,
+        description: updatedGoal.goalDescription,
+        category: 'personal',
+        type: updatedGoal.goalType,
+        participants: updatedGoal.participants || [],
+        priority: 'medium',
+        status: 'active',
+        progress: updatedGoal.currentProgress || 0,
+        target: { type: 'numeric', value: updatedGoal.targetValue },
+        current: { value: updatedGoal.currentProgress, lastUpdated: new Date(updatedGoal.updatedAt) },
+        startDate: new Date(updatedGoal.createdAt),
+        targetDate: updatedGoal.deadline ? new Date(updatedGoal.deadline) : null,
+        milestones: updatedGoal.milestones || [],
+        tags: [],
+        createdAt: new Date(updatedGoal.createdAt)
+      };
+
+      setGoals(prev => prev.map(g => g.id === goalId ? transformedGoal : g));
+      console.log('Goal updated successfully:', transformedGoal);
+    } catch (error) {
+      console.error('Failed to update goal:', error);
+      alert('Failed to update goal. Please try again.');
+    }
+  };
 
   // Mobile Header Component
   const renderMobileHeader = () => (
@@ -410,6 +428,34 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
             >
               <Plus className="w-5 h-5" />
               New Goal
+            </button>
+
+            <button
+              onClick={() => {
+                if (!isGeneratingCoach) {
+                  handleGenerateGoalCoach();
+                }
+                setShowMobileMenu(false);
+              }}
+              className="mobile-btn-secondary w-full flex items-center gap-3"
+              disabled={isGeneratingCoach}
+            >
+              <Target className="w-5 h-5" />
+              {isGeneratingCoach ? 'Generating Coach...' : 'AI Goal Coach'}
+            </button>
+
+            <button
+              onClick={() => {
+                if (!isGeneratingSummary) {
+                  handleGenerateGoalSummary();
+                }
+                setShowMobileMenu(false);
+              }}
+              className="mobile-btn-secondary w-full flex items-center gap-3"
+              disabled={isGeneratingSummary}
+            >
+              <BarChart3 className="w-5 h-5" />
+              {isGeneratingSummary ? 'Summarising…' : 'Progress Summary'}
             </button>
 
             <div className="border-t border-gray-200 pt-4">
@@ -687,6 +733,46 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
           </button>
 
           <button
+            onClick={handleGenerateGoalCoach}
+            disabled={isGeneratingCoach}
+            className={`flex items-center border border-gray-200 rounded-lg transition-colors ${
+              isMobile ? 'flex-col space-y-2 p-3 text-center' : 'space-x-3 p-4'
+            } ${isGeneratingCoach ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'hover:bg-gray-50'}`}
+          >
+            <Zap className={`text-purple-500 ${
+              isMobile ? 'w-5 h-5' : 'w-6 h-6'
+            }`} />
+            <div className={isMobile ? '' : 'text-left'}>
+              <h3 className={`font-medium text-gray-900 ${
+                isMobile ? 'text-sm' : ''
+              }`}>{isGeneratingCoach ? 'Generating…' : 'AI Goal Coach'}</h3>
+              {!isMobile && (
+                <p className="text-sm text-gray-600">Personalised weekly focus</p>
+              )}
+            </div>
+          </button>
+
+          <button
+            onClick={handleGenerateGoalSummary}
+            disabled={isGeneratingSummary}
+            className={`flex items-center border border-gray-200 rounded-lg transition-colors ${
+              isMobile ? 'flex-col space-y-2 p-3 text-center' : 'space-x-3 p-4'
+            } ${isGeneratingSummary ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'hover:bg-gray-50'}`}
+          >
+            <BarChart3 className={`text-blue-500 ${
+              isMobile ? 'w-5 h-5' : 'w-6 h-6'
+            }`} />
+            <div className={isMobile ? '' : 'text-left'}>
+              <h3 className={`font-medium text-gray-900 ${
+                isMobile ? 'text-sm' : ''
+              }`}>{isGeneratingSummary ? 'Summarising…' : 'Progress Summary'}</h3>
+              {!isMobile && (
+                <p className="text-sm text-gray-600">Snapshot of progress & risks</p>
+              )}
+            </div>
+          </button>
+
+          <button
             onClick={() => setActiveView('achievements')}
             className={`flex items-center border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors ${
               isMobile ? 'flex-col space-y-2 p-3 text-center' : 'space-x-3 p-4'
@@ -739,7 +825,127 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
               )}
             </div>
           </button>
+      </div>
+    </div>
+
+      {/* AI Goal Coach */}
+      <div className={`bg-white border border-gray-200 rounded-lg ${
+        isMobile ? 'p-3' : 'p-3 sm:p-4 md:p-6'
+      }`}>
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className={`font-semibold text-gray-900 ${
+              isMobile ? 'text-lg' : 'text-xl'
+            }`}>AI Goal Coach</h2>
+            <p className="text-sm text-gray-600">
+              Celebrate wins, focus efforts, and get weekly action ideas
+            </p>
+          </div>
+          <button
+            onClick={handleGenerateGoalCoach}
+            disabled={isGeneratingCoach}
+            className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium ${
+              isGeneratingCoach ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'
+            }`}
+          >
+            {isGeneratingCoach ? (
+              <>
+                <RefreshCw className="w-4 h-4 animate-spin" /> Working…
+              </>
+            ) : (
+              <>
+                <Target className="w-4 h-4" /> Refresh Insights
+              </>
+            )}
+          </button>
         </div>
+
+        {goalCoachError && (
+          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+            Unable to generate coaching plan: {goalCoachError}
+          </div>
+        )}
+
+        {goalCoachPlan ? (
+          <div className="space-y-4 text-sm text-gray-700">
+            <p>{goalCoachPlan.summary}</p>
+
+            {goalCoachPlan.celebration && goalCoachPlan.celebration.length > 0 && (
+              <div>
+                <h3 className="text-sm font-semibold text-gray-900 mb-2">Celebrations</h3>
+                <ul className="list-disc pl-5 space-y-1">
+                  {goalCoachPlan.celebration.map((item, index) => (
+                    <li key={index}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {goalCoachPlan.focusGoal && (
+              <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
+                <p className="text-xs uppercase tracking-wide text-blue-600 font-semibold mb-1">Primary focus</p>
+                <p className="font-medium text-blue-900">{goalCoachPlan.focusGoal.title}</p>
+                <p className="text-xs text-blue-700 mt-1">Progress {goalCoachPlan.focusGoal.progress}%</p>
+                <p className="mt-2 text-sm text-blue-900">Next step: {goalCoachPlan.focusGoal.nextStep}</p>
+                {goalCoachPlan.focusGoal.encouragement && (
+                  <p className="mt-1 text-xs text-blue-700">{goalCoachPlan.focusGoal.encouragement}</p>
+                )}
+              </div>
+            )}
+
+            {goalCoachPlan.weeklyActions && goalCoachPlan.weeklyActions.length > 0 && (
+              <div>
+                <h3 className="text-sm font-semibold text-gray-900 mb-2">This week&apos;s actions</h3>
+                <ul className="space-y-2">
+                  {goalCoachPlan.weeklyActions.map((action, index) => (
+                    <li key={index} className="border border-gray-200 rounded-lg p-3">
+                      <p className="font-medium text-gray-900">{action.title}</p>
+                      <p className="text-xs text-gray-600 mt-1">
+                        {action.owner ? `Owner: ${action.owner}` : 'Owner: Family'}
+                        {action.dueDate ? ` • Due ${action.dueDate}` : ''}
+                      </p>
+                      {action.motivation && (
+                        <p className="text-xs text-purple-600 mt-1">{action.motivation}</p>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {goalCoachPlan.blockers && goalCoachPlan.blockers.length > 0 && (
+              <div>
+                <h3 className="text-sm font-semibold text-gray-900 mb-2">Potential blockers</h3>
+                <ul className="list-disc pl-5 space-y-1 text-sm text-gray-600">
+                  {goalCoachPlan.blockers.map((blocker, index) => (
+                    <li key={index}>{blocker}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {goalCoachPlan.checkInQuestions && goalCoachPlan.checkInQuestions.length > 0 && (
+              <div>
+                <h3 className="text-sm font-semibold text-gray-900 mb-2">Check-in questions</h3>
+                <ul className="list-disc pl-5 space-y-1 text-sm text-gray-600">
+                  {goalCoachPlan.checkInQuestions.map((question, index) => (
+                    <li key={index}>{question}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {goalCoachPlan.encouragement && (
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">
+                {goalCoachPlan.encouragement}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="rounded-lg border border-dashed border-gray-300 p-6 text-center text-sm text-gray-500">
+            Tap “Refresh Insights” to get a personalised focus goal, weekly actions, and motivational check-in prompts for the family.
+          </div>
+        )}
       </div>
 
       <div className={`grid gap-8 ${
@@ -784,34 +990,82 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
           </div>
         </div>
 
-        {/* Recent Activity */}
+        {/* Active Goals Overview */}
         <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Recent Activity</h2>
-
-          <div className="space-y-4">
-            {recentActivity.map((activity) => {
-              const person = familyMembers.find(p => p.id === activity.personId);
-              return (
-                <div key={activity.id} className="flex items-center space-x-4 p-3 border border-gray-200 rounded-lg">
-                  <div
-                    className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold"
-                    style={{ backgroundColor: person?.color }}
-                  >
-                    {person?.avatar}
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm text-gray-900">{activity.message}</p>
-                    <p className="text-xs text-gray-500">{formatTimeAgo(activity.timestamp)}</p>
-                  </div>
-                  {activity.points && (
-                    <div className="text-sm font-medium text-yellow-600">
-                      +{activity.points} pts
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold text-gray-900">Active Goals</h2>
+            <button
+              onClick={() => setActiveView('family')}
+              className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+            >
+              View All →
+            </button>
           </div>
+
+          {goals.length === 0 ? (
+            <div className="text-center py-8">
+              <Target className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+              <p className="text-gray-600 mb-3">No goals yet</p>
+              <button
+                onClick={() => setShowNewGoalForm(true)}
+                className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+              >
+                Create your first goal →
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {goals.slice(0, 3).map((goal) => {
+                const category = goalCategories.find(c => c.id === goal.category);
+                return (
+                  <div key={goal.id} className="p-4 border border-gray-200 rounded-lg hover:shadow-sm transition-shadow">
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex items-center space-x-2">
+                        <span>{category?.icon || '🎯'}</span>
+                        <h3 className="font-medium text-gray-900">{goal.title}</h3>
+                      </div>
+                      <span className={`px-2 py-1 rounded-full text-xs ${getStatusColor(goal.status)}`}>
+                        {goal.status}
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-600 mb-3">{goal.description}</p>
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1 mr-4">
+                        <div className="flex items-center justify-between text-xs text-gray-600 mb-1">
+                          <span>Progress</span>
+                          <span>{goal.progress}%</span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-1.5">
+                          <div
+                            className="h-1.5 rounded-full transition-all duration-300"
+                            style={{
+                              width: `${goal.progress}%`,
+                              backgroundColor: getProgressColor(goal.progress)
+                            }}
+                          ></div>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-1">
+                        {goal.participants?.slice(0, 3).map((participantId: string) => {
+                          const person = familyMembers.find(p => p.id === participantId);
+                          return person ? (
+                            <div
+                              key={participantId}
+                              className="w-6 h-6 rounded-full flex items-center justify-center text-xs"
+                              style={{ backgroundColor: person.color }}
+                              title={person.name}
+                            >
+                              {person.icon}
+                            </div>
+                          ) : null;
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Goals by Category */}
@@ -883,7 +1137,7 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
                     className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold"
                     style={{ backgroundColor: person?.color }}
                   >
-                    {person?.avatar}
+                    {person?.icon}
                   </div>
                   <div>
                     <h3 className="font-medium text-gray-900">{achievement.title}</h3>
@@ -974,7 +1228,7 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
       }`}>
         {filteredGoals.map((goal) => {
           const category = goalCategories.find(c => c.id === goal.category);
-          const completedMilestones = goal.milestones.filter(m => m.isCompleted).length;
+          const completedMilestones = goal.milestones.filter((m: any) => m.isCompleted).length;
 
           return (
             <div key={goal.id} className={`bg-white border border-gray-200 rounded-lg hover:shadow-md transition-shadow ${
@@ -999,7 +1253,13 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
                   <button className="text-gray-400 hover:text-gray-600">
                     <Eye className={isMobile ? 'w-3 h-3' : 'w-4 h-4'} />
                   </button>
-                  <button className="text-gray-400 hover:text-gray-600">
+                  <button
+                    className="text-gray-400 hover:text-gray-600"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEditingGoal(goal);
+                    }}
+                  >
                     <Edit className={isMobile ? 'w-3 h-3' : 'w-4 h-4'} />
                   </button>
                 </div>
@@ -1036,7 +1296,7 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
                   <span>{completedMilestones}/{goal.milestones.length}</span>
                 </div>
                 <div className="flex space-x-1">
-                  {goal.milestones.map((milestone, index) => (
+                  {goal.milestones.map((milestone: any, index: number) => (
                     <div
                       key={milestone.id}
                       className={`flex-1 h-1 rounded ${
@@ -1050,7 +1310,7 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
               {/* Participants */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-1">
-                  {goal.participants.slice(0, 3).map(participantId => {
+                  {goal.participants.slice(0, 3).map((participantId: string) => {
                     const person = familyMembers.find(p => p.id === participantId);
                     return (
                       <div
@@ -1059,7 +1319,7 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
                         style={{ backgroundColor: person?.color }}
                         title={person?.name}
                       >
-                        {person?.avatar}
+                        {person?.icon}
                       </div>
                     );
                   })}
@@ -1078,7 +1338,7 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
               {/* Tags */}
               {goal.tags.length > 0 && (
                 <div className="mt-3 flex flex-wrap gap-1">
-                  {goal.tags.slice(0, 3).map(tag => (
+                  {goal.tags.slice(0, 3).map((tag: string) => (
                     <span key={tag} className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded">
                       {tag}
                     </span>
@@ -1119,6 +1379,25 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
       {/* Desktop Header */}
       {!isMobile && (
         <div className="mb-8">
+          {/* Breadcrumbs */}
+          <nav className="flex items-center space-x-2 text-sm mb-4">
+            <button
+              onClick={() => onClose && onClose()}
+              className="flex items-center text-gray-500 hover:text-gray-700"
+            >
+              <Home className="w-4 h-4 mr-1" />
+              Dashboard
+            </button>
+            <ChevronRight className="w-4 h-4 text-gray-400" />
+            <span className="text-gray-900 font-medium">
+              {activeView === 'dashboard' && 'Goals'}
+              {activeView === 'family' && 'Family Goals'}
+              {activeView === 'individual' && 'Individual Goals'}
+              {activeView === 'achievements' && 'Achievements'}
+              {activeView === 'analytics' && 'Analytics'}
+            </span>
+          </nav>
+
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl md:text-3xl font-light text-gray-900 mb-2">
@@ -1148,6 +1427,146 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
             )}
           </div>
         </div>
+      )}
+
+      {/* Goal Progress Summary */}
+      {activeView === 'dashboard' && (
+      <div className={`bg-white border border-gray-200 rounded-lg ${
+        isMobile ? 'p-3' : 'p-3 sm:p-4 md:p-6'
+      }`}>
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className={`font-semibold text-gray-900 ${
+              isMobile ? 'text-lg' : 'text-xl'
+            }`}>Goal Progress Summary</h2>
+            <p className="text-sm text-gray-600">
+              Understand overall momentum, risks, and suggested focus areas
+            </p>
+          </div>
+          <button
+            onClick={handleGenerateGoalSummary}
+            disabled={isGeneratingSummary}
+            className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium ${
+              isGeneratingSummary ? 'bg-blue-200 text-white cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'
+            }`}
+          >
+            {isGeneratingSummary ? (
+              <>
+                <RefreshCw className="w-4 h-4 animate-spin" /> Summarising…
+              </>
+            ) : (
+              <>
+                <BarChart3 className="w-4 h-4" /> Refresh summary
+              </>
+            )}
+          </button>
+        </div>
+
+        {goalSummaryError && (
+          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+            Unable to summarise progress: {goalSummaryError}
+          </div>
+        )}
+
+        {goalSummary ? (
+          <div className="space-y-4 text-sm text-gray-700">
+            <p>{goalSummary.summary}</p>
+
+            {goalSummary.metrics && goalSummary.metrics.length > 0 && (
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {goalSummary.metrics.map((metric, index) => (
+                  <div key={`${metric.label}-${index}`} className="rounded-lg border border-blue-100 bg-blue-50 p-3">
+                    <p className="text-xs uppercase tracking-wide text-blue-600 font-semibold">{metric.label}</p>
+                    <p className="text-lg font-semibold text-blue-900">{metric.value}</p>
+                    {metric.context && <p className="text-xs text-blue-700 mt-1">{metric.context}</p>}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {goalSummary.goalBreakdown.length > 0 && (
+              <div>
+                <h3 className="text-sm font-semibold text-gray-900 mb-2">Goal breakdown</h3>
+                <div className="space-y-2">
+                  {goalSummary.goalBreakdown.map((goal, index) => (
+                    <div key={`${goal.title}-${index}`} className="rounded-lg border border-gray-200 p-3">
+                      <div className="flex items-center justify-between">
+                        <p className="font-medium text-gray-900">{goal.title}</p>
+                        <span
+                          className={`text-xs uppercase tracking-wide ${
+                            goal.status === 'at_risk'
+                              ? 'text-red-600'
+                              : goal.status === 'behind'
+                                ? 'text-orange-600'
+                                : 'text-emerald-600'
+                          }`}
+                        >
+                          {goal.status}
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">Progress {goal.progress}%</p>
+                      {goal.highlight && <p className="text-sm text-gray-700 mt-2">{goal.highlight}</p>}
+                      {goal.nextStep && <p className="text-xs text-blue-600 mt-1">Next step: {goal.nextStep}</p>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {(goalSummary.momentum?.improving?.length || goalSummary.momentum?.slipping?.length) && (
+              <div className="grid gap-3 sm:grid-cols-2">
+                {goalSummary.momentum?.improving?.length ? (
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                    <p className="text-xs uppercase tracking-wide text-emerald-600 font-semibold">Improving streaks</p>
+                    <ul className="list-disc pl-5 text-xs text-emerald-700 space-y-1 mt-1">
+                      {goalSummary.momentum.improving.map((item, index) => (
+                        <li key={index}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+
+                {goalSummary.momentum?.slipping?.length ? (
+                  <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-3">
+                    <p className="text-xs uppercase tracking-wide text-yellow-600 font-semibold">Needs attention</p>
+                    <ul className="list-disc pl-5 text-xs text-yellow-700 space-y-1 mt-1">
+                      {goalSummary.momentum.slipping.map((item, index) => (
+                        <li key={index}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+              </div>
+            )}
+
+            {goalSummary.riskyGoals && goalSummary.riskyGoals.length > 0 && (
+              <div>
+                <h3 className="text-sm font-semibold text-gray-900 mb-2">Goals at risk</h3>
+                <ul className="list-disc pl-5 text-sm text-gray-700 space-y-1">
+                  {goalSummary.riskyGoals.map((item, index) => (
+                    <li key={index}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {goalSummary.recommendations && goalSummary.recommendations.length > 0 && (
+              <div>
+                <h3 className="text-sm font-semibold text-gray-900 mb-2">Recommendations</h3>
+                <ul className="list-disc pl-5 text-sm text-gray-700 space-y-1">
+                  {goalSummary.recommendations.map((item, index) => (
+                    <li key={index}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="rounded-lg border border-dashed border-gray-300 p-6 text-center text-sm text-gray-500">
+            Generate a summary to see overall momentum, risks, and tailored suggestions for your current goals.
+          </div>
+        )}
+      </div>
       )}
 
       {/* Navigation Tabs - Desktop Only */}
@@ -1202,26 +1621,96 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
         <GoalForm
           onClose={() => setShowNewGoalForm(false)}
           onSave={async (goalData) => {
+            if (!familyId) {
+              alert('No family ID available');
+              setShowNewGoalForm(false);
+              return;
+            }
+
             try {
-              const newGoal = {
-                id: `goal-${Date.now()}`,
-                ...goalData,
-                createdAt: new Date().toISOString(),
-                currentProgress: 0,
+              const response = await fetch(`/api/families/${familyId}/goals`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  title: goalData.title,
+                  description: goalData.description,
+                  type: goalData.type,
+                  targetValue: goalData.targetValue?.toString() || '',
+                  currentProgress: 0,
+                  deadline: goalData.targetDate ? new Date(goalData.targetDate).toISOString() : null,
+                  participants: goalData.participants || [],
+                  milestones: []
+                }),
+              });
+
+              if (!response.ok) {
+                throw new Error('Failed to create goal');
+              }
+
+              const savedGoal = await response.json();
+
+              // Transform and add to local state
+              const transformedGoal = {
+                id: savedGoal.id,
+                title: savedGoal.goalTitle,
+                description: savedGoal.goalDescription,
+                category: 'personal',
+                type: savedGoal.goalType,
+                participants: savedGoal.participants || [],
+                priority: 'medium',
+                status: 'active',
+                progress: savedGoal.currentProgress || 0,
+                target: { type: 'numeric', value: savedGoal.targetValue },
+                current: { value: savedGoal.currentProgress, lastUpdated: new Date() },
+                startDate: new Date(savedGoal.createdAt),
+                targetDate: savedGoal.deadline ? new Date(savedGoal.deadline) : null,
+                milestones: savedGoal.milestones || [],
+                tags: [],
+                createdAt: new Date(savedGoal.createdAt)
               };
 
-              console.log('Saving new goal:', newGoal);
-              const savedGoal = await databaseService.saveGoal(newGoal);
-
-              if (savedGoal) {
-                console.log('Goal saved successfully:', savedGoal);
-                // You would typically update local state here
-                // setGoals(prev => [...prev, savedGoal]);
-              }
+              setGoals(prev => [transformedGoal, ...prev]);
+              console.log('Goal created successfully:', transformedGoal);
             } catch (error) {
               console.error('Failed to save goal:', error);
+              alert('Failed to create goal. Please try again.');
             }
             setShowNewGoalForm(false);
+          }}
+          familyMembers={familyMembers}
+          categories={goalCategories}
+        />
+      )}
+
+      {/* Edit Goal Form Modal */}
+      {editingGoal && (
+        <GoalForm
+          goal={editingGoal}
+          onClose={() => setEditingGoal(null)}
+          onSave={async (goalData) => {
+            if (!familyId || !editingGoal) {
+              alert('No family ID or goal available');
+              setEditingGoal(null);
+              return;
+            }
+
+            try {
+              await updateGoal(editingGoal.id, {
+                title: goalData.title,
+                description: goalData.description,
+                type: goalData.type,
+                targetValue: goalData.targetValue?.toString() || '',
+                currentProgress: editingGoal.progress,
+                deadline: goalData.targetDate ? new Date(goalData.targetDate).toISOString() : null,
+                participants: goalData.participants || [],
+                milestones: editingGoal.milestones || []
+              });
+            } catch (error) {
+              console.error('Failed to update goal:', error);
+            }
+            setEditingGoal(null);
           }}
           familyMembers={familyMembers}
           categories={goalCategories}

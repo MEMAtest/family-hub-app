@@ -1,6 +1,7 @@
 import React from 'react'
 import { Calendar, Clock, MapPin } from 'lucide-react'
 import { CalendarEvent } from '@/types'
+import { formatDate } from '@/utils/formatDate'
 
 interface UpcomingEventsProps {
   events: CalendarEvent[]
@@ -43,7 +44,7 @@ export default function UpcomingEvents({ events, onViewAll }: UpcomingEventsProp
             <div className="flex items-center space-x-4 mt-1 text-xs text-gray-500">
               <div className="flex items-center">
                 <Calendar className="w-3 h-3 mr-1" />
-                {new Date(event.date).toLocaleDateString()}
+                {formatDate(event.date)}
               </div>
               <div className="flex items-center">
                 <Clock className="w-3 h-3 mr-1" />

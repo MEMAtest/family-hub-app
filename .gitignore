@@ -51,3 +51,5 @@ prisma/generated/
 /test-*.ts
 /add-*.ts
 /check-*.ts
+.jest-temp
+coverage/

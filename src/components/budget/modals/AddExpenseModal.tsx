@@ -1,16 +1,22 @@
 'use client'
 
-import React, { useState } from 'react';
-import { X, CreditCard, Calendar, User, Tag, Target } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, CreditCard, Calendar, User, Tag, Target, Camera } from 'lucide-react';
 import { ExpenseFormData } from '@/types/budget.types';
+import { useFamilyStore } from '@/store/familyStore';
 
 interface AddExpenseModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (data: ExpenseFormData) => void;
+  editData?: any;
 }
 
-const AddExpenseModal: React.FC<AddExpenseModalProps> = ({ isOpen, onClose, onSave }) => {
+const AddExpenseModal: React.FC<AddExpenseModalProps> = ({ isOpen, onClose, onSave, editData }) => {
+  const familyMembersFromStore = useFamilyStore((state) => state.familyMembers);
+  const peopleFromStore = useFamilyStore((state) => state.people);
+  const familyMembers = familyMembersFromStore.length > 0 ? familyMembersFromStore : peopleFromStore;
+
   const [formData, setFormData] = useState<ExpenseFormData>({
     expenseName: '',
     amount: 0,
@@ -22,18 +28,47 @@ const AddExpenseModal: React.FC<AddExpenseModalProps> = ({ isOpen, onClose, onSa
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isScanning, setIsScanning] = useState(false);
+  const [scanError, setScanError] = useState<string>('');
+
+  // Populate form when editData is provided
+  useEffect(() => {
+    if (editData) {
+      const formatDate = (date: any) => {
+        if (!date) return '';
+        const d = new Date(date);
+        return d.toISOString().split('T')[0];
+      };
+
+      setFormData({
+        expenseName: editData.expenseName || '',
+        amount: editData.amount || 0,
+        category: editData.category || 'Housing',
+        budgetLimit: editData.budgetLimit,
+        isRecurring: editData.isRecurring ?? true,
+        recurringFrequency: editData.recurringFrequency || 'monthly',
+        recurringStartDate: formatDate(editData.recurringStartDate),
+        recurringEndDate: formatDate(editData.recurringEndDate),
+        paymentDate: formatDate(editData.paymentDate),
+        personId: editData.personId || ''
+      });
+    } else {
+      // Reset form for new expense
+      setFormData({
+        expenseName: '',
+        amount: 0,
+        category: 'Housing',
+        budgetLimit: undefined,
+        isRecurring: true,
+        paymentDate: '',
+        personId: ''
+      });
+    }
+  }, [editData]);
 
   const expenseCategories = [
     'Housing', 'Transportation', 'Food & Dining', 'Entertainment', 'Healthcare',
     'Childcare', 'Education', 'Utilities', 'Insurance', 'Clothing', 'Other'
-  ];
-
-  const familyMembers = [
-    { id: 'ade', name: 'Ade' },
-    { id: 'angela', name: 'Angela' },
-    { id: 'amari', name: 'Amari' },
-    { id: 'askia', name: 'Askia' },
-    { id: 'all', name: 'Family' }
   ];
 
   const handleInputChange = (field: keyof ExpenseFormData, value: any) => {
@@ -98,7 +133,89 @@ const AddExpenseModal: React.FC<AddExpenseModalProps> = ({ isOpen, onClose, onSa
 
   const handleClose = () => {
     resetForm();
+    setScanError('');
     onClose();
+  };
+
+  const handleScanReceipt = async () => {
+    try {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.capture = 'environment';
+
+      input.onchange = async (e: any) => {
+        const file = e.target?.files?.[0];
+        if (!file) return;
+
+        setScanError('');
+        setIsScanning(true);
+
+        try {
+          // Convert to base64
+          const reader = new FileReader();
+          reader.readAsDataURL(file);
+
+          reader.onload = async () => {
+            try {
+              const base64Image = reader.result as string;
+
+              // Get family ID from store
+              const databaseStatus = useFamilyStore.getState().databaseStatus;
+              const familyId = databaseStatus.familyId;
+
+              if (!familyId) {
+                throw new Error('No family ID available');
+              }
+
+              // Call receipt scanner API
+              const response = await fetch(`/api/families/${familyId}/budget/ai-receipt`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ image: base64Image })
+              });
+
+              if (!response.ok) {
+                throw new Error(`Receipt scan failed: ${response.status}`);
+              }
+
+              const scannedData = await response.json();
+
+              // Pre-fill form with scanned data
+              setFormData(prev => ({
+                ...prev,
+                expenseName: scannedData.name || prev.expenseName,
+                amount: scannedData.amount || prev.amount,
+                category: scannedData.category || prev.category,
+                paymentDate: scannedData.paymentDate || prev.paymentDate,
+                isRecurring: false, // Receipt scans are one-time by default
+              }));
+
+              setIsScanning(false);
+            } catch (error) {
+              console.error('Receipt scan error:', error);
+              setScanError(error instanceof Error ? error.message : 'Failed to scan receipt');
+              setIsScanning(false);
+            }
+          };
+
+          reader.onerror = () => {
+            setScanError('Failed to read image file');
+            setIsScanning(false);
+          };
+        } catch (error) {
+          console.error('File read error:', error);
+          setScanError('Failed to process image');
+          setIsScanning(false);
+        }
+      };
+
+      input.click();
+    } catch (error) {
+      console.error('Scan receipt error:', error);
+      setScanError('Failed to open camera');
+      setIsScanning(false);
+    }
   };
 
   if (!isOpen) return null;
@@ -115,15 +232,45 @@ const AddExpenseModal: React.FC<AddExpenseModalProps> = ({ isOpen, onClose, onSa
               <div className="p-2 bg-red-100 rounded-lg mr-3">
                 <CreditCard className="w-6 h-6 text-red-600" />
               </div>
-              <h3 className="text-lg font-medium text-gray-900">Add Expense</h3>
+              <h3 className="text-lg font-medium text-gray-900">{editData ? 'Edit Expense' : 'Add Expense'}</h3>
             </div>
-            <button
-              onClick={handleClose}
-              className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
-            >
-              <X className="w-5 h-5" />
-            </button>
+            <div className="flex items-center space-x-2">
+              {!editData && (
+                <button
+                  type="button"
+                  onClick={handleScanReceipt}
+                  disabled={isScanning}
+                  className="p-2 text-blue-600 hover:text-blue-700 rounded-lg hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Scan Receipt"
+                >
+                  <Camera className={`w-5 h-5 ${isScanning ? 'animate-pulse' : ''}`} />
+                </button>
+              )}
+              <button
+                onClick={handleClose}
+                className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
           </div>
+
+          {/* Scanning status */}
+          {isScanning && (
+            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
+              <p className="text-sm text-blue-700 flex items-center">
+                <Camera className="w-4 h-4 mr-2 animate-pulse" />
+                Scanning receipt...
+              </p>
+            </div>
+          )}
+
+          {/* Scan error */}
+          {scanError && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
+              <p className="text-sm text-red-700">{scanError}</p>
+            </div>
+          )}
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -221,6 +368,7 @@ const AddExpenseModal: React.FC<AddExpenseModalProps> = ({ isOpen, onClose, onSa
                 className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-red-500 focus:border-transparent"
               >
                 <option value="">Select family member</option>
+                <option value="all">Family (All Members)</option>
                 {familyMembers.map(member => (
                   <option key={member.id} value={member.id}>{member.name}</option>
                 ))}
@@ -240,18 +388,64 @@ const AddExpenseModal: React.FC<AddExpenseModalProps> = ({ isOpen, onClose, onSa
               </label>
             </div>
 
-            {/* Payment Date */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {formData.isRecurring ? 'Next Payment Date' : 'Payment Date'}
-              </label>
-              <input
-                type="date"
-                value={formData.paymentDate}
-                onChange={(e) => handleInputChange('paymentDate', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-red-500 focus:border-transparent"
-              />
-            </div>
+            {/* Recurring Options - Show when isRecurring is true */}
+            {formData.isRecurring && (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Frequency *
+                  </label>
+                  <select
+                    value={formData.recurringFrequency || 'monthly'}
+                    onChange={(e) => handleInputChange('recurringFrequency', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  >
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
+                    <option value="yearly">Yearly</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Start Date *
+                  </label>
+                  <input
+                    type="date"
+                    value={formData.recurringStartDate || ''}
+                    onChange={(e) => handleInputChange('recurringStartDate', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    End Date <span className="text-gray-500 text-xs">(leave blank for indefinite)</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={formData.recurringEndDate || ''}
+                    onChange={(e) => handleInputChange('recurringEndDate', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  />
+                </div>
+              </>
+            )}
+
+            {/* Payment Date - Only show for one-time payments */}
+            {!formData.isRecurring && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Payment Date
+                </label>
+                <input
+                  type="date"
+                  value={formData.paymentDate}
+                  onChange={(e) => handleInputChange('paymentDate', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                />
+              </div>
+            )}
 
             {/* Buttons */}
             <div className="flex justify-end space-x-3 pt-4">
@@ -266,7 +460,7 @@ const AddExpenseModal: React.FC<AddExpenseModalProps> = ({ isOpen, onClose, onSa
                 type="submit"
                 className="px-4 py-2 text-sm text-white bg-red-600 rounded-md hover:bg-red-700"
               >
-                Add Expense
+                {editData ? 'Update Expense' : 'Add Expense'}
               </button>
             </div>
           </form>

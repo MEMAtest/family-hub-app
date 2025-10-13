@@ -1,16 +1,22 @@
 'use client'
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, DollarSign, Calendar, User, Tag } from 'lucide-react';
 import { IncomeFormData } from '@/types/budget.types';
+import { useFamilyStore } from '@/store/familyStore';
 
 interface AddIncomeModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (data: IncomeFormData) => void;
+  editData?: any;
 }
 
-const AddIncomeModal: React.FC<AddIncomeModalProps> = ({ isOpen, onClose, onSave }) => {
+const AddIncomeModal: React.FC<AddIncomeModalProps> = ({ isOpen, onClose, onSave, editData }) => {
+  const familyMembersFromStore = useFamilyStore((state) => state.familyMembers);
+  const peopleFromStore = useFamilyStore((state) => state.people);
+  const familyMembers = familyMembersFromStore.length > 0 ? familyMembersFromStore : peopleFromStore;
+
   const [formData, setFormData] = useState<IncomeFormData>({
     incomeName: '',
     amount: 0,
@@ -22,14 +28,41 @@ const AddIncomeModal: React.FC<AddIncomeModalProps> = ({ isOpen, onClose, onSave
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  // Populate form when editData is provided
+  useEffect(() => {
+    if (editData) {
+      const formatDate = (date: any) => {
+        if (!date) return '';
+        const d = new Date(date);
+        return d.toISOString().split('T')[0];
+      };
+
+      setFormData({
+        incomeName: editData.incomeName || '',
+        amount: editData.amount || 0,
+        category: editData.category || 'Salary',
+        isRecurring: editData.isRecurring ?? true,
+        recurringFrequency: editData.recurringFrequency || 'monthly',
+        recurringStartDate: formatDate(editData.recurringStartDate),
+        recurringEndDate: formatDate(editData.recurringEndDate),
+        paymentDate: formatDate(editData.paymentDate),
+        personId: editData.personId || ''
+      });
+    } else {
+      // Reset form for new income
+      setFormData({
+        incomeName: '',
+        amount: 0,
+        category: 'Salary',
+        isRecurring: true,
+        paymentDate: '',
+        personId: ''
+      });
+    }
+  }, [editData]);
+
   const incomeCategories = [
     'Salary', 'Freelance', 'Investment', 'Rental', 'Business', 'Government Benefits', 'Other'
-  ];
-
-  const familyMembers = [
-    { id: 'ade', name: 'Ade' },
-    { id: 'angela', name: 'Angela' },
-    { id: 'all', name: 'Family' }
   ];
 
   const handleInputChange = (field: keyof IncomeFormData, value: any) => {
@@ -105,7 +138,7 @@ const AddIncomeModal: React.FC<AddIncomeModalProps> = ({ isOpen, onClose, onSave
               <div className="p-2 bg-green-100 rounded-lg mr-3">
                 <DollarSign className="w-6 h-6 text-green-600" />
               </div>
-              <h3 className="text-lg font-medium text-gray-900">Add Income</h3>
+              <h3 className="text-lg font-medium text-gray-900">{editData ? 'Edit Income' : 'Add Income'}</h3>
             </div>
             <button
               onClick={handleClose}
@@ -188,6 +221,7 @@ const AddIncomeModal: React.FC<AddIncomeModalProps> = ({ isOpen, onClose, onSave
                 className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent"
               >
                 <option value="">Select family member</option>
+                <option value="all">Family (All Members)</option>
                 {familyMembers.map(member => (
                   <option key={member.id} value={member.id}>{member.name}</option>
                 ))}
@@ -207,18 +241,64 @@ const AddIncomeModal: React.FC<AddIncomeModalProps> = ({ isOpen, onClose, onSave
               </label>
             </div>
 
-            {/* Payment Date */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {formData.isRecurring ? 'Next Payment Date' : 'Payment Date'}
-              </label>
-              <input
-                type="date"
-                value={formData.paymentDate}
-                onChange={(e) => handleInputChange('paymentDate', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              />
-            </div>
+            {/* Recurring Options - Show when isRecurring is true */}
+            {formData.isRecurring && (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Frequency *
+                  </label>
+                  <select
+                    value={formData.recurringFrequency || 'monthly'}
+                    onChange={(e) => handleInputChange('recurringFrequency', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  >
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
+                    <option value="yearly">Yearly</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Start Date *
+                  </label>
+                  <input
+                    type="date"
+                    value={formData.recurringStartDate || ''}
+                    onChange={(e) => handleInputChange('recurringStartDate', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    End Date <span className="text-gray-500 text-xs">(leave blank for indefinite)</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={formData.recurringEndDate || ''}
+                    onChange={(e) => handleInputChange('recurringEndDate', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  />
+                </div>
+              </>
+            )}
+
+            {/* Payment Date - Only show for one-time payments */}
+            {!formData.isRecurring && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Payment Date
+                </label>
+                <input
+                  type="date"
+                  value={formData.paymentDate}
+                  onChange={(e) => handleInputChange('paymentDate', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                />
+              </div>
+            )}
 
             {/* Buttons */}
             <div className="flex justify-end space-x-3 pt-4">
@@ -233,7 +313,7 @@ const AddIncomeModal: React.FC<AddIncomeModalProps> = ({ isOpen, onClose, onSave
                 type="submit"
                 className="px-4 py-2 text-sm text-white bg-green-600 rounded-md hover:bg-green-700"
               >
-                Add Income
+                {editData ? 'Update Income' : 'Add Income'}
               </button>
             </div>
           </form>

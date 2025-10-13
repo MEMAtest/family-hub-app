@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import {
   Calendar as CalendarIcon,
   DollarSign,
@@ -25,6 +25,7 @@ import { FamilyView } from './views/FamilyView';
 import { NewsView } from './views/NewsView';
 import { FamilyHubModals } from './FamilyHubModals';
 import Breadcrumb from '@/components/common/Breadcrumb';
+import SetupWizard from '@/components/common/SetupWizard';
 import { useAppView } from '@/contexts/familyHub/AppViewContext';
 import { useCalendarContext } from '@/contexts/familyHub/CalendarContext';
 import { useBudgetContext } from '@/contexts/familyHub/BudgetContext';
@@ -33,6 +34,8 @@ import { useDatabaseSync } from '@/hooks/useDatabaseSync';
 import { useClientTime } from '@/hooks/useClientTime';
 import { formatDateConsistent } from '@/utils/date';
 import { useFamilyStore } from '@/store/familyStore';
+import { DebugPanel } from '@/components/DebugPanel';
+import { PWAInstallPrompt } from '@/components/pwa/PWAInstallPrompt';
 
 const NAV_ITEMS: NavItem[] = [
   { id: 'dashboard', label: 'Dashboard', icon: Home },
@@ -62,6 +65,35 @@ export const FamilyHubShell = () => {
   const { openCreateForm } = useCalendarContext();
   const { openForm: openBudgetForm } = useBudgetContext();
   const { openForm: openShoppingForm, lists } = useShoppingContext();
+
+  // Setup Wizard state
+  const [showSetupWizard, setShowSetupWizard] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js')
+        .then((registration) => {
+          if (registration.waiting) {
+            registration.waiting.postMessage('SKIP_WAITING');
+          }
+        })
+        .catch((error) => {
+          console.error('Service Worker registration failed:', error);
+        });
+    }
+  }, []);
+
+  // Check if setup wizard should be shown on mount (client-side only)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const setupComplete = localStorage.getItem('familyHub_setupComplete');
+      if (!setupComplete) {
+        // Show wizard after a brief delay for better UX
+        setTimeout(() => setShowSetupWizard(true), 1000);
+      }
+    }
+  }, []);
 
   const rightContent = useMemo(() => (
     <div className="hidden items-center gap-2 lg:flex">
@@ -155,7 +187,7 @@ export const FamilyHubShell = () => {
           rightContent={rightContent}
           databaseStatus={databaseStatus}
         />
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto pb-24 lg:pb-0">
           {currentView !== 'dashboard' && breadcrumbItems.length > 0 && (
             <div className="px-4 pt-4 lg:px-8">
               <Breadcrumb
@@ -169,6 +201,16 @@ export const FamilyHubShell = () => {
       </div>
 
       <FamilyHubModals />
+      <DebugPanel />
+      <PWAInstallPrompt />
+
+      {/* Setup Wizard */}
+      {showSetupWizard && (
+        <SetupWizard
+          onClose={() => setShowSetupWizard(false)}
+          onComplete={() => setShowSetupWizard(false)}
+        />
+      )}
     </div>
   );
 };

@@ -18,7 +18,7 @@ export interface BudgetFormState {
 
 interface BudgetContextValue {
   data: BudgetData | null;
-  setData: (data: BudgetData) => void;
+  setData: (data: BudgetData | null) => void;
   updateData: (updates: Partial<BudgetData>) => void;
   addEntry: (entry: BudgetFormState) => void;
   isFormOpen: boolean;
