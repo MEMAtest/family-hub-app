@@ -12,15 +12,15 @@ const inter = Inter({
 })
 
 export const metadata: Metadata = {
-  title: 'Family Hub - Manage Your Family Life',
-  description: 'A comprehensive family management application with calendar, budget tracking, meal planning, shopping lists, goals tracking, and family member management.',
+  title: 'Omosanya Family Hub – Manage Your Family Life',
+  description: 'A comprehensive family management application with calendar, budget tracking, meal planning, shopping lists, goals tracking, and family member management for the Omosanya household.',
   keywords: ['family', 'management', 'calendar', 'budget', 'meals', 'shopping', 'goals', 'PWA', 'mobile'],
-  authors: [{ name: 'Family Hub Team' }],
+  authors: [{ name: 'Omosanya Family Hub Team' }],
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
-    title: 'Family Hub',
+    title: 'Omosanya Hub',
     startupImage: [
       {
         url: '/apple-splash-1170x2532.png',
@@ -84,22 +84,22 @@ export const metadata: Metadata = {
   },
   openGraph: {
     type: 'website',
-    siteName: 'Family Hub',
-    title: 'Family Hub - Manage Your Family Life',
+    siteName: 'Omosanya Family Hub',
+    title: 'Omosanya Family Hub – Manage Your Family Life',
     description: 'A comprehensive family management application with calendar, budget, meals, and more',
     images: [
       {
         url: '/og-image.png',
         width: 1200,
         height: 630,
-        alt: 'Family Hub App'
+        alt: 'Omosanya Family Hub'
       }
     ]
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Family Hub',
-    description: 'A comprehensive family management application',
+    title: 'Omosanya Family Hub',
+    description: 'A comprehensive family management application for the Omosanya family',
     images: ['/og-image.png']
   },
   robots: {

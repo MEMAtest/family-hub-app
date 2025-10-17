@@ -99,16 +99,35 @@ export async function POST(
       })),
     };
 
-    const aiResponse = await aiService.summariseGoalProgress(aiInput);
-    const summary = parseAiJson(aiResponse);
+    try {
+      const aiResponse = await aiService.summariseGoalProgress(aiInput);
+      const summary = parseAiJson(aiResponse);
 
-    return NextResponse.json(
-      {
-        summary,
-        raw: aiResponse,
-      },
-      { status: 200 }
-    );
+      return NextResponse.json(
+        {
+          summary,
+          raw: aiResponse,
+          fallback: false,
+        },
+        { status: 200 }
+      );
+    } catch (aiError) {
+      console.error('Goal progress AI service error:', aiError);
+      const fallbackSummary = buildFallbackGoalSummary({
+        familyName: family.familyName,
+        goals,
+        achievements,
+      });
+
+      return NextResponse.json(
+        {
+          summary: fallbackSummary,
+          raw: null,
+          fallback: true,
+        },
+        { status: 200 }
+      );
+    }
   } catch (error) {
     console.error('Goal progress AI error:', error);
     return NextResponse.json(
@@ -120,3 +139,130 @@ export async function POST(
     );
   }
 }
+
+const buildFallbackGoalSummary = ({
+  familyName,
+  goals,
+  achievements,
+}: {
+  familyName: string;
+  goals: Array<{
+    goalTitle: string;
+    goalType: string;
+    currentProgress: number;
+    targetValue: string;
+    deadline: Date | null;
+    updatedAt: Date | null;
+  }>;
+  achievements: Array<{
+    achievementTitle: string;
+    category: string;
+    pointsAwarded: number;
+    achievedDate: Date;
+  }>;
+}): ParsedGoalProgressSummary => {
+  const totalGoals = goals.length;
+  const completedGoals = goals.filter((goal) => goal.currentProgress >= 100).length;
+  const averageProgress =
+    totalGoals === 0
+      ? 0
+      : Math.round(
+          goals.reduce((sum, goal) => sum + goal.currentProgress, 0) / totalGoals
+        );
+
+  const latestAchievement = achievements[0];
+
+  const goalBreakdown = goals.slice(0, 12).map((goal) => {
+    const status =
+      goal.currentProgress >= 80
+        ? 'on_track'
+        : goal.currentProgress >= 50
+          ? 'behind'
+          : 'at_risk';
+
+    return {
+      title: goal.goalTitle,
+      progress: goal.currentProgress,
+      status,
+      highlight:
+        status === 'on_track'
+          ? 'Progress is on track based on recent updates.'
+          : status === 'behind'
+            ? 'Momentum is slowing; consider a mid-point check-in.'
+            : 'Needs focused attention to stay viable.',
+      nextStep:
+        status === 'on_track'
+          ? 'Keep following the current routine.'
+          : status === 'behind'
+            ? 'Schedule a planning session to unblock progress.'
+            : 'Break the goal into smaller weekly targets and assign owners.',
+    };
+  });
+
+  const riskyGoals = goalBreakdown
+    .filter((goal) => goal.status === 'at_risk')
+    .map((goal) => goal.title);
+
+  const summaryLines = [
+    `${familyName} is tracking ${totalGoals} active goal${totalGoals === 1 ? '' : 's'} with an average completion of ${averageProgress}%.`,
+    completedGoals
+      ? `${completedGoals} goal${completedGoals === 1 ? '' : 's'} are already complete — great work!`
+      : 'No goals are complete yet, but steady progress keeps everyone accountable.',
+    riskyGoals.length
+      ? `Give extra support to ${riskyGoals.slice(0, 2).join(', ')} to prevent these from slipping.`
+      : 'No critical risks spotted; focus on maintaining the current cadence.',
+  ];
+
+  if (latestAchievement) {
+    summaryLines.push(
+      `Recent win: ${latestAchievement.achievementTitle} (${latestAchievement.category}) earned ${latestAchievement.pointsAwarded} pts on ${latestAchievement.achievedDate.toLocaleDateString('en-GB')}. Celebrate this momentum.`
+    );
+  }
+
+  const recommendations: string[] = [];
+  if (riskyGoals.length) {
+    recommendations.push(
+      `Agree on next actions for ${riskyGoals[0]} so everyone knows how to contribute this week.`
+    );
+  }
+  if (averageProgress < 60) {
+    recommendations.push(
+      'Run a short weekly stand-up to unblock slower goals and rediscover motivation.'
+    );
+  }
+  if (!recommendations.length) {
+    recommendations.push('Continue celebrating small wins and capture new achievements to stay motivated.');
+  }
+
+  return {
+    summary: summaryLines.join(' '),
+    metrics: [
+      {
+        label: 'Active goals',
+        value: `${totalGoals}`,
+        context: completedGoals
+          ? `${completedGoals} completed`
+          : 'Looking for the first completion',
+      },
+      {
+        label: 'Average progress',
+        value: `${averageProgress}%`,
+        context: 'Across all goals',
+      },
+      {
+        label: 'Recent achievements',
+        value: `${achievements.length}`,
+        context: latestAchievement
+          ? `${latestAchievement.achievementTitle} earned on ${latestAchievement.achievedDate.toLocaleDateString('en-GB')}`
+          : 'Record achievements to spotlight momentum',
+      },
+    ],
+    goalBreakdown,
+    momentum: {
+      improving: [],
+      slipping: riskyGoals,
+    },
+    riskyGoals,
+    recommendations,
+  };
+};

@@ -39,7 +39,16 @@ import { useFamilyContext } from '@/contexts/familyHub/FamilyContext';
 import { useGoalsContext } from '@/contexts/familyHub/GoalsContext';
 import { useMealsContext } from '@/contexts/familyHub/MealsContext';
 import { stewartFleming2025To2026, stewartFleming2026To2027 } from '@/data/schoolTerms';
+import { extractBudgetRecords, summariseBudgetForMonth } from '@/utils/budgetAnalytics';
 import { useFamilyStore } from '@/store/familyStore';
+
+const currencyFormatter = new Intl.NumberFormat('en-GB', {
+  style: 'currency',
+  currency: 'GBP',
+  maximumFractionDigits: 0,
+});
+
+const formatCurrency = (value: number) => currencyFormatter.format(value);
 
 const StatCard = ({
   label,
@@ -91,6 +100,7 @@ export const DashboardView = () => {
 
   // Fetch actual budget data from database
   const [dbBudgetTotals, setDbBudgetTotals] = useState({ income: 0, expenses: 0, net: 0 });
+  const [budgetTotalsLoaded, setBudgetTotalsLoaded] = useState(false);
   const familyId = useFamilyStore((state) => state.databaseStatus.familyId);
 
   useEffect(() => {
@@ -98,6 +108,7 @@ export const DashboardView = () => {
       if (!familyId) return;
 
       try {
+        setBudgetTotalsLoaded(false);
         // Get current month and year
         const now = new Date();
         const currentMonth = now.getMonth() + 1;
@@ -123,6 +134,7 @@ export const DashboardView = () => {
           expenses: totalExpenses,
           net: totalIncome - totalExpenses
         });
+        setBudgetTotalsLoaded(true);
       } catch (error) {
         console.error('Failed to fetch budget data:', error);
       }
@@ -171,38 +183,42 @@ export const DashboardView = () => {
     return calendarDerived.length > 0 ? calendarDerived : baseTerms;
   }, [events, selectedSchoolYear]);
 
-  const budgetTotals = useMemo(() => {
-    if (!budgetData) {
-      return { income: 0, expenses: 0, net: 0 };
+  const { expenseRecords } = useMemo(() => extractBudgetRecords(budgetData), [budgetData]);
+
+  const monthlyBudgetSnapshot = useMemo(
+    () => summariseBudgetForMonth(budgetData),
+    [budgetData]
+  );
+
+  const { income: apiIncome, expenses: apiExpenses, net: apiNet } = dbBudgetTotals;
+  const {
+    totalIncome: snapshotIncome,
+    totalExpenses: snapshotExpenses,
+    netIncome: snapshotNet,
+  } = monthlyBudgetSnapshot;
+
+  const budgetCardTotals = useMemo(() => {
+    if (budgetTotalsLoaded) {
+      return {
+        income: apiIncome,
+        expenses: apiExpenses,
+        net: apiNet,
+      };
     }
-
-    const income = Object.values(budgetData.income.monthly ?? {})
-      .filter((item: any) => item !== null && item !== undefined)
-      .reduce((sum, item: any) => sum + (item.amount || 0), 0)
-      + (budgetData.income.oneTime ?? [])
-        .filter((item: any) => item !== null && item !== undefined)
-        .reduce((sum, item: any) => sum + (item.amount || 0), 0);
-
-    const recurringExpenses = Object.values(budgetData.expenses.recurringMonthly ?? {})
-      .filter((section: any) => section !== null && section !== undefined)
-      .reduce((sectionSum, section: any) => {
-        return sectionSum + Object.values(section)
-          .filter((item: any) => item !== null && item !== undefined)
-          .reduce((sum: number, item: any) => sum + (item.amount || 0), 0);
-      }, 0);
-
-    const oneTimeExpenses = (budgetData.expenses.oneTimeSpends ?? [])
-      .filter((item: any) => item !== null && item !== undefined)
-      .reduce((sum, item: any) => sum + (item.amount || 0), 0);
-
-    const expenses = recurringExpenses + oneTimeExpenses;
-
     return {
-      income,
-      expenses,
-      net: income - expenses,
+      income: snapshotIncome,
+      expenses: snapshotExpenses,
+      net: snapshotNet,
     };
-  }, [budgetData]);
+  }, [
+    budgetTotalsLoaded,
+    apiIncome,
+    apiExpenses,
+    apiNet,
+    snapshotIncome,
+    snapshotExpenses,
+    snapshotNet,
+  ]);
 
   const totalGoals = (goalsData?.familyGoals?.length || 0) + (goalsData?.individualGoals?.length || 0);
   const avgGoalProgress = useMemo(() => {
@@ -224,32 +240,19 @@ export const DashboardView = () => {
   }, [mealPlanning]);
 
   const budgetCategorySeries = useMemo(() => {
-    if (!budgetData) return [] as Array<{ category: string; amount: number }>;
+    if (!expenseRecords.length) return [] as Array<{ category: string; amount: number }>;
 
-    const recurring = Object.entries(budgetData.expenses.recurringMonthly || {}).flatMap(([group, items]) =>
-      Object.values(items as Record<string, any>)
-        .filter((item: any) => item !== null && item !== undefined)
-        .map((item: any) => ({
-          category: item.category || group,
-          amount: item.amount || 0,
-        }))
-    );
-
-    const oneTime = (budgetData.expenses.oneTimeSpends || [])
-      .filter((item: any) => item !== null && item !== undefined)
-      .map((item: any) => ({
-        category: item.category || 'One-time',
-        amount: item.amount || 0,
-      }));
-
-    const merged = [...recurring, ...oneTime];
     const totals = new Map<string, number>();
-    merged.forEach(({ category, amount }) => {
-      totals.set(category, (totals.get(category) || 0) + amount);
+    expenseRecords.forEach((record) => {
+      const category = record.category || 'Other';
+      totals.set(category, (totals.get(category) || 0) + Number(record.amount || 0));
     });
 
-    return Array.from(totals.entries()).map(([category, amount]) => ({ category, amount }));
-  }, [budgetData]);
+    return Array.from(totals.entries()).map(([category, amount]) => ({
+      category,
+      amount: Number(amount.toFixed(2)),
+    }));
+  }, [expenseRecords]);
 
   const upcomingSchoolHighlights = useMemo(() => {
     const today = new Date();
@@ -271,8 +274,8 @@ export const DashboardView = () => {
     {
       key: 'budget',
       label: 'Net Income',
-      value: `£${dbBudgetTotals.net.toLocaleString(undefined, { maximumFractionDigits: 0 })}`,
-      subtext: `Income £${dbBudgetTotals.income.toLocaleString(undefined, { maximumFractionDigits: 0 })}`,
+      value: formatCurrency(budgetCardTotals.net),
+      subtext: `Income ${formatCurrency(budgetCardTotals.income)}`,
       icon: DollarSign,
       onClick: () => setView('budget' as const),
     },
@@ -292,7 +295,7 @@ export const DashboardView = () => {
       icon: Target,
       onClick: () => setView('goals' as const),
     },
-  ]), [avgGoalProgress, dbBudgetTotals, lists, setView, totalGoals, upcomingEvents]);
+  ]), [avgGoalProgress, budgetCardTotals, lists, setView, totalGoals, upcomingEvents]);
 
   return (
     <div className="space-y-6 p-4 lg:p-8">
@@ -517,9 +520,9 @@ export const DashboardView = () => {
           <div className="mt-4 h-64">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={[
-                { name: 'Income', amount: dbBudgetTotals.income, fill: '#10B981' },
-                { name: 'Expenses', amount: dbBudgetTotals.expenses, fill: '#EF4444' },
-                { name: 'Net', amount: dbBudgetTotals.net, fill: dbBudgetTotals.net >= 0 ? '#3B82F6' : '#F59E0B' }
+                { name: 'Income', amount: budgetCardTotals.income, fill: '#10B981' },
+                { name: 'Expenses', amount: budgetCardTotals.expenses, fill: '#EF4444' },
+                { name: 'Net', amount: budgetCardTotals.net, fill: budgetCardTotals.net >= 0 ? '#3B82F6' : '#F59E0B' }
               ]}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
                 <XAxis dataKey="name" tick={{ fontSize: 12 }} />
@@ -533,16 +536,16 @@ export const DashboardView = () => {
           <div className="mt-4 grid grid-cols-3 gap-4 text-sm">
             <div className="rounded-lg bg-green-50 p-3 border border-green-200">
               <p className="text-xs text-green-700 font-medium">Total Income</p>
-              <p className="text-lg font-semibold text-green-900">£{dbBudgetTotals.income.toLocaleString()}</p>
+              <p className="text-lg font-semibold text-green-900">£{budgetCardTotals.income.toLocaleString()}</p>
             </div>
             <div className="rounded-lg bg-red-50 p-3 border border-red-200">
               <p className="text-xs text-red-700 font-medium">Total Expenses</p>
-              <p className="text-lg font-semibold text-red-900">£{dbBudgetTotals.expenses.toLocaleString()}</p>
+              <p className="text-lg font-semibold text-red-900">£{budgetCardTotals.expenses.toLocaleString()}</p>
             </div>
-            <div className={`rounded-lg p-3 border ${dbBudgetTotals.net >= 0 ? 'bg-blue-50 border-blue-200' : 'bg-amber-50 border-amber-200'}`}>
-              <p className={`text-xs font-medium ${dbBudgetTotals.net >= 0 ? 'text-blue-700' : 'text-amber-700'}`}>Net Income</p>
-              <p className={`text-lg font-semibold ${dbBudgetTotals.net >= 0 ? 'text-blue-900' : 'text-amber-900'}`}>
-                £{dbBudgetTotals.net.toLocaleString()}
+            <div className={`rounded-lg p-3 border ${budgetCardTotals.net >= 0 ? 'bg-blue-50 border-blue-200' : 'bg-amber-50 border-amber-200'}`}>
+              <p className={`text-xs font-medium ${budgetCardTotals.net >= 0 ? 'text-blue-700' : 'text-amber-700'}`}>Net Income</p>
+              <p className={`text-lg font-semibold ${budgetCardTotals.net >= 0 ? 'text-blue-900' : 'text-amber-900'}`}>
+                £{budgetCardTotals.net.toLocaleString()}
               </p>
             </div>
           </div>

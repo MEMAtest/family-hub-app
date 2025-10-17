@@ -80,7 +80,7 @@ export const FamilyHubNavigation = ({
       <aside className="hidden lg:flex w-64 flex-col border-r border-gray-200 bg-white p-4 sticky top-0 h-screen overflow-y-auto">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <p className="text-xs uppercase tracking-wide text-gray-500">Family Hub</p>
+            <p className="text-xs uppercase tracking-wide text-gray-500">Omosanya Hub</p>
             <h2 className="text-lg font-semibold text-gray-900">Navigation</h2>
           </div>
           <Menu className="h-5 w-5 text-gray-400" />
@@ -116,7 +116,7 @@ export const FamilyHubNavigation = ({
               <Dialog.Panel className="relative flex w-full max-w-xs flex-col bg-white p-4 shadow-lg">
                 <div className="flex items-center justify-between mb-4">
                   <div>
-                    <p className="text-xs uppercase tracking-wide text-gray-500">Family Hub</p>
+                    <p className="text-xs uppercase tracking-wide text-gray-500">Omosanya Hub</p>
                     <h2 className="text-lg font-semibold text-gray-900">Navigate</h2>
                   </div>
                   <button onClick={onCloseMobile} className="rounded-md p-2 text-gray-500 hover:bg-gray-100">

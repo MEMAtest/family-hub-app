@@ -1,4 +1,5 @@
 import { BudgetExpense, BudgetIncome } from '@prisma/client';
+import type { BudgetData } from '@/store/familyStore';
 
 export interface MonthlySummary {
   monthKey: string; // YYYY-MM
@@ -224,4 +225,122 @@ export const sumByCategory = (records: Array<{ category?: string | null; amount:
     category,
     amount: Number(amount.toFixed(2)),
   }));
+};
+
+// ---------------------------------------------------------------------------
+// Client helpers – convert budget store data into analytic-friendly records
+// ---------------------------------------------------------------------------
+
+export type NormalisedBudgetRecord = {
+  amount: number;
+  category: string;
+  isRecurring: boolean;
+  paymentDate: Date | null;
+  createdAt: Date;
+  recurringStartDate: Date | null;
+  recurringEndDate: Date | null;
+};
+
+const toNumber = (value: unknown): number => {
+  if (value === null || value === undefined) return 0;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  if (typeof value === 'string') {
+    const parsed = parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  if (typeof value === 'object' && value !== null && 'toString' in value) {
+    const parsed = parseFloat((value as any).toString());
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+};
+
+const toDate = (value: unknown): Date | null => {
+  if (!value) return null;
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value;
+  }
+  const parsed = new Date(value as string);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const normaliseRecord = (record: any): NormalisedBudgetRecord => {
+  const paymentDate = toDate(record.paymentDate ?? record.date);
+  const createdAt =
+    toDate(record.createdAt) ??
+    paymentDate ??
+    new Date();
+
+  return {
+    amount: toNumber(record.amount),
+    category: record.category || 'Other',
+    isRecurring: Boolean(record.isRecurring),
+    paymentDate,
+    createdAt,
+    recurringStartDate: toDate(record.recurringStartDate),
+    recurringEndDate: toDate(record.recurringEndDate),
+  };
+};
+
+export const extractBudgetRecords = (budgetData: BudgetData | null) => {
+  if (!budgetData) {
+    return {
+      incomeRecords: [] as IncomeLike[],
+      expenseRecords: [] as ExpenseLike[],
+    };
+  }
+
+  const incomeRecordsRaw: any[] = [
+    ...Object.values(budgetData.income?.monthly ?? {}),
+    ...(budgetData.income?.oneTime ?? []),
+  ];
+
+  const expenseRecordsRaw: any[] = [
+    ...Object.values(budgetData.expenses?.recurringMonthly ?? {}),
+    ...(budgetData.expenses?.oneTimeSpends ?? []),
+  ];
+
+  const incomeRecords = incomeRecordsRaw.map(normaliseRecord) as unknown as IncomeLike[];
+  const expenseRecords = expenseRecordsRaw.map(normaliseRecord) as unknown as ExpenseLike[];
+
+  return { incomeRecords, expenseRecords };
+};
+
+export interface BudgetMonthSnapshot {
+  totalIncome: number;
+  totalExpenses: number;
+  netIncome: number;
+}
+
+export const summariseBudgetForMonth = (
+  budgetData: BudgetData | null,
+  referenceDate: Date = new Date()
+): BudgetMonthSnapshot => {
+  const { incomeRecords, expenseRecords } = extractBudgetRecords(budgetData);
+
+  if (!incomeRecords.length && !expenseRecords.length) {
+    return {
+      totalIncome: 0,
+      totalExpenses: 0,
+      netIncome: 0,
+    };
+  }
+
+  const incomeSummary = buildIncomeSummaries(incomeRecords, {
+    months: 1,
+    referenceDate,
+  });
+  const expenseSummary = buildExpenseSummaries(expenseRecords, {
+    months: 1,
+    referenceDate,
+  });
+
+  const totalIncome = incomeSummary.at(-1)?.total ?? 0;
+  const totalExpenses = expenseSummary.at(-1)?.total ?? 0;
+
+  return {
+    totalIncome: Number(totalIncome.toFixed(2)),
+    totalExpenses: Number(totalExpenses.toFixed(2)),
+    netIncome: Number((totalIncome - totalExpenses).toFixed(2)),
+  };
 };

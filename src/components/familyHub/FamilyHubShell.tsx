@@ -181,7 +181,7 @@ export const FamilyHubShell = () => {
 
       <div className="flex flex-1 flex-col">
         <FamilyHubHeader
-          title="Family Hub"
+          title="Omosanya Family Hub"
           subtitle={subtitle}
           onToggleMobileNav={openMobileMenu}
           rightContent={rightContent}

@@ -56,6 +56,17 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Ignore non-HTTP(S) schemes (e.g., chrome-extension://) to avoid cache errors
+  try {
+    const scheme = new URL(request.url).protocol;
+    if (scheme !== 'http:' && scheme !== 'https:') {
+      return;
+    }
+  } catch (urlError) {
+    // If the URL cannot be parsed, let the network handle it
+    return;
+  }
+
   const url = new URL(request.url);
   const isSameOrigin = url.origin === self.location.origin;
   const acceptHeader = request.headers.get('accept') || '';
