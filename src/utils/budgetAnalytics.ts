@@ -335,8 +335,8 @@ export const summariseBudgetForMonth = (
     referenceDate,
   });
 
-  const totalIncome = incomeSummary.at(-1)?.total ?? 0;
-  const totalExpenses = expenseSummary.at(-1)?.total ?? 0;
+  const totalIncome = incomeSummary.length ? incomeSummary[incomeSummary.length - 1].total : 0;
+  const totalExpenses = expenseSummary.length ? expenseSummary[expenseSummary.length - 1].total : 0;
 
   return {
     totalIncome: Number(totalIncome.toFixed(2)),
