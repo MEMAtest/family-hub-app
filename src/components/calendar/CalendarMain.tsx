@@ -6,8 +6,8 @@ import { Calendar, momentLocalizer, View, Views } from 'react-big-calendar'
 type ExtendedView = View | 'YEAR';
 import withDragAndDrop from 'react-big-calendar/lib/addons/dragAndDrop'
 import moment from 'moment'
-import 'react-big-calendar/lib/css/react-big-calendar.css'
-import 'react-big-calendar/lib/addons/dragAndDrop/styles.css'
+import '@/styles/react-big-calendar.css'
+import '@/styles/react-big-calendar-dnd.css'
 import './calendar-dnd.css'
 import {
   CalendarDays,
@@ -528,7 +528,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
     social: 'bg-pink-100 text-pink-800',
     education: 'bg-yellow-100 text-yellow-800',
     family: 'bg-red-100 text-red-800',
-    other: 'bg-gray-100 text-gray-800',
+    other: 'bg-gray-100 text-gray-800 dark:text-slate-200',
     appointment: 'bg-orange-100 text-orange-800',
     work: 'bg-indigo-100 text-indigo-800',
     personal: 'bg-teal-100 text-teal-800'
@@ -596,7 +596,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
 
   // Mobile Calendar Header Component
   const renderMobileHeader = () => (
-    <div className="lg:hidden bg-white border-b border-gray-200 px-4 py-3 sticky top-0 z-40 pwa-safe-top">
+    <div className="lg:hidden bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 px-4 py-3 sticky top-0 z-40 pwa-safe-top">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-3">
           <CalendarDays className="w-6 h-6 text-blue-600" />
@@ -604,9 +604,9 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
         </div>
         <button
           onClick={() => setShowMobileMenu(!showMobileMenu)}
-          className="p-2 hover:bg-gray-100 rounded-lg touch-target"
+          className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg touch-target"
         >
-          <Settings className="w-5 h-5 text-gray-600" />
+          <Settings className="w-5 h-5 text-gray-600 dark:text-slate-300" />
         </button>
       </div>
 
@@ -617,7 +617,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
             const unit = view === 'YEAR' ? 'year' : view.toLowerCase() as any;
             handleNavigate(moment(currentDate).subtract(1, unit).toDate());
           }}
-          className="p-2 hover:bg-gray-100 rounded-lg touch-target"
+          className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg touch-target"
         >
           <ChevronLeft className="w-5 h-5" />
         </button>
@@ -637,7 +637,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
             const unit = view === 'YEAR' ? 'year' : view.toLowerCase() as any;
             handleNavigate(moment(currentDate).add(1, unit).toDate());
           }}
-          className="p-2 hover:bg-gray-100 rounded-lg touch-target"
+          className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg touch-target"
         >
           <ChevronRight className="w-5 h-5" />
         </button>
@@ -656,8 +656,8 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
             onClick={() => setView(viewType)}
             className={`py-2 px-1 text-sm rounded-md transition-colors touch-target ${
               view === viewType
-                ? 'bg-white text-gray-900 shadow-sm font-medium'
-                : 'text-gray-600'
+                ? 'bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 shadow-sm font-medium'
+                : 'text-gray-600 dark:text-slate-300'
             }`}
           >
             {label}
@@ -677,7 +677,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
           <button
             onClick={() => setShowFilters(!showFilters)}
             className={`p-2 rounded-lg touch-target transition-colors ${
-              showFilters ? 'bg-blue-100 text-blue-600' : 'hover:bg-gray-100 text-gray-600'
+              showFilters ? 'bg-blue-100 text-blue-600' : 'hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-600 dark:text-slate-300'
             }`}
           >
             <Filter className="w-4 h-4" />
@@ -696,11 +696,11 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
 
   // Desktop Calendar Header Component
   const renderDesktopHeader = () => (
-    <div className="hidden lg:flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 sm:p-4 md:p-6 border-b border-gray-200 gap-3">
+    <div className="hidden lg:flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 sm:p-4 md:p-6 border-b border-gray-200 dark:border-slate-800 gap-3">
         <div className="flex items-center space-x-4">
           <div className="flex items-center space-x-2">
             <CalendarDays className="w-6 h-6 text-blue-600" />
-            <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Calendar</h1>
+            <h1 className="text-xl sm:text-2xl font-semibold text-gray-900 dark:text-slate-100">Calendar</h1>
           </div>
 
           {/* Date Navigation */}
@@ -710,13 +710,13 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                 const unit = view === 'YEAR' ? 'year' : view.toLowerCase() as any;
                 handleNavigate(moment(currentDate).subtract(1, unit).toDate());
               }}
-              className="p-2 hover:bg-gray-100 rounded-md transition-colors"
+              className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-md transition-colors"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
 
-            <div className="px-4 py-2 bg-gray-50 rounded-md min-w-[200px] text-center">
-              <span className="text-lg font-medium text-gray-900">
+            <div className="px-4 py-2 bg-gray-50 dark:bg-slate-800 rounded-md min-w-[200px] text-center">
+              <span className="text-lg font-medium text-gray-900 dark:text-slate-100">
                 {view === Views.MONTH && moment(currentDate).format('MMMM YYYY')}
                 {view === Views.WEEK && `Week of ${moment(currentDate).startOf('week').format('MMM D, YYYY')}`}
                 {view === Views.DAY && moment(currentDate).format('dddd, MMMM D, YYYY')}
@@ -730,7 +730,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                 const unit = view === 'YEAR' ? 'year' : view.toLowerCase() as any;
                 handleNavigate(moment(currentDate).add(1, unit).toDate());
               }}
-              className="p-2 hover:bg-gray-100 rounded-md transition-colors"
+              className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-md transition-colors"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
@@ -746,17 +746,17 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
 
       {isAIConflictOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white w-full max-w-3xl rounded-lg shadow-xl overflow-hidden">
-            <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-3xl rounded-lg shadow-xl overflow-hidden">
+            <div className="flex items-center justify-between border-b border-gray-200 dark:border-slate-800 px-6 py-4">
               <div>
-                <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100 flex items-center gap-2">
                   <AlertTriangle className="w-5 h-5 text-purple-500" /> AI Conflict Review
                 </h3>
-                <p className="text-sm text-gray-500">Check overlaps before adding a new event</p>
+                <p className="text-sm text-gray-500 dark:text-slate-400">Check overlaps before adding a new event</p>
               </div>
               <button
                 onClick={closeAIConflictModal}
-                className="rounded-full p-2 text-gray-500 hover:bg-gray-100"
+                className="rounded-full p-2 text-gray-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800"
                 aria-label="Close conflict insights"
               >
                 <X className="w-5 h-5" />
@@ -766,7 +766,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
             <div className="px-6 py-5 space-y-5">
               <form onSubmit={handleAIConflictSubmit} className="space-y-4">
                 <div>
-                  <label className="text-sm font-medium text-gray-700">Event title</label>
+                  <label className="text-sm font-medium text-gray-700 dark:text-slate-300">Event title</label>
                   <input
                     type="text"
                     value={aiConflictForm.title}
@@ -777,7 +777,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="text-sm font-medium text-gray-700">Date</label>
+                    <label className="text-sm font-medium text-gray-700 dark:text-slate-300">Date</label>
                     <input
                       type="date"
                       value={aiConflictForm.date}
@@ -786,7 +786,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                     />
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-700">Start time</label>
+                    <label className="text-sm font-medium text-gray-700 dark:text-slate-300">Start time</label>
                     <input
                       type="time"
                       value={aiConflictForm.time}
@@ -795,7 +795,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                     />
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-700">Duration (minutes)</label>
+                    <label className="text-sm font-medium text-gray-700 dark:text-slate-300">Duration (minutes)</label>
                     <input
                       type="number"
                       min={15}
@@ -806,7 +806,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                     />
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-700">Who is attending?</label>
+                    <label className="text-sm font-medium text-gray-700 dark:text-slate-300">Who is attending?</label>
                     <select
                       value={aiConflictForm.personId}
                       onChange={(event) => setAiConflictForm((prev) => ({ ...prev, personId: event.target.value }))}
@@ -819,7 +819,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                   </div>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-700">Location (optional)</label>
+                  <label className="text-sm font-medium text-gray-700 dark:text-slate-300">Location (optional)</label>
                   <input
                     type="text"
                     value={aiConflictForm.location}
@@ -866,15 +866,15 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                   ) : (
                     <div className="space-y-3">
                       {aiConflictResult.conflicts.map((conflict, index) => (
-                        <div key={index} className="rounded-lg border border-gray-200 p-4">
+                        <div key={index} className="rounded-lg border border-gray-200 dark:border-slate-800 p-4">
                           <div className="flex items-center justify-between mb-2">
-                            <p className="text-sm font-semibold text-gray-900">{conflict.newEvent.title}</p>
-                            <span className="text-xs uppercase tracking-wide text-gray-500">Severity: {conflict.severity}</span>
+                            <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">{conflict.newEvent.title}</p>
+                            <span className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-400">Severity: {conflict.severity}</span>
                           </div>
-                          <p className="text-xs text-gray-600 mb-2">{conflict.newEvent.date} at {conflict.newEvent.time}</p>
+                          <p className="text-xs text-gray-600 dark:text-slate-300 mb-2">{conflict.newEvent.date} at {conflict.newEvent.time}</p>
                           <div className="space-y-2">
-                            <p className="text-sm font-medium text-gray-900">Conflicts with:</p>
-                            <ul className="space-y-1 text-sm text-gray-700">
+                            <p className="text-sm font-medium text-gray-900 dark:text-slate-100">Conflicts with:</p>
+                            <ul className="space-y-1 text-sm text-gray-700 dark:text-slate-300">
                               {conflict.conflictingEvents.map((event, idx) => (
                                 <li key={idx} className="flex items-center gap-2">
                                   <span className="h-2 w-2 rounded-full bg-red-400"></span>
@@ -885,8 +885,8 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                           </div>
                           {conflict.recommendations.length > 0 && (
                             <div className="mt-3">
-                              <p className="text-sm font-medium text-gray-900">Recommendations</p>
-                              <ul className="list-disc pl-5 text-sm text-gray-700 space-y-1 mt-1">
+                              <p className="text-sm font-medium text-gray-900 dark:text-slate-100">Recommendations</p>
+                              <ul className="list-disc pl-5 text-sm text-gray-700 dark:text-slate-300 space-y-1 mt-1">
                                 {conflict.recommendations.map((rec, idx) => (
                                   <li key={idx}>{rec}</li>
                                 ))}
@@ -906,17 +906,17 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
 
       {isAIScheduleOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white w-full max-w-3xl rounded-lg shadow-xl overflow-hidden">
-            <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-3xl rounded-lg shadow-xl overflow-hidden">
+            <div className="flex items-center justify-between border-b border-gray-200 dark:border-slate-800 px-6 py-4">
               <div>
-                <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100 flex items-center gap-2">
                   <Sparkles className="w-5 h-5 text-blue-500" /> Smart Scheduling Suggestions
                 </h3>
-                <p className="text-sm text-gray-500">Find the best time that keeps everyone free</p>
+                <p className="text-sm text-gray-500 dark:text-slate-400">Find the best time that keeps everyone free</p>
               </div>
               <button
                 onClick={closeAIScheduleModal}
-                className="rounded-full p-2 text-gray-500 hover:bg-gray-100"
+                className="rounded-full p-2 text-gray-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800"
                 aria-label="Close scheduling insights"
               >
                 <X className="w-5 h-5" />
@@ -926,7 +926,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
             <div className="px-6 py-5 space-y-5">
               <form onSubmit={handleAIScheduleSubmit} className="space-y-4">
                 <div>
-                  <label className="text-sm font-medium text-gray-700">Meeting title</label>
+                  <label className="text-sm font-medium text-gray-700 dark:text-slate-300">Meeting title</label>
                   <input
                     type="text"
                     value={aiScheduleForm.title}
@@ -937,7 +937,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="text-sm font-medium text-gray-700">Duration (minutes)</label>
+                    <label className="text-sm font-medium text-gray-700 dark:text-slate-300">Duration (minutes)</label>
                     <input
                       type="number"
                       min={15}
@@ -948,7 +948,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                     />
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-700">Preferred date</label>
+                    <label className="text-sm font-medium text-gray-700 dark:text-slate-300">Preferred date</label>
                     <div className="mt-1 flex gap-2">
                       <input
                         type="date"
@@ -959,7 +959,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                       <button
                         type="button"
                         onClick={addPreferredDate}
-                        className="inline-flex items-center justify-center rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50"
+                        className="inline-flex items-center justify-center rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:bg-slate-800"
                       >
                         Add
                       </button>
@@ -980,10 +980,10 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                 </div>
 
                 <div>
-                  <p className="text-sm font-medium text-gray-700 mb-2">Participants</p>
+                  <p className="text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Participants</p>
                   <div className="grid sm:grid-cols-2 gap-2">
                     {people.map((person) => (
-                      <label key={person.id} className="flex items-center gap-2 rounded-md border border-gray-200 px-3 py-2 text-sm cursor-pointer hover:bg-gray-50">
+                      <label key={person.id} className="flex items-center gap-2 rounded-md border border-gray-200 dark:border-slate-800 px-3 py-2 text-sm cursor-pointer hover:bg-gray-50 dark:bg-slate-800">
                         <input
                           type="checkbox"
                           className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
@@ -1030,22 +1030,22 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                   </div>
                   {aiScheduleResult.recommendedSlots.length > 0 && (
                     <div className="space-y-2">
-                      <h4 className="text-sm font-semibold text-gray-900">Recommended slots</h4>
+                      <h4 className="text-sm font-semibold text-gray-900 dark:text-slate-100">Recommended slots</h4>
                       <ul className="space-y-2">
                         {aiScheduleResult.recommendedSlots.map((slot, index) => (
-                          <li key={index} className="rounded-lg border border-gray-200 p-3 text-sm text-gray-700">
+                          <li key={index} className="rounded-lg border border-gray-200 dark:border-slate-800 p-3 text-sm text-gray-700 dark:text-slate-300">
                             <div className="flex items-center justify-between">
-                              <span className="font-medium text-gray-900">{slot.date}</span>
-                              <span className="text-xs text-gray-500">Confidence {Math.round(slot.confidence * 100)}%</span>
+                              <span className="font-medium text-gray-900 dark:text-slate-100">{slot.date}</span>
+                              <span className="text-xs text-gray-500 dark:text-slate-400">Confidence {Math.round(slot.confidence * 100)}%</span>
                             </div>
-                            <p className="text-sm text-gray-800 mt-1">
+                            <p className="text-sm text-gray-800 dark:text-slate-200 mt-1">
                               {slot.startTime} - {slot.endTime}
                             </p>
                             {slot.travelBuffer && (
-                              <p className="text-xs text-gray-500 mt-1">{slot.travelBuffer}</p>
+                              <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">{slot.travelBuffer}</p>
                             )}
                             {slot.reasons.length > 0 && (
-                              <ul className="list-disc pl-5 text-xs text-gray-600 space-y-1 mt-2">
+                              <ul className="list-disc pl-5 text-xs text-gray-600 dark:text-slate-300 space-y-1 mt-2">
                                 {slot.reasons.map((reason, idx) => (
                                   <li key={idx}>{reason}</li>
                                 ))}
@@ -1059,8 +1059,8 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
 
                   {aiScheduleResult.considerations && aiScheduleResult.considerations.length > 0 && (
                     <div>
-                      <h4 className="text-sm font-semibold text-gray-900">Considerations</h4>
-                      <ul className="list-disc pl-5 text-xs text-gray-600 space-y-1 mt-1">
+                      <h4 className="text-sm font-semibold text-gray-900 dark:text-slate-100">Considerations</h4>
+                      <ul className="list-disc pl-5 text-xs text-gray-600 dark:text-slate-300 space-y-1 mt-1">
                         {aiScheduleResult.considerations.map((item, index) => (
                           <li key={index}>{item}</li>
                         ))}
@@ -1070,8 +1070,8 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
 
                   {aiScheduleResult.followUp && aiScheduleResult.followUp.length > 0 && (
                     <div>
-                      <h4 className="text-sm font-semibold text-gray-900">Follow-up actions</h4>
-                      <ul className="list-disc pl-5 text-xs text-gray-600 space-y-1 mt-1">
+                      <h4 className="text-sm font-semibold text-gray-900 dark:text-slate-100">Follow-up actions</h4>
+                      <ul className="list-disc pl-5 text-xs text-gray-600 dark:text-slate-300 space-y-1 mt-1">
                         {aiScheduleResult.followUp.map((item, index) => (
                           <li key={index}>{item}</li>
                         ))}
@@ -1102,8 +1102,8 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                 onClick={() => setView(viewType)}
                 className={`px-3 py-1 text-sm rounded-md transition-colors ${
                   view === viewType
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
+                    ? 'bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 shadow-sm'
+                    : 'text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:text-slate-100'
                 }`}
               >
                 {label}
@@ -1117,24 +1117,24 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
             className={`p-2 rounded-md transition-colors ${
               showFilters
                 ? 'bg-blue-100 text-blue-600'
-                : 'hover:bg-gray-100 text-gray-600'
+                : 'hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-600 dark:text-slate-300'
             }`}
           >
             <Filter className="w-4 h-4" />
           </button>
 
-          <button className="p-2 hover:bg-gray-100 rounded-md transition-colors text-gray-600">
+          <button className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-md transition-colors text-gray-600 dark:text-slate-300">
             <Upload className="w-4 h-4" />
           </button>
 
-          <button className="p-2 hover:bg-gray-100 rounded-md transition-colors text-gray-600">
+          <button className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-md transition-colors text-gray-600 dark:text-slate-300">
             <Download className="w-4 h-4" />
           </button>
 
           {onTemplateManage && (
             <button
               onClick={onTemplateManage}
-              className="p-2 hover:bg-gray-100 rounded-md transition-colors text-gray-600"
+              className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-md transition-colors text-gray-600 dark:text-slate-300"
               title="Manage Templates"
             >
               <Bookmark className="w-4 h-4" />
@@ -1143,7 +1143,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
 
           <button
             onClick={() => setShowWorkStatusManager(true)}
-            className="p-2 hover:bg-gray-100 rounded-md transition-colors text-gray-600"
+            className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-md transition-colors text-gray-600 dark:text-slate-300"
             title="Log Work Status"
           >
             <Building2 className="w-4 h-4" />
@@ -1154,7 +1154,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
             className={`p-2 rounded-md transition-colors ${
               showSettings
                 ? 'bg-blue-100 text-blue-600'
-                : 'hover:bg-gray-100 text-gray-600'
+                : 'hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-600 dark:text-slate-300'
             }`}
           >
             <Settings className="w-4 h-4" />
@@ -1175,15 +1175,15 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
   const renderMobileMenuOverlay = () => (
     showMobileMenu && (
       <div className="lg:hidden fixed inset-0 z-50 bg-black bg-opacity-50" onClick={() => setShowMobileMenu(false)}>
-        <div className="absolute top-0 right-0 w-80 max-w-[90vw] h-full bg-white shadow-xl" onClick={e => e.stopPropagation()}>
-          <div className="p-4 border-b border-gray-200 pwa-safe-top">
+        <div className="absolute top-0 right-0 w-80 max-w-[90vw] h-full bg-white dark:bg-slate-900 shadow-xl" onClick={e => e.stopPropagation()}>
+          <div className="p-4 border-b border-gray-200 dark:border-slate-800 pwa-safe-top">
             <div className="flex items-center justify-between">
               <h2 className="mobile-title">Calendar Settings</h2>
               <button
                 onClick={() => setShowMobileMenu(false)}
-                className="p-2 hover:bg-gray-100 rounded-lg touch-target"
+                className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg touch-target"
               >
-                <X className="w-5 h-5 text-gray-600" />
+                <X className="w-5 h-5 text-gray-600 dark:text-slate-300" />
               </button>
             </div>
           </div>
@@ -1195,9 +1195,9 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                   onTemplateManage()
                   setShowMobileMenu(false)
                 }}
-                className="w-full flex items-center gap-3 p-3 text-left hover:bg-gray-50 rounded-lg touch-target"
+                className="w-full flex items-center gap-3 p-3 text-left hover:bg-gray-50 dark:bg-slate-800 rounded-lg touch-target"
               >
-                <Bookmark className="w-5 h-5 text-gray-600" />
+                <Bookmark className="w-5 h-5 text-gray-600 dark:text-slate-300" />
                 <span>Manage Templates</span>
               </button>
             )}
@@ -1207,9 +1207,9 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                 setShowWorkStatusManager(true)
                 setShowMobileMenu(false)
               }}
-              className="w-full flex items-center gap-3 p-3 text-left hover:bg-gray-50 rounded-lg touch-target"
+              className="w-full flex items-center gap-3 p-3 text-left hover:bg-gray-50 dark:bg-slate-800 rounded-lg touch-target"
             >
-              <Building2 className="w-5 h-5 text-gray-600" />
+              <Building2 className="w-5 h-5 text-gray-600 dark:text-slate-300" />
               <span>Log Work Status</span>
             </button>
 
@@ -1218,9 +1218,9 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                 setShowSettings(!showSettings)
                 setShowMobileMenu(false)
               }}
-              className="w-full flex items-center gap-3 p-3 text-left hover:bg-gray-50 rounded-lg touch-target"
+              className="w-full flex items-center gap-3 p-3 text-left hover:bg-gray-50 dark:bg-slate-800 rounded-lg touch-target"
             >
-              <Upload className="w-5 h-5 text-gray-600" />
+              <Upload className="w-5 h-5 text-gray-600 dark:text-slate-300" />
               <span>Sync & Import</span>
             </button>
 
@@ -1229,9 +1229,9 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                 // Add export functionality
                 setShowMobileMenu(false)
               }}
-              className="w-full flex items-center gap-3 p-3 text-left hover:bg-gray-50 rounded-lg touch-target"
+              className="w-full flex items-center gap-3 p-3 text-left hover:bg-gray-50 dark:bg-slate-800 rounded-lg touch-target"
             >
-              <Download className="w-5 h-5 text-gray-600" />
+              <Download className="w-5 h-5 text-gray-600 dark:text-slate-300" />
               <span>Export Calendar</span>
             </button>
           </div>
@@ -1241,7 +1241,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
   )
 
   return (
-    <div className="h-full flex flex-col bg-white">
+    <div className="h-full flex flex-col bg-white dark:bg-slate-900">
       {/* Mobile Header */}
       {isMobile && renderMobileHeader()}
 
@@ -1253,11 +1253,11 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
 
       {/* Filters Panel */}
       {showFilters && (
-        <div className={`p-4 border-b border-gray-200 bg-gray-50 ${isMobile ? 'pwa-safe-top' : ''}`}>
+        <div className={`p-4 border-b border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-800 ${isMobile ? 'pwa-safe-top' : ''}`}>
           <div className={`grid gap-4 ${isMobile ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-2'}`}>
             {/* People Filter */}
             <div>
-              <h3 className={`font-medium text-gray-700 mb-2 ${isMobile ? 'mobile-subtitle' : 'text-sm'}`}>Family Members</h3>
+              <h3 className={`font-medium text-gray-700 dark:text-slate-300 mb-2 ${isMobile ? 'mobile-subtitle' : 'text-sm'}`}>Family Members</h3>
               <div className={`flex flex-wrap gap-2 ${isMobile ? 'gap-3' : ''}`}>
                 {people.map(person => (
                   <button
@@ -1266,7 +1266,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                     className={`flex items-center space-x-2 px-3 py-1 rounded-full transition-colors ${isMobile ? 'py-2 px-4 text-base touch-target' : 'text-sm'} ${
                       selectedPeople.includes(person.id)
                         ? 'text-white'
-                        : 'bg-white text-gray-600 hover:bg-gray-100'
+                        : 'bg-white dark:bg-slate-900 text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800'
                     }`}
                     style={{
                       backgroundColor: selectedPeople.includes(person.id) ? person.color : undefined
@@ -1280,7 +1280,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
 
             {/* Categories Filter */}
             <div>
-              <h3 className={`font-medium text-gray-700 mb-2 ${isMobile ? 'mobile-subtitle' : 'text-sm'}`}>Categories</h3>
+              <h3 className={`font-medium text-gray-700 dark:text-slate-300 mb-2 ${isMobile ? 'mobile-subtitle' : 'text-sm'}`}>Categories</h3>
               <div className={`flex flex-wrap gap-2 ${isMobile ? 'gap-3' : ''}`}>
                 {Object.entries(categoryColors).map(([category, colorClass]) => (
                   <button
@@ -1289,7 +1289,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                     className={`px-3 py-1 rounded-full transition-colors ${isMobile ? 'py-2 px-4 text-base touch-target' : 'text-sm'} ${
                       selectedCategories.includes(category)
                         ? colorClass
-                        : 'bg-white text-gray-600 hover:bg-gray-100'
+                        : 'bg-white dark:bg-slate-900 text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800'
                     }`}
                   >
                     {category.charAt(0).toUpperCase() + category.slice(1)}
@@ -1303,13 +1303,13 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
 
       {/* Settings Panel */}
       {showSettings && (
-        <div className="border-b border-gray-200 bg-white">
+        <div className="border-b border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900">
           <div className="p-4">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900">Calendar Settings</h3>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Calendar Settings</h3>
               <button
                 onClick={() => setShowSettings(false)}
-                className="p-1 hover:bg-gray-100 rounded-md transition-colors"
+                className="p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-md transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1321,8 +1321,8 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                 onClick={() => setSettingsTab('sync')}
                 className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
                   settingsTab === 'sync'
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
+                    ? 'bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 shadow-sm'
+                    : 'text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:text-slate-100'
                 }`}
               >
                 Google Calendar
@@ -1331,8 +1331,8 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                 onClick={() => setSettingsTab('export')}
                 className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
                   settingsTab === 'export'
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
+                    ? 'bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 shadow-sm'
+                    : 'text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:text-slate-100'
                 }`}
               >
                 Export
@@ -1341,8 +1341,8 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                 onClick={() => setSettingsTab('import')}
                 className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
                   settingsTab === 'import'
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
+                    ? 'bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 shadow-sm'
+                    : 'text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:text-slate-100'
                 }`}
               >
                 Import
@@ -1377,8 +1377,8 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                       onClick={() => setImportType('pdf')}
                       className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
                         importType === 'pdf'
-                          ? 'bg-white text-gray-900 shadow-sm'
-                          : 'text-gray-600 hover:text-gray-900'
+                          ? 'bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 shadow-sm'
+                          : 'text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:text-slate-100'
                       }`}
                     >
                       PDF Import
@@ -1387,8 +1387,8 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                       onClick={() => setImportType('csv')}
                       className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
                         importType === 'csv'
-                          ? 'bg-white text-gray-900 shadow-sm'
-                          : 'text-gray-600 hover:text-gray-900'
+                          ? 'bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 shadow-sm'
+                          : 'text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:text-slate-100'
                       }`}
                     >
                       CSV Import
@@ -1426,19 +1426,19 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
 
       {/* Month Analytics Panel */}
       {view === Views.MONTH && monthAnalytics && !isMobile && (
-        <div className="border-b border-gray-200 bg-gray-50 p-4">
+        <div className="border-b border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-800 p-4">
           <div className="mb-4">
-            <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100 flex items-center gap-2">
               <BarChart3 className="w-5 h-5 text-blue-600" />
               {monthAnalytics.monthName} Analytics
             </h3>
           </div>
 
-          <div className="bg-white border border-gray-200 rounded-lg p-4 mb-4">
+          <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-lg p-4 mb-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">AI Assistant</p>
-                <p className="text-sm text-gray-500">Analyse conflicts or suggest scheduling slots</p>
+                <p className="text-sm font-medium text-gray-600 dark:text-slate-300">AI Assistant</p>
+                <p className="text-sm text-gray-500 dark:text-slate-400">Analyse conflicts or suggest scheduling slots</p>
               </div>
               <div className="flex gap-2">
                 <button
@@ -1459,10 +1459,10 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-4">
             {/* Total Events */}
-            <div className="bg-white border border-gray-200 p-4 rounded-lg">
+            <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 p-4 rounded-lg">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Total Events</p>
+                  <p className="text-sm font-medium text-gray-600 dark:text-slate-300">Total Events</p>
                   <p className="text-xl md:text-2xl font-bold text-blue-600">{monthAnalytics.totalEvents}</p>
                 </div>
                 <CalendarDays className="w-8 h-8 text-blue-500" />
@@ -1470,13 +1470,13 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
             </div>
 
             {/* Busiest Person */}
-            <div className="bg-white border border-gray-200 p-4 rounded-lg">
+            <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 p-4 rounded-lg">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Busiest Person</p>
+                  <p className="text-sm font-medium text-gray-600 dark:text-slate-300">Busiest Person</p>
                   <p className="text-lg font-bold text-green-600">{monthAnalytics.busiestPerson.name || 'None'}</p>
                   {monthAnalytics.busiestPerson.count > 0 && (
-                    <p className="text-xs text-gray-500">{monthAnalytics.busiestPerson.count} events</p>
+                    <p className="text-xs text-gray-500 dark:text-slate-400">{monthAnalytics.busiestPerson.count} events</p>
                   )}
                 </div>
                 <Activity className="w-8 h-8 text-green-500" />
@@ -1484,13 +1484,13 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
             </div>
 
             {/* Most Common Type */}
-            <div className="bg-white border border-gray-200 p-4 rounded-lg">
+            <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 p-4 rounded-lg">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Most Common</p>
+                  <p className="text-sm font-medium text-gray-600 dark:text-slate-300">Most Common</p>
                   <p className="text-lg font-bold text-purple-600">{monthAnalytics.mostCommonType.type || 'None'}</p>
                   {monthAnalytics.mostCommonType.count > 0 && (
-                    <p className="text-xs text-gray-500">{monthAnalytics.mostCommonType.count} events</p>
+                    <p className="text-xs text-gray-500 dark:text-slate-400">{monthAnalytics.mostCommonType.count} events</p>
                   )}
                 </div>
                 <TrendingUp className="w-8 h-8 text-purple-500" />
@@ -1498,10 +1498,10 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
             </div>
 
             {/* Total Cost */}
-            <div className="bg-white border border-gray-200 p-4 rounded-lg">
+            <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 p-4 rounded-lg">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Total Cost</p>
+                  <p className="text-sm font-medium text-gray-600 dark:text-slate-300">Total Cost</p>
                   <p className="text-xl md:text-2xl font-bold text-orange-600">£{monthAnalytics.totalCost.toFixed(2)}</p>
                 </div>
                 <DollarSign className="w-8 h-8 text-orange-500" />
@@ -1511,14 +1511,14 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
 
           {/* Event Type Breakdown */}
           {Object.keys(monthAnalytics.eventsByType).length > 0 && (
-            <div className="bg-white border border-gray-200 p-4 rounded-lg">
-              <h4 className="font-medium text-gray-900 mb-3">Event Types Breakdown</h4>
+            <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 p-4 rounded-lg">
+              <h4 className="font-medium text-gray-900 dark:text-slate-100 mb-3">Event Types Breakdown</h4>
               <div className="flex flex-wrap gap-2">
                 {Object.entries(monthAnalytics.eventsByType).map(([type, count]) => (
                   <div
                     key={type}
                     className={`px-3 py-1 rounded-full text-sm font-medium ${
-                      categoryColors[type as keyof typeof categoryColors] || 'bg-gray-100 text-gray-800'
+                      categoryColors[type as keyof typeof categoryColors] || 'bg-gray-100 text-gray-800 dark:text-slate-200'
                     }`}
                   >
                     {type}: {count}
@@ -1615,7 +1615,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
           {/* Event Tooltip */}
           {hoveredEvent && ((!isMobile && tooltipPosition) || isMobile) && view !== 'YEAR' && (
             <div
-              className={`fixed z-50 bg-white border border-gray-200 rounded-lg shadow-lg p-4 max-w-sm ${
+              className={`fixed z-50 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-lg shadow-lg p-4 max-w-sm ${
                 isMobile ? 'bottom-0 left-0 right-0 m-4 rounded-t-2xl pwa-safe-bottom' : ''
               }`}
               style={isMobile ? {} : {
@@ -1626,9 +1626,9 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
             >
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <h3 className="font-semibold text-gray-900">{hoveredEvent.title}</h3>
+                  <h3 className="font-semibold text-gray-900 dark:text-slate-100">{hoveredEvent.title}</h3>
                   <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                    categoryColors[hoveredEvent.type as keyof typeof categoryColors] || 'bg-gray-100 text-gray-800'
+                    categoryColors[hoveredEvent.type as keyof typeof categoryColors] || 'bg-gray-100 text-gray-800 dark:text-slate-200'
                   }`}>
                     {hoveredEvent.type}
                   </span>
@@ -1642,39 +1642,39 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                         className="w-3 h-3 rounded-full"
                         style={{ backgroundColor: person.color }}
                       />
-                      <span className="text-sm text-gray-600">{person.name}</span>
+                      <span className="text-sm text-gray-600 dark:text-slate-300">{person.name}</span>
                     </div>
                   ) : null;
                 })()}
 
-                <div className="flex items-center space-x-2 text-sm text-gray-600">
+                <div className="flex items-center space-x-2 text-sm text-gray-600 dark:text-slate-300">
                   <Clock className="w-4 h-4" />
                   <span>{hoveredEvent.time} ({hoveredEvent.duration} min)</span>
                 </div>
 
                 {hoveredEvent.location && (
-                  <div className="flex items-center space-x-2 text-sm text-gray-600">
+                  <div className="flex items-center space-x-2 text-sm text-gray-600 dark:text-slate-300">
                     <MapPin className="w-4 h-4" />
                     <span>{hoveredEvent.location}</span>
                   </div>
                 )}
 
                 {hoveredEvent.cost > 0 && (
-                  <div className="flex items-center space-x-2 text-sm text-gray-600">
+                  <div className="flex items-center space-x-2 text-sm text-gray-600 dark:text-slate-300">
                     <DollarSign className="w-4 h-4" />
                     <span>£{hoveredEvent.cost}</span>
                   </div>
                 )}
 
                 {hoveredEvent.attendees && hoveredEvent.attendees.length > 0 && (
-                  <div className="flex items-center space-x-2 text-sm text-gray-600">
+                  <div className="flex items-center space-x-2 text-sm text-gray-600 dark:text-slate-300">
                     <Users className="w-4 h-4" />
                     <span>{hoveredEvent.attendees.length} attendee{hoveredEvent.attendees.length !== 1 ? 's' : ''}</span>
                   </div>
                 )}
 
                 {hoveredEvent.reminders && hoveredEvent.reminders.some(r => r.enabled) && (
-                  <div className="flex items-center space-x-2 text-sm text-gray-600">
+                  <div className="flex items-center space-x-2 text-sm text-gray-600 dark:text-slate-300">
                     <Bell className="w-4 h-4" />
                     <span>Reminders set</span>
                   </div>
@@ -1712,7 +1712,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                 )}
 
                 {hoveredEvent.notes && (
-                  <div className="text-sm text-gray-600 border-t pt-2 mt-2">
+                  <div className="text-sm text-gray-600 dark:text-slate-300 border-t pt-2 mt-2">
                     {hoveredEvent.notes}
                   </div>
                 )}
@@ -1724,7 +1724,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                       e.stopPropagation()
                       handleExportEvent(hoveredEvent)
                     }}
-                    className="p-1.5 text-gray-500 hover:text-green-600 hover:bg-green-50 rounded transition-colors"
+                    className="p-1.5 text-gray-500 dark:text-slate-400 hover:text-green-600 hover:bg-green-50 rounded transition-colors"
                     title="Export as iCal"
                   >
                     <FileDown className="w-4 h-4" />
@@ -1743,9 +1743,9 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
               {isMobile && (
                 <button
                   onClick={() => setHoveredEvent(null)}
-                  className="absolute top-2 right-2 p-2 hover:bg-gray-100 rounded-lg touch-target"
+                  className="absolute top-2 right-2 p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg touch-target"
                 >
-                  <X className="w-4 h-4 text-gray-600" />
+                  <X className="w-4 h-4 text-gray-600 dark:text-slate-300" />
                 </button>
               )}
             </div>
@@ -1754,7 +1754,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
           {/* Drag and Drop Feedback Toast */}
           {dragFeedback && view !== 'YEAR' && (
             <div className="fixed bottom-4 right-4 z-50 bg-green-600 text-white px-4 py-2 rounded-lg shadow-lg flex items-center space-x-2 transition-all duration-300 drag-feedback-toast">
-              <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
+              <div className="w-2 h-2 bg-white dark:bg-slate-900 rounded-full animate-pulse" />
               <span className="text-sm font-medium">{dragFeedback}</span>
             </div>
           )}

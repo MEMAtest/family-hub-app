@@ -55,6 +55,7 @@ export const FamilyHubShell = () => {
     currentView,
     currentSubView,
     setView,
+    setSubView,
     isMobileMenuOpen,
     openMobileMenu,
     closeMobileMenu,
@@ -99,19 +100,19 @@ export const FamilyHubShell = () => {
     <div className="hidden items-center gap-2 lg:flex">
       <button
         onClick={() => openCreateForm()}
-        className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
+        className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 dark:bg-blue-500 dark:hover:bg-blue-400"
       >
         <Plus className="h-4 w-4" /> Event
       </button>
       <button
         onClick={() => openBudgetForm()}
-        className="inline-flex items-center gap-2 rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+        className="inline-flex items-center gap-2 rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
       >
         <DollarSign className="h-4 w-4" /> Expense
       </button>
       <button
         onClick={() => openShoppingForm(lists[0]?.id)}
-        className="inline-flex items-center gap-2 rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+        className="inline-flex items-center gap-2 rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
       >
         <ShoppingBag className="h-4 w-4" /> Item
       </button>
@@ -160,17 +161,17 @@ export const FamilyHubShell = () => {
 
     const items: Array<{ label: string; onClick?: () => void; isActive?: boolean }> = [];
     const label = labels[currentView] ?? currentView;
-    items.push({ label, isActive: !currentSubView, onClick: currentSubView ? () => setView(currentView) : undefined });
+    items.push({ label, isActive: !currentSubView, onClick: currentSubView ? () => setSubView('') : undefined });
 
     if (currentSubView) {
       items.push({ label: currentSubView, isActive: true });
     }
 
     return items;
-  }, [currentSubView, currentView, setView]);
+  }, [currentSubView, currentView, setSubView]);
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="flex min-h-screen bg-gray-50 dark:bg-slate-950">
       <FamilyHubNavigation
         items={NAV_ITEMS}
         activeId={currentView}
@@ -179,7 +180,7 @@ export const FamilyHubShell = () => {
         onCloseMobile={closeMobileMenu}
       />
 
-      <div className="flex flex-1 flex-col">
+      <div className="flex flex-1 flex-col bg-white dark:bg-slate-900">
         <FamilyHubHeader
           title="Omosanya Family Hub"
           subtitle={subtitle}

@@ -3,7 +3,6 @@ import { Inter } from 'next/font/google'
 import './globals.css'
 import ErrorBoundary from '@/components/common/ErrorBoundary'
 import { ThemeProvider } from '@/contexts/ThemeContext'
-import { ThemeToggle } from '@/components/common/ThemeToggle'
 
 const inter = Inter({
   subsets: ['latin'],
@@ -126,14 +125,13 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className={inter.variable}>
-      <body className={`${inter.className} antialiased bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors`}>
-        <ErrorBoundary>
-          <ThemeProvider>
-            <ThemeToggle />
+    <html lang="en" className={`${inter.variable} bg-slate-50 dark:bg-slate-950`}>
+      <body className={`${inter.className} antialiased bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors`}>
+        <ThemeProvider>
+          <ErrorBoundary>
             {children}
-          </ThemeProvider>
-        </ErrorBoundary>
+          </ErrorBoundary>
+        </ThemeProvider>
       </body>
     </html>
   )

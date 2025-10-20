@@ -1,57 +1,116 @@
 'use client'
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import {
+  createContext,
+  PropsWithChildren,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState
+} from 'react';
 
 type Theme = 'light' | 'dark';
 
-interface ThemeContextType {
+interface ThemeContextValue {
   theme: Theme;
+  setTheme: (theme: Theme) => void;
   toggleTheme: () => void;
+  mounted: boolean;
 }
 
-const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
+const STORAGE_KEY = 'omosanya_theme';
 
-export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<Theme>('light');
+const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
+
+const getPreferredTheme = (): Theme => {
+  if (typeof window === 'undefined') {
+    return 'light';
+  }
+
+  const stored = localStorage.getItem(STORAGE_KEY);
+  if (stored === 'light' || stored === 'dark') {
+    return stored;
+  }
+
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  return prefersDark ? 'dark' : 'light';
+};
+
+export const ThemeProvider = ({ children }: PropsWithChildren) => {
+  const [theme, setThemeState] = useState<Theme>('light');
   const [mounted, setMounted] = useState(false);
 
-  // Load theme from localStorage on mount
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+    setThemeState(getPreferredTheme());
     setMounted(true);
-    const savedTheme = localStorage.getItem('theme') as Theme | null;
-    if (savedTheme) {
-      setTheme(savedTheme);
-      if (savedTheme === 'dark') {
-        document.documentElement.classList.add('dark');
-      } else {
-        document.documentElement.classList.remove('dark');
-      }
-    }
   }, []);
 
-  const toggleTheme = () => {
-    const newTheme = theme === 'light' ? 'dark' : 'light';
-    setTheme(newTheme);
-    localStorage.setItem('theme', newTheme);
-
-    if (newTheme === 'dark') {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
+  useEffect(() => {
+    if (!mounted) {
+      return;
     }
-  };
 
-  return (
-    <ThemeContext.Provider value={{ theme, toggleTheme }}>
-      {children}
-    </ThemeContext.Provider>
+    if (typeof document === 'undefined') {
+      return;
+    }
+
+    const root = document.documentElement;
+    if (theme === 'dark') {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+
+    try {
+      localStorage.setItem(STORAGE_KEY, theme);
+    } catch (error) {
+      console.warn('Unable to persist theme preference', error);
+    }
+  }, [theme, mounted]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+
+    const handleChange = (event: MediaQueryListEvent) => {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored === 'light' || stored === 'dark') {
+        return;
+      }
+      setThemeState(event.matches ? 'dark' : 'light');
+    };
+
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, []);
+
+  const setTheme = useCallback((nextTheme: Theme) => {
+    setThemeState(nextTheme);
+  }, []);
+
+  const toggleTheme = useCallback(() => {
+    setThemeState((prev) => (prev === 'dark' ? 'light' : 'dark'));
+  }, []);
+
+  const value = useMemo<ThemeContextValue>(
+    () => ({
+      theme,
+      setTheme,
+      toggleTheme,
+      mounted,
+    }),
+    [mounted, setTheme, theme, toggleTheme]
   );
-}
 
-export function useTheme() {
+  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
+};
+
+export const useTheme = () => {
   const context = useContext(ThemeContext);
-  if (context === undefined) {
+  if (!context) {
     throw new Error('useTheme must be used within a ThemeProvider');
   }
   return context;
-}
+};

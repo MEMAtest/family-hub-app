@@ -3,6 +3,7 @@
 import { ReactNode } from 'react';
 import { Bell, Menu } from 'lucide-react';
 import NotificationBell from '@/components/notifications/NotificationBell';
+import { ThemeToggle } from '@/components/common/ThemeToggle';
 
 interface FamilyHubHeaderProps {
   title: string;
@@ -23,27 +24,28 @@ export const FamilyHubHeader = ({
   databaseStatus,
 }: FamilyHubHeaderProps) => {
   return (
-    <header className="sticky top-0 z-30 border-b border-gray-200 bg-white/80 backdrop-blur">
+    <header className="sticky top-0 z-30 border-b border-gray-200 bg-white/80 backdrop-blur dark:border-slate-800 dark:bg-slate-900/80">
       <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 lg:flex-nowrap lg:px-8">
         <div className="flex items-center gap-4">
           <button
-            className="rounded-md p-2 text-gray-500 hover:bg-gray-100 lg:hidden"
+            className="rounded-md p-2 text-gray-500 hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 lg:hidden dark:text-slate-300 dark:hover:bg-slate-800"
             onClick={onToggleMobileNav}
           >
             <Menu className="h-5 w-5" />
           </button>
           <div>
-            <h1 className="text-xl font-semibold text-gray-900 lg:text-2xl">{title}</h1>
-            {subtitle && <p className="text-sm text-gray-500">{subtitle}</p>}
-            <div className="mt-1 flex items-center gap-2 text-xs text-gray-400">
+            <h1 className="text-xl font-semibold text-gray-900 lg:text-2xl dark:text-slate-100">{title}</h1>
+            {subtitle && <p className="text-sm text-gray-500 dark:text-slate-400">{subtitle}</p>}
+            <div className="mt-1 flex items-center gap-2 text-xs text-gray-400 dark:text-slate-500">
               <span className={`inline-flex h-2 w-2 items-center justify-center rounded-full ${databaseStatus.connected ? 'bg-green-500' : 'bg-yellow-400'}`} />
               <span>{databaseStatus.connected ? 'Database Connected' : `Offline • ${databaseStatus.mode}`}</span>
             </div>
           </div>
         </div>
         <div className="flex items-center gap-2 sm:gap-3">
+          <ThemeToggle />
           <NotificationBell />
-          <button className="hidden rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 lg:inline-flex">
+          <button className="hidden rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 lg:inline-flex dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800">
             <Bell className="mr-2 h-4 w-4" />
             Alerts
           </button>

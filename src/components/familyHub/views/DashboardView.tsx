@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState } from 'react';
 import { formatDate } from '@/utils/formatDate';
 import {
   Activity,
@@ -40,7 +40,6 @@ import { useGoalsContext } from '@/contexts/familyHub/GoalsContext';
 import { useMealsContext } from '@/contexts/familyHub/MealsContext';
 import { stewartFleming2025To2026, stewartFleming2026To2027 } from '@/data/schoolTerms';
 import { extractBudgetRecords, summariseBudgetForMonth } from '@/utils/budgetAnalytics';
-import { useFamilyStore } from '@/store/familyStore';
 
 const currencyFormatter = new Intl.NumberFormat('en-GB', {
   style: 'currency',
@@ -69,18 +68,18 @@ const StatCard = ({
     onClick={onClick}
     className={`flex flex-col gap-2 rounded-lg border border-gray-200 bg-white p-4 text-left transition hover:border-blue-300 hover:shadow ${
       onClick ? 'cursor-pointer' : 'cursor-default'
-    } ${className ?? ''}`}
+    } ${className ?? ''} dark:border-slate-700 dark:bg-slate-800`}
   >
     <div className="flex items-center justify-between">
       <div>
-        <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</p>
-        <p className="mt-1 text-2xl font-semibold text-gray-900">{value}</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">{label}</p>
+        <p className="mt-1 text-2xl font-semibold text-gray-900 dark:text-slate-100">{value}</p>
       </div>
-      <div className="rounded-full bg-blue-50 p-2 text-blue-600">
+      <div className="rounded-full bg-blue-50 p-2 text-blue-600 dark:bg-blue-500/20 dark:text-blue-200">
         <Icon className="h-5 w-5" />
       </div>
     </div>
-    {subtext && <p className="text-xs text-gray-500">{subtext}</p>}
+    {subtext && <p className="text-xs text-gray-500 dark:text-slate-400">{subtext}</p>}
   </button>
 );
 
@@ -97,51 +96,6 @@ export const DashboardView = () => {
 
   // School year selector state
   const [selectedSchoolYear, setSelectedSchoolYear] = useState<'2025-2026' | '2026-2027'>('2025-2026');
-
-  // Fetch actual budget data from database
-  const [dbBudgetTotals, setDbBudgetTotals] = useState({ income: 0, expenses: 0, net: 0 });
-  const [budgetTotalsLoaded, setBudgetTotalsLoaded] = useState(false);
-  const familyId = useFamilyStore((state) => state.databaseStatus.familyId);
-
-  useEffect(() => {
-    const fetchBudgetData = async () => {
-      if (!familyId) return;
-
-      try {
-        setBudgetTotalsLoaded(false);
-        // Get current month and year
-        const now = new Date();
-        const currentMonth = now.getMonth() + 1;
-        const currentYear = now.getFullYear();
-
-        const [incomeRes, expensesRes] = await Promise.all([
-          fetch(`/api/families/${familyId}/budget/income?month=${currentMonth}&year=${currentYear}`),
-          fetch(`/api/families/${familyId}/budget/expenses?month=${currentMonth}&year=${currentYear}`)
-        ]);
-
-        const incomeList = await incomeRes.json();
-        const expenseList = await expensesRes.json();
-
-        const totalIncome = Array.isArray(incomeList)
-          ? incomeList.reduce((sum: number, item: any) => sum + (parseFloat(item.amount) || 0), 0)
-          : 0;
-        const totalExpenses = Array.isArray(expenseList)
-          ? expenseList.reduce((sum: number, item: any) => sum + (parseFloat(item.amount) || 0), 0)
-          : 0;
-
-        setDbBudgetTotals({
-          income: totalIncome,
-          expenses: totalExpenses,
-          net: totalIncome - totalExpenses
-        });
-        setBudgetTotalsLoaded(true);
-      } catch (error) {
-        console.error('Failed to fetch budget data:', error);
-      }
-    };
-
-    fetchBudgetData();
-  }, [familyId]);
 
   const upcomingEvents = useMemo(() => {
     const now = new Date();
@@ -190,35 +144,11 @@ export const DashboardView = () => {
     [budgetData]
   );
 
-  const { income: apiIncome, expenses: apiExpenses, net: apiNet } = dbBudgetTotals;
-  const {
-    totalIncome: snapshotIncome,
-    totalExpenses: snapshotExpenses,
-    netIncome: snapshotNet,
-  } = monthlyBudgetSnapshot;
-
-  const budgetCardTotals = useMemo(() => {
-    if (budgetTotalsLoaded) {
-      return {
-        income: apiIncome,
-        expenses: apiExpenses,
-        net: apiNet,
-      };
-    }
-    return {
-      income: snapshotIncome,
-      expenses: snapshotExpenses,
-      net: snapshotNet,
-    };
-  }, [
-    budgetTotalsLoaded,
-    apiIncome,
-    apiExpenses,
-    apiNet,
-    snapshotIncome,
-    snapshotExpenses,
-    snapshotNet,
-  ]);
+  const budgetCardTotals = useMemo(() => ({
+    income: monthlyBudgetSnapshot.totalIncome,
+    expenses: monthlyBudgetSnapshot.totalExpenses,
+    net: monthlyBudgetSnapshot.netIncome,
+  }), [monthlyBudgetSnapshot.netIncome, monthlyBudgetSnapshot.totalExpenses, monthlyBudgetSnapshot.totalIncome]);
 
   const totalGoals = (goalsData?.familyGoals?.length || 0) + (goalsData?.individualGoals?.length || 0);
   const avgGoalProgress = useMemo(() => {
@@ -329,12 +259,12 @@ export const DashboardView = () => {
       </section>
 
       <section className="grid gap-6 lg:grid-cols-3">
-        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm lg:col-span-2">
+        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm lg:col-span-2 dark:border-slate-700 dark:bg-slate-900">
           <div className="flex items-center justify-between">
-            <h3 className="text-base font-semibold text-gray-900">Upcoming Schedule</h3>
+            <h3 className="text-base font-semibold text-gray-900 dark:text-slate-100">Upcoming Schedule</h3>
             <button
               onClick={() => openCreateForm()}
-              className="rounded-md border border-gray-200 px-3 py-1 text-sm text-gray-600 hover:bg-gray-50"
+              className="rounded-md border border-gray-200 px-3 py-1 text-sm text-gray-600 hover:bg-gray-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
             >
               Add Event
             </button>
@@ -346,7 +276,7 @@ export const DashboardView = () => {
             {upcomingEvents.map((event) => {
               const person = members.find((m) => m.id === event.person);
               return (
-                <div key={event.id} className="flex items-center justify-between rounded-md border border-gray-100 bg-gray-50 p-3">
+              <div key={event.id} className="flex items-center justify-between rounded-md border border-gray-100 bg-gray-50 p-3 dark:border-slate-700 dark:bg-slate-800">
                   <div>
                     <p className="text-sm font-medium text-gray-900">{event.title}</p>
                     <p className="text-xs text-gray-500">
@@ -360,8 +290,8 @@ export const DashboardView = () => {
           </div>
         </div>
 
-        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-          <h3 className="text-base font-semibold text-gray-900">Family Activity</h3>
+        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+          <h3 className="text-base font-semibold text-gray-900 dark:text-slate-100">Family Activity</h3>
           <div className="mt-4 space-y-4 text-sm">
             <div className="flex items-center justify-between">
               <span className="text-gray-500">Today&apos;s steps</span>
@@ -388,9 +318,9 @@ export const DashboardView = () => {
       </section>
 
       <section className="grid gap-6 lg:grid-cols-3">
-        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm lg:col-span-2">
+        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm lg:col-span-2 dark:border-slate-700 dark:bg-slate-900">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="flex items-center gap-2 text-base font-semibold text-gray-900">
+            <h3 className="flex items-center gap-2 text-base font-semibold text-gray-900 dark:text-slate-100">
               <GraduationCap className="h-5 w-5 text-purple-500" /> Stewart Fleming Term Dates
             </h3>
             <div className="flex items-center gap-2">
@@ -426,14 +356,14 @@ export const DashboardView = () => {
             ) : (
               upcomingSchoolHighlights.map((term) => (
                 <div key={term.name} className="dashboard-widget p-4">
-                  <p className="text-sm font-semibold text-gray-900">{term.name}</p>
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">{term.name}</p>
+                  <p className="text-xs text-gray-500 mt-1 dark:text-slate-400">
                     {term.end ? `${term.start} → ${term.end}` : term.start}
                   </p>
                   {term.description && (
-                    <p className="mt-2 text-xs text-gray-500">{term.description}</p>
+                    <p className="mt-2 text-xs text-gray-500 dark:text-slate-400">{term.description}</p>
                   )}
-                  <div className="mt-3 inline-flex items-center rounded-full bg-purple-50 px-3 py-1 text-xs font-medium text-purple-700">
+                  <div className="mt-3 inline-flex items-center rounded-full bg-purple-50 px-3 py-1 text-xs font-medium text-purple-700 dark:bg-purple-500/10 dark:text-purple-200">
                     <BookOpen className="mr-1 h-4 w-4" /> {term.type.replace('-', ' ')}
                   </div>
                 </div>
@@ -442,45 +372,45 @@ export const DashboardView = () => {
           </div>
         </div>
 
-        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
           <div className="flex items-center justify-between">
-            <h3 className="text-base font-semibold text-gray-900">Quick Actions</h3>
+            <h3 className="text-base font-semibold text-gray-900 dark:text-slate-100">Quick Actions</h3>
           </div>
           <div className="mt-4 space-y-3">
             <button
               onClick={() => openMealForm(new Date().toISOString().split('T')[0])}
-              className="flex items-center justify-between rounded-lg border border-gray-200 px-4 py-3 text-left text-sm hover:border-blue-300 hover:shadow"
+              className="flex items-center justify-between rounded-lg border border-gray-200 px-4 py-3 text-left text-sm hover:border-blue-300 hover:shadow dark:border-slate-700 dark:bg-slate-800"
             >
               <div className="flex items-center gap-3">
-                <UtensilsCrossed className="h-5 w-5 text-blue-500" />
+                <UtensilsCrossed className="h-5 w-5 text-blue-500 dark:text-blue-300" />
                 <div>
-                  <p className="font-medium text-gray-900">Plan this week&apos;s meals</p>
-                  <p className="text-xs text-gray-500">Keep the meal planner up to date</p>
+                  <p className="font-medium text-gray-900 dark:text-slate-100">Plan this week&apos;s meals</p>
+                  <p className="text-xs text-gray-500 dark:text-slate-400">Keep the meal planner up to date</p>
                 </div>
               </div>
             </button>
             <button
               onClick={() => openBudgetForm()}
-              className="flex items-center justify-between rounded-lg border border-gray-200 px-4 py-3 text-left text-sm hover:border-emerald-300 hover:shadow"
+              className="flex items-center justify-between rounded-lg border border-gray-200 px-4 py-3 text-left text-sm hover:border-emerald-300 hover:shadow dark:border-slate-700 dark:bg-slate-800"
             >
               <div className="flex items-center gap-3">
-                <BarChart3 className="h-5 w-5 text-emerald-500" />
+                <BarChart3 className="h-5 w-5 text-emerald-500 dark:text-emerald-300" />
                 <div>
-                  <p className="font-medium text-gray-900">Update budget tracker</p>
-                  <p className="text-xs text-gray-500">Capture income and expenses</p>
+                  <p className="font-medium text-gray-900 dark:text-slate-100">Update budget tracker</p>
+                  <p className="text-xs text-gray-500 dark:text-slate-400">Capture income and expenses</p>
                 </div>
               </div>
-              <DollarSign className="h-4 w-4 text-emerald-500" />
+              <DollarSign className="h-4 w-4 text-emerald-500 dark:text-emerald-300" />
             </button>
             <button
               onClick={() => openShoppingForm(lists[0]?.id)}
-              className="flex items-center justify-between rounded-lg border border-gray-200 px-4 py-3 text-left text-sm hover:border-orange-300 hover:shadow"
+              className="flex items-center justify-between rounded-lg border border-gray-200 px-4 py-3 text-left text-sm hover:border-orange-300 hover:shadow dark:border-slate-700 dark:bg-slate-800"
             >
               <div className="flex items-center gap-3">
-                <ShoppingCart className="h-5 w-5 text-orange-500" />
+                <ShoppingCart className="h-5 w-5 text-orange-500 dark:text-orange-300" />
                 <div>
-                  <p className="font-medium text-gray-900">Add to shopping list</p>
-                  <p className="text-xs text-gray-500">Stay ahead of grocery needs</p>
+                  <p className="font-medium text-gray-900 dark:text-slate-100">Add to shopping list</p>
+                  <p className="text-xs text-gray-500 dark:text-slate-400">Stay ahead of grocery needs</p>
                 </div>
               </div>
             </button>
@@ -489,10 +419,10 @@ export const DashboardView = () => {
               className="flex items-center justify-between rounded-lg border border-gray-200 px-4 py-3 text-left text-sm hover:border-indigo-300 hover:shadow"
             >
               <div className="flex items-center gap-3">
-                <Users className="h-5 w-5 text-indigo-500" />
+                <Users className="h-5 w-5 text-indigo-500 dark:text-indigo-300" />
                 <div>
-                  <p className="font-medium text-gray-900">Add family member</p>
-                  <p className="text-xs text-gray-500">Keep household records up to date</p>
+                  <p className="font-medium text-gray-900 dark:text-slate-100">Add family member</p>
+                  <p className="text-xs text-gray-500 dark:text-slate-400">Keep household records up to date</p>
                 </div>
               </div>
             </button>
@@ -501,10 +431,10 @@ export const DashboardView = () => {
               className="flex items-center justify-between rounded-lg border border-gray-200 px-4 py-3 text-left text-sm hover:border-purple-300 hover:shadow"
             >
               <div className="flex items-center gap-3">
-                <Clock className="h-5 w-5 text-purple-500" />
+                <Clock className="h-5 w-5 text-purple-500 dark:text-purple-300" />
                 <div>
-                  <p className="font-medium text-gray-900">Review calendar</p>
-                  <p className="text-xs text-gray-500">Check clashes before the week begins</p>
+                  <p className="font-medium text-gray-900 dark:text-slate-100">Review calendar</p>
+                  <p className="text-xs text-gray-500 dark:text-slate-400">Check clashes before the week begins</p>
                 </div>
               </div>
             </button>
@@ -513,8 +443,8 @@ export const DashboardView = () => {
       </section>
 
       <section className="grid gap-6 xl:grid-cols-3">
-        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm xl:col-span-2">
-          <h3 className="flex items-center gap-2 text-base font-semibold text-gray-900">
+        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm xl:col-span-2 dark:border-slate-700 dark:bg-slate-900">
+          <h3 className="flex items-center gap-2 text-base font-semibold text-gray-900 dark:text-slate-100">
             <BarChart3 className="h-5 w-5 text-blue-500" /> Budget Overview
           </h3>
           <div className="mt-4 h-64">
@@ -534,25 +464,25 @@ export const DashboardView = () => {
             </ResponsiveContainer>
           </div>
           <div className="mt-4 grid grid-cols-3 gap-4 text-sm">
-            <div className="rounded-lg bg-green-50 p-3 border border-green-200">
-              <p className="text-xs text-green-700 font-medium">Total Income</p>
-              <p className="text-lg font-semibold text-green-900">£{budgetCardTotals.income.toLocaleString()}</p>
+            <div className="rounded-lg bg-green-50 p-3 border border-green-200 dark:border-green-500/40 dark:bg-green-500/10">
+              <p className="text-xs text-green-700 font-medium dark:text-green-300">Total Income</p>
+              <p className="text-lg font-semibold text-green-900 dark:text-green-200">£{budgetCardTotals.income.toLocaleString()}</p>
             </div>
-            <div className="rounded-lg bg-red-50 p-3 border border-red-200">
-              <p className="text-xs text-red-700 font-medium">Total Expenses</p>
-              <p className="text-lg font-semibold text-red-900">£{budgetCardTotals.expenses.toLocaleString()}</p>
+            <div className="rounded-lg bg-red-50 p-3 border border-red-200 dark:border-red-500/40 dark:bg-red-500/10">
+              <p className="text-xs text-red-700 font-medium dark:text-red-300">Total Expenses</p>
+              <p className="text-lg font-semibold text-red-900 dark:text-red-200">£{budgetCardTotals.expenses.toLocaleString()}</p>
             </div>
-            <div className={`rounded-lg p-3 border ${budgetCardTotals.net >= 0 ? 'bg-blue-50 border-blue-200' : 'bg-amber-50 border-amber-200'}`}>
-              <p className={`text-xs font-medium ${budgetCardTotals.net >= 0 ? 'text-blue-700' : 'text-amber-700'}`}>Net Income</p>
-              <p className={`text-lg font-semibold ${budgetCardTotals.net >= 0 ? 'text-blue-900' : 'text-amber-900'}`}>
+            <div className={`rounded-lg p-3 border ${budgetCardTotals.net >= 0 ? 'bg-blue-50 border-blue-200 dark:border-blue-500/40 dark:bg-blue-500/10' : 'bg-amber-50 border-amber-200 dark:border-amber-500/40 dark:bg-amber-500/10'}`}>
+              <p className={`text-xs font-medium ${budgetCardTotals.net >= 0 ? 'text-blue-700 dark:text-blue-200' : 'text-amber-700 dark:text-amber-200'}`}>Net Income</p>
+              <p className={`text-lg font-semibold ${budgetCardTotals.net >= 0 ? 'text-blue-900 dark:text-blue-200' : 'text-amber-900 dark:text-amber-200'}`}>
                 £{budgetCardTotals.net.toLocaleString()}
               </p>
             </div>
           </div>
         </div>
 
-        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-          <h3 className="flex items-center gap-2 text-base font-semibold text-gray-900">
+        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+          <h3 className="flex items-center gap-2 text-base font-semibold text-gray-900 dark:text-slate-100">
             <Heart className="h-5 w-5 text-rose-500" /> Fitness & wellbeing
           </h3>
           <div className="mt-4 space-y-3 text-sm">
@@ -576,8 +506,8 @@ export const DashboardView = () => {
       </section>
 
       <section className="grid gap-6 lg:grid-cols-3">
-        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-          <h3 className="flex items-center gap-2 text-base font-semibold text-gray-900">
+        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+          <h3 className="flex items-center gap-2 text-base font-semibold text-gray-900 dark:text-slate-100">
             <Users className="h-5 w-5 text-indigo-500" /> Household members
           </h3>
           <ul className="mt-4 space-y-3 text-sm">
@@ -590,32 +520,32 @@ export const DashboardView = () => {
           </ul>
         </div>
 
-        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-          <h3 className="flex items-center gap-2 text-base font-semibold text-gray-900">
+        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+          <h3 className="flex items-center gap-2 text-base font-semibold text-gray-900 dark:text-slate-100">
             <Utensils className="h-5 w-5 text-green-500" /> Meal plan highlights
           </h3>
           <ul className="mt-4 space-y-3 text-sm">
             {upcomingMeals.map((meal) => (
-              <li key={meal.date} className="rounded-lg border border-gray-100 px-3 py-2">
-                <p className="font-medium text-gray-900">{meal.name || 'Family meal'}</p>
-                <p className="text-xs text-gray-500">{formatDate(meal.date)}</p>
+              <li key={meal.date} className="rounded-lg border border-gray-100 px-3 py-2 dark:border-slate-700 dark:bg-slate-800">
+                <p className="font-medium text-gray-900 dark:text-slate-100">{meal.name || 'Family meal'}</p>
+                <p className="text-xs text-gray-500 dark:text-slate-400">{formatDate(meal.date)}</p>
               </li>
             ))}
             {upcomingMeals.length === 0 && (
-              <p className="text-xs text-gray-500">No meals planned yet. Add one using the quick actions.</p>
+              <p className="text-xs text-gray-500 dark:text-slate-400">No meals planned yet. Add one using the quick actions.</p>
             )}
           </ul>
         </div>
 
-        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-          <h3 className="flex items-center gap-2 text-base font-semibold text-gray-900">
-            <ShoppingBag className="h-5 w-5 text-orange-500" /> Shopping lists
+        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+          <h3 className="flex items-center gap-2 text-base font-semibold text-gray-900 dark:text-slate-100">
+            <ShoppingBag className="h-5 w-5 text-orange-500 dark:text-orange-300" /> Shopping lists
           </h3>
           <ul className="mt-4 space-y-3 text-sm">
             {lists.map((list) => (
-              <li key={list.id} className="rounded-lg border border-gray-100 px-3 py-2">
-                <p className="font-medium text-gray-900">{list.name}</p>
-                <p className="text-xs text-gray-500">
+              <li key={list.id} className="rounded-lg border border-gray-100 px-3 py-2 dark:border-slate-700 dark:bg-slate-800">
+                <p className="font-medium text-gray-900 dark:text-slate-100">{list.name}</p>
+                <p className="text-xs text-gray-500 dark:text-slate-400">
                   {list.items.length} items • Est. £{list.estimatedTotal.toFixed(2)}
                 </p>
               </li>

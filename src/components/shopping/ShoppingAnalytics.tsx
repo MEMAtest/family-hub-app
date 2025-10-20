@@ -152,9 +152,9 @@ const ShoppingAnalytics: React.FC<ShoppingAnalyticsProps> = ({ onClose }) => {
   if (!analytics) {
     return (
       <div className="space-y-4">
-        <div className="rounded-xl border border-gray-200 bg-white p-6 text-center text-sm text-gray-600">
-          <ShoppingCart className="mx-auto h-10 w-10 text-gray-300" />
-          <h2 className="mt-3 text-lg font-semibold text-gray-900">Shopping analytics will appear soon</h2>
+        <div className="rounded-xl border border-gray-200 bg-white p-6 text-center text-sm text-gray-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
+          <ShoppingCart className="mx-auto h-10 w-10 text-gray-300 dark:text-slate-500" />
+          <h2 className="mt-3 text-lg font-semibold text-gray-900 dark:text-slate-100">Shopping analytics will appear soon</h2>
           <p className="mt-2">
             Create shopping lists and complete items to unlock spend insights, category trends, and
             top-item tracking.
@@ -175,15 +175,15 @@ const ShoppingAnalytics: React.FC<ShoppingAnalyticsProps> = ({ onClose }) => {
     <div className="space-y-6">
       <div className="flex items-start justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Shopping Analytics</h2>
-          <p className="text-gray-600 mt-1">
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-slate-100">Shopping Analytics</h2>
+          <p className="text-gray-600 mt-1 dark:text-slate-400">
             Snapshot of spending across {completedLists} completed list{completedLists === 1 ? '' : 's'}
           </p>
         </div>
         {onClose && (
           <button
             onClick={onClose}
-            className="rounded-full border border-gray-200 p-2 text-gray-500 hover:bg-gray-100"
+            className="rounded-full border border-gray-200 p-2 text-gray-500 hover:bg-gray-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
             aria-label="Close analytics"
           >
             <X className="h-4 w-4" />
@@ -192,50 +192,52 @@ const ShoppingAnalytics: React.FC<ShoppingAnalyticsProps> = ({ onClose }) => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="rounded-lg border border-gray-200 bg-white p-4">
+        <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-gray-600">Total spent</span>
-            <DollarSign className="h-5 w-5 text-gray-400" />
+            <span className="text-sm text-gray-600 dark:text-slate-400">Total spent</span>
+            <DollarSign className="h-5 w-5 text-gray-400 dark:text-slate-400" />
           </div>
-          <p className="text-2xl font-semibold text-gray-900">{currencyFormatter.format(totalSpent)}</p>
-          <p className="mt-1 text-xs text-gray-500">
+          <p className="text-2xl font-semibold text-gray-900 dark:text-slate-100">{currencyFormatter.format(totalSpent)}</p>
+          <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">
             vs {currencyFormatter.format(totalEstimated)} estimated
           </p>
         </div>
 
-        <div className="rounded-lg border border-gray-200 bg-white p-4">
+        <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-gray-600">Items logged</span>
-            <ShoppingCart className="h-5 w-5 text-gray-400" />
+            <span className="text-sm text-gray-600 dark:text-slate-400">Items logged</span>
+            <ShoppingCart className="h-5 w-5 text-gray-400 dark:text-slate-400" />
           </div>
-          <p className="text-2xl font-semibold text-gray-900">{totalItems}</p>
-          <p className="mt-1 text-xs text-gray-500">
+          <p className="text-2xl font-semibold text-gray-900 dark:text-slate-100">{totalItems}</p>
+          <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">
             Avg {(totalItems && completedLists) ? Math.round(totalItems / completedLists) : totalItems} per list
           </p>
         </div>
 
-        <div className="rounded-lg border border-gray-200 bg-white p-4">
+        <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-gray-600">Average list total</span>
-            <BarChart3 className="h-5 w-5 text-gray-400" />
+            <span className="text-sm text-gray-600 dark:text-slate-400">Average list total</span>
+            <BarChart3 className="h-5 w-5 text-gray-400 dark:text-slate-400" />
           </div>
-          <p className="text-2xl font-semibold text-gray-900">
+          <p className="text-2xl font-semibold text-gray-900 dark:text-slate-100">
             {currencyFormatter.format(averagePerList)}
           </p>
-          <p className="mt-1 text-xs text-gray-500">Based on completed lists</p>
+          <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">Based on completed lists</p>
         </div>
 
-        <div className="rounded-lg border border-gray-200 bg-white p-4">
+        <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-gray-600">Savings vs estimates</span>
-            <PiggyBank className="h-5 w-5 text-gray-400" />
+            <span className="text-sm text-gray-600 dark:text-slate-400">Savings vs estimates</span>
+            <PiggyBank className="h-5 w-5 text-gray-400 dark:text-slate-400" />
           </div>
-          <div className="text-2xl font-semibold text-gray-900">
+          <div className="text-2xl font-semibold text-gray-900 dark:text-slate-100">
             {currencyFormatter.format(savings)}
           </div>
           <div
             className={`mt-1 inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
-              savings >= 0 ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'
+              savings >= 0
+                ? 'bg-green-50 text-green-700 dark:bg-green-500/10 dark:text-green-200'
+                : 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-200'
             }`}
           >
             {savings >= 0 ? (
@@ -254,8 +256,8 @@ const ShoppingAnalytics: React.FC<ShoppingAnalyticsProps> = ({ onClose }) => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="rounded-lg border border-gray-200 bg-white p-4">
-          <h3 className="text-base font-semibold text-gray-900">Monthly totals</h3>
+        <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+          <h3 className="text-base font-semibold text-gray-900 dark:text-slate-100">Monthly totals</h3>
           {monthlyTrend.length ? (
             <div className="mt-4 h-64">
               <ResponsiveContainer width="100%" height="100%">
@@ -275,14 +277,14 @@ const ShoppingAnalytics: React.FC<ShoppingAnalyticsProps> = ({ onClose }) => {
               </ResponsiveContainer>
             </div>
           ) : (
-            <p className="mt-4 text-sm text-gray-500">
+            <p className="mt-4 text-sm text-gray-500 dark:text-slate-400">
               Add created dates to shopping lists to unlock monthly trends.
             </p>
           )}
         </div>
 
-        <div className="rounded-lg border border-gray-200 bg-white p-4">
-          <h3 className="text-base font-semibold text-gray-900">Spend by category</h3>
+        <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+          <h3 className="text-base font-semibold text-gray-900 dark:text-slate-100">Spend by category</h3>
           {categoryData.length ? (
             <div className="mt-4 h-64">
               <ResponsiveContainer width="100%" height="100%">
@@ -297,29 +299,29 @@ const ShoppingAnalytics: React.FC<ShoppingAnalyticsProps> = ({ onClose }) => {
               </ResponsiveContainer>
             </div>
           ) : (
-            <p className="mt-4 text-sm text-gray-500">Categorise lists to see where money goes.</p>
+            <p className="mt-4 text-sm text-gray-500 dark:text-slate-400">Categorise lists to see where money goes.</p>
           )}
         </div>
       </div>
 
-      <div className="rounded-lg border border-gray-200 bg-white p-4">
-        <h3 className="text-base font-semibold text-gray-900">Most frequent items</h3>
+      <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+        <h3 className="text-base font-semibold text-gray-900 dark:text-slate-100">Most frequent items</h3>
         {topItems.length ? (
-          <div className="mt-4 divide-y divide-gray-100">
+          <div className="mt-4 divide-y divide-gray-100 dark:divide-slate-700">
             {topItems.map((item) => (
               <div key={item.name} className="flex items-center justify-between py-3">
                 <div>
-                  <p className="font-medium text-gray-900">{item.name}</p>
-                  <p className="text-xs text-gray-500">{item.frequency} time{item.frequency === 1 ? '' : 's'} added</p>
+                  <p className="font-medium text-gray-900 dark:text-slate-100">{item.name}</p>
+                  <p className="text-xs text-gray-500 dark:text-slate-400">{item.frequency} time{item.frequency === 1 ? '' : 's'} added</p>
                 </div>
-                <div className="text-sm text-gray-600">
+                <div className="text-sm text-gray-600 dark:text-slate-300">
                   Avg {currencyFormatter.format(item.avgPrice)}
                 </div>
               </div>
             ))}
           </div>
         ) : (
-          <p className="mt-4 text-sm text-gray-500">Add items to lists to track buying patterns.</p>
+          <p className="mt-4 text-sm text-gray-500 dark:text-slate-400">Add items to lists to track buying patterns.</p>
         )}
       </div>
     </div>

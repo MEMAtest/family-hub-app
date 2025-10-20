@@ -105,6 +105,22 @@ const SimpleBudgetDashboard: React.FC = () => {
     return colorMap[category] || CHART_COLORS[index % CHART_COLORS.length];
   }, []);
 
+  const sanitizeBudgetItems = useCallback((items: any[]) => {
+    return (items ?? []).filter((item): item is Record<string, any> => !!item && typeof item === 'object');
+  }, []);
+
+  const persistBudgetLists = useCallback((incomeItems: any[], expenseItems: any[]) => {
+    if (typeof window === 'undefined') return;
+    try {
+      const safeIncome = sanitizeBudgetItems(incomeItems);
+      const safeExpenses = sanitizeBudgetItems(expenseItems);
+      window.localStorage.setItem('budgetIncome', JSON.stringify(safeIncome));
+      window.localStorage.setItem('budgetExpenses', JSON.stringify(safeExpenses));
+    } catch (error) {
+      console.warn('Failed to persist budget lists to localStorage', error);
+    }
+  }, [sanitizeBudgetItems]);
+
   // Load budget data from store
   useEffect(() => {
     const loadBudgetData = async () => {
@@ -116,40 +132,47 @@ const SimpleBudgetDashboard: React.FC = () => {
 
         console.log('Loading budget data for family:', familyId);
 
-        // Check if budgetData is already in store (loaded by useDatabaseSync)
-        if (budgetData && (budgetData.income || budgetData.expenses)) {
+        let incomeItems: any[] = [];
+        let expenseItems: any[] = [];
+
+        const hasStoreBudget = Boolean(budgetData && (budgetData.income || budgetData.expenses));
+
+        if (hasStoreBudget) {
           console.log('Using budget data from store');
-          const incomeItems = [
-            ...Object.values(budgetData.income?.monthly || {}),
-            ...(budgetData.income?.oneTime || [])
-          ];
-          const expenseItems = [
-            ...Object.values(budgetData.expenses?.recurringMonthly || {}),
-            ...(budgetData.expenses?.oneTimeSpends || [])
+
+          incomeItems = [
+            ...Object.values(budgetData?.income?.monthly || {}),
+            ...(budgetData?.income?.oneTime || [])
           ];
 
-          setIncomeList(incomeItems);
-          setExpenseList(expenseItems);
-          console.log('Loaded from store:', incomeItems.length, 'income,', expenseItems.length, 'expenses');
-          setIsLoading(false);
-          return;
+          expenseItems = [
+            ...Object.values(budgetData?.expenses?.recurringMonthly || {}),
+            ...(budgetData?.expenses?.oneTimeSpends || [])
+          ];
+        } else {
+          console.log('Fetching budget data from API');
+          const [incomeData, expenseData] = await Promise.all([
+            fetch(`/api/families/${familyId}/budget/income`).then((res) => res.json()),
+            fetch(`/api/families/${familyId}/budget/expenses`).then((res) => res.json()),
+          ]);
+
+          if (Array.isArray(incomeData)) {
+            incomeItems = incomeData;
+            console.log('Loaded income from API:', incomeData.length, 'items');
+          }
+
+          if (Array.isArray(expenseData)) {
+            expenseItems = expenseData;
+            console.log('Loaded expenses from API:', expenseData.length, 'items');
+          }
         }
 
-        // Fallback: Fetch from API if not in store
-        console.log('Fetching budget data from API');
-        const [incomeData, expenseData] = await Promise.all([
-          fetch(`/api/families/${familyId}/budget/income`).then(res => res.json()),
-          fetch(`/api/families/${familyId}/budget/expenses`).then(res => res.json())
-        ]);
-
-        if (Array.isArray(incomeData)) {
-          setIncomeList(incomeData);
-          console.log('Loaded income from API:', incomeData.length, 'items');
-        }
-
-        if (Array.isArray(expenseData)) {
-          setExpenseList(expenseData);
-          console.log('Loaded expenses from API:', expenseData.length, 'items');
+        if (incomeItems.length || expenseItems.length) {
+          const safeIncome = sanitizeBudgetItems(incomeItems);
+          const safeExpenses = sanitizeBudgetItems(expenseItems);
+          setIncomeList(safeIncome);
+          setExpenseList(safeExpenses);
+          persistBudgetLists(safeIncome, safeExpenses);
         }
       } catch (error) {
         console.error('Error loading budget data:', error);
@@ -159,22 +182,28 @@ const SimpleBudgetDashboard: React.FC = () => {
     };
 
     loadBudgetData();
-  }, [familyId, budgetData]);
+  }, [familyId, budgetData, persistBudgetLists, sanitizeBudgetItems]);
 
   // Helper function to filter items by selected month/year (must be before useMemo hooks)
   const filterByMonth = useCallback((item: any) => {
+    if (!item || typeof item !== 'object') {
+      return false;
+    }
+
     // For recurring items, check if selected month falls within the recurring date range
-    if (item.isRecurring) {
+    if ((item as any).isRecurring) {
       const selectedDate = new Date(selectedYear, selectedMonth - 1, 1); // First day of selected month
       const selectedDateEnd = new Date(selectedYear, selectedMonth, 0); // Last day of selected month
 
       // Determine the start date for the recurring item
-      let startDate: Date;
-      if (item.recurringStartDate) {
-        startDate = new Date(item.recurringStartDate);
-      } else {
-        // Fallback to createdAt if no recurringStartDate
-        startDate = new Date(item.createdAt);
+      const startDate = item.recurringStartDate
+        ? new Date(item.recurringStartDate)
+        : item.createdAt
+          ? new Date(item.createdAt)
+          : selectedDate;
+
+      if (Number.isNaN(startDate.getTime())) {
+        return false;
       }
 
       // Check if the selected month is before the start date
@@ -185,6 +214,9 @@ const SimpleBudgetDashboard: React.FC = () => {
       // Determine the end date for the recurring item
       if (item.recurringEndDate) {
         const endDate = new Date(item.recurringEndDate);
+        if (Number.isNaN(endDate.getTime())) {
+          return false;
+        }
         // Check if the selected month is after the end date
         if (selectedDate > endDate) {
           return false; // Selected month is after the recurring period ends
@@ -213,6 +245,7 @@ const SimpleBudgetDashboard: React.FC = () => {
     // For one-time items, match the exact month/year using paymentDate
     if (!item.paymentDate && !item.createdAt) return false;
     const dateToCheck = new Date(item.paymentDate || item.createdAt);
+    if (Number.isNaN(dateToCheck.getTime())) return false;
     return (
       dateToCheck.getMonth() + 1 === selectedMonth &&
       dateToCheck.getFullYear() === selectedYear
@@ -222,8 +255,8 @@ const SimpleBudgetDashboard: React.FC = () => {
   // Calculate all dashboard data from real income and expense lists filtered by selected month
   const dashboardData = useMemo(() => {
     // Filter lists by selected month/year
-    const filteredIncome = incomeList.filter(filterByMonth);
-    const filteredExpenses = expenseList.filter(filterByMonth);
+    const filteredIncome = sanitizeBudgetItems(incomeList).filter(filterByMonth);
+    const filteredExpenses = sanitizeBudgetItems(expenseList).filter(filterByMonth);
 
     const totalIncome = filteredIncome.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
     const totalExpenses = filteredExpenses.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
@@ -276,16 +309,16 @@ const SimpleBudgetDashboard: React.FC = () => {
       filteredIncome,
       filteredExpenses
     };
-  }, [incomeList, expenseList, selectedMonth, selectedYear, getColorForCategory, filterByMonth]);
+  }, [incomeList, expenseList, selectedMonth, selectedYear, getColorForCategory, filterByMonth, sanitizeBudgetItems]);
 
   const visibleIncome = useMemo(() => {
     if (!dashboardData) return [] as any[];
-    return filterIncome(dashboardData.filteredIncome, searchQuery);
+    return filterIncome(dashboardData.filteredIncome as any[], searchQuery);
   }, [dashboardData, searchQuery]);
 
   const visibleExpenses = useMemo(() => {
     if (!dashboardData) return [] as any[];
-    return filterExpenses(dashboardData.filteredExpenses, searchQuery, { viewTab });
+    return filterExpenses(dashboardData.filteredExpenses as any[], searchQuery, { viewTab });
   }, [dashboardData, searchQuery, viewTab]);
 
   // Helper function for currency formatting (defined before useMemo hooks that use it)
@@ -372,7 +405,7 @@ const SimpleBudgetDashboard: React.FC = () => {
 
   // Mobile Header Component
   const renderMobileHeader = () => (
-    <div className="lg:hidden bg-white border-b border-gray-200 px-4 py-3 sticky top-0 z-40 pwa-safe-top">
+    <div className="lg:hidden bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 px-4 py-3 sticky top-0 z-40 pwa-safe-top">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-3">
           <DollarSign className="w-6 h-6 text-blue-600" />
@@ -418,8 +451,8 @@ const SimpleBudgetDashboard: React.FC = () => {
 
     return (
       <div className="lg:hidden fixed inset-0 bg-black bg-opacity-50 z-50" onClick={() => setShowMobileMenu(false)}>
-        <div className="absolute right-0 top-0 h-full w-80 bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
-          <div className="flex items-center justify-between p-4 border-b border-gray-200 pwa-safe-top">
+        <div className="absolute right-0 top-0 h-full w-80 surface-card shadow-xl" onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-slate-800 pwa-safe-top">
             <h2 className="text-lg font-semibold text-gray-900">Budget Actions</h2>
             <button
               onClick={() => setShowMobileMenu(false)}
@@ -487,7 +520,7 @@ const SimpleBudgetDashboard: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="p-3 sm:p-4 md:p-6 lg:p-8 bg-gray-50 min-h-screen">
+      <div className="p-3 sm:p-4 md:p-6 lg:p-8 bg-gray-50 dark:bg-slate-950 min-h-screen">
         <div className="flex items-center justify-center h-64">
           <RefreshCw className="w-8 h-8 animate-spin text-gray-400" />
           <span className="ml-2 text-gray-600">Loading budget data...</span>
@@ -498,8 +531,8 @@ const SimpleBudgetDashboard: React.FC = () => {
 
   if (!dashboardData) {
     return (
-      <div className="p-3 sm:p-4 md:p-6 lg:p-8 bg-gray-50 min-h-screen">
-        <div className="max-w-xl mx-auto text-center bg-white border border-gray-200 rounded-lg p-6">
+      <div className="p-3 sm:p-4 md:p-6 lg:p-8 bg-gray-50 dark:bg-slate-950 min-h-screen">
+        <div className="max-w-xl mx-auto text-center surface-card rounded-lg p-6">
           <p className="text-gray-600">
             Budget data is not available yet. Please add income or expenses to get started.
           </p>
@@ -515,7 +548,7 @@ const SimpleBudgetDashboard: React.FC = () => {
   }
 
   return (
-    <div className={`bg-gray-50 min-h-screen ${isMobile ? 'pb-safe-bottom' : 'p-3 sm:p-4 md:p-6 lg:p-8'}`}>
+    <div className={`bg-gray-50 dark:bg-slate-950 min-h-screen ${isMobile ? 'pb-safe-bottom' : 'p-3 sm:p-4 md:p-6 lg:p-8'}`}>
       {/* Mobile Header */}
       {isMobile && renderMobileHeader()}
 
@@ -587,7 +620,7 @@ const SimpleBudgetDashboard: React.FC = () => {
               </button>
               <button
                 onClick={() => setShowSettings(true)}
-                className="border border-gray-300 text-gray-700 px-4 py-2 rounded-sm hover:bg-gray-50 transition-colors text-sm font-medium"
+                className="border border-gray-300 text-gray-700 px-4 py-2 rounded-sm hover:bg-gray-50 dark:bg-slate-950 transition-colors text-sm font-medium"
               >
                 <Settings className="w-4 h-4" />
               </button>
@@ -602,7 +635,7 @@ const SimpleBudgetDashboard: React.FC = () => {
           ? 'grid-cols-2 px-4'
           : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 md:gap-6'
       }`}>
-        <div className={`bg-white border border-gray-200 ${
+        <div className={`surface-card ${
           isMobile ? 'p-3 rounded-xl' : 'p-3 sm:p-4 md:p-6'
         }`}>
           <div className="flex items-center justify-between">
@@ -625,7 +658,7 @@ const SimpleBudgetDashboard: React.FC = () => {
           </div>
         </div>
 
-        <div className={`bg-white border border-gray-200 ${
+        <div className={`surface-card ${
           isMobile ? 'p-3 rounded-xl' : 'p-3 sm:p-4 md:p-6'
         }`}>
           <div className="flex items-center justify-between">
@@ -648,7 +681,7 @@ const SimpleBudgetDashboard: React.FC = () => {
           </div>
         </div>
 
-        <div className={`bg-white border border-gray-200 ${
+        <div className={`surface-card ${
           isMobile ? 'p-3 rounded-xl' : 'p-3 sm:p-4 md:p-6'
         }`}>
           <div className="flex items-center justify-between">
@@ -673,7 +706,7 @@ const SimpleBudgetDashboard: React.FC = () => {
           </div>
         </div>
 
-        <div className={`bg-white border border-gray-200 ${
+        <div className={`surface-card ${
           isMobile ? 'p-3 rounded-xl' : 'p-3 sm:p-4 md:p-6'
         }`}>
           <div className="flex items-center justify-between">
@@ -695,7 +728,7 @@ const SimpleBudgetDashboard: React.FC = () => {
       </div>
 
       {/* 6-Month Trend Chart */}
-      <div className={`bg-white border border-gray-200 mb-4 md:mb-8 ${
+      <div className={`surface-card mb-4 md:mb-8 ${
         isMobile ? 'mx-4 p-4 rounded-xl' : 'p-6'
       }`}>
         <h2 className={`font-medium text-gray-900 mb-6 ${
@@ -736,7 +769,7 @@ const SimpleBudgetDashboard: React.FC = () => {
         isMobile ? 'grid-cols-1 px-4' : 'grid-cols-1 lg:grid-cols-2'
       }`}>
         {/* Income vs Expenses Comparison */}
-        <div className={`bg-white border border-gray-200 ${
+        <div className={`surface-card ${
           isMobile ? 'p-4 rounded-xl' : 'p-6'
         }`}>
           <h2 className={`font-medium text-gray-900 mb-6 ${
@@ -763,7 +796,7 @@ const SimpleBudgetDashboard: React.FC = () => {
 
         {/* Expense Breakdown by Category */}
         {dashboardData.categorySpending.length > 0 && (
-          <div className={`bg-white border border-gray-200 ${
+          <div className={`surface-card ${
             isMobile ? 'p-4 rounded-xl' : 'p-6'
           }`}>
             <h2 className={`font-medium text-gray-900 mb-6 flex items-center ${
@@ -806,7 +839,7 @@ const SimpleBudgetDashboard: React.FC = () => {
 
         {/* Income Breakdown by Category */}
         {dashboardData.incomeByCategory.length > 0 && (
-          <div className={`bg-white border border-gray-200 ${
+          <div className={`surface-card ${
             isMobile ? 'p-4 rounded-xl' : 'p-6'
           }`}>
             <h2 className={`font-medium text-gray-900 mb-6 flex items-center ${
@@ -848,7 +881,7 @@ const SimpleBudgetDashboard: React.FC = () => {
         )}
 
         {/* Category Summary Table */}
-        <div className={`bg-white border border-gray-200 ${
+        <div className={`surface-card ${
           isMobile ? 'p-4 rounded-xl' : 'p-6'
         }`}>
           <h2 className={`font-medium text-gray-900 mb-4 ${
@@ -858,7 +891,7 @@ const SimpleBudgetDashboard: React.FC = () => {
           </h2>
           <div className="overflow-auto max-h-80">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50">
+              <thead className="bg-gray-50 dark:bg-slate-950">
                 <tr>
                   <th className="text-left p-2">Category</th>
                   <th className="text-right p-2">Amount</th>
@@ -873,7 +906,7 @@ const SimpleBudgetDashboard: React.FC = () => {
                     <td className="text-right p-2">{cat.percentage.toFixed(1)}%</td>
                   </tr>
                 ))}
-                <tr className="border-t font-bold bg-gray-50">
+                <tr className="border-t font-bold bg-gray-50 dark:bg-slate-950">
                   <td className="p-2">Total Expenses</td>
                   <td className="text-right p-2">{formatCurrency(dashboardData.totalExpenses)}</td>
                   <td className="text-right p-2">100%</td>
@@ -887,7 +920,7 @@ const SimpleBudgetDashboard: React.FC = () => {
       {/* Search & Filters */}
       <div className={`${isMobile ? 'px-4' : ''} mb-6`}>
         <div
-          className={`bg-white border border-gray-200 ${
+          className={`surface-card ${
             isMobile
               ? 'p-3 rounded-xl space-y-3'
               : 'p-4 rounded-lg flex items-center justify-between gap-4'
@@ -900,7 +933,7 @@ const SimpleBudgetDashboard: React.FC = () => {
               onChange={(event) => setSearchQuery(event.target.value)}
               type="search"
               placeholder="Search income, expenses, or amounts"
-              className="w-full border border-gray-200 rounded-md pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full border border-gray-200 dark:border-slate-800 rounded-md pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
           <div className={`flex ${isMobile ? 'w-full' : ''} gap-2`}>
@@ -937,7 +970,7 @@ const SimpleBudgetDashboard: React.FC = () => {
           : 'grid-cols-1 md:grid-cols-2'
       }`}>
         {/* Income List */}
-        <div className={`bg-white border border-gray-200 ${
+        <div className={`surface-card ${
           isMobile ? 'p-4 rounded-xl' : 'p-6'
         }`}>
           <h3 className={`font-medium text-gray-900 mb-4 flex items-center ${
@@ -1014,7 +1047,7 @@ const SimpleBudgetDashboard: React.FC = () => {
         </div>
 
         {/* Expense List */}
-        <div className={`bg-white border border-gray-200 ${
+        <div className={`surface-card ${
           isMobile ? 'p-4 rounded-xl' : 'p-6'
         }`}>
           <h3 className={`font-medium text-gray-900 mb-4 flex items-center ${
@@ -1104,7 +1137,7 @@ const SimpleBudgetDashboard: React.FC = () => {
 
                       {/* Budget Limit Indicator */}
                       {budgetLimit && (
-                        <div className="mt-3 pt-2 border-t border-gray-200">
+                        <div className="mt-3 pt-2 border-t border-gray-200 dark:border-slate-800">
                           <div className="flex justify-between items-center mb-1">
                             <span className={`text-xs font-medium ${textColor}`}>
                               Budget: £{amount.toLocaleString()} / £{budgetLimit.toLocaleString()}
@@ -1260,7 +1293,7 @@ const SimpleBudgetDashboard: React.FC = () => {
       {/* Advanced Reports Modal */}
       {showAdvancedReports && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
-          <div className="bg-white w-full h-full overflow-auto">
+          <div className="surface-card w-full h-full overflow-auto">
             <AdvancedReportsDashboard
               onClose={() => setShowAdvancedReports(false)}
               incomeList={incomeList}

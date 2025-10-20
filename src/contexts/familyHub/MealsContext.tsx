@@ -39,6 +39,7 @@ export const MealsProvider = ({ children }: PropsWithChildren) => {
   const mealPlanning = useFamilyStore((state) => state.mealPlanning);
   const setMealPlanningStore = useFamilyStore((state) => state.setMealPlanning);
   const updateMealPlanningStore = useFamilyStore((state) => state.updateMealPlanning);
+  const familyId = useFamilyStore((state) => state.databaseStatus.familyId);
 
   const [isMealFormOpen, setIsMealFormOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -59,26 +60,101 @@ export const MealsProvider = ({ children }: PropsWithChildren) => {
     setFormStateInternal(INITIAL_MEAL_FORM);
   }, []);
 
-  const saveMeal = useCallback(() => {
-    if (!mealPlanning || !selectedDate) return;
-
-    const calories = parseInt(formState.calories, 10) || 0;
-    const plannedMeal = {
-      ...formState,
-      name: `${formState.protein} with ${formState.carb}`,
-      calories,
+  const buildUpdatedPlanning = useCallback((base: MealPlanning | null, dateKey: string, entry: any, isEaten = false): MealPlanning => {
+    const template: MealPlanning = base ? {
+      planned: { ...base.planned },
+      eaten: { ...base.eaten },
+      components: base.components,
+      favorites: base.favorites,
+    } : {
+      planned: {},
+      eaten: {},
+      components: {
+        proteins: [],
+        grains: [],
+        carbs: [],
+        vegetables: [],
+      },
+      favorites: [],
     };
 
-    setMealPlanningStore({
-      ...mealPlanning,
-      planned: {
-        ...mealPlanning.planned,
-        [selectedDate]: plannedMeal,
-      },
-    });
+    if (isEaten) {
+      delete template.planned[dateKey];
+      template.eaten[dateKey] = entry;
+    } else {
+      template.planned[dateKey] = entry;
+    }
 
+    return template;
+  }, []);
+
+  const transformMealRecord = useCallback((record: any) => ({
+    id: record.id,
+    name: record.mealName,
+    protein: record.proteinSource || '',
+    carb: record.carbohydrateSource || '',
+    veg: record.vegetableSource || '',
+    calories: record.estimatedCalories || 0,
+    notes: record.mealNotes || '',
+    eaten: Boolean(record.isEaten),
+  }), []);
+
+  const saveMeal = useCallback(async () => {
+    if (!selectedDate) return;
+
+    const calories = parseInt(formState.calories, 10) || 0;
+    const localEntry = {
+      id: `meal-${selectedDate}`,
+      name: `${formState.protein} with ${formState.carb}`.trim() || formState.protein || formState.carb || 'Meal',
+      protein: formState.protein,
+      carb: formState.carb,
+      veg: formState.veg,
+      calories,
+      notes: formState.notes,
+      eaten: false,
+    };
+
+    const applyUpdate = (entry: any, eaten = false) => {
+      const current = useFamilyStore.getState().mealPlanning;
+      const next = buildUpdatedPlanning(current, selectedDate, entry, eaten);
+      setMealPlanningStore(next);
+    };
+
+    if (familyId) {
+      try {
+        const response = await fetch(`/api/families/${familyId}/meals`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            mealDate: selectedDate,
+            mealName: localEntry.name,
+            proteinSource: formState.protein,
+            carbohydrateSource: formState.carb,
+            vegetableSource: formState.veg,
+            estimatedCalories: calories || null,
+            mealNotes: formState.notes,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`Meal save failed with status ${response.status}`);
+        }
+
+        const saved = await response.json();
+        const entry = transformMealRecord(saved);
+        applyUpdate(entry, entry.eaten);
+        closeMealForm();
+        return;
+      } catch (error) {
+        console.error('Failed to persist meal. Falling back to local state.', error);
+      }
+    }
+
+    applyUpdate(localEntry, false);
     closeMealForm();
-  }, [closeMealForm, formState, mealPlanning, selectedDate, setMealPlanningStore]);
+  }, [buildUpdatedPlanning, closeMealForm, familyId, formState, selectedDate, setMealPlanningStore, transformMealRecord]);
 
   const value = useMemo<MealsContextValue>(() => ({
     mealPlanning,

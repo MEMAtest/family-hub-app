@@ -264,21 +264,22 @@ const toDate = (value: unknown): Date | null => {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 };
 
-const normaliseRecord = (record: any): NormalisedBudgetRecord => {
-  const paymentDate = toDate(record.paymentDate ?? record.date);
+const normaliseRecord = (input: any): NormalisedBudgetRecord => {
+  const record = input && typeof input === 'object' ? input : {};
+  const paymentDate = toDate((record as any).paymentDate ?? (record as any).date);
   const createdAt =
-    toDate(record.createdAt) ??
+    toDate((record as any).createdAt) ??
     paymentDate ??
     new Date();
 
   return {
-    amount: toNumber(record.amount),
-    category: record.category || 'Other',
-    isRecurring: Boolean(record.isRecurring),
+    amount: toNumber((record as any).amount),
+    category: (record as any).category || 'Other',
+    isRecurring: Boolean((record as any).isRecurring),
     paymentDate,
     createdAt,
-    recurringStartDate: toDate(record.recurringStartDate),
-    recurringEndDate: toDate(record.recurringEndDate),
+    recurringStartDate: toDate((record as any).recurringStartDate),
+    recurringEndDate: toDate((record as any).recurringEndDate),
   };
 };
 
@@ -290,18 +291,62 @@ export const extractBudgetRecords = (budgetData: BudgetData | null) => {
     };
   }
 
-  const incomeRecordsRaw: any[] = [
-    ...Object.values(budgetData.income?.monthly ?? {}),
-    ...(budgetData.income?.oneTime ?? []),
-  ];
+  const readLocalArray = (key: string) => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const raw = window.localStorage.getItem(key);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (error) {
+      console.warn(`Failed to parse localStorage item "${key}"`, error);
+      return [];
+    }
+  };
 
-  const expenseRecordsRaw: any[] = [
-    ...Object.values(budgetData.expenses?.recurringMonthly ?? {}),
-    ...(budgetData.expenses?.oneTimeSpends ?? []),
-  ];
+  const mergeRecords = (primary: any[], fallback: any[]) => {
+    if (!fallback.length) return primary;
+    const byId = new Map<string, any>();
 
-  const incomeRecords = incomeRecordsRaw.map(normaliseRecord) as unknown as IncomeLike[];
-  const expenseRecords = expenseRecordsRaw.map(normaliseRecord) as unknown as ExpenseLike[];
+    primary.filter(Boolean).forEach((record, index) => {
+      const key = String(record?.id ?? `primary-${index}`);
+      byId.set(key, record);
+    });
+
+    fallback.filter(Boolean).forEach((record, index) => {
+      const key = String(record?.id ?? `fallback-${index}`);
+      if (!byId.has(key)) {
+        byId.set(key, record);
+      }
+    });
+
+    return Array.from(byId.values());
+  };
+
+  const incomeRecordsRaw: any[] = mergeRecords(
+    [
+      ...Object.values(budgetData.income?.monthly ?? {}),
+      ...(budgetData.income?.oneTime ?? []),
+    ],
+    readLocalArray('budgetIncome')
+  );
+
+  const recurringSections = budgetData.expenses?.recurringMonthly ?? {};
+  const flattenedRecurringExpenses = Object.values(recurringSections).flatMap((section) => {
+    if (!section || typeof section !== 'object') return [] as any[];
+    return Object.values(section as Record<string, any>);
+  });
+
+  const expenseRecordsRaw: any[] = mergeRecords(
+    [
+      ...flattenedRecurringExpenses,
+      ...(budgetData.expenses?.oneTimeSpends ?? []),
+    ],
+    readLocalArray('budgetExpenses')
+  );
+
+  const incomeRecords = incomeRecordsRaw.filter(Boolean).map(normaliseRecord) as unknown as IncomeLike[];
+  const expenseRecords = expenseRecordsRaw.filter(Boolean).map(normaliseRecord) as unknown as ExpenseLike[];
 
   return { incomeRecords, expenseRecords };
 };

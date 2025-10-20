@@ -166,18 +166,18 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
       />
 
       {/* Notification Panel */}
-      <div className="absolute right-0 top-0 h-full w-full max-w-md bg-white shadow-xl">
+      <div className="absolute right-0 top-0 h-full w-full max-w-md bg-white shadow-xl dark:bg-slate-900">
         <div className="flex flex-col h-full">
           {/* Header */}
-          <div className="border-b border-gray-200 p-4">
+          <div className="border-b border-gray-200 p-4 dark:border-slate-800">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2">
-                <Bell className="w-5 h-5 text-gray-600" />
-                <h2 className="text-lg font-semibold text-gray-900">
+                <Bell className="w-5 h-5 text-gray-600 dark:text-slate-300" />
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-100">
                   Notifications
                 </h2>
                 {unreadCount > 0 && (
-                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-200">
                     {unreadCount}
                   </span>
                 )}
@@ -185,17 +185,17 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
               <div className="flex items-center space-x-2">
                 <button
                   onClick={() => setShowSettings(!showSettings)}
-                  className="p-1 hover:bg-gray-100 rounded-md transition-colors"
+                  className="p-1 hover:bg-gray-100 rounded-md transition-colors dark:hover:bg-slate-800"
                   title="Settings"
                 >
-                  <Settings className="w-4 h-4 text-gray-600" />
+                  <Settings className="w-4 h-4 text-gray-600 dark:text-slate-300" />
                 </button>
                 <button
                   onClick={onClose}
-                  className="p-1 hover:bg-gray-100 rounded-md transition-colors"
+                  className="p-1 hover:bg-gray-100 rounded-md transition-colors dark:hover:bg-slate-800"
                   title="Close"
                 >
-                  <X className="w-4 h-4 text-gray-600" />
+                  <X className="w-4 h-4 text-gray-600 dark:text-slate-300" />
                 </button>
               </div>
             </div>
@@ -279,20 +279,18 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
           {/* Notifications List */}
           <div className="flex-1 overflow-y-auto">
             {filteredNotifications.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full text-gray-500">
+              <div className="flex flex-col items-center justify-center h-full text-gray-500 dark:text-slate-400">
                 <Bell className="w-12 h-12 text-gray-300 mb-2" />
                 <p className="text-sm">
                   {searchTerm ? 'No matching notifications' : 'No notifications'}
                 </p>
               </div>
             ) : (
-              <div className="divide-y divide-gray-200">
+              <div className="divide-y divide-gray-200 dark:divide-slate-800">
                 {filteredNotifications.map((notification) => (
                   <div
                     key={notification.id}
-                    className={`p-4 border-l-4 ${getNotificationColor(notification)} ${
-                      !notification.read ? 'bg-opacity-100' : 'bg-opacity-50'
-                    }`}
+                    className={`p-4 border-l-4 ${getNotificationColor(notification)} ${ !notification.read ? 'bg-opacity-100' : 'bg-opacity-50' } dark:bg-opacity-80`}
                   >
                     <div className="flex items-start space-x-3">
                       <div className="flex-shrink-0 mt-1">
@@ -303,16 +301,16 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
                             <h4 className={`text-sm font-medium ${
-                              !notification.read ? 'text-gray-900' : 'text-gray-600'
+                              !notification.read ? 'text-gray-900 dark:text-slate-100' : 'text-gray-600 dark:text-slate-400'
                             }`}>
                               {notification.title}
                             </h4>
                             <p className={`text-sm mt-1 ${
-                              !notification.read ? 'text-gray-700' : 'text-gray-500'
+                              !notification.read ? 'text-gray-700 dark:text-slate-300' : 'text-gray-500 dark:text-slate-400'
                             }`}>
                               {notification.message}
                             </p>
-                            <p className="text-xs text-gray-400 mt-1">
+                            <p className="text-xs text-gray-400 mt-1 dark:text-slate-500">
                               {notification.timestamp.toLocaleString()}
                             </p>
                           </div>
@@ -321,7 +319,7 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
                             {!notification.read && (
                               <button
                                 onClick={() => markAsRead(notification.id)}
-                                className="p-1 hover:bg-white hover:bg-opacity-50 rounded transition-colors"
+                                className="p-1 hover:bg-white hover:bg-opacity-50 rounded transition-colors dark:hover:bg-slate-800"
                                 title="Mark as read"
                               >
                                 <Check className="w-3 h-3 text-gray-600" />
@@ -331,7 +329,7 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
                             {/* Snooze dropdown */}
                             <div className="relative group">
                               <button
-                                className="p-1 hover:bg-white hover:bg-opacity-50 rounded transition-colors"
+                                className="p-1 hover:bg-white hover:bg-opacity-50 rounded transition-colors dark:hover:bg-slate-800"
                                 title="Snooze"
                               >
                                 <Clock className="w-3 h-3 text-gray-600" />
@@ -341,7 +339,7 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
                                   <button
                                     key={option.label}
                                     onClick={() => handleSnooze(notification, option.minutes)}
-                                    className="block w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50"
+                                    className="block w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800"
                                   >
                                     {option.label}
                                   </button>
@@ -351,7 +349,7 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
 
                             <button
                               onClick={() => clearNotification(notification.id)}
-                              className="p-1 hover:bg-white hover:bg-opacity-50 rounded transition-colors"
+                              className="p-1 hover:bg-white hover:bg-opacity-50 rounded transition-colors dark:hover:bg-slate-800"
                               title="Delete"
                             >
                               <Trash2 className="w-3 h-3 text-gray-600" />
