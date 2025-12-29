@@ -2,6 +2,22 @@ import { create, StateCreator } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { CalendarEvent, EventTemplate } from '@/types/calendar.types';
 import { FamilyMember } from '@/types';
+import {
+  AreaWatchItem,
+  PropertyBaseline,
+  PropertyComponent,
+  PropertyTask,
+  PropertyValueEntry,
+  PropertyWorkLog,
+  PropertyDocument,
+} from '@/types/property.types';
+import {
+  tremaineRoadAreaWatch,
+  tremaineRoadBaseline,
+  tremaineRoadComponents,
+  tremaineRoadTasks,
+  tremaineRoadValues,
+} from '@/data/property/tremaineRoad';
 
 // =================================================================
 // TYPE DEFINITIONS
@@ -84,13 +100,15 @@ interface ViewSlice {
   currentView: string;
   currentSubView: string;
   calendarView: 'month' | 'week' | 'day';
-  currentDate: Date;
+  currentDate: Date | null;
+  isHydrated: boolean;
   selectedPerson: string;
   setCurrentView: (view: string) => void;
   setCurrentSubView: (subView: string) => void;
   setCalendarView: (view: 'month' | 'week' | 'day') => void;
   setCurrentDate: (date: Date) => void;
   setSelectedPerson: (personId: string) => void;
+  hydrate: () => void;
 }
 
 interface BudgetSlice {
@@ -119,6 +137,33 @@ interface GoalsSlice {
   updateGoalsData: (updates: Partial<GoalsData>) => void;
 }
 
+interface PropertySlice {
+  propertyProfile: PropertyBaseline;
+  propertyTasks: PropertyTask[];
+  propertyValues: PropertyValueEntry[];
+  areaWatchItems: AreaWatchItem[];
+  propertyComponents: PropertyComponent[];
+  propertyRole: 'owner' | 'contractor' | 'viewer';
+  setPropertyProfile: (profile: PropertyBaseline) => void;
+  updatePropertyProfile: (updates: Partial<PropertyBaseline>) => void;
+  addPropertyDocument: (document: PropertyDocument) => void;
+  removePropertyDocument: (id: string) => void;
+  setPropertyTasks: (tasks: PropertyTask[]) => void;
+  addPropertyTask: (task: PropertyTask) => void;
+  updatePropertyTask: (id: string, updates: Partial<PropertyTask>) => void;
+  removePropertyTask: (id: string) => void;
+  addPropertyWorkLog: (taskId: string, workLog: PropertyWorkLog) => void;
+  setPropertyValues: (values: PropertyValueEntry[]) => void;
+  addPropertyValue: (value: PropertyValueEntry) => void;
+  removePropertyValue: (id: string) => void;
+  setAreaWatchItems: (items: AreaWatchItem[]) => void;
+  addAreaWatchItem: (item: AreaWatchItem) => void;
+  updateAreaWatchItem: (id: string, updates: Partial<AreaWatchItem>) => void;
+  removeAreaWatchItem: (id: string) => void;
+  setPropertyComponents: (components: PropertyComponent[]) => void;
+  setPropertyRole: (role: 'owner' | 'contractor' | 'viewer') => void;
+}
+
 interface DatabaseSlice {
   databaseStatus: {
     connected: boolean;
@@ -129,7 +174,7 @@ interface DatabaseSlice {
 }
 
 // Combined state
-export type FamilyState = PeopleSlice & CalendarSlice & ViewSlice & BudgetSlice & MealPlanningSlice & ShoppingSlice & GoalsSlice & DatabaseSlice;
+export type FamilyState = PeopleSlice & CalendarSlice & ViewSlice & BudgetSlice & MealPlanningSlice & ShoppingSlice & GoalsSlice & PropertySlice & DatabaseSlice;
 
 // =================================================================
 // SLICE CREATORS
@@ -188,13 +233,15 @@ const createViewSlice: StateCreator<FamilyState, [], [], ViewSlice> = (set) => (
   currentView: 'dashboard',
   currentSubView: '',
   calendarView: 'month',
-  currentDate: new Date(), // Fix 5: Default to current date instead of hardcoded 2025
+  currentDate: null, // Initialize as null to prevent hydration mismatch
+  isHydrated: false,
   selectedPerson: 'all',
   setCurrentView: (view) => set({ currentView: view, currentSubView: '' }),
   setCurrentSubView: (subView) => set({ currentSubView: subView }),
   setCalendarView: (view) => set({ calendarView: view }),
   setCurrentDate: (date) => set({ currentDate: date }),
   setSelectedPerson: (personId) => set({ selectedPerson: personId }),
+  hydrate: () => set({ currentDate: new Date(), isHydrated: true }),
 });
 
 const createBudgetSlice: StateCreator<FamilyState, [], [], BudgetSlice> = (set) => ({
@@ -207,26 +254,7 @@ const createBudgetSlice: StateCreator<FamilyState, [], [], BudgetSlice> = (set) 
 });
 
 const createMealPlanningSlice: StateCreator<FamilyState, [], [], MealPlanningSlice> = (set) => ({
-  mealPlanning: {
-    planned: {
-      '2025-08-31': { name: 'Chicken & Rice Bowl', protein: 'Chicken Breast', carb: 'Rice', veg: 'Broccoli', calories: 450, notes: 'Family favorite' },
-      '2025-09-01': { name: 'Salmon Pasta', protein: 'Salmon', carb: 'Pasta', veg: 'Spinach', calories: 520, notes: 'Sunday special' },
-      '2025-09-03': { name: 'Beef Stir Fry', protein: 'Beef Mince', carb: 'Noodles', veg: 'Bell Peppers', calories: 480, notes: 'Quick weeknight meal' }
-    },
-    eaten: {
-      '2025-08-30': { name: 'Turkey Sandwich', protein: 'Turkey', carb: 'Bread', veg: 'Cucumber', calories: 350, eatenDate: '2025-08-30T12:00:00' }
-    },
-    components: {
-      proteins: ['Chicken Breast', 'Salmon', 'Beef Mince', 'Tofu', 'Eggs', 'Turkey', 'Lamb', 'Prawns', 'Tuna', 'Chickpeas'],
-      grains: ['Rice', 'Pasta', 'Quinoa', 'Couscous', 'Bulgur', 'Barley', 'Noodles', 'Bread'],
-      carbs: ['Sweet Potato', 'Regular Potato', 'Pasta', 'Rice', 'Bread', 'Wraps'],
-      vegetables: ['Broccoli', 'Carrots', 'Spinach', 'Bell Peppers', 'Tomatoes', 'Cucumber', 'Onions', 'Mushrooms']
-    },
-    favorites: [
-      { name: 'Chicken & Rice Bowl', protein: 'Chicken Breast', carb: 'Rice', veg: 'Broccoli', calories: 450 },
-      { name: 'Salmon Pasta', protein: 'Salmon', carb: 'Pasta', veg: 'Spinach', calories: 520 }
-    ]
-  },
+  mealPlanning: null, // Load from database, no hardcoded data
   setMealPlanning: (data) => set({ mealPlanning: data }),
   updateMealPlanning: (updates) =>
     set((state) => ({
@@ -235,27 +263,7 @@ const createMealPlanningSlice: StateCreator<FamilyState, [], [], MealPlanningSli
 });
 
 const createShoppingSlice: StateCreator<FamilyState, [], [], ShoppingSlice> = (set) => ({
-  shoppingLists: [
-    {
-      id: '1', name: 'Weekly Groceries', category: 'Food',
-      items: [
-        { id: 'item1', name: 'Chicken Breast', completed: false, price: 6.99, category: 'Protein', frequency: 'weekly' },
-        { id: 'item2', name: 'Broccoli', completed: false, price: 2.50, category: 'Vegetables', frequency: 'weekly' },
-        { id: 'item3', name: 'Rice', completed: true, price: 3.99, category: 'Grains', frequency: 'bi-weekly' },
-        { id: 'item4', name: 'Milk', completed: false, price: 1.85, category: 'Dairy', frequency: 'twice-weekly' },
-        { id: 'item5', name: 'Bread', completed: true, price: 1.20, category: 'Bakery', frequency: 'weekly' }
-      ],
-      total: 5.19, estimatedTotal: 16.53, lastWeekSpent: 18.42, avgWeeklySpend: 19.65
-    },
-    {
-      id: '2', name: 'Sports Equipment', category: 'Activities',
-      items: [
-        { id: 'item6', name: 'Football boots', completed: false, price: 45.00, category: 'Sports', person: 'amari', frequency: 'annual' },
-        { id: 'item7', name: 'Swimming goggles', completed: false, price: 12.99, category: 'Sports', person: 'askia', frequency: 'bi-annual' }
-      ],
-      total: 0, estimatedTotal: 57.99, lastWeekSpent: 0, avgWeeklySpend: 8.50
-    },
-  ],
+  shoppingLists: [], // Load from database, no hardcoded data
   setShoppingLists: (lists) => set({ shoppingLists: lists }),
   addShoppingList: (list) =>
     set((state) => ({ shoppingLists: [...state.shoppingLists, list] })),
@@ -272,39 +280,89 @@ const createShoppingSlice: StateCreator<FamilyState, [], [], ShoppingSlice> = (s
 });
 
 const createGoalsSlice: StateCreator<FamilyState, [], [], GoalsSlice> = (set) => ({
-  goalsData: {
-    familyGoals: [
-      {
-        id: 'fg1', title: 'Family Fitness Challenge', description: 'Each member achieves weekly fitness targets',
-        progress: 65, target: 100, deadline: '2025-12-31', participants: ['ade', 'angela', 'amari', 'askia'],
-        milestones: [
-          { date: '2025-08-20', achievement: 'Ade reached 10K steps 5 days running', person: 'ade' },
-          { date: '2025-08-25', achievement: 'Amari completed first 5K run', person: 'amari' }
-        ]
-      }
-    ],
-    individualGoals: [
-      { id: 'ig1', person: 'ade', title: 'Sub-22 minute 5K', progress: 78, current: '22:45', target: '22:00', deadline: '2025-10-31', category: 'fitness' },
-      { id: 'ig2', person: 'amari', title: 'Score 10 goals this season', progress: 30, current: 3, target: 10, deadline: '2025-12-20', category: 'sport' }
-    ],
-    achievements: [
-      { id: 'ach1', person: 'amari', title: 'First Goal Scorer', description: 'Scored first goal of the season', date: '2025-08-15', category: 'sport', badge: '⚽' }
-    ],
-    rewardSystem: {
-      points: { ade: 850, angela: 720, amari: 1200, askia: 900 },
-      badges: {
-        ade: ['🏋️', '🏃', '💪'],
-        angela: ['📚', '💼', '🎯'],
-        amari: ['⚽', '🎭', '🇩🇪'],
-        askia: ['🏊', '🎨', '🌟']
-      }
-    }
-  },
+  goalsData: null, // Load from database, no hardcoded data
   setGoalsData: (data) => set({ goalsData: data }),
   updateGoalsData: (updates) =>
     set((state) => ({
       goalsData: state.goalsData ? { ...state.goalsData, ...updates } : null,
     })),
+});
+
+const createPropertySlice: StateCreator<FamilyState, [], [], PropertySlice> = (set) => ({
+  propertyProfile: tremaineRoadBaseline,
+  propertyTasks: tremaineRoadTasks,
+  propertyValues: tremaineRoadValues,
+  areaWatchItems: tremaineRoadAreaWatch,
+  propertyComponents: tremaineRoadComponents,
+  propertyRole: 'owner',
+  setPropertyProfile: (profile) => set({ propertyProfile: profile }),
+  updatePropertyProfile: (updates) =>
+    set((state) => ({
+      propertyProfile: { ...state.propertyProfile, ...updates },
+    })),
+  addPropertyDocument: (document) =>
+    set((state) => ({
+      propertyProfile: {
+        ...state.propertyProfile,
+        documents: [...state.propertyProfile.documents, document],
+      },
+    })),
+  removePropertyDocument: (id) =>
+    set((state) => ({
+      propertyProfile: {
+        ...state.propertyProfile,
+        documents: state.propertyProfile.documents.filter((doc) => doc.id !== id),
+      },
+    })),
+  setPropertyTasks: (tasks) => set({ propertyTasks: tasks }),
+  addPropertyTask: (task) =>
+    set((state) => ({ propertyTasks: [...state.propertyTasks, task] })),
+  updatePropertyTask: (id, updates) =>
+    set((state) => ({
+      propertyTasks: state.propertyTasks.map((task) =>
+        task.id === id
+          ? { ...task, ...updates, updatedAt: new Date().toISOString() }
+          : task
+      ),
+    })),
+  removePropertyTask: (id) =>
+    set((state) => ({
+      propertyTasks: state.propertyTasks.filter((task) => task.id !== id),
+    })),
+  addPropertyWorkLog: (taskId, workLog) =>
+    set((state) => ({
+      propertyTasks: state.propertyTasks.map((task) =>
+        task.id === taskId
+          ? {
+            ...task,
+            workLogs: [...task.workLogs, workLog],
+            updatedAt: new Date().toISOString(),
+          }
+          : task
+      ),
+    })),
+  setPropertyValues: (values) => set({ propertyValues: values }),
+  addPropertyValue: (value) =>
+    set((state) => ({ propertyValues: [...state.propertyValues, value] })),
+  removePropertyValue: (id) =>
+    set((state) => ({
+      propertyValues: state.propertyValues.filter((entry) => entry.id !== id),
+    })),
+  setAreaWatchItems: (items) => set({ areaWatchItems: items }),
+  addAreaWatchItem: (item) =>
+    set((state) => ({ areaWatchItems: [...state.areaWatchItems, item] })),
+  updateAreaWatchItem: (id, updates) =>
+    set((state) => ({
+      areaWatchItems: state.areaWatchItems.map((item) =>
+        item.id === id ? { ...item, ...updates } : item
+      ),
+    })),
+  removeAreaWatchItem: (id) =>
+    set((state) => ({
+      areaWatchItems: state.areaWatchItems.filter((item) => item.id !== id),
+    })),
+  setPropertyComponents: (components) => set({ propertyComponents: components }),
+  setPropertyRole: (role) => set({ propertyRole: role }),
 });
 
 const createDatabaseSlice: StateCreator<FamilyState, [], [], DatabaseSlice> = (set) => ({
@@ -330,26 +388,34 @@ export const useFamilyStore = create<FamilyState>()(
       ...createMealPlanningSlice(...a),
       ...createShoppingSlice(...a),
       ...createGoalsSlice(...a),
+      ...createPropertySlice(...a),
       ...createDatabaseSlice(...a),
     }),
     {
       name: 'family-storage',
-      version: 3, // Increment this to clear old cache
+      version: 4, // Bumped to clear old cache with hardcoded data
       partialize: (state) => ({
-        people: state.people,
-        familyMembers: state.familyMembers,
-        events: state.events,
+        // Only persist UI preferences, NOT dynamic data
+        // Dynamic data (people, events, budgetData, mealPlanning, shoppingLists, goalsData)
+        // should be loaded from the database via useDatabaseSync
+        currentView: state.currentView,
+        currentSubView: state.currentSubView,
+        calendarView: state.calendarView,
+        selectedPerson: state.selectedPerson,
         eventTemplates: state.eventTemplates,
-        budgetData: state.budgetData,
-        mealPlanning: state.mealPlanning,
-        shoppingLists: state.shoppingLists,
-        goalsData: state.goalsData,
+        // Property data (loaded from static files for now)
+        propertyProfile: state.propertyProfile,
+        propertyTasks: state.propertyTasks,
+        propertyValues: state.propertyValues,
+        areaWatchItems: state.areaWatchItems,
+        propertyComponents: state.propertyComponents,
+        propertyRole: state.propertyRole,
       }),
       migrate: (persistedState: any, version: number) => {
-        // If migrating from version 1 or earlier, clear old data and return fresh state
-        if (version < 3) {
-          console.log('Migrating from version', version, 'to version 3 - clearing old cache and syncing family members');
-          return {} as any; // Return empty state to force fresh load from database
+        // Clear old cache to force fresh load from database
+        if (version < 4) {
+          console.log('Migrating from version', version, 'to version 4 - clearing old cache');
+          return {} as any;
         }
         return persistedState;
       },

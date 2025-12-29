@@ -12,14 +12,19 @@ datasource db {
 
 // User authentication table
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  password  String
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id           String   @id @default(cuid())
+  neonAuthId   String?  @unique @map("neon_auth_id")
+  email        String   @unique
+  password     String?
+  displayName  String?  @map("display_name")
+  avatarUrl    String?  @map("avatar_url")
+  authProvider String   @default("email") @map("auth_provider")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
 
   // Relations
   familyMembers FamilyMember[]
+  ownedFamilies Family[]       @relation("FamilyOwner")
 
   @@map("users")
 }
@@ -29,10 +34,12 @@ model Family {
   id         String   @id @default(cuid())
   familyName String   @map("family_name")
   familyCode String   @unique @map("family_code")
+  ownerId    String?  @map("owner_id")
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
 
   // Relations
+  owner                 User?          @relation("FamilyOwner", fields: [ownerId], references: [id])
   members               FamilyMember[]
   calendarEvents        CalendarEvent[]
   budgetIncome          BudgetIncome[]

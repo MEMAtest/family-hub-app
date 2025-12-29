@@ -3,7 +3,7 @@
 import { createContext, PropsWithChildren, useContext, useMemo, useState } from 'react';
 import { useFamilyStore } from '@/store/familyStore';
 
-export type AppView = 'dashboard' | 'calendar' | 'budget' | 'meals' | 'shopping' |
+export type AppView = 'dashboard' | 'property' | 'calendar' | 'budget' | 'meals' | 'shopping' |
   'family' | 'goals' | 'news' | 'notifications' | string;
 
 export type CalendarViewMode = 'month' | 'week' | 'day';
@@ -45,7 +45,7 @@ export const AppViewProvider = ({ children }: PropsWithChildren) => {
     currentView,
     currentSubView,
     calendarView,
-    currentDate,
+    currentDate: currentDate ?? new Date(), // Fallback to current date if not hydrated yet
     selectedPerson,
     setView: (view: AppView) => setCurrentView(view),
     setSubView: setCurrentSubView,

@@ -1,10 +1,11 @@
 'use client'
 
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import {
   Calendar as CalendarIcon,
   DollarSign,
   Home,
+  Building2,
   ShoppingCart,
   UtensilsCrossed,
   Users,
@@ -23,6 +24,7 @@ import { ShoppingView } from './views/ShoppingView';
 import { GoalsView } from './views/GoalsView';
 import { FamilyView } from './views/FamilyView';
 import { NewsView } from './views/NewsView';
+import { PropertyView } from './views/PropertyView';
 import { FamilyHubModals } from './FamilyHubModals';
 import Breadcrumb from '@/components/common/Breadcrumb';
 import SetupWizard from '@/components/common/SetupWizard';
@@ -36,9 +38,11 @@ import { formatDateConsistent } from '@/utils/date';
 import { useFamilyStore } from '@/store/familyStore';
 import { DebugPanel } from '@/components/DebugPanel';
 import { PWAInstallPrompt } from '@/components/pwa/PWAInstallPrompt';
+import { useSearchParams } from 'next/navigation';
 
 const NAV_ITEMS: NavItem[] = [
   { id: 'dashboard', label: 'Dashboard', icon: Home },
+  { id: 'property', label: '21 Tremaine', icon: Building2 },
   { id: 'calendar', label: 'Calendar', icon: CalendarIcon },
   { id: 'budget', label: 'Budget', icon: DollarSign },
   { id: 'meals', label: 'Meals', icon: UtensilsCrossed },
@@ -62,6 +66,8 @@ export const FamilyHubShell = () => {
   } = useAppView();
   const { clientTime, isClient } = useClientTime();
   const databaseStatus = useFamilyStore((state) => state.databaseStatus);
+  const searchParams = useSearchParams();
+  const appliedViewParam = useRef(false);
 
   const { openCreateForm } = useCalendarContext();
   const { openForm: openBudgetForm } = useBudgetContext();
@@ -84,6 +90,15 @@ export const FamilyHubShell = () => {
         });
     }
   }, []);
+
+  useEffect(() => {
+    if (appliedViewParam.current) return;
+    const viewParam = searchParams.get('view');
+    if (viewParam && viewParam !== currentView) {
+      setView(viewParam);
+    }
+    appliedViewParam.current = true;
+  }, [currentView, searchParams, setView]);
 
   // Check if setup wizard should be shown on mount (client-side only)
   useEffect(() => {
@@ -128,6 +143,8 @@ export const FamilyHubShell = () => {
     switch (currentView) {
       case 'calendar':
         return <CalendarView />;
+      case 'property':
+        return <PropertyView />;
       case 'budget':
         return <BudgetView />;
       case 'meals':
@@ -157,6 +174,7 @@ export const FamilyHubShell = () => {
       goals: 'Goals',
       family: 'Family',
       news: 'News',
+      property: '21 Tremaine Road',
     };
 
     const items: Array<{ label: string; onClick?: () => void; isActive?: boolean }> = [];
