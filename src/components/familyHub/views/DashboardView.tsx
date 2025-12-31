@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react';
-import { formatDate } from '@/utils/formatDate';
+import { formatDateLong } from '@/utils/formatDate';
 import {
   Activity,
   CalendarDays,
@@ -15,7 +15,6 @@ import {
   Utensils,
   GraduationCap,
   BookOpen,
-  Heart,
   UtensilsCrossed,
   Zap,
   ShoppingCart,
@@ -48,6 +47,15 @@ const currencyFormatter = new Intl.NumberFormat('en-GB', {
 });
 
 const formatCurrency = (value: number) => currencyFormatter.format(value);
+const formatShortDate = (value: Date | string | null | undefined) => {
+  if (!value) return '';
+  const dateValue = typeof value === 'string' ? new Date(value) : value;
+  if (Number.isNaN(dateValue.getTime())) return '';
+  const day = dateValue.getDate().toString().padStart(2, '0');
+  const month = (dateValue.getMonth() + 1).toString().padStart(2, '0');
+  const year = dateValue.getFullYear();
+  return `${day}/${month}/${year}`;
+};
 
 const StatCard = ({
   label,
@@ -94,8 +102,15 @@ export const DashboardView = () => {
   const { goalsData, openQuickActivityForm, personalTracking } = useGoalsContext();
   const mealPlanning = mealsContext.mealPlanning;
 
-  // School year selector state
-  const [selectedSchoolYear, setSelectedSchoolYear] = useState<'2025-2026' | '2026-2027'>('2025-2026');
+  // School year selector state - calculate dynamically based on current date
+  // Academic year starts in September
+  const currentYear = new Date().getFullYear();
+  const currentMonth = new Date().getMonth();
+  const academicYear = currentMonth >= 8 ? currentYear : currentYear - 1; // Sept = month 8
+  const currentAcademicYear = `${academicYear}-${academicYear + 1}`;
+  const nextAcademicYear = `${academicYear + 1}-${academicYear + 2}`;
+
+  const [selectedSchoolYear, setSelectedSchoolYear] = useState<string>(currentAcademicYear);
 
   const upcomingEvents = useMemo(() => {
     const now = new Date();
@@ -106,8 +121,9 @@ export const DashboardView = () => {
   }, [events]);
 
   const schoolTerms = useMemo(() => {
-    // Use selected school year data
-    const baseTerms = selectedSchoolYear === '2025-2026'
+    // Use selected school year data - map dynamic years to available data
+    // For now, use 2025-2026 data for current year, 2026-2027 for next
+    const baseTerms = selectedSchoolYear === currentAcademicYear
       ? stewartFleming2025To2026
       : stewartFleming2026To2027;
 
@@ -135,7 +151,7 @@ export const DashboardView = () => {
       });
 
     return calendarDerived.length > 0 ? calendarDerived : baseTerms;
-  }, [events, selectedSchoolYear]);
+  }, [events, selectedSchoolYear, currentAcademicYear]);
 
   const { expenseRecords } = useMemo(() => extractBudgetRecords(budgetData), [budgetData]);
 
@@ -230,7 +246,12 @@ export const DashboardView = () => {
   return (
     <div className="space-y-6 p-4 lg:p-8">
       <section>
-        <h2 className="text-lg font-semibold text-gray-900">Today&apos;s Snapshot</h2>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <h2 className="text-lg font-semibold text-gray-900">Today&apos;s Snapshot</h2>
+          <p className="text-sm text-gray-500 dark:text-slate-400">
+            {formatDateLong(new Date())}
+          </p>
+        </div>
         <div className="-mx-4 mt-4 flex snap-x gap-3 overflow-x-auto px-4 pb-2 sm:hidden">
           {snapshotCards.map((card) => (
             <StatCard
@@ -325,24 +346,24 @@ export const DashboardView = () => {
             </h3>
             <div className="flex items-center gap-2">
               <button
-                onClick={() => setSelectedSchoolYear('2025-2026')}
+                onClick={() => setSelectedSchoolYear(currentAcademicYear)}
                 className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
-                  selectedSchoolYear === '2025-2026'
+                  selectedSchoolYear === currentAcademicYear
                     ? 'bg-purple-600 text-white'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-slate-700 dark:text-slate-300'
                 }`}
               >
-                2025/26
+                {academicYear}/{(academicYear + 1).toString().slice(-2)}
               </button>
               <button
-                onClick={() => setSelectedSchoolYear('2026-2027')}
+                onClick={() => setSelectedSchoolYear(nextAcademicYear)}
                 className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
-                  selectedSchoolYear === '2026-2027'
+                  selectedSchoolYear === nextAcademicYear
                     ? 'bg-purple-600 text-white'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-slate-700 dark:text-slate-300'
                 }`}
               >
-                2026/27
+                {academicYear + 1}/{(academicYear + 2).toString().slice(-2)}
               </button>
             </div>
           </div>
@@ -483,14 +504,14 @@ export const DashboardView = () => {
 
         <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
           <h3 className="flex items-center gap-2 text-base font-semibold text-gray-900 dark:text-slate-100">
-            <Heart className="h-5 w-5 text-rose-500" /> Fitness & wellbeing
+            <Activity className="h-5 w-5 text-rose-500" /> Recent Activity
           </h3>
           <div className="mt-4 space-y-3 text-sm">
             {personalTracking.fitness.activities.slice(0, 4).map((activity) => (
               <div key={activity.id} className="rounded-lg border border-gray-100 px-3 py-2">
                 <p className="font-medium text-gray-900">{activity.type}</p>
                 <p className="text-xs text-gray-500">
-                  {formatDate(activity.date)} • {activity.duration} mins • {activity.intensity}
+                  {formatShortDate(activity.date)} • {activity.duration} mins • {activity.intensity}
                 </p>
                 {activity.notes && <p className="mt-1 text-xs text-gray-400">{activity.notes}</p>}
               </div>
@@ -528,7 +549,7 @@ export const DashboardView = () => {
             {upcomingMeals.map((meal) => (
               <li key={meal.date} className="rounded-lg border border-gray-100 px-3 py-2 dark:border-slate-700 dark:bg-slate-800">
                 <p className="font-medium text-gray-900 dark:text-slate-100">{meal.name || 'Family meal'}</p>
-                <p className="text-xs text-gray-500 dark:text-slate-400">{formatDate(meal.date)}</p>
+                <p className="text-xs text-gray-500 dark:text-slate-400">{formatShortDate(meal.date)}</p>
               </li>
             ))}
             {upcomingMeals.length === 0 && (

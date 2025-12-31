@@ -1,7 +1,10 @@
 'use client'
 
-import React, { useState, useRef } from 'react';
-import { Camera, FileImage, X, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Camera, FileImage, X, Loader2, CheckCircle2, AlertCircle, WifiOff } from 'lucide-react';
+import { performOcr, preloadOcrWorker, terminateOcrWorker } from '@/utils/receiptOcr';
+import { parseReceiptText } from '@/utils/receiptParser';
+import type { OcrProcessingStage } from '@/types/receipt.types';
 
 interface ReceiptScannerProps {
   familyId: string;
@@ -14,6 +17,8 @@ interface ExtractedExpense {
   amount: number;
   category: string;
   paymentDate: string;
+  confidence?: number;
+  warnings?: string[];
 }
 
 export const ReceiptScanner: React.FC<ReceiptScannerProps> = ({
@@ -22,15 +27,27 @@ export const ReceiptScanner: React.FC<ReceiptScannerProps> = ({
   onClose
 }) => {
   const [isProcessing, setIsProcessing] = useState(false);
+  const [processingStage, setProcessingStage] = useState<OcrProcessingStage>('idle');
+  const [ocrProgress, setOcrProgress] = useState(0);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [extractedData, setExtractedData] = useState<ExtractedExpense | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
+  // Preload OCR worker on mount
+  useEffect(() => {
+    preloadOcrWorker();
+    return () => {
+      terminateOcrWorker();
+    };
+  }, []);
+
   const handleImageUpload = async (file: File) => {
-    if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
-      setError('Please upload an image (JPG, PNG, WebP) or PDF file');
+    // Only support images for OCR (PDF would require different handling)
+    if (!file.type.startsWith('image/')) {
+      setError('Please upload an image file (JPG, PNG, WebP). PDF scanning is not supported in offline mode.');
       return;
     }
 
@@ -47,40 +64,55 @@ export const ReceiptScanner: React.FC<ReceiptScannerProps> = ({
     };
     reader.readAsDataURL(file);
 
-    // Process with AI
+    // Process with local OCR (no API/AI required)
     setIsProcessing(true);
+    setProcessingStage('loading');
+    setOcrProgress(0);
     setError(null);
+    setWarning(null);
 
     try {
-      // Convert image to base64
-      const base64 = await fileToBase64(file);
-
-      console.log('Base64 conversion result:', {
-        length: base64?.length || 0,
-        preview: base64?.substring(0, 50)
+      // Stage 1: Run OCR
+      setProcessingStage('recognizing');
+      const ocrResult = await performOcr(file, (progress) => {
+        setOcrProgress(progress);
       });
 
-      const response = await fetch('/api/ai/receipt/scan', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          familyId,
-          imageData: base64,
-          fileName: file.name
-        }),
+      console.log('OCR result:', {
+        textLength: ocrResult.text.length,
+        confidence: ocrResult.confidence,
+        processingTime: ocrResult.processingTime
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to process receipt');
+      // Stage 2: Parse the extracted text
+      setProcessingStage('parsing');
+      const parsed = parseReceiptText(ocrResult.text);
+
+      console.log('Parsed receipt:', {
+        name: parsed.name,
+        amount: parsed.amount,
+        category: parsed.category,
+        confidence: parsed.confidence
+      });
+
+      // Stage 3: Set extracted data
+      setProcessingStage('complete');
+      setExtractedData({
+        name: parsed.name,
+        amount: parsed.amount,
+        category: parsed.category,
+        paymentDate: parsed.paymentDate,
+        confidence: parsed.confidence,
+        warnings: parsed.warnings,
+      });
+
+      // Show warning if low confidence
+      if (parsed.confidence < 0.5) {
+        setWarning('Low confidence extraction - please verify all fields');
       }
-
-      const result = await response.json();
-      setExtractedData(result.expense);
     } catch (err) {
       console.error('Error processing receipt:', err);
+      setProcessingStage('error');
       setError(err instanceof Error ? err.message : 'Failed to process receipt');
     } finally {
       setIsProcessing(false);
@@ -123,6 +155,33 @@ export const ReceiptScanner: React.FC<ReceiptScannerProps> = ({
 
   const handleSaveExpense = async () => {
     if (!extractedData) return;
+
+    // Check for duplicate receipts
+    if (typeof window !== 'undefined') {
+      try {
+        const fingerprint = `${extractedData.paymentDate}|${extractedData.name.toLowerCase().trim()}|${extractedData.amount.toFixed(2)}`;
+        const existingExpenses = JSON.parse(localStorage.getItem('budgetExpenses') || '[]');
+
+        const duplicate = existingExpenses.find((exp: any) => {
+          const expDate = exp.paymentDate?.split('T')[0] || '';
+          const expName = (exp.expenseName || '').toLowerCase().trim();
+          const expAmount = parseFloat(exp.amount || 0).toFixed(2);
+          return `${expDate}|${expName}|${expAmount}` === fingerprint;
+        });
+
+        if (duplicate) {
+          const confirmed = window.confirm(
+            `⚠️ Possible duplicate detected!\n\n` +
+            `Existing: ${duplicate.expenseName} - £${parseFloat(duplicate.amount).toFixed(2)}\n` +
+            `New: ${extractedData.name} - £${extractedData.amount.toFixed(2)}\n\n` +
+            `Save anyway?`
+          );
+          if (!confirmed) return;
+        }
+      } catch (dupError) {
+        console.warn('Error checking for duplicates:', dupError);
+      }
+    }
 
     try {
       const response = await fetch(`/api/families/${familyId}/budget/expenses`, {
@@ -187,12 +246,15 @@ export const ReceiptScanner: React.FC<ReceiptScannerProps> = ({
     setImagePreview(null);
     setExtractedData(null);
     setError(null);
+    setWarning(null);
+    setProcessingStage('idle');
+    setOcrProgress(0);
     if (fileInputRef.current) fileInputRef.current.value = '';
     if (cameraInputRef.current) cameraInputRef.current.value = '';
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-lg p-6 max-w-2xl mx-auto">
+    <div className="bg-white rounded-lg shadow-lg p-6 max-w-2xl mx-auto max-h-[90vh] overflow-y-auto">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
@@ -220,7 +282,7 @@ export const ReceiptScanner: React.FC<ReceiptScannerProps> = ({
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/*,.pdf,application/pdf"
+            accept="image/*"
             onChange={handleFileSelect}
             className="hidden"
           />
@@ -246,7 +308,7 @@ export const ReceiptScanner: React.FC<ReceiptScannerProps> = ({
             className="w-full flex items-center justify-center gap-3 p-4 border-2 border-dashed border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
           >
             <FileImage className="w-6 h-6 text-gray-600" />
-            <span className="font-medium text-gray-900">Upload Image or PDF</span>
+            <span className="font-medium text-gray-900">Upload Image</span>
           </button>
         </div>
       )}
@@ -262,9 +324,25 @@ export const ReceiptScanner: React.FC<ReceiptScannerProps> = ({
             />
             {isProcessing && (
               <div className="absolute inset-0 bg-black bg-opacity-50 rounded-lg flex items-center justify-center">
-                <div className="bg-white rounded-lg p-6 flex flex-col items-center gap-3">
+                <div className="bg-white rounded-lg p-6 flex flex-col items-center gap-3 min-w-[200px]">
                   <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
-                  <p className="text-sm font-medium text-gray-900">Analyzing receipt...</p>
+                  <p className="text-sm font-medium text-gray-900">
+                    {processingStage === 'loading' && 'Loading OCR engine...'}
+                    {processingStage === 'recognizing' && `Scanning text... ${ocrProgress}%`}
+                    {processingStage === 'parsing' && 'Extracting data...'}
+                  </p>
+                  {processingStage === 'recognizing' && (
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div
+                        className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                        style={{ width: `${ocrProgress}%` }}
+                      />
+                    </div>
+                  )}
+                  <p className="text-xs text-gray-500 flex items-center gap-1">
+                    <WifiOff className="w-3 h-3" />
+                    Offline processing
+                  </p>
                 </div>
               </div>
             )}
@@ -291,6 +369,15 @@ export const ReceiptScanner: React.FC<ReceiptScannerProps> = ({
               <p className="text-sm text-green-700">Review the extracted information below and save to your budget.</p>
             </div>
           </div>
+
+          {warning && (
+            <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+              <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm text-amber-700">{warning}</p>
+              </div>
+            </div>
+          )}
 
           <div className="space-y-3 bg-gray-50 rounded-lg p-4">
             <div>

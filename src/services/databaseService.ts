@@ -9,11 +9,11 @@ class DatabaseService {
 
   async initialize() {
     try {
-      // Get or create family with timeout
+      // Get or create family with timeout (15s to allow for cold start compilation)
       const families = await Promise.race([
         this.fetchAPI('/api/families'),
         new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Database initialization timeout')), 5000)
+          setTimeout(() => reject(new Error('Database initialization timeout')), 15000)
         )
       ]);
       console.log('Fetched families:', families);
@@ -22,6 +22,9 @@ class DatabaseService {
         this.familyId = families[0].id;
         if (this.familyId && typeof window !== 'undefined') {
           localStorage.setItem('familyId', this.familyId);
+        }
+        if (families[0].familyName && typeof window !== 'undefined') {
+          localStorage.setItem('familyName', families[0].familyName);
         }
         console.log('Database connected: Family ID', this.familyId);
 
@@ -98,6 +101,16 @@ class DatabaseService {
       const members = await this.fetchAPI(`${API_BASE}/${this.familyId}/members`);
       if (members && typeof window !== 'undefined') {
         localStorage.setItem('familyMembers', JSON.stringify(members));
+      }
+
+      // Fetch family milestones
+      try {
+        const milestones = await this.fetchAPI(`${API_BASE}/${this.familyId}/milestones`);
+        if (milestones && typeof window !== 'undefined') {
+          localStorage.setItem('familyMilestones', JSON.stringify(milestones));
+        }
+      } catch (error) {
+        console.warn('Failed to fetch milestones:', error);
       }
 
       // Fetch calendar events
@@ -312,19 +325,27 @@ class DatabaseService {
     if (!this.familyId || !this.syncEnabled) {
       // Just save to localStorage
       const members = JSON.parse(localStorage.getItem('familyMembers') || '[]');
-      members.push(member);
+      members.push({
+        ...member,
+        ageGroup: (member as any).ageGroup || (member as any).age || 'Adult',
+        dateOfBirth: (member as any).dateOfBirth || null,
+        avatarUrl: (member as any).avatarUrl || null,
+      });
       localStorage.setItem('familyMembers', JSON.stringify(members));
       return member;
     }
 
     try {
       const memberData: any = member;
+      const ageGroup = memberData.ageGroup || memberData.age || 'Adult';
       const dbMember = await this.fetchAPI(`${API_BASE}/${this.familyId}/members`, {
         method: 'POST',
         body: JSON.stringify({
           name: memberData.name,
           role: memberData.role || 'Family Member',
-          ageGroup: memberData.age || 'Adult',
+          ageGroup,
+          dateOfBirth: memberData.dateOfBirth || null,
+          avatarUrl: memberData.avatarUrl || null,
           color: memberData.color,
           icon: memberData.icon,
           fitnessGoals: memberData.fitnessGoals || {},
@@ -337,6 +358,9 @@ class DatabaseService {
         members.push({
           ...member,
           id: dbMember.id,
+          ageGroup,
+          dateOfBirth: memberData.dateOfBirth || null,
+          avatarUrl: memberData.avatarUrl || null,
         });
         localStorage.setItem('familyMembers', JSON.stringify(members));
         return { ...member, id: dbMember.id };
@@ -345,12 +369,206 @@ class DatabaseService {
       console.error('Failed to save member to database:', error);
       // Fall back to localStorage
       const members = JSON.parse(localStorage.getItem('familyMembers') || '[]');
-      members.push(member);
+      members.push({
+        ...member,
+        ageGroup: (member as any).ageGroup || (member as any).age || 'Adult',
+        dateOfBirth: (member as any).dateOfBirth || null,
+        avatarUrl: (member as any).avatarUrl || null,
+      });
       localStorage.setItem('familyMembers', JSON.stringify(members));
       return member;
     }
 
     return null;
+  }
+
+  // Update family member in database
+  async updateMember(id: string, updates: Partial<Person>): Promise<Person | null> {
+    if (!this.familyId || !this.syncEnabled) {
+      const members = JSON.parse(localStorage.getItem('familyMembers') || '[]');
+      const index = members.findIndex((m: any) => m.id === id);
+      if (index !== -1) {
+        members[index] = { ...members[index], ...updates };
+        localStorage.setItem('familyMembers', JSON.stringify(members));
+        return members[index];
+      }
+      return null;
+    }
+
+    try {
+      const dbMember = await this.fetchAPI(`${API_BASE}/${this.familyId}/members/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          name: (updates as any).name,
+          role: (updates as any).role,
+          ageGroup: (updates as any).ageGroup,
+          dateOfBirth: (updates as any).dateOfBirth,
+          avatarUrl: (updates as any).avatarUrl,
+          color: (updates as any).color,
+          icon: (updates as any).icon,
+          fitnessGoals: (updates as any).fitnessGoals || {},
+        }),
+      });
+
+      if (dbMember) {
+        const members = JSON.parse(localStorage.getItem('familyMembers') || '[]');
+        const index = members.findIndex((m: any) => m.id === id);
+        if (index !== -1) {
+          members[index] = { ...members[index], ...dbMember };
+        } else {
+          members.push(dbMember);
+        }
+        localStorage.setItem('familyMembers', JSON.stringify(members));
+        return dbMember;
+      }
+    } catch (error) {
+      console.error('Failed to update member in database:', error);
+      const members = JSON.parse(localStorage.getItem('familyMembers') || '[]');
+      const index = members.findIndex((m: any) => m.id === id);
+      if (index !== -1) {
+        members[index] = { ...members[index], ...updates };
+        localStorage.setItem('familyMembers', JSON.stringify(members));
+        return members[index];
+      }
+    }
+
+    return null;
+  }
+
+  // Delete family member from database
+  async deleteMember(id: string): Promise<boolean> {
+    if (!this.familyId || !this.syncEnabled) {
+      const members = JSON.parse(localStorage.getItem('familyMembers') || '[]');
+      const filtered = members.filter((m: any) => m.id !== id);
+      localStorage.setItem('familyMembers', JSON.stringify(filtered));
+      return true;
+    }
+
+    try {
+      await this.fetchAPI(`${API_BASE}/${this.familyId}/members/${id}`, {
+        method: 'DELETE',
+      });
+
+      const members = JSON.parse(localStorage.getItem('familyMembers') || '[]');
+      const filtered = members.filter((m: any) => m.id !== id);
+      localStorage.setItem('familyMembers', JSON.stringify(filtered));
+      return true;
+    } catch (error) {
+      console.error('Failed to delete member from database:', error);
+      return false;
+    }
+  }
+
+  // Save family milestone to database
+  async saveMilestone(milestone: any): Promise<any | null> {
+    if (!this.familyId || !this.syncEnabled) {
+      const milestones = JSON.parse(localStorage.getItem('familyMilestones') || '[]');
+      milestones.push(milestone);
+      localStorage.setItem('familyMilestones', JSON.stringify(milestones));
+      return milestone;
+    }
+
+    try {
+      const dbMilestone = await this.fetchAPI(`${API_BASE}/${this.familyId}/milestones`, {
+        method: 'POST',
+        body: JSON.stringify({
+          title: milestone.title,
+          description: milestone.description || null,
+          date: milestone.date,
+          type: milestone.type,
+          participants: milestone.participants || [],
+          photos: milestone.photos || [],
+          tags: milestone.tags || [],
+          isRecurring: milestone.isRecurring || false,
+          reminderDays: milestone.reminderDays || [],
+          isPrivate: milestone.isPrivate || false,
+          createdBy: milestone.createdBy || null,
+        }),
+      });
+
+      if (dbMilestone) {
+        const milestones = JSON.parse(localStorage.getItem('familyMilestones') || '[]');
+        milestones.push(dbMilestone);
+        localStorage.setItem('familyMilestones', JSON.stringify(milestones));
+        return dbMilestone;
+      }
+    } catch (error) {
+      console.error('Failed to save milestone to database:', error);
+      const milestones = JSON.parse(localStorage.getItem('familyMilestones') || '[]');
+      milestones.push(milestone);
+      localStorage.setItem('familyMilestones', JSON.stringify(milestones));
+      return milestone;
+    }
+
+    return null;
+  }
+
+  // Update family milestone in database
+  async updateMilestone(id: string, updates: any): Promise<any | null> {
+    if (!this.familyId || !this.syncEnabled) {
+      const milestones = JSON.parse(localStorage.getItem('familyMilestones') || '[]');
+      const index = milestones.findIndex((m: any) => m.id === id);
+      if (index !== -1) {
+        milestones[index] = { ...milestones[index], ...updates };
+        localStorage.setItem('familyMilestones', JSON.stringify(milestones));
+        return milestones[index];
+      }
+      return null;
+    }
+
+    try {
+      const dbMilestone = await this.fetchAPI(`${API_BASE}/${this.familyId}/milestones/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(updates),
+      });
+
+      if (dbMilestone) {
+        const milestones = JSON.parse(localStorage.getItem('familyMilestones') || '[]');
+        const index = milestones.findIndex((m: any) => m.id === id);
+        if (index !== -1) {
+          milestones[index] = { ...milestones[index], ...dbMilestone };
+        } else {
+          milestones.push(dbMilestone);
+        }
+        localStorage.setItem('familyMilestones', JSON.stringify(milestones));
+        return dbMilestone;
+      }
+    } catch (error) {
+      console.error('Failed to update milestone in database:', error);
+      const milestones = JSON.parse(localStorage.getItem('familyMilestones') || '[]');
+      const index = milestones.findIndex((m: any) => m.id === id);
+      if (index !== -1) {
+        milestones[index] = { ...milestones[index], ...updates };
+        localStorage.setItem('familyMilestones', JSON.stringify(milestones));
+        return milestones[index];
+      }
+    }
+
+    return null;
+  }
+
+  // Delete family milestone from database
+  async deleteMilestone(id: string): Promise<boolean> {
+    if (!this.familyId || !this.syncEnabled) {
+      const milestones = JSON.parse(localStorage.getItem('familyMilestones') || '[]');
+      const filtered = milestones.filter((m: any) => m.id !== id);
+      localStorage.setItem('familyMilestones', JSON.stringify(filtered));
+      return true;
+    }
+
+    try {
+      await this.fetchAPI(`${API_BASE}/${this.familyId}/milestones/${id}`, {
+        method: 'DELETE',
+      });
+
+      const milestones = JSON.parse(localStorage.getItem('familyMilestones') || '[]');
+      const filtered = milestones.filter((m: any) => m.id !== id);
+      localStorage.setItem('familyMilestones', JSON.stringify(filtered));
+      return true;
+    } catch (error) {
+      console.error('Failed to delete milestone from database:', error);
+      return false;
+    }
   }
 
   // Save goal to database
