@@ -13,9 +13,12 @@ import {
   ChevronRight,
   Zap,
   Trophy,
-  RefreshCw
+  RefreshCw,
+  Settings,
+  Watch,
 } from 'lucide-react';
 import { ActivityLoggingWizard } from './ActivityLoggingWizard';
+import DeviceConnections from './DeviceConnections';
 import type { FitnessActivity, FitnessStats } from '@/types/fitness.types';
 import { categoryDisplayNames } from '@/data/exerciseLibrary';
 
@@ -45,6 +48,7 @@ const FitnessDashboard: React.FC<FitnessDashboardProps> = ({
   personColor = '#3B82F6',
 }) => {
   const [showWizard, setShowWizard] = useState(false);
+  const [showDeviceSettings, setShowDeviceSettings] = useState(false);
   const [activities, setActivities] = useState<FitnessActivity[]>([]);
   const [stats, setStats] = useState<FitnessStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -132,6 +136,17 @@ const FitnessDashboard: React.FC<FitnessDashboardProps> = ({
         </div>
         <div className="flex items-center gap-2">
           <button
+            onClick={() => setShowDeviceSettings(!showDeviceSettings)}
+            className={`p-2 rounded-lg transition-colors ${
+              showDeviceSettings
+                ? 'text-blue-600 bg-blue-50 dark:text-blue-400 dark:bg-blue-900/20'
+                : 'text-gray-500 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-800'
+            }`}
+            title="Connect devices"
+          >
+            <Watch className="w-5 h-5" />
+          </button>
+          <button
             onClick={fetchData}
             className="p-2 text-gray-500 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-200 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800"
             title="Refresh"
@@ -151,6 +166,13 @@ const FitnessDashboard: React.FC<FitnessDashboardProps> = ({
       {error && (
         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 text-red-700 dark:text-red-300">
           {error}
+        </div>
+      )}
+
+      {/* Device Connections Panel */}
+      {showDeviceSettings && (
+        <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 p-4">
+          <DeviceConnections familyId={familyId} personId={personId} />
         </div>
       )}
 
