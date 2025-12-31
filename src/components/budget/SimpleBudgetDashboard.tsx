@@ -15,6 +15,7 @@ import {
   X,
   PieChart as PieChartIcon,
   Camera,
+  FileUp,
   Search,
 } from 'lucide-react';
 import {
@@ -28,6 +29,7 @@ import BudgetSettingsModal from './modals/BudgetSettingsModal';
 import AdvancedReportsDashboard from './reports/AdvancedReportsDashboard';
 import { AIInsightsCard } from './AIInsightsCard';
 import { ReceiptScanner } from './ReceiptScanner';
+import StatementImportModal from './modals/StatementImportModal';
 import databaseService from '@/services/databaseService';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { filterExpenses, filterIncome } from '@/utils/budgetFilters';
@@ -62,6 +64,7 @@ const SimpleBudgetDashboard: React.FC = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [showAdvancedReports, setShowAdvancedReports] = useState(false);
   const [showReceiptScanner, setShowReceiptScanner] = useState(false);
+  const [showStatementImport, setShowStatementImport] = useState(false);
 
   // Edit mode states
   const [editingIncome, setEditingIncome] = useState<any>(null);
@@ -75,31 +78,62 @@ const SimpleBudgetDashboard: React.FC = () => {
   const [showAllIncome, setShowAllIncome] = useState(false);
   const [showAllExpenses, setShowAllExpenses] = useState(false);
 
+  const handleStatementImported = useCallback((income: any[], expenses: any[]) => {
+    if (income.length) {
+      setIncomeList((prev) => [...prev, ...income]);
+    }
+    if (expenses.length) {
+      setExpenseList((prev) => [...prev, ...expenses]);
+    }
+
+    // Auto-navigate to the month of the imported data
+    const allItems = [...income, ...expenses];
+    if (allItems.length > 0) {
+      // Find the first valid date from imported items
+      const firstItem = allItems.find(item => item.paymentDate);
+      if (firstItem?.paymentDate) {
+        const importedDate = new Date(firstItem.paymentDate);
+        if (!isNaN(importedDate.getTime())) {
+          const month = importedDate.getMonth() + 1;
+          const year = importedDate.getFullYear();
+          setSelectedMonth(month);
+          setSelectedYear(year);
+        }
+      }
+    }
+  }, []);
+
   // Color palette for charts
   const CHART_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4', '#F97316', '#14B8A6', '#F43F5E'];
 
   // Helper function to assign colors to categories (must be defined before useMemo)
   const getColorForCategory = useCallback((category: string, index: number = 0): string => {
     const colorMap: { [key: string]: string } = {
-      // Expense categories
+      // Expense categories - matching EXPENSE_CATEGORIES
       'Housing': '#3B82F6',        // Blue
-      'Children': '#10B981',       // Green
-      'Transportation': '#F59E0F', // Amber
+      'Transportation': '#F59E0B', // Amber
       'Food & Dining': '#EF4444',  // Red
-      'Food': '#EF4444',           // Red
-      'Utilities': '#8B5CF6',      // Purple
       'Entertainment': '#EC4899',  // Pink
       'Healthcare': '#06B6D4',     // Cyan
+      'Childcare': '#10B981',      // Green
       'Education': '#F97316',      // Orange
+      'Utilities': '#8B5CF6',      // Purple
+      'Insurance': '#14B8A6',      // Teal
+      'Clothing': '#A855F7',       // Violet
       'Other': '#6B7280',          // Gray
-      // Income categories
-      'Salary': '#10B981',         // Green
-      'Test': '#3B82F6',           // Blue - distinct from Salary
-      'Employment': '#059669',     // Emerald
+      // Legacy aliases
+      'Children': '#10B981',       // Green (alias for Childcare)
+      'Food': '#EF4444',           // Red (alias for Food & Dining)
+      // Income categories - matching INCOME_CATEGORIES
+      'Salary': '#22C55E',         // Green
       'Freelance': '#06B6D4',      // Cyan
       'Investment': '#F59E0B',     // Amber
-      'Business': '#8B5CF6',       // Purple
       'Rental': '#EC4899',         // Pink
+      'Business': '#8B5CF6',       // Purple
+      'Government Benefits': '#14B8A6', // Teal
+      // Legacy income aliases
+      'Employment': '#22C55E',     // Green (alias for Salary)
+      'Test': '#3B82F6',           // Blue
       'Other Income': '#6B7280'    // Gray
     };
     return colorMap[category] || CHART_COLORS[index % CHART_COLORS.length];
@@ -504,6 +538,16 @@ const SimpleBudgetDashboard: React.FC = () => {
             </button>
             <button
               onClick={() => {
+                setShowStatementImport(true);
+                setShowMobileMenu(false);
+              }}
+              className="mobile-btn-secondary w-full flex items-center gap-3"
+            >
+              <FileUp className="w-5 h-5" />
+              Import Statement
+            </button>
+            <button
+              onClick={() => {
                 setShowSettings(true);
                 setShowMobileMenu(false);
               }}
@@ -603,6 +647,13 @@ const SimpleBudgetDashboard: React.FC = () => {
               >
                 <Camera className="w-4 h-4" />
                 Scan Receipt
+              </button>
+              <button
+                onClick={() => setShowStatementImport(true)}
+                className="bg-blue-600 text-white px-4 py-2 rounded-sm hover:bg-blue-700 transition-colors text-sm font-medium flex items-center gap-2"
+              >
+                <FileUp className="w-4 h-4" />
+                Import Statement
               </button>
               <button
                 onClick={() => setShowAddSavingsGoal(true)}
@@ -784,7 +835,12 @@ const SimpleBudgetDashboard: React.FC = () => {
                 <XAxis dataKey="name" />
                 <YAxis tickFormatter={(value) => `£${(value / 1000).toFixed(0)}k`} />
                 <Tooltip formatter={(value: number) => formatCurrency(value)} />
-                <Bar dataKey="amount" />
+                <Bar dataKey="amount" radius={[4, 4, 0, 0]}>
+                  {dashboardData.comparisonData.map((entry, index) => (
+                    <Cell key={`cell-comparison-${index}`} fill={entry.fill} />
+                  ))}
+                  <LabelList dataKey="amount" position="top" formatter={(value) => formatCurrency(value as number)} />
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -818,10 +874,9 @@ const SimpleBudgetDashboard: React.FC = () => {
                     dataKey="value"
                     nameKey="name"
                   >
-                    {dashboardData.categorySpending.map((entry, index) => {
-                      console.log('Expense category:', entry.name, 'Color:', entry.color);
-                      return <Cell key={`cell-expense-${index}`} fill={entry.color} />;
-                    })}
+                    {dashboardData.categorySpending.map((entry, index) => (
+                      <Cell key={`cell-expense-${index}`} fill={entry.color} />
+                    ))}
                   </Pie>
                   <Tooltip
                     formatter={(value: number) => formatCurrency(value)}
@@ -861,10 +916,9 @@ const SimpleBudgetDashboard: React.FC = () => {
                     dataKey="value"
                     nameKey="name"
                   >
-                    {dashboardData.incomeByCategory.map((entry, index) => {
-                      console.log('Income category:', entry.name, 'Color:', entry.color);
-                      return <Cell key={`cell-income-${index}`} fill={entry.color} />;
-                    })}
+                    {dashboardData.incomeByCategory.map((entry, index) => (
+                      <Cell key={`cell-income-${index}`} fill={entry.color} />
+                    ))}
                   </Pie>
                   <Tooltip
                     formatter={(value: number) => formatCurrency(value)}
@@ -1280,6 +1334,15 @@ const SimpleBudgetDashboard: React.FC = () => {
           console.log('Save savings goal:', data);
           setShowAddSavingsGoal(false);
         }}
+      />
+
+      <StatementImportModal
+        isOpen={showStatementImport}
+        onClose={() => setShowStatementImport(false)}
+        familyId={familyId}
+        existingIncome={incomeList}
+        existingExpenses={expenseList}
+        onImported={handleStatementImported}
       />
 
       <BudgetSettingsModal

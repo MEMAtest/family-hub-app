@@ -21,6 +21,9 @@ export interface FamilyMember {
   name: string;
   role: 'Parent' | 'Student' | 'Family Member';
   ageGroup: 'Toddler' | 'Preschool' | 'Child' | 'Teen' | 'Adult';
+  dateOfBirth?: string; // YYYY-MM-DD format
+  age?: number;
+  avatarUrl?: string;
   color: string;        // Hex color code
   icon: string;         // Emoji character
   fitnessGoals?: {
@@ -29,6 +32,26 @@ export interface FamilyMember {
     activeHours?: number;
     activities?: number;
   };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type MilestoneType = 'birthday' | 'anniversary' | 'achievement' | 'life_event' | 'family_event' | 'other';
+
+export interface FamilyMilestone {
+  id: string;
+  familyId: string;
+  title: string;
+  description?: string;
+  date: string; // YYYY-MM-DD format
+  type: MilestoneType;
+  participants: string[];
+  photos: string[];
+  tags: string[];
+  isRecurring: boolean;
+  reminderDays: number[];
+  isPrivate: boolean;
+  createdBy?: string;
   createdAt: string;
   updatedAt: string;
 }

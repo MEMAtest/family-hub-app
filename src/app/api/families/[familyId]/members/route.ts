@@ -27,7 +27,9 @@ export async function POST(
 ) {
   try {
     const body = await request.json();
-    const { name, role, ageGroup, color, icon, fitnessGoals } = body;
+    const { name, role, ageGroup, color, icon, fitnessGoals, dateOfBirth, avatarUrl } = body;
+    const parsedDob = dateOfBirth ? new Date(dateOfBirth) : null;
+    const dateOfBirthValue = parsedDob && !Number.isNaN(parsedDob.getTime()) ? parsedDob : null;
 
     const member = await prisma.familyMember.create({
       data: {
@@ -35,6 +37,8 @@ export async function POST(
         name,
         role,
         ageGroup,
+        dateOfBirth: dateOfBirthValue,
+        avatarUrl: avatarUrl || null,
         color,
         icon,
         fitnessGoals,

@@ -9,8 +9,10 @@ import {
 const createdAt = '2024-01-16T12:00:00Z';
 
 export const tremaineRoadBaseline: PropertyBaseline = {
-  propertyName: '21 Tremaine Road View',
+  propertyName: 'Tremaine Improvements',
   address: '21 Tremaine Road, London, SE20 7UA',
+  purchasePrice: 750000,
+  purchaseDate: '2024-03-01',
   documents: [
     {
       id: 'doc-survey',
@@ -778,7 +780,15 @@ export const tremaineRoadTasks: PropertyTask[] = [
   },
 ];
 
-export const tremaineRoadValues: PropertyValueEntry[] = [];
+export const tremaineRoadValues: PropertyValueEntry[] = [
+  {
+    id: 'val-purchase-2024',
+    date: '2024-03-01',
+    value: 750000,
+    source: 'manual',
+    notes: 'Purchase price',
+  },
+];
 
 export const tremaineRoadAreaWatch: AreaWatchItem[] = [
   {

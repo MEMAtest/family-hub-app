@@ -34,6 +34,8 @@ export const FamilyMemberModal = () => {
     await saveMember();
   };
 
+  const previewFallback = formState.name.trim().charAt(0).toUpperCase() || formState.icon || '🧑🏾';
+
   return (
     <Dialog open={isFormOpen} onClose={closeForm} className="relative z-40">
       <div className="fixed inset-0 bg-black/40" aria-hidden="true" />
@@ -49,6 +51,26 @@ export const FamilyMemberModal = () => {
           </div>
 
           <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+            <div className="flex items-center gap-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+              {formState.avatarUrl ? (
+                <img
+                  src={formState.avatarUrl}
+                  alt={`${formState.name || 'Member'} avatar`}
+                  className="h-12 w-12 rounded-full object-cover border border-gray-200"
+                />
+              ) : (
+                <div
+                  className="flex h-12 w-12 items-center justify-center rounded-full text-lg text-white"
+                  style={{ backgroundColor: formState.color }}
+                >
+                  {formState.icon || previewFallback}
+                </div>
+              )}
+              <div>
+                <p className="text-sm font-medium text-gray-900">Avatar preview</p>
+                <p className="text-xs text-gray-500">Updates as you edit</p>
+              </div>
+            </div>
             <div>
               <label className="text-sm font-medium text-gray-700">Display name</label>
               <input
@@ -93,6 +115,57 @@ export const FamilyMemberModal = () => {
 
             <div className="grid grid-cols-2 gap-3">
               <div>
+                <label className="text-sm font-medium text-gray-700">Date of birth</label>
+                <input
+                  type="date"
+                  value={formState.dateOfBirth}
+                  onChange={(event) => {
+                    const nextDob = event.target.value;
+                    setFormState((prev) => {
+                      const date = nextDob ? new Date(nextDob) : null;
+                      const age = date && !Number.isNaN(date.getTime())
+                        ? (() => {
+                            const today = new Date();
+                            let years = today.getFullYear() - date.getFullYear();
+                            const monthDiff = today.getMonth() - date.getMonth();
+                            if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < date.getDate())) {
+                              years -= 1;
+                            }
+                            return years;
+                          })()
+                        : null;
+                      const derivedGroup = age === null
+                        ? prev.ageGroup
+                        : age < 4
+                          ? 'Toddler'
+                          : age < 6
+                            ? 'Preschool'
+                            : age < 13
+                              ? 'Child'
+                              : age < 18
+                                ? 'Teen'
+                                : 'Adult';
+
+                      return { ...prev, dateOfBirth: nextDob, ageGroup: derivedGroup };
+                    });
+                  }}
+                  className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700">Avatar URL</label>
+                <input
+                  type="url"
+                  value={formState.avatarUrl}
+                  onChange={(event) => setFormState({ ...formState, avatarUrl: event.target.value })}
+                  placeholder="https://..."
+                  className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
                 <label className="text-sm font-medium text-gray-700">Icon</label>
                 <select
                   value={formState.icon}
@@ -113,8 +186,8 @@ export const FamilyMemberModal = () => {
                   onChange={(event) => setFormState({ ...formState, color: event.target.value })}
                   className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
                 >
-                  {colorOptions.map((color) => (
-                    <option key={color} value={color}>
+                  {colorOptions.map((color, index) => (
+                    <option key={`${color}-${index}`} value={color}>
                       {color}
                     </option>
                   ))}

@@ -52,6 +52,7 @@ model Family {
   shoppingLists         ShoppingList[]
   familyGoals           FamilyGoal[]
   achievements          Achievement[]
+  milestones            FamilyMilestone[]
 
   @@map("families")
 }
@@ -64,6 +65,8 @@ model FamilyMember {
   name         String
   role         String
   ageGroup     String   @map("age_group")
+  dateOfBirth  DateTime? @map("date_of_birth")
+  avatarUrl    String?  @map("avatar_url")
   color        String   // Hex color code
   icon         String   // Emoji icon
   fitnessGoals Json?    @map("fitness_goals")
@@ -79,8 +82,31 @@ model FamilyMember {
   shoppingItems    ShoppingItem[]
   achievements     Achievement[]
   fitnessTracking  FitnessTracking[]
+  deviceSyncs      DeviceSync[]
 
   @@map("family_members")
+}
+
+model FamilyMilestone {
+  id           String   @id @default(cuid())
+  familyId     String   @map("family_id")
+  title        String
+  description  String?
+  date         DateTime
+  type         String
+  participants Json?    // Array of member IDs
+  photos       Json?    // Array of URLs
+  tags         Json?    // Array of strings
+  isRecurring  Boolean  @default(false) @map("is_recurring")
+  reminderDays Json?    @map("reminder_days")
+  isPrivate    Boolean  @default(false) @map("is_private")
+  createdBy    String?  @map("created_by")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  family Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  @@map("family_milestones")
 }
 
 // Calendar events table
@@ -360,17 +386,50 @@ model Achievement {
 
 // Fitness tracking table
 model FitnessTracking {
-  id             String   @id @default(cuid())
-  personId       String   @map("person_id")
-  activityType   String   @map("activity_type")
-  durationMinutes Int     @map("duration_minutes")
-  intensityLevel String   @map("intensity_level")
-  activityDate   DateTime @default(now()) @map("activity_date")
-  notes          String?
-  createdAt      DateTime @default(now()) @map("created_at")
+  id              String   @id @default(cuid())
+  personId        String   @map("person_id")
+  activityType    String   @map("activity_type")  // gym, run, swim, cycle, walk, sports, yoga, cardio
+  durationMinutes Int      @map("duration_minutes")
+  intensityLevel  String   @map("intensity_level") // low, moderate, high
+  activityDate    DateTime @default(now()) @map("activity_date")
+  notes           String?
+
+  // Extended fields for gym workouts
+  calories        Int?
+  exercises       Json?                           // Array of ExerciseSet objects
+  workoutName     String?  @map("workout_name")   // e.g., "Upper Body", "Leg Day"
+  heartRateAvg    Int?     @map("heart_rate_avg")
+  heartRateMax    Int?     @map("heart_rate_max")
+  source          String   @default("manual")     // manual, garmin, ultrahuman
+  externalId      String?  @map("external_id")    // ID from device sync
+
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
 
   // Relations
   person FamilyMember @relation(fields: [personId], references: [id], onDelete: Cascade)
 
   @@map("fitness_tracking")
+}
+
+// Device sync tracking for Garmin/Ultrahuman integrations (Phase 2)
+model DeviceSync {
+  id           String    @id @default(cuid())
+  personId     String    @map("person_id")
+  provider     String                            // garmin, ultrahuman
+  accountId    String?   @map("account_id")
+  accessToken  String?   @map("access_token")    // encrypted
+  refreshToken String?   @map("refresh_token")   // encrypted
+  tokenExpiry  DateTime? @map("token_expiry")
+  lastSyncAt   DateTime? @map("last_sync_at")
+  syncEnabled  Boolean   @default(true) @map("sync_enabled")
+  settings     Json?                             // Provider-specific settings
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  person FamilyMember @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@unique([personId, provider])
+  @@map("device_syncs")
 }

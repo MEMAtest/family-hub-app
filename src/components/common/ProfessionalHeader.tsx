@@ -1,7 +1,8 @@
 'use client'
 
 import React from 'react'
-import { Menu, Bell, Search, Plus, Filter, MoreVertical } from 'lucide-react'
+import { Menu, Search, Plus, Filter, MoreVertical } from 'lucide-react'
+import NotificationBell from '@/components/notifications/NotificationBell'
 
 interface ProfessionalHeaderProps {
   onMenuToggle: () => void
@@ -79,14 +80,7 @@ export default function ProfessionalHeader({
           </button>
 
           {/* Notifications */}
-          <button
-            className="relative p-2.5 rounded-xl text-gray-500 hover:text-gray-700 hover:bg-gray-100/70 transition-all duration-200"
-            aria-label="Notifications"
-          >
-            <Bell className="h-5 w-5" />
-            {/* Notification badge */}
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
-          </button>
+          <NotificationBell className="p-2.5 rounded-xl text-gray-500 hover:text-gray-700 hover:bg-gray-100/70 transition-all duration-200" />
 
           {/* Add button */}
           {showAddButton && onAddClick && (

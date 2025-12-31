@@ -47,6 +47,53 @@ export interface PropertyWorkLog {
   attachments?: PropertyDocument[];
 }
 
+// CRM Types for Task Workflow
+export interface TaskContact {
+  id: string;
+  name: string;
+  company?: string;
+  phone?: string;
+  email?: string;
+  contactDate: string;
+  notes?: string;
+}
+
+export type TaskQuoteStatus = 'pending' | 'accepted' | 'rejected';
+
+export interface TaskQuote {
+  id: string;
+  contractorName: string;
+  company?: string;
+  phone?: string;
+  email?: string;
+  amount: number;
+  currency: 'GBP';
+  validUntil?: string;
+  notes?: string;
+  status: TaskQuoteStatus;
+  attachments?: PropertyDocument[];
+  createdAt: string;
+}
+
+export interface TaskScheduledVisit {
+  id: string;
+  date: string;
+  time?: string;
+  contractorName: string;
+  company?: string;
+  purpose: string;
+  completed: boolean;
+  notes?: string;
+}
+
+export interface TaskFollowUp {
+  id: string;
+  dueDate: string;
+  description: string;
+  completed: boolean;
+  createdAt: string;
+}
+
 export interface PropertyTask {
   id: string;
   title: string;
@@ -68,6 +115,11 @@ export interface PropertyTask {
   source: PropertyTaskSource;
   createdAt: string;
   updatedAt: string;
+  // CRM workflow fields
+  contacts?: TaskContact[];
+  quotes?: TaskQuote[];
+  scheduledVisits?: TaskScheduledVisit[];
+  followUps?: TaskFollowUp[];
 }
 
 export interface PropertyValueEntry {
@@ -96,4 +148,123 @@ export interface PropertyComponent {
   type: 'room' | 'element' | 'system' | 'exterior';
   floor: 'cellar' | 'ground' | 'first' | 'second' | 'roof' | 'exterior';
   description?: string;
+}
+
+// ============== PROJECT TYPES ==============
+
+// Email extraction types (from AI parsing)
+export interface ExtractedContact {
+  name: string;
+  company?: string;
+  phone?: string;
+  email?: string;
+  role?: string;
+}
+
+export interface ExtractedPrice {
+  description: string;
+  amount: number;
+  currency: 'GBP';
+  type: 'quote' | 'estimate' | 'mention';
+}
+
+export interface ExtractedDate {
+  description: string;
+  date: string;
+  type: 'proposed_visit' | 'start_date' | 'completion' | 'deadline' | 'other';
+}
+
+export interface ExtractedFollowUp {
+  action: string;
+  dueDate?: string;
+}
+
+export interface ProjectEmailExtractedData {
+  contacts: ExtractedContact[];
+  prices: ExtractedPrice[];
+  dates: ExtractedDate[];
+  followUps: ExtractedFollowUp[];
+  topics: string[];
+  summary: string;
+}
+
+export interface ProjectEmail {
+  id: string;
+  projectId: string;
+  rawContent: string;
+  subject?: string;
+  sender?: string;
+  receivedDate?: string;
+  parsedAt: string;
+  extractedData: ProjectEmailExtractedData;
+  // Track which items were created from this email
+  contactsCreated: string[];
+  quotesCreated: string[];
+  visitsCreated: string[];
+  followUpsCreated: string[];
+  createdAt: string;
+}
+
+// Project types
+export type ProjectStatus = 'planning' | 'scheduled' | 'in_progress' | 'on_hold' | 'completed' | 'cancelled';
+
+export type ProjectCategory = 'Bathroom' | 'Kitchen' | 'Electrics' | 'Plumbing' | 'Heating' | 'Roofing' | 'Extension' | 'Garden' | 'Decoration' | 'Other';
+
+export interface ProjectMilestone {
+  id: string;
+  title: string;
+  targetDate?: string;
+  completedDate?: string;
+  status: 'pending' | 'completed' | 'missed';
+  notes?: string;
+}
+
+export interface ProjectTask {
+  id: string;
+  projectId: string;
+  title: string;
+  description?: string;
+  status: 'pending' | 'in_progress' | 'completed';
+  dueDate?: string;
+  assignedTo?: string;
+  createdAt: string;
+  completedAt?: string;
+}
+
+export interface PropertyProject {
+  id: string;
+  title: string;
+  description?: string;
+  status: ProjectStatus;
+  category: ProjectCategory | string;
+
+  // Budget
+  budgetMin?: number;
+  budgetMax?: number;
+  actualSpend?: number;
+  currency: 'GBP';
+
+  // Timeline
+  targetStartDate?: string;
+  targetCompletionDate?: string;
+  actualStartDate?: string;
+  actualCompletionDate?: string;
+  milestones: ProjectMilestone[];
+
+  // Content
+  emails: ProjectEmail[];
+  tasks: ProjectTask[];
+
+  // CRM (reuses existing types)
+  contacts: TaskContact[];
+  quotes: TaskQuote[];
+  scheduledVisits: TaskScheduledVisit[];
+  followUps: TaskFollowUp[];
+
+  // Documents
+  attachments: PropertyDocument[];
+
+  // Metadata
+  createdAt: string;
+  updatedAt: string;
 }

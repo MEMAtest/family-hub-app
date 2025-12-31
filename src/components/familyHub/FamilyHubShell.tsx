@@ -13,6 +13,7 @@ import {
   Newspaper,
   Plus,
   ShoppingBag,
+  Dumbbell,
 } from 'lucide-react';
 import { FamilyHubNavigation, NavItem } from './FamilyHubNavigation';
 import { FamilyHubHeader } from './FamilyHubHeader';
@@ -25,6 +26,7 @@ import { GoalsView } from './views/GoalsView';
 import { FamilyView } from './views/FamilyView';
 import { NewsView } from './views/NewsView';
 import { PropertyView } from './views/PropertyView';
+import { FitnessView } from './views/FitnessView';
 import { FamilyHubModals } from './FamilyHubModals';
 import Breadcrumb from '@/components/common/Breadcrumb';
 import SetupWizard from '@/components/common/SetupWizard';
@@ -42,11 +44,12 @@ import { useSearchParams } from 'next/navigation';
 
 const NAV_ITEMS: NavItem[] = [
   { id: 'dashboard', label: 'Dashboard', icon: Home },
-  { id: 'property', label: '21 Tremaine', icon: Building2 },
+  { id: 'property', label: 'Tremaine Improvements', icon: Building2 },
   { id: 'calendar', label: 'Calendar', icon: CalendarIcon },
   { id: 'budget', label: 'Budget', icon: DollarSign },
   { id: 'meals', label: 'Meals', icon: UtensilsCrossed },
   { id: 'shopping', label: 'Shopping', icon: ShoppingCart },
+  { id: 'fitness', label: 'Fitness', icon: Dumbbell },
   { id: 'goals', label: 'Goals', icon: Target },
   { id: 'family', label: 'Family', icon: Users },
   { id: 'news', label: 'News', icon: Newspaper },
@@ -66,6 +69,7 @@ export const FamilyHubShell = () => {
   } = useAppView();
   const { clientTime, isClient } = useClientTime();
   const databaseStatus = useFamilyStore((state) => state.databaseStatus);
+  const [familyName, setFamilyName] = useState('Family');
   const searchParams = useSearchParams();
   const appliedViewParam = useRef(false);
 
@@ -90,6 +94,41 @@ export const FamilyHubShell = () => {
         });
     }
   }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const storedName = localStorage.getItem('familyName');
+    if (storedName) {
+      setFamilyName(storedName);
+    }
+
+    if (!databaseStatus.familyId) return;
+
+    const controller = new AbortController();
+
+    const loadFamilyName = async () => {
+      try {
+        const response = await fetch('/api/families', { signal: controller.signal });
+        if (!response.ok) return;
+        const families = await response.json();
+        if (!Array.isArray(families)) return;
+        const match = families.find((family: { id: string }) => family.id === databaseStatus.familyId);
+        if (match?.familyName) {
+          setFamilyName(match.familyName);
+          localStorage.setItem('familyName', match.familyName);
+        }
+      } catch (error) {
+        if (!(error instanceof DOMException && error.name === 'AbortError')) {
+          console.error('Failed to load family name:', error);
+        }
+      }
+    };
+
+    loadFamilyName();
+
+    return () => controller.abort();
+  }, [databaseStatus.familyId]);
 
   useEffect(() => {
     if (appliedViewParam.current) return;
@@ -139,6 +178,13 @@ export const FamilyHubShell = () => {
     return formatDateConsistent(clientTime);
   }, [clientTime, isClient]);
 
+  const headerTitle = useMemo(() => {
+    const trimmed = familyName.trim();
+    const baseName = trimmed.length > 0 ? trimmed : 'Family';
+    const normalized = baseName.toLowerCase().includes('family') ? baseName : `${baseName} Family`;
+    return `${normalized} Hub`;
+  }, [familyName]);
+
   const content = useMemo(() => {
     switch (currentView) {
       case 'calendar':
@@ -151,6 +197,8 @@ export const FamilyHubShell = () => {
         return <MealsView />;
       case 'shopping':
         return <ShoppingView />;
+      case 'fitness':
+        return <FitnessView />;
       case 'goals':
         return <GoalsView />;
       case 'family':
@@ -171,6 +219,7 @@ export const FamilyHubShell = () => {
       budget: 'Budget',
       meals: 'Meals',
       shopping: 'Shopping',
+      fitness: 'Fitness',
       goals: 'Goals',
       family: 'Family',
       news: 'News',
@@ -200,7 +249,7 @@ export const FamilyHubShell = () => {
 
       <div className="flex flex-1 flex-col bg-white dark:bg-slate-900">
         <FamilyHubHeader
-          title="Omosanya Family Hub"
+          title={headerTitle}
           subtitle={subtitle}
           onToggleMobileNav={openMobileMenu}
           rightContent={rightContent}

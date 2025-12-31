@@ -59,6 +59,7 @@ export interface InAppNotification {
   relatedEventId?: string;
   relatedPersonId?: string;
   expiresAt?: Date;
+  snoozedUntil?: Date;
   metadata?: any;
 }
 

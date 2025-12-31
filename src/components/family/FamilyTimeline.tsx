@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { FamilyMilestone, FamilyMember, MilestoneType } from '@/types/family.types';
+import { FamilyMilestone, FamilyMember, MilestoneType } from '@/types';
 import {
   Calendar,
   Users,
@@ -35,181 +35,22 @@ interface FamilyTimelineProps {
 }
 
 export const FamilyTimeline: React.FC<FamilyTimelineProps> = ({
-  milestones: initialMilestones,
+  milestones,
   familyMembers,
   onAddMilestone,
   onEditMilestone,
   onDeleteMilestone
 }) => {
-  const mockMilestones: FamilyMilestone[] = [
-    {
-      id: '1',
-      title: 'Omosanya Family Established',
-      description: 'Ade and Angela got married and started their beautiful family journey together.',
-      date: new Date('2010-06-15'),
-      type: 'family_event' as const,
-      participants: ['ade', 'angela'],
-      photos: ['https://images.unsplash.com/photo-1511285560929-80b456fea0bc?w=800'],
-      // location: 'Lagos, Nigeria',
-      isPrivate: false,
-      tags: ['wedding', 'love', 'beginning'],
-      isRecurring: false,
-      reminderDays: [],
-      createdBy: 'ade',
-      createdAt: new Date('2010-06-15')
-    },
-    {
-      id: '2',
-      title: 'Moved to New Home',
-      description: 'The family moved to their dream home in a wonderful neighborhood.',
-      date: new Date('2012-03-20'),
-      type: 'achievement' as const,
-      participants: ['ade', 'angela'],
-      photos: ['https://images.unsplash.com/photo-1570129477492-45c003edd2be?w=800'],
-      // location: 'Atlanta, GA',
-      isPrivate: false,
-      tags: ['home', 'milestone', 'new-chapter'],
-      isRecurring: false,
-      reminderDays: [],
-      createdBy: 'ade',
-      createdAt: new Date('2012-03-20')
-    },
-    {
-      id: '3',
-      title: 'Askia Born',
-      description: 'Welcome to the world, Askia! Our first bundle of joy brought so much happiness to our family.',
-      date: new Date('2013-08-10'),
-      type: 'life_event' as const,
-      participants: ['ade', 'angela', 'askia'],
-      photos: ['https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=800'],
-      // location: 'Atlanta, GA',
-      isPrivate: false,
-      tags: ['birth', 'first-child', 'joy'],
-      isRecurring: false,
-      reminderDays: [],
-      createdBy: 'ade',
-      createdAt: new Date('2013-08-10')
-    },
-    {
-      id: '4',
-      title: 'Amari Born',
-      description: 'Our family is complete! Amari joined us and filled our hearts with even more love.',
-      date: new Date('2016-04-22'),
-      type: 'life_event' as const,
-      participants: ['ade', 'angela', 'askia', 'amari'],
-      photos: ['https://images.unsplash.com/photo-1515488042361-ee00e0ddd4e4?w=800'],
-      // location: 'Atlanta, GA',
-      isPrivate: false,
-      tags: ['birth', 'second-child', 'complete-family'],
-      isRecurring: false,
-      reminderDays: [],
-      createdBy: 'ade',
-      createdAt: new Date('2016-04-22')
-    },
-    {
-      id: '5',
-      title: 'Ade\'s Promotion',
-      description: 'Ade got promoted to Senior Manager at his company. A well-deserved recognition!',
-      date: new Date('2018-11-15'),
-      type: 'achievement' as const,
-      participants: ['ade'],
-      photos: [],
-      // location: 'Atlanta, GA',
-      isPrivate: false,
-      tags: ['career', 'promotion', 'success'],
-      isRecurring: false,
-      reminderDays: [],
-      createdBy: 'ade',
-      createdAt: new Date('2018-11-15')
-    },
-    {
-      id: '6',
-      title: 'First Family Vacation',
-      description: 'Our amazing trip to Disney World. The kids had the time of their lives!',
-      date: new Date('2019-07-04'),
-      type: 'family_event' as const,
-      participants: ['ade', 'angela', 'askia', 'amari'],
-      photos: [
-        'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800',
-        'https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=800'
-      ],
-      // location: 'Orlando, FL',
-      isPrivate: false,
-      tags: ['vacation', 'disney', 'family-fun'],
-      isRecurring: false,
-      reminderDays: [],
-      createdBy: 'ade',
-      createdAt: new Date('2019-07-04')
-    },
-    {
-      id: '7',
-      title: 'Askia\'s First Soccer Trophy',
-      description: 'Askia won their first soccer trophy! We\'re so proud of their dedication and teamwork.',
-      date: new Date('2020-10-30'),
-      type: 'achievement' as const,
-      participants: ['askia'],
-      photos: ['https://images.unsplash.com/photo-1551698618-1dfe5d97d256?w=800'],
-      // location: 'Atlanta, GA',
-      isPrivate: false,
-      tags: ['sports', 'achievement', 'soccer'],
-      isRecurring: false,
-      reminderDays: [],
-      createdBy: 'ade',
-      createdAt: new Date('2020-10-30')
-    },
-    {
-      id: '8',
-      title: 'Angela\'s Master\'s Degree',
-      description: 'Angela graduated with her Master\'s degree in Education. Years of hard work paid off!',
-      date: new Date('2021-05-18'),
-      type: 'achievement' as const,
-      participants: ['angela'],
-      photos: ['https://images.unsplash.com/photo-1523050854058-8df90110c9d1?w=800'],
-      // location: 'Atlanta, GA',
-      isPrivate: false,
-      tags: ['education', 'graduation', 'achievement'],
-      isRecurring: false,
-      reminderDays: [],
-      createdBy: 'ade',
-      createdAt: new Date('2021-05-18')
-    },
-    {
-      id: '9',
-      title: 'Family Pet Adoption',
-      description: 'We adopted our beloved dog Max! He\'s been the perfect addition to our family.',
-      date: new Date('2022-02-14'),
-      type: 'other' as const,
-      participants: ['ade', 'angela', 'askia', 'amari'],
-      photos: ['https://images.unsplash.com/photo-1552053831-71594a27632d?w=800'],
-      // location: 'Atlanta, GA',
-      isPrivate: false,
-      tags: ['pet', 'adoption', 'valentine'],
-      isRecurring: false,
-      reminderDays: [],
-      createdBy: 'ade',
-      createdAt: new Date('2022-02-14')
-    },
-    {
-      id: '10',
-      title: 'Amari\'s Piano Recital',
-      description: 'Amari performed beautifully at their first piano recital. Such talent and confidence!',
-      date: new Date('2023-12-10'),
-      type: 'achievement' as const,
-      participants: ['amari'],
-      photos: ['https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=800'],
-      // location: 'Atlanta, GA',
-      isPrivate: false,
-      tags: ['music', 'piano', 'performance'],
-      isRecurring: false,
-      reminderDays: [],
-      createdBy: 'ade',
-      createdAt: new Date('2023-12-10')
-    }
-  ];
-
-  const [milestones, setMilestones] = useState<FamilyMilestone[]>(
-    initialMilestones && initialMilestones.length > 0 ? initialMilestones : mockMilestones
-  );
+  const [editingMilestone, setEditingMilestone] = useState<FamilyMilestone | null>(null);
+  const [formState, setFormState] = useState({
+    title: '',
+    description: '',
+    date: '',
+    type: 'family_event' as MilestoneType,
+    participants: [] as string[],
+    tags: '',
+    isPrivate: false,
+  });
   const [selectedFilter, setSelectedFilter] = useState<MilestoneType | 'all'>('all');
   const [selectedYear, setSelectedYear] = useState<number | 'all'>('all');
   const [searchTerm, setSearchTerm] = useState('');
@@ -230,7 +71,7 @@ export const FamilyTimeline: React.FC<FamilyTimelineProps> = ({
       if (selectedFilter !== 'all' && milestone.type !== selectedFilter) return false;
       if (selectedYear !== 'all' && new Date(milestone.date).getFullYear() !== selectedYear) return false;
       if (searchTerm && !milestone.title.toLowerCase().includes(searchTerm.toLowerCase()) &&
-          !milestone.description.toLowerCase().includes(searchTerm.toLowerCase())) return false;
+          !(milestone.description || '').toLowerCase().includes(searchTerm.toLowerCase())) return false;
       return true;
     })
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -268,6 +109,76 @@ export const FamilyTimeline: React.FC<FamilyTimelineProps> = ({
     }
   };
 
+  const resetForm = () => {
+    setFormState({
+      title: '',
+      description: '',
+      date: '',
+      type: 'family_event',
+      participants: [],
+      tags: '',
+      isPrivate: false,
+    });
+    setEditingMilestone(null);
+  };
+
+  const openCreateForm = () => {
+    resetForm();
+    setShowAddForm(true);
+  };
+
+  const handleEdit = (milestone: FamilyMilestone) => {
+    setEditingMilestone(milestone);
+    setFormState({
+      title: milestone.title,
+      description: milestone.description || '',
+      date: milestone.date,
+      type: milestone.type,
+      participants: milestone.participants || [],
+      tags: milestone.tags?.join(', ') || '',
+      isPrivate: milestone.isPrivate,
+    });
+    setShowAddForm(true);
+  };
+
+  const toggleParticipant = (memberId: string) => {
+    setFormState((prev) => ({
+      ...prev,
+      participants: prev.participants.includes(memberId)
+        ? prev.participants.filter((id) => id !== memberId)
+        : [...prev.participants, memberId],
+    }));
+  };
+
+  const handleSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
+    const payload: Partial<FamilyMilestone> = {
+      title: formState.title.trim(),
+      description: formState.description.trim(),
+      date: formState.date,
+      type: formState.type,
+      participants: formState.participants,
+      tags: formState.tags
+        ? formState.tags.split(',').map((tag) => tag.trim()).filter(Boolean)
+        : [],
+      isPrivate: formState.isPrivate,
+      photos: [],
+      reminderDays: [],
+      isRecurring: false,
+    };
+
+    if (!payload.title || !payload.date) return;
+
+    if (editingMilestone) {
+      onEditMilestone(editingMilestone.id, payload);
+    } else {
+      onAddMilestone(payload);
+    }
+
+    setShowAddForm(false);
+    resetForm();
+  };
+
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200">
       <div className="p-6 border-b border-gray-200">
@@ -284,7 +195,7 @@ export const FamilyTimeline: React.FC<FamilyTimelineProps> = ({
             </div>
           </div>
           <button
-            onClick={() => setShowAddForm(true)}
+            onClick={openCreateForm}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
             <Plus className="w-4 h-4" />
@@ -384,8 +295,8 @@ export const FamilyTimeline: React.FC<FamilyTimelineProps> = ({
                                 <div className="flex items-center gap-1">
                                   <Users className="w-4 h-4" />
                                   <span>
-                                    {milestone.participants
-                                      .map((id: string) => getMemberById(id)?.firstName || 'Unknown')
+                                  {milestone.participants
+                                      .map((id: string) => getMemberById(id)?.name || 'Unknown')
                                       .join(', ')}
                                   </span>
                                 </div>
@@ -445,7 +356,7 @@ export const FamilyTimeline: React.FC<FamilyTimelineProps> = ({
                               <Share2 className="w-4 h-4" />
                             </button>
                             <button
-                              onClick={() => {}}
+                              onClick={() => handleEdit(milestone)}
                               className="p-1 text-gray-400 hover:text-yellow-600 hover:bg-yellow-50 rounded transition-colors"
                               title="Edit milestone"
                             >
@@ -477,7 +388,7 @@ export const FamilyTimeline: React.FC<FamilyTimelineProps> = ({
                 : 'Start building your family timeline by adding your first milestone.'}
             </p>
             <button
-              onClick={() => setShowAddForm(true)}
+              onClick={openCreateForm}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors mx-auto"
             >
               <Plus className="w-4 h-4" />
@@ -492,9 +403,14 @@ export const FamilyTimeline: React.FC<FamilyTimelineProps> = ({
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-gray-900">Add New Milestone</h3>
+                <h3 className="text-lg font-semibold text-gray-900">
+                  {editingMilestone ? 'Edit Milestone' : 'Add New Milestone'}
+                </h3>
                 <button
-                  onClick={() => setShowAddForm(false)}
+                  onClick={() => {
+                    setShowAddForm(false);
+                    resetForm();
+                  }}
                   className="p-1 text-gray-400 hover:text-gray-600 rounded"
                 >
                   <Plus className="w-5 h-5 rotate-45" />
@@ -503,13 +419,15 @@ export const FamilyTimeline: React.FC<FamilyTimelineProps> = ({
             </div>
 
             <div className="p-6">
-              <form className="space-y-4">
+              <form className="space-y-4" onSubmit={handleSubmit}>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Milestone Title
                   </label>
                   <input
                     type="text"
+                    value={formState.title}
+                    onChange={(event) => setFormState((prev) => ({ ...prev, title: event.target.value }))}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Enter milestone title"
                   />
@@ -521,6 +439,8 @@ export const FamilyTimeline: React.FC<FamilyTimelineProps> = ({
                   </label>
                   <textarea
                     rows={3}
+                    value={formState.description}
+                    onChange={(event) => setFormState((prev) => ({ ...prev, description: event.target.value }))}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Describe this special moment..."
                   />
@@ -533,6 +453,8 @@ export const FamilyTimeline: React.FC<FamilyTimelineProps> = ({
                     </label>
                     <input
                       type="date"
+                      value={formState.date}
+                      onChange={(event) => setFormState((prev) => ({ ...prev, date: event.target.value }))}
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
@@ -541,7 +463,11 @@ export const FamilyTimeline: React.FC<FamilyTimelineProps> = ({
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Type
                     </label>
-                    <select className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    <select
+                      value={formState.type}
+                      onChange={(event) => setFormState((prev) => ({ ...prev, type: event.target.value as MilestoneType }))}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
                       {Object.entries(milestoneTypeConfig).map(([type, config]) => (
                         <option key={type} value={type}>
                           {config.label}
@@ -553,17 +479,6 @@ export const FamilyTimeline: React.FC<FamilyTimelineProps> = ({
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Location (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Where did this happen?"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
                     Family Members Involved
                   </label>
                   <div className="space-y-2">
@@ -571,20 +486,51 @@ export const FamilyTimeline: React.FC<FamilyTimelineProps> = ({
                       <label key={member.id} className="flex items-center gap-2">
                         <input
                           type="checkbox"
+                          checked={formState.participants.includes(member.id)}
+                          onChange={() => toggleParticipant(member.id)}
                           className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                         />
                         <span className="text-sm text-gray-700">
-                          {member.firstName} {member.lastName}
+                          {member.name}
                         </span>
                       </label>
                     ))}
                   </div>
                 </div>
 
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Tags (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={formState.tags}
+                    onChange={(event) => setFormState((prev) => ({ ...prev, tags: event.target.value }))}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="e.g. birthday, travel"
+                  />
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <input
+                    id="milestone-private"
+                    type="checkbox"
+                    checked={formState.isPrivate}
+                    onChange={(event) => setFormState((prev) => ({ ...prev, isPrivate: event.target.checked }))}
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  />
+                  <label htmlFor="milestone-private" className="text-sm text-gray-700">
+                    Private milestone
+                  </label>
+                </div>
+
                 <div className="flex items-center justify-end gap-3 pt-4">
                   <button
                     type="button"
-                    onClick={() => setShowAddForm(false)}
+                    onClick={() => {
+                      setShowAddForm(false);
+                      resetForm();
+                    }}
                     className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
                   >
                     Cancel
@@ -593,7 +539,7 @@ export const FamilyTimeline: React.FC<FamilyTimelineProps> = ({
                     type="submit"
                     className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                   >
-                    Add Milestone
+                    {editingMilestone ? 'Save Changes' : 'Add Milestone'}
                   </button>
                 </div>
               </form>

@@ -34,49 +34,6 @@ export default function DataInitializer() {
       }
     }
 
-    // Also ensure we have initial family members if not present
-    const existingMembers = localStorage.getItem('familyMembers');
-    if (!existingMembers) {
-      const initialMembers = [
-        {
-          id: 'member-1',
-          name: 'Parent 1',
-          color: '#3B82F6',
-          icon: '👤',
-          age: 'Adult',
-          role: 'Parent',
-          fitnessGoals: { steps: 10000, workouts: 4 }
-        },
-        {
-          id: 'member-2',
-          name: 'Parent 2',
-          color: '#EC4899',
-          icon: '👤',
-          age: 'Adult',
-          role: 'Parent',
-          fitnessGoals: { steps: 8000, workouts: 3 }
-        },
-        {
-          id: 'member-3',
-          name: 'Child 1',
-          color: '#10B981',
-          icon: '🧒',
-          age: 'Preschool',
-          role: 'Student',
-          fitnessGoals: { activeHours: 2, activities: 5 }
-        },
-        {
-          id: 'member-4',
-          name: 'Amari',
-          color: '#F59E0B',
-          icon: '🧒',
-          age: 'Child',
-          role: 'Student',
-          fitnessGoals: { activeHours: 3, activities: 6 }
-        }
-      ];
-      localStorage.setItem('familyMembers', JSON.stringify(initialMembers));
-    }
   }, []);
 
   return null;

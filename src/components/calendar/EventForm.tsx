@@ -97,6 +97,13 @@ const EventForm: React.FC<EventFormProps> = ({
     }
   }, [event, defaultSlot, isOpen])
 
+  // Auto-select first person when people become available
+  useEffect(() => {
+    if (people.length > 0 && !formData.person && !event) {
+      setFormData(prev => ({ ...prev, person: people[0].id }))
+    }
+  }, [people, formData.person, event])
+
   // Apply template
   const applyTemplate = (templateId: string) => {
     const template = templates.find(t => t.id === templateId)
@@ -279,20 +286,28 @@ const EventForm: React.FC<EventFormProps> = ({
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Assigned to *
                 </label>
-                <select
-                  value={formData.person || ''}
-                  onChange={(e) => setFormData(prev => ({ ...prev, person: e.target.value }))}
-                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                    errors.person ? 'border-red-300' : 'border-gray-300'
-                  }`}
-                >
-                  <option value="">Select person</option>
-                  {people.map(person => (
-                    <option key={person.id} value={person.id}>
-                      {person.name}
-                    </option>
-                  ))}
-                </select>
+                {people.length === 0 ? (
+                  <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                    <p className="text-sm text-yellow-700">
+                      No family members found. Please add family members first in the Family section.
+                    </p>
+                  </div>
+                ) : (
+                  <select
+                    value={formData.person || ''}
+                    onChange={(e) => setFormData(prev => ({ ...prev, person: e.target.value }))}
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      errors.person ? 'border-red-300' : 'border-gray-300'
+                    }`}
+                  >
+                    <option value="">Select person</option>
+                    {people.map(person => (
+                      <option key={person.id} value={person.id}>
+                        {person.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
                 {errors.person && (
                   <p className="mt-1 text-sm text-red-600">{errors.person}</p>
                 )}

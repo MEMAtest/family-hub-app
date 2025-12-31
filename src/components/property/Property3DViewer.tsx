@@ -1,10 +1,10 @@
 'use client';
 
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls, Text, Html, PerspectiveCamera } from '@react-three/drei';
-import { useMemo, useState, Suspense } from 'react';
+import { OrbitControls, Html, PerspectiveCamera } from '@react-three/drei';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import * as THREE from 'three';
-import { PropertyComponent, PropertyTask } from '@/types/property.types';
+import type { PropertyComponent, PropertyTask } from '@/types/property.types';
 
 interface Property3DViewerProps {
   components: PropertyComponent[];
@@ -13,330 +13,360 @@ interface Property3DViewerProps {
   onSelectComponent: (componentId: string | null) => void;
 }
 
-// Floor configuration for the Victorian terraced house
-const FLOOR_CONFIG = {
-  cellar: { y: -2, height: 2, color: '#6B7280', label: 'Cellar' },
-  ground: { y: 0, height: 2.8, color: '#D97706', label: 'Ground Floor' },
-  first: { y: 2.8, height: 2.8, color: '#2563EB', label: 'First Floor' },
-  second: { y: 5.6, height: 2.8, color: '#7C3AED', label: 'Second Floor' },
-  roof: { y: 8.4, height: 2, color: '#DC2626', label: 'Roof' },
-  exterior: { y: 3, height: 0, color: '#059669', label: 'Exterior' },
+const HOUSE = {
+  width: 6.6,
+  depth: 6.2,
+  height: 8.4,
+  roofHeight: 2.3,
 };
 
-// Get task counts and priority for a component
+const COLORS = {
+  render: '#F5F2EA',
+  brick: '#A87853',
+  trim: '#F9F9F9',
+  roof: '#7F3B2A',
+  door: '#6B7D82',
+  canopy: '#8A2F2A',
+  windowFrame: '#EDEDED',
+  glass: '#CFE3F6',
+  gutter: '#2F3A3E',
+  chimney: '#7B5238',
+  ground: '#1F2937',
+  hedge: '#2F6B3D',
+};
+
+const STATUS_COLORS = {
+  selected: '#3B82F6',
+  urgent: '#EF4444',
+  outstanding: '#F59E0B',
+  ok: '#22C55E',
+};
+
+const FACADE_TEXTURE = {
+  url: '/assets/property/tremaine/front.jpg',
+  repeat: [1, 1] as const,
+  offset: [0, 0] as const,
+  rotation: 0,
+  center: [0.5, 0.5] as const,
+};
+
+const useFacadeTexture = () => {
+  const [texture, setTexture] = useState<THREE.Texture | null>(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    let isMounted = true;
+    const loader = new THREE.TextureLoader();
+
+    loader.load(
+      FACADE_TEXTURE.url,
+      (loaded) => {
+        if (!isMounted) return;
+        loaded.colorSpace = THREE.SRGBColorSpace;
+        loaded.wrapS = THREE.ClampToEdgeWrapping;
+        loaded.wrapT = THREE.ClampToEdgeWrapping;
+        loaded.repeat.set(...FACADE_TEXTURE.repeat);
+        loaded.offset.set(...FACADE_TEXTURE.offset);
+        loaded.rotation = FACADE_TEXTURE.rotation;
+        loaded.center.set(...FACADE_TEXTURE.center);
+        loaded.anisotropy = 4;
+        setTexture(loaded);
+      },
+      undefined,
+      () => {
+        if (isMounted) setTexture(null);
+      }
+    );
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  return texture;
+};
+
 function getComponentStats(componentId: string, tasks: PropertyTask[]) {
-  const componentTasks = tasks.filter(t => t.components?.includes(componentId));
-  const outstanding = componentTasks.filter(t => t.status !== 'completed').length;
-  const urgent = componentTasks.filter(t => t.priority === 'urgent' && t.status !== 'completed').length;
+  const componentTasks = tasks.filter((t) => t.components?.includes(componentId));
+  const outstanding = componentTasks.filter((t) => t.status !== 'completed').length;
+  const urgent = componentTasks.filter((t) => t.priority === 'urgent' && t.status !== 'completed').length;
   return { total: componentTasks.length, outstanding, urgent };
 }
 
-// Get color based on task status
 function getStatusColor(stats: { outstanding: number; urgent: number }) {
-  if (stats.urgent > 0) return '#EF4444'; // Red for urgent
-  if (stats.outstanding > 0) return '#F59E0B'; // Orange for outstanding
-  return '#22C55E'; // Green for all complete
+  if (stats.urgent > 0) return STATUS_COLORS.urgent;
+  if (stats.outstanding > 0) return STATUS_COLORS.outstanding;
+  return STATUS_COLORS.ok;
 }
 
-// Individual floor component
-function Floor({
-  floor,
-  config,
-  components,
-  tasks,
-  selectedComponent,
-  onSelectComponent,
-  isExterior = false
-}: {
-  floor: string;
-  config: { y: number; height: number; color: string; label: string };
-  components: PropertyComponent[];
-  tasks: PropertyTask[];
-  selectedComponent: string | null;
-  onSelectComponent: (id: string | null) => void;
-  isExterior?: boolean;
-}) {
-  const [hovered, setHovered] = useState<string | null>(null);
-
-  const floorComponents = components.filter(c => c.floor === floor);
-
-  if (isExterior) {
-    // Render exterior elements around the building
-    return (
-      <group>
-        {floorComponents.map((comp, i) => {
-          const stats = getComponentStats(comp.id, tasks);
-          const isSelected = selectedComponent === comp.id;
-          const angle = (i / floorComponents.length) * Math.PI * 2;
-          const radius = 5;
-
-          return (
-            <group key={comp.id} position={[Math.cos(angle) * radius, 3, Math.sin(angle) * radius]}>
-              <mesh
-                onClick={(e) => { e.stopPropagation(); onSelectComponent(isSelected ? null : comp.id); }}
-                onPointerOver={() => setHovered(comp.id)}
-                onPointerOut={() => setHovered(null)}
-              >
-                <sphereGeometry args={[0.5, 16, 16]} />
-                <meshStandardMaterial
-                  color={isSelected ? '#3B82F6' : getStatusColor(stats)}
-                  emissive={hovered === comp.id ? '#ffffff' : '#000000'}
-                  emissiveIntensity={hovered === comp.id ? 0.3 : 0}
-                />
-              </mesh>
-              {hovered === comp.id && (
-                <Html center distanceFactor={10}>
-                  <div className="bg-slate-900 text-white px-2 py-1 rounded text-xs whitespace-nowrap shadow-lg">
-                    <div className="font-medium">{comp.label}</div>
-                    <div className="text-slate-300">{stats.outstanding} tasks</div>
-                  </div>
-                </Html>
-              )}
-            </group>
-          );
-        })}
-      </group>
-    );
-  }
-
-  // Calculate positions for rooms on this floor
-  const roomWidth = 3;
-  const roomDepth = 4;
-  const gap = 0.2;
-
+function StatusBadge({ stats, offset = 0.4 }: { stats: { outstanding: number; urgent: number }; offset?: number }) {
+  if (stats.outstanding <= 0) return null;
   return (
-    <group position={[0, config.y, 0]}>
-      {/* Floor plate */}
-      <mesh position={[0, -0.1, 0]} receiveShadow>
-        <boxGeometry args={[8, 0.2, 6]} />
-        <meshStandardMaterial color={config.color} opacity={0.3} transparent />
-      </mesh>
-
-      {/* Floor label */}
-      <Html position={[-4.5, config.height / 2, 0]} center>
-        <div className="text-xs font-bold text-slate-600 dark:text-slate-300 -rotate-90 whitespace-nowrap">
-          {config.label}
-        </div>
-      </Html>
-
-      {/* Rooms/Components */}
-      {floorComponents.map((comp, i) => {
-        const stats = getComponentStats(comp.id, tasks);
-        const isSelected = selectedComponent === comp.id;
-        const isHovered = hovered === comp.id;
-
-        // Position rooms in a grid
-        const col = i % 2;
-        const row = Math.floor(i / 2);
-        const x = (col - 0.5) * (roomWidth + gap);
-        const z = (row - 0.5) * (roomDepth + gap);
-
-        const roomHeight = comp.type === 'system' ? 1 : config.height * 0.8;
-        const roomY = comp.type === 'system' ? 0.5 : roomHeight / 2;
-
-        return (
-          <group key={comp.id} position={[x, roomY, z]}>
-            <mesh
-              castShadow
-              receiveShadow
-              onClick={(e) => { e.stopPropagation(); onSelectComponent(isSelected ? null : comp.id); }}
-              onPointerOver={() => setHovered(comp.id)}
-              onPointerOut={() => setHovered(null)}
-            >
-              <boxGeometry args={[
-                comp.type === 'system' ? 1.5 : roomWidth - 0.1,
-                roomHeight,
-                comp.type === 'system' ? 1.5 : roomDepth - 0.1
-              ]} />
-              <meshStandardMaterial
-                color={isSelected ? '#3B82F6' : getStatusColor(stats)}
-                opacity={isHovered ? 0.9 : 0.7}
-                transparent
-                emissive={isHovered ? '#ffffff' : '#000000'}
-                emissiveIntensity={isHovered ? 0.2 : 0}
-              />
-            </mesh>
-
-            {/* Wireframe outline */}
-            <lineSegments>
-              <edgesGeometry args={[new THREE.BoxGeometry(
-                comp.type === 'system' ? 1.5 : roomWidth - 0.1,
-                roomHeight,
-                comp.type === 'system' ? 1.5 : roomDepth - 0.1
-              )]} />
-              <lineBasicMaterial color={isSelected ? '#1D4ED8' : '#374151'} />
-            </lineSegments>
-
-            {/* Task indicator badge */}
-            {stats.outstanding > 0 && (
-              <Html position={[0, roomHeight / 2 + 0.3, 0]} center>
-                <div className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold text-white ${
-                  stats.urgent > 0 ? 'bg-red-500' : 'bg-orange-500'
-                }`}>
-                  {stats.outstanding}
-                </div>
-              </Html>
-            )}
-
-            {/* Hover tooltip */}
-            {isHovered && (
-              <Html position={[0, roomHeight / 2 + 0.8, 0]} center>
-                <div className="bg-slate-900 text-white px-3 py-2 rounded-lg text-xs whitespace-nowrap shadow-xl">
-                  <div className="font-semibold">{comp.label}</div>
-                  <div className="text-slate-300 mt-1">
-                    {stats.total} task{stats.total !== 1 ? 's' : ''}
-                    {stats.outstanding > 0 && ` (${stats.outstanding} pending)`}
-                  </div>
-                  {stats.urgent > 0 && (
-                    <div className="text-red-400 mt-0.5">{stats.urgent} urgent</div>
-                  )}
-                </div>
-              </Html>
-            )}
-          </group>
-        );
-      })}
-    </group>
-  );
-}
-
-// Roof structure
-function RoofStructure({ tasks, selectedComponent, onSelectComponent }: {
-  tasks: PropertyTask[];
-  selectedComponent: string | null;
-  onSelectComponent: (id: string | null) => void;
-}) {
-  const [hovered, setHovered] = useState(false);
-  const roofComponents = ['roof-main', 'roof-parapet', 'gutters', 'chimney'];
-
-  const stats = roofComponents.reduce((acc, id) => {
-    const s = getComponentStats(id, tasks);
-    return { total: acc.total + s.total, outstanding: acc.outstanding + s.outstanding, urgent: acc.urgent + s.urgent };
-  }, { total: 0, outstanding: 0, urgent: 0 });
-
-  const isSelected = roofComponents.includes(selectedComponent || '');
-
-  return (
-    <group position={[0, 8.4, 0]}>
-      {/* Main roof - pitched */}
-      <mesh
-        castShadow
-        onClick={(e) => { e.stopPropagation(); onSelectComponent(isSelected ? null : 'roof-main'); }}
-        onPointerOver={() => setHovered(true)}
-        onPointerOut={() => setHovered(false)}
+    <Html position={[0, offset, 0]} center>
+      <div
+        className={`h-5 w-5 rounded-full text-[10px] font-bold text-white flex items-center justify-center shadow-lg ${
+          stats.urgent > 0 ? 'bg-red-500' : 'bg-orange-500'
+        }`}
       >
-        <coneGeometry args={[5, 3, 4]} />
-        <meshStandardMaterial
-          color={isSelected ? '#3B82F6' : getStatusColor(stats)}
-          opacity={hovered ? 0.9 : 0.7}
-          transparent
-        />
-      </mesh>
-
-      {/* Chimney stacks */}
-      <mesh position={[2, 2, 1]} castShadow>
-        <boxGeometry args={[0.8, 2, 0.8]} />
-        <meshStandardMaterial color="#78350F" />
-      </mesh>
-      <mesh position={[-2, 2, -1]} castShadow>
-        <boxGeometry args={[0.8, 2, 0.8]} />
-        <meshStandardMaterial color="#78350F" />
-      </mesh>
-
-      {/* Task badge */}
-      {stats.outstanding > 0 && (
-        <Html position={[0, 3, 0]} center>
-          <div className={`w-6 h-6 rounded-full flex items-center justify-center text-sm font-bold text-white ${
-            stats.urgent > 0 ? 'bg-red-500' : 'bg-orange-500'
-          }`}>
-            {stats.outstanding}
-          </div>
-        </Html>
-      )}
-
-      {hovered && (
-        <Html position={[0, 4, 0]} center>
-          <div className="bg-slate-900 text-white px-3 py-2 rounded-lg text-xs whitespace-nowrap shadow-xl">
-            <div className="font-semibold">Roof & Chimneys</div>
-            <div className="text-slate-300 mt-1">
-              {stats.total} task{stats.total !== 1 ? 's' : ''}
-              {stats.outstanding > 0 && ` (${stats.outstanding} pending)`}
-            </div>
-          </div>
-        </Html>
-      )}
-    </group>
-  );
-}
-
-// Building walls (wireframe)
-function BuildingWalls() {
-  return (
-    <group>
-      {/* Front wall outline */}
-      <lineSegments position={[0, 4.2, 3]}>
-        <edgesGeometry args={[new THREE.PlaneGeometry(8, 8.4)]} />
-        <lineBasicMaterial color="#94A3B8" />
-      </lineSegments>
-
-      {/* Back wall outline */}
-      <lineSegments position={[0, 4.2, -3]}>
-        <edgesGeometry args={[new THREE.PlaneGeometry(8, 8.4)]} />
-        <lineBasicMaterial color="#94A3B8" />
-      </lineSegments>
-
-      {/* Side walls */}
-      <lineSegments position={[4, 4.2, 0]} rotation={[0, Math.PI / 2, 0]}>
-        <edgesGeometry args={[new THREE.PlaneGeometry(6, 8.4)]} />
-        <lineBasicMaterial color="#94A3B8" />
-      </lineSegments>
-      <lineSegments position={[-4, 4.2, 0]} rotation={[0, Math.PI / 2, 0]}>
-        <edgesGeometry args={[new THREE.PlaneGeometry(6, 8.4)]} />
-        <lineBasicMaterial color="#94A3B8" />
-      </lineSegments>
-    </group>
-  );
-}
-
-// Ground plane
-function Ground() {
-  return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -2.2, 0]} receiveShadow>
-      <planeGeometry args={[20, 20]} />
-      <meshStandardMaterial color="#1E293B" opacity={0.5} transparent />
-    </mesh>
-  );
-}
-
-// Legend component
-function Legend() {
-  return (
-    <div className="absolute bottom-4 left-4 bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm rounded-lg p-3 shadow-lg">
-      <div className="text-xs font-semibold text-slate-700 dark:text-slate-200 mb-2">Task Status</div>
-      <div className="space-y-1.5">
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-red-500"></div>
-          <span className="text-xs text-slate-600 dark:text-slate-300">Urgent tasks</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-orange-500"></div>
-          <span className="text-xs text-slate-600 dark:text-slate-300">Outstanding tasks</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-green-500"></div>
-          <span className="text-xs text-slate-600 dark:text-slate-300">All complete</span>
-        </div>
+        {stats.outstanding}
       </div>
-      <div className="mt-3 pt-2 border-t border-slate-200 dark:border-slate-600">
-        <div className="text-xs text-slate-500 dark:text-slate-400">
-          Click a room to filter tasks
-        </div>
+    </Html>
+  );
+}
+
+function Tooltip({ label, stats }: { label: string; stats: { total: number; outstanding: number; urgent: number } }) {
+  return (
+    <div className="bg-slate-900 text-white px-3 py-2 rounded-lg text-xs whitespace-nowrap shadow-xl">
+      <div className="font-semibold">{label}</div>
+      <div className="text-slate-300 mt-1">
+        {stats.total} task{stats.total !== 1 ? 's' : ''}
+        {stats.outstanding > 0 && ` (${stats.outstanding} pending)`}
       </div>
+      {stats.urgent > 0 && (
+        <div className="text-red-400 mt-0.5">{stats.urgent} urgent</div>
+      )}
     </div>
   );
 }
 
-// Loading fallback
+function InteractiveMesh({
+  id,
+  label,
+  stats,
+  geometry,
+  position,
+  rotation,
+  baseColor,
+  opacity = 1,
+  transparent = false,
+  selectedComponent,
+  hoveredId,
+  setHoveredId,
+  onSelect,
+  badgeOffset,
+}: {
+  id: string;
+  label: string;
+  stats: { total: number; outstanding: number; urgent: number };
+  geometry: THREE.BufferGeometry;
+  position?: [number, number, number];
+  rotation?: [number, number, number];
+  baseColor: string;
+  opacity?: number;
+  transparent?: boolean;
+  selectedComponent: string | null;
+  hoveredId: string | null;
+  setHoveredId: (id: string | null) => void;
+  onSelect: (id: string) => void;
+  badgeOffset?: number;
+}) {
+  const isSelected = selectedComponent === id;
+  const isHovered = hoveredId === id;
+  const statusColor = getStatusColor(stats);
+
+  return (
+    <group position={position} rotation={rotation}>
+      <mesh
+        geometry={geometry}
+        onClick={(event) => {
+          event.stopPropagation();
+          onSelect(id);
+        }}
+        onPointerOver={(event) => {
+          event.stopPropagation();
+          setHoveredId(id);
+        }}
+        onPointerOut={() => setHoveredId(null)}
+        castShadow
+        receiveShadow
+      >
+        <meshStandardMaterial
+          color={baseColor}
+          transparent={transparent}
+          opacity={opacity}
+          emissive={isSelected ? STATUS_COLORS.selected : statusColor}
+          emissiveIntensity={isSelected ? 0.35 : stats.outstanding > 0 ? 0.12 : 0.05}
+        />
+      </mesh>
+
+      <StatusBadge stats={stats} offset={badgeOffset ?? 0.5} />
+
+      {isHovered && (
+        <Html position={[0, (badgeOffset ?? 0.5) + 0.4, 0]} center>
+          <Tooltip label={label} stats={stats} />
+        </Html>
+      )}
+    </group>
+  );
+}
+
+function HouseWindows({ baseZ }: { baseZ: number }) {
+  return (
+    <group>
+      {/* Upper floor windows */}
+      {[-1.2, 1.2].map((x) => (
+        <group key={`top-window-${x}`} position={[x, 6.6, baseZ]}>
+          <mesh>
+            <boxGeometry args={[1.1, 1.4, 0.08]} />
+            <meshStandardMaterial color={COLORS.windowFrame} />
+          </mesh>
+          <mesh position={[0, 0, 0.05]}>
+            <planeGeometry args={[0.9, 1.2]} />
+            <meshStandardMaterial color={COLORS.glass} transparent opacity={0.7} />
+          </mesh>
+        </group>
+      ))}
+
+      {/* First floor windows */}
+      {[-1.5, 1.5].map((x) => (
+        <group key={`mid-window-${x}`} position={[x, 4.2, baseZ]}>
+          <mesh>
+            <boxGeometry args={[1.2, 1.6, 0.08]} />
+            <meshStandardMaterial color={COLORS.windowFrame} />
+          </mesh>
+          <mesh position={[0, 0, 0.05]}>
+            <planeGeometry args={[1, 1.4]} />
+            <meshStandardMaterial color={COLORS.glass} transparent opacity={0.7} />
+          </mesh>
+        </group>
+      ))}
+    </group>
+  );
+}
+
+function BayWindow({ baseZ }: { baseZ: number }) {
+  const bayGeometry = useMemo(
+    () => new THREE.CylinderGeometry(1.2, 1.2, 1.25, 24, 1, false, Math.PI / 2, Math.PI),
+    []
+  );
+
+  return (
+    <group position={[-1.1, 1.2, baseZ + 0.6]} rotation={[0, Math.PI, 0]}>
+      <mesh geometry={bayGeometry} castShadow receiveShadow>
+        <meshStandardMaterial color={COLORS.render} />
+      </mesh>
+      <mesh position={[0, 0.9, 0.05]}>
+        <boxGeometry args={[2, 0.35, 0.7]} />
+        <meshStandardMaterial color={COLORS.canopy} />
+      </mesh>
+      <mesh position={[0, 0, 0.05]}>
+        <planeGeometry args={[1.8, 0.9]} />
+        <meshStandardMaterial color={COLORS.glass} transparent opacity={0.6} />
+      </mesh>
+    </group>
+  );
+}
+
+function Doorway({ baseZ }: { baseZ: number }) {
+  return (
+    <group position={[1.6, 1.1, baseZ + 0.02]}>
+      <mesh>
+        <boxGeometry args={[0.9, 2.2, 0.12]} />
+        <meshStandardMaterial color={COLORS.door} />
+      </mesh>
+      <mesh position={[0, 1.2, 0.02]}>
+        <boxGeometry args={[1.2, 0.5, 0.08]} />
+        <meshStandardMaterial color={COLORS.trim} />
+      </mesh>
+    </group>
+  );
+}
+
+function Roof({ stats, selectedComponent, hoveredId, setHoveredId, onSelect }: {
+  stats: { total: number; outstanding: number; urgent: number };
+  selectedComponent: string | null;
+  hoveredId: string | null;
+  setHoveredId: (id: string | null) => void;
+  onSelect: (id: string) => void;
+}) {
+  const roofShape = useMemo(() => {
+    const shape = new THREE.Shape();
+    const halfWidth = HOUSE.width / 2 + 0.2;
+    shape.moveTo(-halfWidth, 0);
+    shape.lineTo(0, HOUSE.roofHeight);
+    shape.lineTo(halfWidth, 0);
+    shape.closePath();
+
+    const geometry = new THREE.ExtrudeGeometry(shape, {
+      depth: HOUSE.depth + 0.4,
+      bevelEnabled: false,
+    });
+    geometry.translate(0, 0, -(HOUSE.depth + 0.4) / 2);
+    return geometry;
+  }, []);
+
+  return (
+    <group position={[0, HOUSE.height, 0]}>
+      <InteractiveMesh
+        id="roof-main"
+        label="Main roof"
+        stats={stats}
+        geometry={roofShape}
+        baseColor={COLORS.roof}
+        selectedComponent={selectedComponent}
+        hoveredId={hoveredId}
+        setHoveredId={setHoveredId}
+        onSelect={onSelect}
+        badgeOffset={HOUSE.roofHeight + 0.2}
+      />
+    </group>
+  );
+}
+
+function UtilityHotspot({
+  id,
+  label,
+  position,
+  stats,
+  selectedComponent,
+  hoveredId,
+  setHoveredId,
+  onSelect,
+}: {
+  id: string;
+  label: string;
+  position: [number, number, number];
+  stats: { total: number; outstanding: number; urgent: number };
+  selectedComponent: string | null;
+  hoveredId: string | null;
+  setHoveredId: (id: string | null) => void;
+  onSelect: (id: string) => void;
+}) {
+  const geometry = useMemo(() => new THREE.SphereGeometry(0.25, 16, 16), []);
+  return (
+    <InteractiveMesh
+      id={id}
+      label={label}
+      stats={stats}
+      geometry={geometry}
+      baseColor="#F8FAFC"
+      transparent
+      opacity={0.9}
+      selectedComponent={selectedComponent}
+      hoveredId={hoveredId}
+      setHoveredId={setHoveredId}
+      onSelect={onSelect}
+      badgeOffset={0.45}
+      position={position}
+    />
+  );
+}
+
+function GroundScene() {
+  return (
+    <group>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.05, 0]} receiveShadow>
+        <planeGeometry args={[30, 30]} />
+        <meshStandardMaterial color={COLORS.ground} opacity={0.7} transparent />
+      </mesh>
+      <mesh position={[-6, 0.4, 2]}>
+        <boxGeometry args={[4, 0.8, 3]} />
+        <meshStandardMaterial color={COLORS.hedge} />
+      </mesh>
+    </group>
+  );
+}
+
 function LoadingFallback() {
   return (
     <div className="w-full h-full flex items-center justify-center bg-slate-100 dark:bg-slate-900">
@@ -352,105 +382,315 @@ export default function Property3DViewer({
   components,
   tasks,
   selectedComponent,
-  onSelectComponent
+  onSelectComponent,
 }: Property3DViewerProps) {
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const facadeTexture = useFacadeTexture();
+
+  const componentStats = useMemo(() => {
+    const stats = new Map<string, { total: number; outstanding: number; urgent: number }>();
+    components.forEach((component) => {
+      stats.set(component.id, getComponentStats(component.id, tasks));
+    });
+    return stats;
+  }, [components, tasks]);
+
+  const componentLabels = useMemo(() => {
+    const map = new Map<string, string>();
+    components.forEach((component) => map.set(component.id, component.label));
+    return map;
+  }, [components]);
+
+  const getStats = (id: string) => componentStats.get(id) ?? { total: 0, outstanding: 0, urgent: 0 };
+  const getLabel = (id: string) => componentLabels.get(id) ?? id;
+
+  const handleSelect = (id: string) => {
+    onSelectComponent(selectedComponent === id ? null : id);
+  };
+
+  const baseZ = HOUSE.depth / 2 + 0.02;
+  const chimneyGeometry = useMemo(() => new THREE.BoxGeometry(0.7, 1.8, 0.7), []);
+  const gutterGeometry = useMemo(() => new THREE.BoxGeometry(HOUSE.width + 0.3, 0.15, 0.2), []);
+  const parapetGeometry = useMemo(() => new THREE.BoxGeometry(HOUSE.width + 0.4, 0.25, 0.2), []);
+  const windowsHitboxGeometry = useMemo(() => new THREE.BoxGeometry(4.8, 4.8, 0.2), []);
+  const doorHitboxGeometry = useMemo(() => new THREE.BoxGeometry(1.2, 2.4, 0.2), []);
+
+  const facadeMaterial = facadeTexture
+    ? {
+        map: facadeTexture,
+        color: '#ffffff',
+        roughness: 0.88,
+        metalness: 0.05,
+      }
+    : {
+        color: COLORS.render,
+        roughness: 0.9,
+        metalness: 0.05,
+      };
+
   return (
     <div className="relative w-full h-[500px] rounded-xl overflow-hidden bg-gradient-to-b from-slate-100 to-slate-200 dark:from-slate-900 dark:to-slate-800">
-      <Suspense fallback={<LoadingFallback />}>
+      <Suspense fallback={<LoadingFallback />}> 
         <Canvas shadows>
-          <PerspectiveCamera makeDefault position={[12, 10, 12]} fov={50} />
-
-          {/* Lighting */}
-          <ambientLight intensity={0.5} />
+          <PerspectiveCamera makeDefault position={[12, 8, 12]} fov={45} />
+          <ambientLight intensity={0.6} />
           <directionalLight
-            position={[10, 15, 10]}
-            intensity={1}
+            position={[12, 16, 8]}
+            intensity={1.1}
             castShadow
             shadow-mapSize={[2048, 2048]}
           />
-          <pointLight position={[-10, 10, -10]} intensity={0.3} />
+          <pointLight position={[-8, 10, -8]} intensity={0.35} />
 
-          {/* Ground */}
-          <Ground />
+          <GroundScene />
 
-          {/* Building structure */}
-          <BuildingWalls />
+          {/* Main house body */}
+          <mesh position={[0, HOUSE.height / 2, 0]} castShadow receiveShadow>
+            <boxGeometry args={[HOUSE.width, HOUSE.height, HOUSE.depth]} />
+            <meshStandardMaterial color={COLORS.brick} />
+          </mesh>
+          <mesh position={[0, HOUSE.height / 2, HOUSE.depth / 2 + 0.01]}>
+            <planeGeometry args={[HOUSE.width - 0.3, HOUSE.height - 0.4]} />
+            <meshStandardMaterial {...facadeMaterial} />
+          </mesh>
 
-          {/* Floors */}
-          <Floor
-            floor="cellar"
-            config={FLOOR_CONFIG.cellar}
-            components={components}
-            tasks={tasks}
+          {/* Roof + gutters + chimney */}
+          <Roof
+            stats={getStats('roof-main')}
             selectedComponent={selectedComponent}
-            onSelectComponent={onSelectComponent}
-          />
-          <Floor
-            floor="ground"
-            config={FLOOR_CONFIG.ground}
-            components={components}
-            tasks={tasks}
-            selectedComponent={selectedComponent}
-            onSelectComponent={onSelectComponent}
-          />
-          <Floor
-            floor="first"
-            config={FLOOR_CONFIG.first}
-            components={components}
-            tasks={tasks}
-            selectedComponent={selectedComponent}
-            onSelectComponent={onSelectComponent}
-          />
-          <Floor
-            floor="second"
-            config={FLOOR_CONFIG.second}
-            components={components}
-            tasks={tasks}
-            selectedComponent={selectedComponent}
-            onSelectComponent={onSelectComponent}
+            hoveredId={hoveredId}
+            setHoveredId={setHoveredId}
+            onSelect={handleSelect}
           />
 
-          {/* Roof */}
-          <RoofStructure
-            tasks={tasks}
+          <InteractiveMesh
+            id="chimney"
+            label={getLabel('chimney')}
+            stats={getStats('chimney')}
+            geometry={chimneyGeometry}
+            baseColor={COLORS.chimney}
             selectedComponent={selectedComponent}
-            onSelectComponent={onSelectComponent}
+            hoveredId={hoveredId}
+            setHoveredId={setHoveredId}
+            onSelect={handleSelect}
+            position={[1.6, HOUSE.height + 1.3, -1]}
           />
 
-          {/* Exterior elements */}
-          <Floor
-            floor="exterior"
-            config={FLOOR_CONFIG.exterior}
-            components={components}
-            tasks={tasks}
+          <InteractiveMesh
+            id="gutters"
+            label={getLabel('gutters')}
+            stats={getStats('gutters')}
+            geometry={gutterGeometry}
+            baseColor={COLORS.gutter}
             selectedComponent={selectedComponent}
-            onSelectComponent={onSelectComponent}
-            isExterior
+            hoveredId={hoveredId}
+            setHoveredId={setHoveredId}
+            onSelect={handleSelect}
+            position={[0, HOUSE.height - 0.1, HOUSE.depth / 2 + 0.15]}
+            badgeOffset={0.3}
           />
 
-          {/* Controls */}
+          <InteractiveMesh
+            id="roof-parapet"
+            label={getLabel('roof-parapet')}
+            stats={getStats('roof-parapet')}
+            geometry={parapetGeometry}
+            baseColor={COLORS.trim}
+            selectedComponent={selectedComponent}
+            hoveredId={hoveredId}
+            setHoveredId={setHoveredId}
+            onSelect={handleSelect}
+            position={[0, HOUSE.height - 0.45, HOUSE.depth / 2 - 0.05]}
+            badgeOffset={0.3}
+          />
+
+          {/* Facade details */}
+          <BayWindow baseZ={baseZ} />
+          <Doorway baseZ={baseZ} />
+          <HouseWindows baseZ={baseZ} />
+
+          {/* Window hitbox for tasks */}
+          <InteractiveMesh
+            id="windows"
+            label={getLabel('windows')}
+            stats={getStats('windows')}
+            geometry={windowsHitboxGeometry}
+            baseColor={COLORS.render}
+            transparent
+            opacity={0.05}
+            selectedComponent={selectedComponent}
+            hoveredId={hoveredId}
+            setHoveredId={setHoveredId}
+            onSelect={handleSelect}
+            position={[0, 5.2, HOUSE.depth / 2 + 0.12]}
+            badgeOffset={2.4}
+          />
+
+          <InteractiveMesh
+            id="doors"
+            label={getLabel('doors')}
+            stats={getStats('doors')}
+            geometry={doorHitboxGeometry}
+            baseColor={COLORS.render}
+            transparent
+            opacity={0.05}
+            selectedComponent={selectedComponent}
+            hoveredId={hoveredId}
+            setHoveredId={setHoveredId}
+            onSelect={handleSelect}
+            position={[1.6, 1.2, HOUSE.depth / 2 + 0.12]}
+            badgeOffset={1.4}
+          />
+
+          {/* Interior hotspots */}
+          <UtilityHotspot
+            id="cellar"
+            label={getLabel('cellar')}
+            position={[-1.5, -1.2, 0]}
+            stats={getStats('cellar')}
+            selectedComponent={selectedComponent}
+            hoveredId={hoveredId}
+            setHoveredId={setHoveredId}
+            onSelect={handleSelect}
+          />
+          <UtilityHotspot
+            id="kitchen"
+            label={getLabel('kitchen')}
+            position={[-1.2, 1.2, -1.6]}
+            stats={getStats('kitchen')}
+            selectedComponent={selectedComponent}
+            hoveredId={hoveredId}
+            setHoveredId={setHoveredId}
+            onSelect={handleSelect}
+          />
+          <UtilityHotspot
+            id="bathroom"
+            label={getLabel('bathroom')}
+            position={[1.2, 4.1, -1.4]}
+            stats={getStats('bathroom')}
+            selectedComponent={selectedComponent}
+            hoveredId={hoveredId}
+            setHoveredId={setHoveredId}
+            onSelect={handleSelect}
+          />
+          <UtilityHotspot
+            id="bedroom-front-2"
+            label={getLabel('bedroom-front-2')}
+            position={[-1.2, 6.4, 1.4]}
+            stats={getStats('bedroom-front-2')}
+            selectedComponent={selectedComponent}
+            hoveredId={hoveredId}
+            setHoveredId={setHoveredId}
+            onSelect={handleSelect}
+          />
+          <UtilityHotspot
+            id="bedroom-rear-2"
+            label={getLabel('bedroom-rear-2')}
+            position={[1.2, 6.4, -1.6]}
+            stats={getStats('bedroom-rear-2')}
+            selectedComponent={selectedComponent}
+            hoveredId={hoveredId}
+            setHoveredId={setHoveredId}
+            onSelect={handleSelect}
+          />
+          <UtilityHotspot
+            id="electrics"
+            label={getLabel('electrics')}
+            position={[-2.2, 1.2, -0.2]}
+            stats={getStats('electrics')}
+            selectedComponent={selectedComponent}
+            hoveredId={hoveredId}
+            setHoveredId={setHoveredId}
+            onSelect={handleSelect}
+          />
+          <UtilityHotspot
+            id="heating"
+            label={getLabel('heating')}
+            position={[2.2, 1.2, -0.2]}
+            stats={getStats('heating')}
+            selectedComponent={selectedComponent}
+            hoveredId={hoveredId}
+            setHoveredId={setHoveredId}
+            onSelect={handleSelect}
+          />
+          <UtilityHotspot
+            id="plumbing"
+            label={getLabel('plumbing')}
+            position={[0, 1.2, -2.2]}
+            stats={getStats('plumbing')}
+            selectedComponent={selectedComponent}
+            hoveredId={hoveredId}
+            setHoveredId={setHoveredId}
+            onSelect={handleSelect}
+          />
+          <UtilityHotspot
+            id="fire-safety"
+            label={getLabel('fire-safety')}
+            position={[0, 4.1, 0]}
+            stats={getStats('fire-safety')}
+            selectedComponent={selectedComponent}
+            hoveredId={hoveredId}
+            setHoveredId={setHoveredId}
+            onSelect={handleSelect}
+          />
+          <UtilityHotspot
+            id="drainage"
+            label={getLabel('drainage')}
+            position={[2.6, 0.6, HOUSE.depth / 2 + 0.8]}
+            stats={getStats('drainage')}
+            selectedComponent={selectedComponent}
+            hoveredId={hoveredId}
+            setHoveredId={setHoveredId}
+            onSelect={handleSelect}
+          />
+
           <OrbitControls
-            enablePan={true}
-            enableZoom={true}
-            enableRotate={true}
+            enablePan
+            enableZoom
+            enableRotate
             minDistance={8}
-            maxDistance={30}
+            maxDistance={28}
             maxPolarAngle={Math.PI / 2}
           />
         </Canvas>
       </Suspense>
 
-      {/* Legend overlay */}
-      <Legend />
-
-      {/* Controls hint */}
-      <div className="absolute top-4 right-4 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-lg px-3 py-2 text-xs text-slate-600 dark:text-slate-300">
-        <div className="flex items-center gap-2">
-          <span>🖱️ Drag to rotate</span>
-          <span className="text-slate-400">|</span>
-          <span>🔍 Scroll to zoom</span>
+      <div className="absolute bottom-4 left-4 bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm rounded-lg p-3 shadow-lg">
+        <div className="text-xs font-semibold text-slate-700 dark:text-slate-200 mb-2">Task Status</div>
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-red-500"></div>
+            <span className="text-xs text-slate-600 dark:text-slate-300">Urgent tasks</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-orange-500"></div>
+            <span className="text-xs text-slate-600 dark:text-slate-300">Outstanding tasks</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-green-500"></div>
+            <span className="text-xs text-slate-600 dark:text-slate-300">All complete</span>
+          </div>
+        </div>
+        <div className="mt-3 pt-2 border-t border-slate-200 dark:border-slate-600">
+          <div className="text-xs text-slate-500 dark:text-slate-400">
+            Click a highlighted element to filter tasks
+          </div>
         </div>
       </div>
+
+      <div className="absolute top-4 right-4 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-lg px-3 py-2 text-xs text-slate-600 dark:text-slate-300">
+        <div className="flex items-center gap-2">
+          <span>Drag to rotate</span>
+          <span className="text-slate-400">|</span>
+          <span>Scroll to zoom</span>
+        </div>
+      </div>
+
+      {!facadeTexture && (
+        <div className="absolute top-4 left-4 max-w-[220px] rounded-lg bg-amber-50/90 px-3 py-2 text-xs text-amber-800 shadow-sm">
+          Add `public/assets/property/tremaine/front.jpg` to texture the facade.
+        </div>
+      )}
     </div>
   );
 }

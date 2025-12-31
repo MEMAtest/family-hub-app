@@ -1,19 +1,53 @@
 'use client'
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useFamilyStore, FamilyState } from '@/store/familyStore';
-
-// Auth is currently disabled - this hook uses localStorage mode only
-// To re-enable auth-based database sync, import and use useAuth from AuthContext
+import databaseService from '@/services/databaseService';
 
 export const useDatabaseSync = () => {
   const setDatabaseStatus = useFamilyStore((state: FamilyState) => state.setDatabaseStatus);
+  const hasInitialized = useRef(false);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    if (hasInitialized.current) return;
+    hasInitialized.current = true;
 
-    // Auth is disabled - use localStorage mode
-    console.log('📦 Using localStorage mode (auth disabled)');
-    setDatabaseStatus({ connected: false, familyId: null, mode: 'localStorage' });
+    const initDatabase = async () => {
+      console.log('🔄 Initializing database connection...');
+
+      try {
+        const connected = await databaseService.initialize();
+        const status = databaseService.getStatus();
+
+        if (connected) {
+          console.log('✅ Database connected:', status);
+          setDatabaseStatus({
+            connected: true,
+            familyId: status.familyId,
+            mode: 'database',
+          });
+        } else {
+          console.log('📦 Falling back to localStorage mode');
+          // Try to get familyId from localStorage for offline operation
+          const storedFamilyId = localStorage.getItem('familyId');
+          setDatabaseStatus({
+            connected: false,
+            familyId: storedFamilyId,
+            mode: 'localStorage',
+          });
+        }
+      } catch (error) {
+        console.error('Database initialization failed:', error);
+        const storedFamilyId = localStorage.getItem('familyId');
+        setDatabaseStatus({
+          connected: false,
+          familyId: storedFamilyId,
+          mode: 'localStorage',
+        });
+      }
+    };
+
+    initDatabase();
   }, [setDatabaseStatus]);
 };

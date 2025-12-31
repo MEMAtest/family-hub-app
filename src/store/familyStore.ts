@@ -1,7 +1,7 @@
 import { create, StateCreator } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { CalendarEvent, EventTemplate } from '@/types/calendar.types';
-import { FamilyMember } from '@/types';
+import { FamilyMember, FamilyMilestone } from '@/types';
 import {
   AreaWatchItem,
   PropertyBaseline,
@@ -10,6 +10,14 @@ import {
   PropertyValueEntry,
   PropertyWorkLog,
   PropertyDocument,
+  TaskContact,
+  TaskQuote,
+  TaskScheduledVisit,
+  TaskFollowUp,
+  PropertyProject,
+  ProjectEmail,
+  ProjectTask,
+  ProjectMilestone,
 } from '@/types/property.types';
 import {
   tremaineRoadAreaWatch,
@@ -137,6 +145,14 @@ interface GoalsSlice {
   updateGoalsData: (updates: Partial<GoalsData>) => void;
 }
 
+interface TimelineSlice {
+  familyMilestones: FamilyMilestone[];
+  setFamilyMilestones: (milestones: FamilyMilestone[]) => void;
+  addFamilyMilestone: (milestone: FamilyMilestone) => void;
+  updateFamilyMilestone: (id: string, updates: Partial<FamilyMilestone>) => void;
+  deleteFamilyMilestone: (id: string) => void;
+}
+
 interface PropertySlice {
   propertyProfile: PropertyBaseline;
   propertyTasks: PropertyTask[];
@@ -162,6 +178,52 @@ interface PropertySlice {
   removeAreaWatchItem: (id: string) => void;
   setPropertyComponents: (components: PropertyComponent[]) => void;
   setPropertyRole: (role: 'owner' | 'contractor' | 'viewer') => void;
+  // CRM Actions
+  addTaskContact: (taskId: string, contact: TaskContact) => void;
+  updateTaskContact: (taskId: string, contactId: string, updates: Partial<TaskContact>) => void;
+  removeTaskContact: (taskId: string, contactId: string) => void;
+  addTaskQuote: (taskId: string, quote: TaskQuote) => void;
+  updateTaskQuote: (taskId: string, quoteId: string, updates: Partial<TaskQuote>) => void;
+  removeTaskQuote: (taskId: string, quoteId: string) => void;
+  addTaskVisit: (taskId: string, visit: TaskScheduledVisit) => void;
+  updateTaskVisit: (taskId: string, visitId: string, updates: Partial<TaskScheduledVisit>) => void;
+  removeTaskVisit: (taskId: string, visitId: string) => void;
+  addTaskFollowUp: (taskId: string, followUp: TaskFollowUp) => void;
+  updateTaskFollowUp: (taskId: string, followUpId: string, updates: Partial<TaskFollowUp>) => void;
+  removeTaskFollowUp: (taskId: string, followUpId: string) => void;
+  // Projects
+  propertyProjects: PropertyProject[];
+  activeProjectId: string | null;
+  setPropertyProjects: (projects: PropertyProject[]) => void;
+  addPropertyProject: (project: PropertyProject) => void;
+  updatePropertyProject: (id: string, updates: Partial<PropertyProject>) => void;
+  removePropertyProject: (id: string) => void;
+  setActiveProject: (id: string | null) => void;
+  // Project Emails
+  addProjectEmail: (projectId: string, email: ProjectEmail) => void;
+  updateProjectEmail: (projectId: string, emailId: string, updates: Partial<ProjectEmail>) => void;
+  removeProjectEmail: (projectId: string, emailId: string) => void;
+  // Project Tasks
+  addProjectTask: (projectId: string, task: ProjectTask) => void;
+  updateProjectTask: (projectId: string, taskId: string, updates: Partial<ProjectTask>) => void;
+  removeProjectTask: (projectId: string, taskId: string) => void;
+  // Project Milestones
+  addProjectMilestone: (projectId: string, milestone: ProjectMilestone) => void;
+  updateProjectMilestone: (projectId: string, milestoneId: string, updates: Partial<ProjectMilestone>) => void;
+  removeProjectMilestone: (projectId: string, milestoneId: string) => void;
+  // Project CRM
+  addProjectContact: (projectId: string, contact: TaskContact) => void;
+  updateProjectContact: (projectId: string, contactId: string, updates: Partial<TaskContact>) => void;
+  removeProjectContact: (projectId: string, contactId: string) => void;
+  addProjectQuote: (projectId: string, quote: TaskQuote) => void;
+  updateProjectQuote: (projectId: string, quoteId: string, updates: Partial<TaskQuote>) => void;
+  removeProjectQuote: (projectId: string, quoteId: string) => void;
+  addProjectVisit: (projectId: string, visit: TaskScheduledVisit) => void;
+  updateProjectVisit: (projectId: string, visitId: string, updates: Partial<TaskScheduledVisit>) => void;
+  removeProjectVisit: (projectId: string, visitId: string) => void;
+  addProjectFollowUp: (projectId: string, followUp: TaskFollowUp) => void;
+  updateProjectFollowUp: (projectId: string, followUpId: string, updates: Partial<TaskFollowUp>) => void;
+  removeProjectFollowUp: (projectId: string, followUpId: string) => void;
 }
 
 interface DatabaseSlice {
@@ -174,7 +236,7 @@ interface DatabaseSlice {
 }
 
 // Combined state
-export type FamilyState = PeopleSlice & CalendarSlice & ViewSlice & BudgetSlice & MealPlanningSlice & ShoppingSlice & GoalsSlice & PropertySlice & DatabaseSlice;
+export type FamilyState = PeopleSlice & CalendarSlice & ViewSlice & BudgetSlice & MealPlanningSlice & ShoppingSlice & GoalsSlice & TimelineSlice & PropertySlice & DatabaseSlice;
 
 // =================================================================
 // SLICE CREATORS
@@ -288,6 +350,23 @@ const createGoalsSlice: StateCreator<FamilyState, [], [], GoalsSlice> = (set) =>
     })),
 });
 
+const createTimelineSlice: StateCreator<FamilyState, [], [], TimelineSlice> = (set) => ({
+  familyMilestones: [],
+  setFamilyMilestones: (milestones) => set({ familyMilestones: milestones }),
+  addFamilyMilestone: (milestone) =>
+    set((state) => ({ familyMilestones: [...state.familyMilestones, milestone] })),
+  updateFamilyMilestone: (id, updates) =>
+    set((state) => ({
+      familyMilestones: state.familyMilestones.map((milestone) =>
+        milestone.id === id ? { ...milestone, ...updates } : milestone
+      ),
+    })),
+  deleteFamilyMilestone: (id) =>
+    set((state) => ({
+      familyMilestones: state.familyMilestones.filter((milestone) => milestone.id !== id),
+    })),
+});
+
 const createPropertySlice: StateCreator<FamilyState, [], [], PropertySlice> = (set) => ({
   propertyProfile: tremaineRoadBaseline,
   propertyTasks: tremaineRoadTasks,
@@ -363,6 +442,380 @@ const createPropertySlice: StateCreator<FamilyState, [], [], PropertySlice> = (s
     })),
   setPropertyComponents: (components) => set({ propertyComponents: components }),
   setPropertyRole: (role) => set({ propertyRole: role }),
+  // CRM Actions
+  addTaskContact: (taskId, contact) =>
+    set((state) => ({
+      propertyTasks: state.propertyTasks.map((task) =>
+        task.id === taskId
+          ? {
+              ...task,
+              contacts: [...(task.contacts || []), contact],
+              updatedAt: new Date().toISOString(),
+            }
+          : task
+      ),
+    })),
+  updateTaskContact: (taskId, contactId, updates) =>
+    set((state) => ({
+      propertyTasks: state.propertyTasks.map((task) =>
+        task.id === taskId
+          ? {
+              ...task,
+              contacts: (task.contacts || []).map((c) =>
+                c.id === contactId ? { ...c, ...updates } : c
+              ),
+              updatedAt: new Date().toISOString(),
+            }
+          : task
+      ),
+    })),
+  removeTaskContact: (taskId, contactId) =>
+    set((state) => ({
+      propertyTasks: state.propertyTasks.map((task) =>
+        task.id === taskId
+          ? {
+              ...task,
+              contacts: (task.contacts || []).filter((c) => c.id !== contactId),
+              updatedAt: new Date().toISOString(),
+            }
+          : task
+      ),
+    })),
+  addTaskQuote: (taskId, quote) =>
+    set((state) => ({
+      propertyTasks: state.propertyTasks.map((task) =>
+        task.id === taskId
+          ? {
+              ...task,
+              quotes: [...(task.quotes || []), quote],
+              updatedAt: new Date().toISOString(),
+            }
+          : task
+      ),
+    })),
+  updateTaskQuote: (taskId, quoteId, updates) =>
+    set((state) => ({
+      propertyTasks: state.propertyTasks.map((task) =>
+        task.id === taskId
+          ? {
+              ...task,
+              quotes: (task.quotes || []).map((q) =>
+                q.id === quoteId ? { ...q, ...updates } : q
+              ),
+              updatedAt: new Date().toISOString(),
+            }
+          : task
+      ),
+    })),
+  removeTaskQuote: (taskId, quoteId) =>
+    set((state) => ({
+      propertyTasks: state.propertyTasks.map((task) =>
+        task.id === taskId
+          ? {
+              ...task,
+              quotes: (task.quotes || []).filter((q) => q.id !== quoteId),
+              updatedAt: new Date().toISOString(),
+            }
+          : task
+      ),
+    })),
+  addTaskVisit: (taskId, visit) =>
+    set((state) => ({
+      propertyTasks: state.propertyTasks.map((task) =>
+        task.id === taskId
+          ? {
+              ...task,
+              scheduledVisits: [...(task.scheduledVisits || []), visit],
+              updatedAt: new Date().toISOString(),
+            }
+          : task
+      ),
+    })),
+  updateTaskVisit: (taskId, visitId, updates) =>
+    set((state) => ({
+      propertyTasks: state.propertyTasks.map((task) =>
+        task.id === taskId
+          ? {
+              ...task,
+              scheduledVisits: (task.scheduledVisits || []).map((v) =>
+                v.id === visitId ? { ...v, ...updates } : v
+              ),
+              updatedAt: new Date().toISOString(),
+            }
+          : task
+      ),
+    })),
+  removeTaskVisit: (taskId, visitId) =>
+    set((state) => ({
+      propertyTasks: state.propertyTasks.map((task) =>
+        task.id === taskId
+          ? {
+              ...task,
+              scheduledVisits: (task.scheduledVisits || []).filter((v) => v.id !== visitId),
+              updatedAt: new Date().toISOString(),
+            }
+          : task
+      ),
+    })),
+  addTaskFollowUp: (taskId, followUp) =>
+    set((state) => ({
+      propertyTasks: state.propertyTasks.map((task) =>
+        task.id === taskId
+          ? {
+              ...task,
+              followUps: [...(task.followUps || []), followUp],
+              updatedAt: new Date().toISOString(),
+            }
+          : task
+      ),
+    })),
+  updateTaskFollowUp: (taskId, followUpId, updates) =>
+    set((state) => ({
+      propertyTasks: state.propertyTasks.map((task) =>
+        task.id === taskId
+          ? {
+              ...task,
+              followUps: (task.followUps || []).map((f) =>
+                f.id === followUpId ? { ...f, ...updates } : f
+              ),
+              updatedAt: new Date().toISOString(),
+            }
+          : task
+      ),
+    })),
+  removeTaskFollowUp: (taskId, followUpId) =>
+    set((state) => ({
+      propertyTasks: state.propertyTasks.map((task) =>
+        task.id === taskId
+          ? {
+              ...task,
+              followUps: (task.followUps || []).filter((f) => f.id !== followUpId),
+              updatedAt: new Date().toISOString(),
+            }
+          : task
+      ),
+    })),
+  // Projects
+  propertyProjects: [],
+  activeProjectId: null,
+  setPropertyProjects: (projects) => set({ propertyProjects: projects }),
+  addPropertyProject: (project) =>
+    set((state) => ({ propertyProjects: [...state.propertyProjects, project] })),
+  updatePropertyProject: (id, updates) =>
+    set((state) => ({
+      propertyProjects: state.propertyProjects.map((p) =>
+        p.id === id ? { ...p, ...updates, updatedAt: new Date().toISOString() } : p
+      ),
+    })),
+  removePropertyProject: (id) =>
+    set((state) => ({
+      propertyProjects: state.propertyProjects.filter((p) => p.id !== id),
+      activeProjectId: state.activeProjectId === id ? null : state.activeProjectId,
+    })),
+  setActiveProject: (id) => set({ activeProjectId: id }),
+  // Project Emails
+  addProjectEmail: (projectId, email) =>
+    set((state) => ({
+      propertyProjects: state.propertyProjects.map((p) =>
+        p.id === projectId
+          ? { ...p, emails: [...p.emails, email], updatedAt: new Date().toISOString() }
+          : p
+      ),
+    })),
+  updateProjectEmail: (projectId, emailId, updates) =>
+    set((state) => ({
+      propertyProjects: state.propertyProjects.map((p) =>
+        p.id === projectId
+          ? {
+              ...p,
+              emails: p.emails.map((e) => (e.id === emailId ? { ...e, ...updates } : e)),
+              updatedAt: new Date().toISOString(),
+            }
+          : p
+      ),
+    })),
+  removeProjectEmail: (projectId, emailId) =>
+    set((state) => ({
+      propertyProjects: state.propertyProjects.map((p) =>
+        p.id === projectId
+          ? { ...p, emails: p.emails.filter((e) => e.id !== emailId), updatedAt: new Date().toISOString() }
+          : p
+      ),
+    })),
+  // Project Tasks
+  addProjectTask: (projectId, task) =>
+    set((state) => ({
+      propertyProjects: state.propertyProjects.map((p) =>
+        p.id === projectId
+          ? { ...p, tasks: [...p.tasks, task], updatedAt: new Date().toISOString() }
+          : p
+      ),
+    })),
+  updateProjectTask: (projectId, taskId, updates) =>
+    set((state) => ({
+      propertyProjects: state.propertyProjects.map((p) =>
+        p.id === projectId
+          ? {
+              ...p,
+              tasks: p.tasks.map((t) => (t.id === taskId ? { ...t, ...updates } : t)),
+              updatedAt: new Date().toISOString(),
+            }
+          : p
+      ),
+    })),
+  removeProjectTask: (projectId, taskId) =>
+    set((state) => ({
+      propertyProjects: state.propertyProjects.map((p) =>
+        p.id === projectId
+          ? { ...p, tasks: p.tasks.filter((t) => t.id !== taskId), updatedAt: new Date().toISOString() }
+          : p
+      ),
+    })),
+  // Project Milestones
+  addProjectMilestone: (projectId, milestone) =>
+    set((state) => ({
+      propertyProjects: state.propertyProjects.map((p) =>
+        p.id === projectId
+          ? { ...p, milestones: [...p.milestones, milestone], updatedAt: new Date().toISOString() }
+          : p
+      ),
+    })),
+  updateProjectMilestone: (projectId, milestoneId, updates) =>
+    set((state) => ({
+      propertyProjects: state.propertyProjects.map((p) =>
+        p.id === projectId
+          ? {
+              ...p,
+              milestones: p.milestones.map((m) => (m.id === milestoneId ? { ...m, ...updates } : m)),
+              updatedAt: new Date().toISOString(),
+            }
+          : p
+      ),
+    })),
+  removeProjectMilestone: (projectId, milestoneId) =>
+    set((state) => ({
+      propertyProjects: state.propertyProjects.map((p) =>
+        p.id === projectId
+          ? { ...p, milestones: p.milestones.filter((m) => m.id !== milestoneId), updatedAt: new Date().toISOString() }
+          : p
+      ),
+    })),
+  // Project CRM - Contacts
+  addProjectContact: (projectId, contact) =>
+    set((state) => ({
+      propertyProjects: state.propertyProjects.map((p) =>
+        p.id === projectId
+          ? { ...p, contacts: [...p.contacts, contact], updatedAt: new Date().toISOString() }
+          : p
+      ),
+    })),
+  updateProjectContact: (projectId, contactId, updates) =>
+    set((state) => ({
+      propertyProjects: state.propertyProjects.map((p) =>
+        p.id === projectId
+          ? {
+              ...p,
+              contacts: p.contacts.map((c) => (c.id === contactId ? { ...c, ...updates } : c)),
+              updatedAt: new Date().toISOString(),
+            }
+          : p
+      ),
+    })),
+  removeProjectContact: (projectId, contactId) =>
+    set((state) => ({
+      propertyProjects: state.propertyProjects.map((p) =>
+        p.id === projectId
+          ? { ...p, contacts: p.contacts.filter((c) => c.id !== contactId), updatedAt: new Date().toISOString() }
+          : p
+      ),
+    })),
+  // Project CRM - Quotes
+  addProjectQuote: (projectId, quote) =>
+    set((state) => ({
+      propertyProjects: state.propertyProjects.map((p) =>
+        p.id === projectId
+          ? { ...p, quotes: [...p.quotes, quote], updatedAt: new Date().toISOString() }
+          : p
+      ),
+    })),
+  updateProjectQuote: (projectId, quoteId, updates) =>
+    set((state) => ({
+      propertyProjects: state.propertyProjects.map((p) =>
+        p.id === projectId
+          ? {
+              ...p,
+              quotes: p.quotes.map((q) => (q.id === quoteId ? { ...q, ...updates } : q)),
+              updatedAt: new Date().toISOString(),
+            }
+          : p
+      ),
+    })),
+  removeProjectQuote: (projectId, quoteId) =>
+    set((state) => ({
+      propertyProjects: state.propertyProjects.map((p) =>
+        p.id === projectId
+          ? { ...p, quotes: p.quotes.filter((q) => q.id !== quoteId), updatedAt: new Date().toISOString() }
+          : p
+      ),
+    })),
+  // Project CRM - Visits
+  addProjectVisit: (projectId, visit) =>
+    set((state) => ({
+      propertyProjects: state.propertyProjects.map((p) =>
+        p.id === projectId
+          ? { ...p, scheduledVisits: [...p.scheduledVisits, visit], updatedAt: new Date().toISOString() }
+          : p
+      ),
+    })),
+  updateProjectVisit: (projectId, visitId, updates) =>
+    set((state) => ({
+      propertyProjects: state.propertyProjects.map((p) =>
+        p.id === projectId
+          ? {
+              ...p,
+              scheduledVisits: p.scheduledVisits.map((v) => (v.id === visitId ? { ...v, ...updates } : v)),
+              updatedAt: new Date().toISOString(),
+            }
+          : p
+      ),
+    })),
+  removeProjectVisit: (projectId, visitId) =>
+    set((state) => ({
+      propertyProjects: state.propertyProjects.map((p) =>
+        p.id === projectId
+          ? { ...p, scheduledVisits: p.scheduledVisits.filter((v) => v.id !== visitId), updatedAt: new Date().toISOString() }
+          : p
+      ),
+    })),
+  // Project CRM - Follow-ups
+  addProjectFollowUp: (projectId, followUp) =>
+    set((state) => ({
+      propertyProjects: state.propertyProjects.map((p) =>
+        p.id === projectId
+          ? { ...p, followUps: [...p.followUps, followUp], updatedAt: new Date().toISOString() }
+          : p
+      ),
+    })),
+  updateProjectFollowUp: (projectId, followUpId, updates) =>
+    set((state) => ({
+      propertyProjects: state.propertyProjects.map((p) =>
+        p.id === projectId
+          ? {
+              ...p,
+              followUps: p.followUps.map((f) => (f.id === followUpId ? { ...f, ...updates } : f)),
+              updatedAt: new Date().toISOString(),
+            }
+          : p
+      ),
+    })),
+  removeProjectFollowUp: (projectId, followUpId) =>
+    set((state) => ({
+      propertyProjects: state.propertyProjects.map((p) =>
+        p.id === projectId
+          ? { ...p, followUps: p.followUps.filter((f) => f.id !== followUpId), updatedAt: new Date().toISOString() }
+          : p
+      ),
+    })),
 });
 
 const createDatabaseSlice: StateCreator<FamilyState, [], [], DatabaseSlice> = (set) => ({
@@ -388,6 +841,7 @@ export const useFamilyStore = create<FamilyState>()(
       ...createMealPlanningSlice(...a),
       ...createShoppingSlice(...a),
       ...createGoalsSlice(...a),
+      ...createTimelineSlice(...a),
       ...createPropertySlice(...a),
       ...createDatabaseSlice(...a),
     }),
@@ -410,6 +864,9 @@ export const useFamilyStore = create<FamilyState>()(
         areaWatchItems: state.areaWatchItems,
         propertyComponents: state.propertyComponents,
         propertyRole: state.propertyRole,
+        // Projects
+        propertyProjects: state.propertyProjects,
+        activeProjectId: state.activeProjectId,
       }),
       migrate: (persistedState: any, version: number) => {
         // Clear old cache to force fresh load from database

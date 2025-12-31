@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Bell,
   X,
@@ -35,6 +36,7 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
   const {
     notifications,
     unreadCount,
+    requestPermission,
     markAsRead,
     markAllAsRead,
     clearNotification,
@@ -46,6 +48,30 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
   const [filter, setFilter] = useState<'all' | 'unread' | 'today'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [showSettings, setShowSettings] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose();
+      }
+    };
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen, onClose]);
 
   // Filter notifications based on current filter
   const filteredNotifications = notifications.filter(notification => {
@@ -125,8 +151,8 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
         console.log('Navigate to event:', notification.relatedEventId);
         break;
       case 'request_permission':
-        // This would trigger permission request
-        console.log('Request permission');
+        await requestPermission();
+        await markAsRead(notification.id);
         break;
       default:
         console.log('Unknown action:', action.action);
@@ -155,10 +181,10 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
     await snoozeNotification(notification.id, snoozeUntil);
   };
 
-  if (!isOpen) return null;
+  if (!isOpen || !mounted) return null;
 
-  return (
-    <div className={`fixed inset-0 z-50 ${className}`}>
+  const content = (
+    <div className={`fixed inset-0 z-[100] ${className}`} role="dialog" aria-modal="true" aria-label="Notifications">
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black bg-opacity-50"
@@ -215,8 +241,8 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
               </div>
 
               {/* Filters and Actions */}
-              <div className="flex items-center justify-between">
-                <div className="flex space-x-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-wrap gap-1">
                   {(['all', 'unread', 'today'] as const).map((filterOption) => (
                     <button
                       key={filterOption}
@@ -235,7 +261,7 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
                 {unreadCount > 0 && (
                   <button
                     onClick={markAllAsRead}
-                    className="text-sm text-blue-600 hover:text-blue-700 transition-colors"
+                    className="ml-auto text-sm text-blue-600 hover:text-blue-700 transition-colors"
                     title="Mark all as read"
                   >
                     <CheckCheck className="w-4 h-4" />
@@ -388,6 +414,8 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
       </div>
     </div>
   );
+
+  return createPortal(content, document.body);
 };
 
 export default NotificationCenter;

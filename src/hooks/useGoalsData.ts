@@ -6,7 +6,7 @@ import { useFamilyStore } from '@/store/familyStore';
 type GoalsData = any;
 
 // Define the type for the API response
-type FetchGoalsResponse = GoalsData;
+type FetchGoalsResponse = GoalsData | null;
 
 /**
  * Hook for managing goals data.
@@ -16,6 +16,15 @@ function useGoalsData(familyId?: string) {
   const { setGoalsData } = useFamilyStore();
 
   const fetchFunction = async (): Promise<FetchGoalsResponse> => {
+    if (!familyId) {
+      if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem('familyGoals');
+        if (stored) {
+          return JSON.parse(stored) as FetchGoalsResponse;
+        }
+      }
+      return null;
+    }
     // Example API call - adjust the URL and parameters as needed
     const response = await fetch(`/api/families/${familyId}/goals`);
     if (!response.ok) {
@@ -25,6 +34,7 @@ function useGoalsData(familyId?: string) {
   };
 
   const storeUpdateFunction = (data: FetchGoalsResponse) => {
+    if (!data) return;
     setGoalsData(data);
   };
 

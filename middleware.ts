@@ -19,6 +19,7 @@ const publicPaths = [
   "/icons",
   "/sw.js",
   "/workbox-",
+  "/api/families/local/budget/statement-import",
 ];
 
 // Check if path starts with any public path
@@ -28,6 +29,10 @@ function isPublicPath(pathname: string): boolean {
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  if (pathname.startsWith('/api/families/') && pathname.includes('/budget/statement-import')) {
+    return NextResponse.next();
+  }
 
   // Allow public paths without auth check
   if (isPublicPath(pathname)) {

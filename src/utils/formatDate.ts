@@ -84,3 +84,28 @@ export function formatDateForInput(date: Date | string | null | undefined): stri
 
   return `${year}-${month}-${day}`;
 }
+
+/**
+ * Format a date in a human-readable format like "Monday, 30 December 2025"
+ */
+export function formatDateLong(date: Date | string | null | undefined): string {
+  if (!date) return '';
+
+  const dateObj = typeof date === 'string' ? new Date(date) : date;
+
+  // Check if date is valid
+  if (isNaN(dateObj.getTime())) return '';
+
+  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const months = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+
+  const dayName = days[dateObj.getDay()];
+  const day = dateObj.getDate();
+  const month = months[dateObj.getMonth()];
+  const year = dateObj.getFullYear();
+
+  return `${dayName}, ${day} ${month} ${year}`;
+}

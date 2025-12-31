@@ -20,6 +20,7 @@ class FamilyHubNotificationService implements NotificationService {
   private emailRecipients: { email: string; name: string; }[] = [
     { email: 'admin@familyhub.app', name: 'Family Hub Admin' } // Default for testing
   ];
+  private snoozeTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
 
   constructor() {
     this.settings = this.getDefaultSettings();
@@ -54,7 +55,8 @@ class FamilyHubNotificationService implements NotificationService {
         this.notifications = JSON.parse(storedNotifications).map((n: any) => ({
           ...n,
           timestamp: new Date(n.timestamp),
-          expiresAt: n.expiresAt ? new Date(n.expiresAt) : undefined
+          expiresAt: n.expiresAt ? new Date(n.expiresAt) : undefined,
+          snoozedUntil: n.snoozedUntil ? new Date(n.snoozedUntil) : undefined
         }));
       }
 
@@ -73,6 +75,7 @@ class FamilyHubNotificationService implements NotificationService {
           snoozedUntil: r.snoozedUntil ? new Date(r.snoozedUntil) : undefined
         }));
       }
+      this.normalizeSnoozes();
     } catch (error) {
       console.error('Failed to load persisted notification data:', error);
     }
@@ -325,7 +328,7 @@ class FamilyHubNotificationService implements NotificationService {
    * Get notifications with optional filtering
    */
   async getNotifications(filters?: NotificationFilters): Promise<InAppNotification[]> {
-    let filtered = [...this.notifications];
+    let filtered = [...this.getActiveNotifications()];
 
     if (filters) {
       if (filters.type) {
@@ -382,6 +385,11 @@ class FamilyHubNotificationService implements NotificationService {
    * Clear a notification
    */
   async clearNotification(notificationId: string): Promise<void> {
+    const timeoutId = this.snoozeTimeouts.get(notificationId);
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+      this.snoozeTimeouts.delete(notificationId);
+    }
     this.notifications = this.notifications.filter(n => n.id !== notificationId);
     this.persistData();
     this.notifySubscribers();
@@ -393,16 +401,8 @@ class FamilyHubNotificationService implements NotificationService {
   async snoozeNotification(notificationId: string, until: Date): Promise<void> {
     const notification = this.notifications.find(n => n.id === notificationId);
     if (notification) {
-      // Remove from current notifications
-      this.notifications = this.notifications.filter(n => n.id !== notificationId);
-
-      // Schedule to reappear
-      setTimeout(() => {
-        this.notifications.unshift(notification);
-        this.persistData();
-        this.notifySubscribers();
-      }, until.getTime() - Date.now());
-
+      notification.snoozedUntil = until;
+      this.scheduleSnoozeWakeup(notification);
       this.persistData();
       this.notifySubscribers();
     }
@@ -532,7 +532,7 @@ class FamilyHubNotificationService implements NotificationService {
 
   subscribe(callback: (notifications: InAppNotification[]) => void): () => void {
     this.subscribers.push(callback);
-    callback(this.notifications); // Send current state
+    callback(this.getActiveNotifications()); // Send current state
 
     return () => {
       this.subscribers = this.subscribers.filter(sub => sub !== callback);
@@ -540,12 +540,66 @@ class FamilyHubNotificationService implements NotificationService {
   }
 
   private notifySubscribers(): void {
-    this.subscribers.forEach(callback => callback([...this.notifications]));
+    const activeNotifications = this.getActiveNotifications();
+    this.subscribers.forEach(callback => callback([...activeNotifications]));
   }
 
   // Get unread count
   getUnreadCount(): number {
-    return this.notifications.filter(n => !n.read).length;
+    return this.getActiveNotifications().filter(n => !n.read).length;
+  }
+
+  private scheduleSnoozeWakeup(notification: InAppNotification): void {
+    if (!notification.snoozedUntil) return;
+
+    const delay = notification.snoozedUntil.getTime() - Date.now();
+    if (delay <= 0) {
+      notification.snoozedUntil = undefined;
+      return;
+    }
+
+    const existingTimeout = this.snoozeTimeouts.get(notification.id);
+    if (existingTimeout) {
+      clearTimeout(existingTimeout);
+    }
+
+    const timeoutId = setTimeout(() => {
+      const target = this.notifications.find(n => n.id === notification.id);
+      if (target) {
+        target.snoozedUntil = undefined;
+        this.persistData();
+        this.notifySubscribers();
+      }
+      this.snoozeTimeouts.delete(notification.id);
+    }, delay);
+
+    this.snoozeTimeouts.set(notification.id, timeoutId);
+  }
+
+  private normalizeSnoozes(): void {
+    const now = Date.now();
+    let hasChanges = false;
+
+    this.notifications.forEach(notification => {
+      if (!notification.snoozedUntil) return;
+      if (notification.snoozedUntil.getTime() <= now) {
+        notification.snoozedUntil = undefined;
+        hasChanges = true;
+      } else {
+        this.scheduleSnoozeWakeup(notification);
+      }
+    });
+
+    if (hasChanges) {
+      this.persistData();
+    }
+  }
+
+  private getActiveNotifications(): InAppNotification[] {
+    const now = Date.now();
+    return this.notifications.filter(notification => (
+      !notification.snoozedUntil || notification.snoozedUntil.getTime() <= now
+    ));
   }
 
   /**

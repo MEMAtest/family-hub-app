@@ -16,13 +16,15 @@ export interface FamilyFormState {
   icon: string;
   role: FamilyRoleOption;
   ageGroup: FamilyAgeGroup;
+  dateOfBirth: string;
+  avatarUrl: string;
 }
 
 interface FamilyContextValue {
   members: FamilyMember[];
   addMember: (member: FamilyMember) => void;
   updateMember: (id: string, updates: Partial<FamilyMember>) => void;
-  deleteMember: (id: string) => void;
+  deleteMember: (id: string) => Promise<void> | void;
   setMembers: (members: FamilyMember[]) => void;
   isFormOpen: boolean;
   openForm: (member?: FamilyMember) => void;
@@ -39,6 +41,31 @@ const DEFAULT_FORM_STATE: FamilyFormState = {
   icon: iconOptions[0],
   role: 'Family Member',
   ageGroup: 'Adult',
+  dateOfBirth: '',
+  avatarUrl: '',
+};
+
+const getAgeFromDob = (dateOfBirth?: string) => {
+  if (!dateOfBirth) return null;
+  const parsed = new Date(dateOfBirth);
+  if (Number.isNaN(parsed.getTime())) return null;
+  const today = new Date();
+  let age = today.getFullYear() - parsed.getFullYear();
+  const monthDiff = today.getMonth() - parsed.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < parsed.getDate())) {
+    age -= 1;
+  }
+  return age;
+};
+
+const getAgeGroupFromDob = (dateOfBirth?: string): FamilyAgeGroup | null => {
+  const age = getAgeFromDob(dateOfBirth);
+  if (age === null) return null;
+  if (age < 4) return 'Toddler';
+  if (age < 6) return 'Preschool';
+  if (age < 13) return 'Child';
+  if (age < 18) return 'Teen';
+  return 'Adult';
 };
 
 const FamilyContext = createContext<FamilyContextValue | undefined>(undefined);
@@ -49,6 +76,7 @@ export const FamilyProvider = ({ children }: PropsWithChildren) => {
   const updateMemberStore = useFamilyStore((state) => state.updatePerson as (id: string, updates: Partial<FamilyMember>) => void);
   const deleteMemberStore = useFamilyStore((state) => state.deletePerson);
   const setMembersStore = useFamilyStore((state) => state.setPeople as (people: FamilyMember[]) => void);
+  const familyId = useFamilyStore((state) => state.databaseStatus.familyId);
 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<FamilyMember | null>(null);
@@ -67,6 +95,8 @@ export const FamilyProvider = ({ children }: PropsWithChildren) => {
         icon: member.icon,
         role: member.role,
         ageGroup: member.ageGroup,
+        dateOfBirth: member.dateOfBirth || '',
+        avatarUrl: member.avatarUrl || '',
       });
     } else {
       setEditingMember(null);
@@ -83,35 +113,65 @@ export const FamilyProvider = ({ children }: PropsWithChildren) => {
 
   const createMemberFromForm = useCallback((): FamilyMember => {
     const now = new Date().toISOString();
-    const fitnessGoals = formState.ageGroup === 'Adult'
+    const derivedAgeGroup = getAgeGroupFromDob(formState.dateOfBirth);
+    const ageGroup = derivedAgeGroup ?? formState.ageGroup;
+    const fitnessGoals = ageGroup === 'Adult'
       ? { steps: 8000, workouts: 3 }
       : { activeHours: 2, activities: 4 };
 
     return {
       id: editingMember?.id ?? createId('member'),
-      familyId: editingMember?.familyId ?? 'local-family',
+      familyId: editingMember?.familyId ?? familyId ?? 'local-family',
       name: formState.name,
       role: formState.role,
-      ageGroup: formState.ageGroup,
+      ageGroup,
+      dateOfBirth: formState.dateOfBirth || undefined,
+      age: getAgeFromDob(formState.dateOfBirth) ?? undefined,
+      avatarUrl: formState.avatarUrl || undefined,
       color: formState.color,
       icon: formState.icon,
       fitnessGoals,
       createdAt: editingMember?.createdAt ?? now,
       updatedAt: now,
     };
-  }, [editingMember, formState]);
+  }, [editingMember, familyId, formState]);
 
   const saveMember = useCallback(async () => {
     const member = createMemberFromForm();
 
     if (editingMember) {
-      updateMemberStore(member.id, { ...member, updatedAt: member.updatedAt });
+      const savedMember = await databaseService.updateMember(member.id, {
+        name: member.name,
+        role: member.role,
+        ageGroup: member.ageGroup,
+        dateOfBirth: member.dateOfBirth,
+        avatarUrl: member.avatarUrl,
+        color: member.color,
+        icon: member.icon,
+        fitnessGoals: member.fitnessGoals,
+      } as any);
+
+      updateMemberStore(member.id, {
+        ...member,
+        updatedAt: member.updatedAt,
+        ...(savedMember ? {
+          name: (savedMember as any).name ?? member.name,
+          color: (savedMember as any).color ?? member.color,
+          icon: (savedMember as any).icon ?? member.icon,
+          ageGroup: (savedMember as any).ageGroup ?? member.ageGroup,
+          dateOfBirth: (savedMember as any).dateOfBirth ?? member.dateOfBirth,
+          avatarUrl: (savedMember as any).avatarUrl ?? member.avatarUrl,
+          role: (savedMember as any).role ?? member.role,
+        } : {}),
+      });
     } else {
       const savedMember = await databaseService.saveMember({
         id: member.id,
         name: member.name,
         role: member.role,
-        age: member.ageGroup,
+        ageGroup: member.ageGroup,
+        dateOfBirth: member.dateOfBirth,
+        avatarUrl: member.avatarUrl,
         color: member.color,
         icon: member.icon,
         fitnessGoals: member.fitnessGoals,
@@ -123,6 +183,8 @@ export const FamilyProvider = ({ children }: PropsWithChildren) => {
         name: savedMember?.name ?? member.name,
         color: (savedMember as Record<string, any> | undefined)?.color ?? member.color,
         icon: (savedMember as Record<string, any> | undefined)?.icon ?? member.icon,
+        dateOfBirth: (savedMember as Record<string, any> | undefined)?.dateOfBirth ?? member.dateOfBirth,
+        avatarUrl: (savedMember as Record<string, any> | undefined)?.avatarUrl ?? member.avatarUrl,
       };
 
       addMemberStore(persistedMember);
@@ -131,11 +193,16 @@ export const FamilyProvider = ({ children }: PropsWithChildren) => {
     closeForm();
   }, [addMemberStore, closeForm, createMemberFromForm, editingMember, updateMemberStore]);
 
+  const deleteMember = useCallback(async (id: string) => {
+    await databaseService.deleteMember(id);
+    deleteMemberStore(id);
+  }, [deleteMemberStore]);
+
   const value = useMemo<FamilyContextValue>(() => ({
     members,
     addMember: addMemberStore,
     updateMember: updateMemberStore,
-    deleteMember: deleteMemberStore,
+    deleteMember,
     setMembers: setMembersStore,
     isFormOpen,
     openForm,
@@ -147,7 +214,7 @@ export const FamilyProvider = ({ children }: PropsWithChildren) => {
   }), [
     addMemberStore,
     closeForm,
-    deleteMemberStore,
+    deleteMember,
     editingMember,
     formState,
     isFormOpen,

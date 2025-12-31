@@ -3,6 +3,7 @@
 import type { ReactNode } from 'react';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import ErrorBoundary from '@/components/common/ErrorBoundary';
+import { NotificationProvider } from '@/contexts/NotificationContext';
 
 // Auth is currently disabled - can be re-enabled by uncommenting the providers below
 // import { NeonAuthUIProvider } from '@neondatabase/neon-js/auth/react/ui';
@@ -17,8 +18,10 @@ export const AppProviders = ({ children }: { children: ReactNode }) => (
   //   </AuthProvider>
   // </NeonAuthUIProvider>
   <ThemeProvider>
-    <ErrorBoundary>
-      {children}
-    </ErrorBoundary>
+    <NotificationProvider>
+      <ErrorBoundary>
+        {children}
+      </ErrorBoundary>
+    </NotificationProvider>
   </ThemeProvider>
 );

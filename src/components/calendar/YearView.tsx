@@ -222,8 +222,8 @@ const YearView: React.FC<YearViewProps> = ({
       </div>
 
       <div className="grid grid-cols-7 gap-1">
-        {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(day => (
-          <div key={day} className="text-xs text-gray-500 text-center font-medium py-1">
+        {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, idx) => (
+          <div key={`day-${idx}`} className="text-xs text-gray-500 text-center font-medium py-1">
             {day}
           </div>
         ))}
