@@ -57,6 +57,21 @@ const formatShortDate = (value: Date | string | null | undefined) => {
   return `${day}/${month}/${year}`;
 };
 
+// Format date as "Wed 17 Dec" for clear display
+const formatNiceDate = (dateStr: string) => {
+  const date = new Date(dateStr);
+  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `${days[date.getDay()]} ${date.getDate()} ${months[date.getMonth()]}`;
+};
+
+// Calculate days between two dates
+const daysBetween = (date1: string, date2: string) => {
+  const d1 = new Date(date1);
+  const d2 = new Date(date2);
+  return Math.ceil((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24));
+};
+
 const StatCard = ({
   label,
   value,
@@ -206,6 +221,51 @@ export const DashboardView = () => {
       .filter((term) => new Date(term.start) >= today)
       .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime())
       .slice(0, 3);
+  }, [schoolTerms]);
+
+  // Find the next school break with clear break-up and return dates
+  const nextSchoolBreak = useMemo(() => {
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+
+    // Find the next term end date (when school breaks up)
+    const termEnds = schoolTerms
+      .filter((term) => term.type === 'term' && term.name.toLowerCase().includes('end'))
+      .filter((term) => term.start >= todayStr)
+      .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+
+    if (termEnds.length === 0) return null;
+
+    const nextTermEnd = termEnds[0];
+
+    // Find the corresponding break/holiday after this term end
+    const breaks = schoolTerms
+      .filter((term) => term.type === 'break' || term.type === 'half-term')
+      .filter((term) => term.start > nextTermEnd.start)
+      .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+
+    // Find the next term start (when school returns)
+    const termStarts = schoolTerms
+      .filter((term) => term.type === 'term' && term.name.toLowerCase().includes('start'))
+      .filter((term) => term.start > nextTermEnd.start)
+      .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+
+    const nextTermStart = termStarts[0];
+    const breakInfo = breaks[0];
+
+    const daysUntilBreak = daysBetween(todayStr, nextTermEnd.start);
+    const breakDuration = nextTermStart && breakInfo?.end
+      ? daysBetween(nextTermEnd.start, nextTermStart.start)
+      : breakInfo?.end ? daysBetween(breakInfo.start, breakInfo.end) + 1 : 0;
+
+    return {
+      breakUpDate: nextTermEnd.start,
+      breakUpName: nextTermEnd.name.replace(' Ends', ''),
+      returnDate: nextTermStart?.start,
+      breakName: breakInfo?.name,
+      daysUntilBreak,
+      breakDuration,
+    };
   }, [schoolTerms]);
 
   const snapshotCards = useMemo(() => ([
@@ -367,6 +427,42 @@ export const DashboardView = () => {
               </button>
             </div>
           </div>
+          {/* Next Break Summary - Clear at-a-glance view */}
+          {nextSchoolBreak && (
+            <div className="mb-4 p-4 bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg border border-purple-200 dark:from-purple-900/20 dark:to-blue-900/20 dark:border-purple-800">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-lg">🎉</span>
+                <span className="font-semibold text-purple-900 dark:text-purple-100">Next School Break</span>
+                {nextSchoolBreak.daysUntilBreak > 0 && (
+                  <span className="ml-auto px-2 py-0.5 bg-purple-600 text-white text-xs font-medium rounded-full">
+                    {nextSchoolBreak.daysUntilBreak} days to go
+                  </span>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-white/70 dark:bg-slate-800/50 rounded-lg p-3">
+                  <p className="text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wide">Breaking up</p>
+                  <p className="text-lg font-bold text-gray-900 dark:text-slate-100 mt-1">
+                    {formatNiceDate(nextSchoolBreak.breakUpDate)}
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-slate-400">{nextSchoolBreak.breakUpName}</p>
+                </div>
+                {nextSchoolBreak.returnDate && (
+                  <div className="bg-white/70 dark:bg-slate-800/50 rounded-lg p-3">
+                    <p className="text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wide">Back to school</p>
+                    <p className="text-lg font-bold text-gray-900 dark:text-slate-100 mt-1">
+                      {formatNiceDate(nextSchoolBreak.returnDate)}
+                    </p>
+                    {nextSchoolBreak.breakDuration > 0 && (
+                      <p className="text-xs text-gray-500 dark:text-slate-400">{nextSchoolBreak.breakDuration} days off</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Upcoming Term Dates */}
           <div className="grid gap-4 md:grid-cols-2">
             {upcomingSchoolHighlights.length === 0 ? (
               <div className="col-span-2 text-center py-8">
@@ -379,7 +475,10 @@ export const DashboardView = () => {
                 <div key={term.name} className="dashboard-widget p-4">
                   <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">{term.name}</p>
                   <p className="text-xs text-gray-500 mt-1 dark:text-slate-400">
-                    {term.end ? `${term.start} → ${term.end}` : term.start}
+                    {term.end
+                      ? `${formatNiceDate(term.start)} → ${formatNiceDate(term.end)}`
+                      : formatNiceDate(term.start)
+                    }
                   </p>
                   {term.description && (
                     <p className="mt-2 text-xs text-gray-500 dark:text-slate-400">{term.description}</p>
