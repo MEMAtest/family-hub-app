@@ -228,41 +228,92 @@ export const DashboardView = () => {
     const today = new Date();
     const todayStr = today.toISOString().split('T')[0];
 
-    // Find the next term end date (when school breaks up)
-    const termEnds = schoolTerms
-      .filter((term) => term.type === 'term' && term.name.toLowerCase().includes('end'))
-      .filter((term) => term.start >= todayStr)
-      .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
-
-    if (termEnds.length === 0) return null;
-
-    const nextTermEnd = termEnds[0];
-
-    // Find the corresponding break/holiday after this term end
-    const breaks = schoolTerms
+    // Get all breaks (both full breaks and half-terms)
+    const allBreaks = schoolTerms
       .filter((term) => term.type === 'break' || term.type === 'half-term')
-      .filter((term) => term.start > nextTermEnd.start)
       .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
 
-    // Find the next term start (when school returns)
-    const termStarts = schoolTerms
+    // Check if we're currently IN a break
+    const currentBreak = allBreaks.find((brk) => {
+      const startDate = brk.start;
+      const endDate = brk.end || brk.start;
+      return todayStr >= startDate && todayStr <= endDate;
+    });
+
+    if (currentBreak) {
+      // We're currently on a break - find when school returns
+      const nextTermStart = schoolTerms
+        .filter((term) => term.type === 'term' && term.name.toLowerCase().includes('start'))
+        .filter((term) => term.start > (currentBreak.end || currentBreak.start))
+        .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime())[0];
+
+      const breakEnd = currentBreak.end || currentBreak.start;
+      const daysRemaining = daysBetween(todayStr, breakEnd);
+
+      return {
+        isCurrentlyOnBreak: true,
+        breakName: currentBreak.name,
+        breakEndDate: breakEnd,
+        returnDate: nextTermStart?.start,
+        daysRemaining,
+        breakUpDate: currentBreak.start,
+        breakUpName: currentBreak.name,
+        daysUntilBreak: 0,
+        breakDuration: currentBreak.end ? daysBetween(currentBreak.start, currentBreak.end) + 1 : 1,
+      };
+    }
+
+    // Find the next upcoming break (not currently in one)
+    const nextBreak = allBreaks.find((brk) => brk.start > todayStr);
+
+    if (!nextBreak) return null;
+
+    // Find when school breaks up for this break
+    // For half-terms, we need to find the day before the break starts
+    // For full breaks (Easter, Christmas, Summer), find the term end before it
+    let breakUpDate = nextBreak.start;
+    let breakUpName = nextBreak.name;
+
+    // Look for a term end that happens just before this break
+    const termEndBefore = schoolTerms
+      .filter((term) => term.type === 'term' && term.name.toLowerCase().includes('end'))
+      .filter((term) => {
+        const termEndDate = new Date(term.start);
+        const breakStartDate = new Date(nextBreak.start);
+        const daysDiff = (breakStartDate.getTime() - termEndDate.getTime()) / (1000 * 60 * 60 * 24);
+        return daysDiff >= 0 && daysDiff <= 7; // Within a week before break
+      })
+      .sort((a, b) => new Date(b.start).getTime() - new Date(a.start).getTime())[0];
+
+    if (termEndBefore) {
+      breakUpDate = termEndBefore.start;
+      breakUpName = termEndBefore.name.replace(' Ends', '');
+    } else {
+      // For half-terms, the break-up day is the Friday before (day before break starts)
+      const breakStart = new Date(nextBreak.start);
+      breakStart.setDate(breakStart.getDate() - 3); // Typically Friday before Monday half-term
+      // But we'll just use the break start minus 1 day as "last day of school"
+      const lastSchoolDay = new Date(nextBreak.start);
+      lastSchoolDay.setDate(lastSchoolDay.getDate() - 1);
+      breakUpDate = lastSchoolDay.toISOString().split('T')[0];
+      breakUpName = nextBreak.name.replace(' Break', '');
+    }
+
+    // Find when school returns after this break
+    const nextTermStart = schoolTerms
       .filter((term) => term.type === 'term' && term.name.toLowerCase().includes('start'))
-      .filter((term) => term.start > nextTermEnd.start)
-      .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+      .filter((term) => term.start > (nextBreak.end || nextBreak.start))
+      .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime())[0];
 
-    const nextTermStart = termStarts[0];
-    const breakInfo = breaks[0];
-
-    const daysUntilBreak = daysBetween(todayStr, nextTermEnd.start);
-    const breakDuration = nextTermStart && breakInfo?.end
-      ? daysBetween(nextTermEnd.start, nextTermStart.start)
-      : breakInfo?.end ? daysBetween(breakInfo.start, breakInfo.end) + 1 : 0;
+    const daysUntilBreak = daysBetween(todayStr, breakUpDate);
+    const breakDuration = nextBreak.end ? daysBetween(nextBreak.start, nextBreak.end) + 1 : 1;
 
     return {
-      breakUpDate: nextTermEnd.start,
-      breakUpName: nextTermEnd.name.replace(' Ends', ''),
+      isCurrentlyOnBreak: false,
+      breakUpDate,
+      breakUpName,
       returnDate: nextTermStart?.start,
-      breakName: breakInfo?.name,
+      breakName: nextBreak.name,
       daysUntilBreak,
       breakDuration,
     };
@@ -429,34 +480,71 @@ export const DashboardView = () => {
           </div>
           {/* Next Break Summary - Clear at-a-glance view */}
           {nextSchoolBreak && (
-            <div className="mb-4 p-4 bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg border border-purple-200 dark:from-purple-900/20 dark:to-blue-900/20 dark:border-purple-800">
+            <div className={`mb-4 p-4 rounded-lg border ${
+              nextSchoolBreak.isCurrentlyOnBreak
+                ? 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800'
+                : 'bg-purple-50 border-purple-200 dark:bg-purple-900/20 dark:border-purple-800'
+            }`}>
               <div className="flex items-center gap-2 mb-3">
-                <span className="text-lg">🎉</span>
-                <span className="font-semibold text-purple-900 dark:text-purple-100">Next School Break</span>
-                {nextSchoolBreak.daysUntilBreak > 0 && (
+                <span className="text-lg">{nextSchoolBreak.isCurrentlyOnBreak ? '🏖️' : '🎉'}</span>
+                <span className={`font-semibold ${
+                  nextSchoolBreak.isCurrentlyOnBreak
+                    ? 'text-green-900 dark:text-green-100'
+                    : 'text-purple-900 dark:text-purple-100'
+                }`}>
+                  {nextSchoolBreak.isCurrentlyOnBreak ? 'Currently on Break!' : 'Next School Break'}
+                </span>
+                {nextSchoolBreak.isCurrentlyOnBreak ? (
+                  <span className="ml-auto px-2 py-0.5 bg-green-600 text-white text-xs font-medium rounded-full">
+                    {nextSchoolBreak.daysRemaining} days left
+                  </span>
+                ) : nextSchoolBreak.daysUntilBreak > 0 && (
                   <span className="ml-auto px-2 py-0.5 bg-purple-600 text-white text-xs font-medium rounded-full">
                     {nextSchoolBreak.daysUntilBreak} days to go
                   </span>
                 )}
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <div className="bg-white/70 dark:bg-slate-800/50 rounded-lg p-3">
-                  <p className="text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wide">Breaking up</p>
-                  <p className="text-lg font-bold text-gray-900 dark:text-slate-100 mt-1">
-                    {formatNiceDate(nextSchoolBreak.breakUpDate)}
-                  </p>
-                  <p className="text-xs text-gray-500 dark:text-slate-400">{nextSchoolBreak.breakUpName}</p>
-                </div>
-                {nextSchoolBreak.returnDate && (
-                  <div className="bg-white/70 dark:bg-slate-800/50 rounded-lg p-3">
-                    <p className="text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wide">Back to school</p>
-                    <p className="text-lg font-bold text-gray-900 dark:text-slate-100 mt-1">
-                      {formatNiceDate(nextSchoolBreak.returnDate)}
-                    </p>
-                    {nextSchoolBreak.breakDuration > 0 && (
-                      <p className="text-xs text-gray-500 dark:text-slate-400">{nextSchoolBreak.breakDuration} days off</p>
+                {nextSchoolBreak.isCurrentlyOnBreak ? (
+                  <>
+                    <div className="bg-white/70 dark:bg-slate-800/50 rounded-lg p-3">
+                      <p className="text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wide">Enjoying</p>
+                      <p className="text-lg font-bold text-gray-900 dark:text-slate-100 mt-1">
+                        {nextSchoolBreak.breakName}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-slate-400">Until {nextSchoolBreak.breakEndDate && formatNiceDate(nextSchoolBreak.breakEndDate)}</p>
+                    </div>
+                    {nextSchoolBreak.returnDate && (
+                      <div className="bg-white/70 dark:bg-slate-800/50 rounded-lg p-3">
+                        <p className="text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wide">Back to school</p>
+                        <p className="text-lg font-bold text-gray-900 dark:text-slate-100 mt-1">
+                          {formatNiceDate(nextSchoolBreak.returnDate)}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-slate-400">Time to enjoy!</p>
+                      </div>
                     )}
-                  </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="bg-white/70 dark:bg-slate-800/50 rounded-lg p-3">
+                      <p className="text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wide">Breaking up</p>
+                      <p className="text-lg font-bold text-gray-900 dark:text-slate-100 mt-1">
+                        {formatNiceDate(nextSchoolBreak.breakUpDate)}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-slate-400">{nextSchoolBreak.breakUpName}</p>
+                    </div>
+                    {nextSchoolBreak.returnDate && (
+                      <div className="bg-white/70 dark:bg-slate-800/50 rounded-lg p-3">
+                        <p className="text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wide">Back to school</p>
+                        <p className="text-lg font-bold text-gray-900 dark:text-slate-100 mt-1">
+                          {formatNiceDate(nextSchoolBreak.returnDate)}
+                        </p>
+                        {nextSchoolBreak.breakDuration > 0 && (
+                          <p className="text-xs text-gray-500 dark:text-slate-400">{nextSchoolBreak.breakDuration} days off</p>
+                        )}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </div>

@@ -1,9 +1,10 @@
 'use client'
 
-import { createContext, PropsWithChildren, useCallback, useContext, useMemo, useState } from 'react';
+import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { GoalsData } from '@/store/familyStore';
 import { useFamilyStore } from '@/store/familyStore';
 import { createId } from '@/utils/id';
+import { FamilyMember } from '@/types';
 
 export interface ActivityEntry {
   id: string;
@@ -59,26 +60,22 @@ interface GoalsContextValue {
 
 const DEFAULT_PERSONAL_TRACKING: PersonalTrackingState = {
   fitness: {
-    todaySteps: 7432,
+    todaySteps: 0,
     todayWorkout: 'rest',
     weeklyGoal: 4,
-    weeklyProgress: 2,
-    activities: [
-      { id: 'act1', type: 'gym', duration: 75, intensity: 'High', date: '2025-08-29T18:30:00', person: 'ade', notes: 'Upper body focus' },
-      { id: 'act2', type: 'running', duration: 45, intensity: 'Medium', date: '2025-08-28T07:00:00', person: 'ade', notes: '5K park run' },
-      { id: 'act3', type: 'gym', duration: 75, intensity: 'High', date: '2025-08-26T18:30:00', person: 'ade', notes: 'Leg day workout' },
-    ],
-    weeklyMiles: 15.5,
-    avgPace: '7:42',
-    nextRun: 'Tomorrow 7:00 AM - 5K Recovery Run',
+    weeklyProgress: 0,
+    activities: [],
+    weeklyMiles: 0,
+    avgPace: '--:--',
+    nextRun: '',
   },
   wellness: {
-    mood: 8,
-    sleep: 7.5,
-    stress: 2,
-    energy: 8,
-    hydration: 7,
-    recovery: 8,
+    mood: 0,
+    sleep: 0,
+    stress: 0,
+    energy: 0,
+    hydration: 0,
+    recovery: 0,
   },
 };
 
@@ -96,9 +93,75 @@ export const GoalsProvider = ({ children }: PropsWithChildren) => {
   const setGoalsDataStore = useFamilyStore((state) => state.setGoalsData);
   const updateGoalsDataStore = useFamilyStore((state) => state.updateGoalsData);
 
+  // Get family data from store
+  const familyId = useFamilyStore((state) => state.databaseStatus.familyId);
+  const selectedPerson = useFamilyStore((state) => state.selectedPerson);
+  const familyMembers = useFamilyStore((state) => state.people as FamilyMember[]);
+
   const [personalTracking, setPersonalTrackingState] = useState<PersonalTrackingState>(DEFAULT_PERSONAL_TRACKING);
   const [isQuickActivityFormOpen, setIsQuickActivityFormOpen] = useState(false);
   const [quickActivityForm, setQuickActivityFormState] = useState<QuickActivityFormState>(INITIAL_QUICK_ACTIVITY_FORM);
+
+  // Fetch real fitness data when family/person changes
+  useEffect(() => {
+    const fetchFitnessData = async () => {
+      if (!familyId) return;
+
+      // Get selected person ID or first adult member
+      let personId = selectedPerson;
+      if (!personId || personId === 'all') {
+        const adultMember = familyMembers.find((m: FamilyMember) => m.ageGroup === 'Adult');
+        personId = adultMember?.id || familyMembers[0]?.id;
+      }
+      if (!personId) return;
+
+      try {
+        // Fetch fitness activities
+        const activitiesRes = await fetch(`/api/families/${familyId}/fitness?personId=${personId}&limit=10`);
+        const statsRes = await fetch(`/api/families/${familyId}/fitness/stats?personId=${personId}`);
+
+        if (activitiesRes.ok && statsRes.ok) {
+          const activitiesData = await activitiesRes.json();
+          const statsData = await statsRes.json();
+
+          // Get fitness goals from member
+          const member = familyMembers.find((m: FamilyMember) => m.id === personId);
+          const fitnessGoals = member?.fitnessGoals as { workouts?: number } | null;
+          const weeklyGoal = fitnessGoals?.workouts || 4;
+
+          // Map API activities to our format
+          const activities: ActivityEntry[] = (activitiesData.activities || []).map((act: any) => ({
+            id: act.id,
+            type: act.activityType,
+            duration: act.durationMinutes,
+            intensity: act.intensityLevel ? act.intensityLevel.charAt(0).toUpperCase() + act.intensityLevel.slice(1) : 'Medium',
+            date: act.activityDate,
+            person: personId,
+            notes: act.workoutName || act.notes || '',
+          }));
+
+          // Check if there's a workout today
+          const today = new Date().toISOString().split('T')[0];
+          const todayActivity = activities.find((a: ActivityEntry) => a.date.startsWith(today));
+
+          setPersonalTrackingState(prev => ({
+            ...prev,
+            fitness: {
+              ...prev.fitness,
+              weeklyGoal,
+              weeklyProgress: statsData.totalWorkouts || 0,
+              activities,
+              todayWorkout: todayActivity?.type || 'rest',
+            },
+          }));
+        }
+      } catch (error) {
+        console.error('Failed to fetch fitness data:', error);
+      }
+    };
+
+    fetchFitnessData();
+  }, [familyId, selectedPerson, familyMembers]);
 
   const setPersonalTracking = useCallback<GoalsContextValue['setPersonalTracking']>((updater) => {
     setPersonalTrackingState((prev) => (typeof updater === 'function' ? (updater as any)(prev) : updater));
