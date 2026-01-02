@@ -11,6 +11,8 @@ const createdAt = '2024-01-16T12:00:00Z';
 export const tremaineRoadBaseline: PropertyBaseline = {
   propertyName: 'Tremaine Improvements',
   address: '21 Tremaine Road, London, SE20 7UA',
+  propertyType: 'T',
+  nearbyStreets: ['Marlow Road', 'Croydon Road'],
   purchasePrice: 750000,
   purchaseDate: '2024-03-01',
   documents: [

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, Mail, Users, FileText, Calendar, Bell, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
+import { Plus, Mail, Users, FileText, Calendar, Bell, ChevronDown, ChevronUp, Trash2, Edit2, Check, X } from 'lucide-react';
 import { EmailParseModal } from './EmailParseModal';
 import type { PropertyProject, ProjectEmail, TaskContact, TaskQuote, TaskScheduledVisit, TaskFollowUp } from '@/types/property.types';
 import { formatDate } from '@/utils/formatDate';
@@ -9,6 +9,7 @@ import { formatDate } from '@/utils/formatDate';
 interface ProjectEmailInboxProps {
   project: PropertyProject;
   onAddEmail: (email: ProjectEmail) => void;
+  onUpdateEmail: (emailId: string, updates: Partial<ProjectEmail>) => void;
   onRemoveEmail: (emailId: string) => void;
   onAddContact: (contact: TaskContact) => void;
   onAddQuote: (quote: TaskQuote) => void;
@@ -20,6 +21,7 @@ interface ProjectEmailInboxProps {
 export const ProjectEmailInbox = ({
   project,
   onAddEmail,
+  onUpdateEmail,
   onRemoveEmail,
   onAddContact,
   onAddQuote,
@@ -29,6 +31,32 @@ export const ProjectEmailInbox = ({
 }: ProjectEmailInboxProps) => {
   const [showParseModal, setShowParseModal] = useState(false);
   const [expandedEmail, setExpandedEmail] = useState<string | null>(null);
+  const [editingEmailId, setEditingEmailId] = useState<string | null>(null);
+  const [editSubject, setEditSubject] = useState('');
+  const [editSender, setEditSender] = useState('');
+
+  const handleStartEdit = (email: ProjectEmail, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingEmailId(email.id);
+    setEditSubject(email.subject || '');
+    setEditSender(email.sender || '');
+  };
+
+  const handleSaveEdit = (emailId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    onUpdateEmail(emailId, {
+      subject: editSubject || undefined,
+      sender: editSender || undefined,
+    });
+    setEditingEmailId(null);
+  };
+
+  const handleCancelEdit = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingEmailId(null);
+    setEditSubject('');
+    setEditSender('');
+  };
 
   const handleEmailParsed = (
     email: ProjectEmail,
@@ -91,6 +119,7 @@ export const ProjectEmailInbox = ({
         <div className="space-y-3">
           {emails.map((email) => {
             const isExpanded = expandedEmail === email.id;
+            const isEditing = editingEmailId === email.id;
             const contactCount = email.extractedData?.contacts?.length || 0;
             const priceCount = email.extractedData?.prices?.length || 0;
             const dateCount = email.extractedData?.dates?.length || 0;
@@ -104,61 +133,127 @@ export const ProjectEmailInbox = ({
                 {/* Email Header */}
                 <div
                   className="flex cursor-pointer items-start justify-between p-4"
-                  onClick={() => setExpandedEmail(isExpanded ? null : email.id)}
+                  onClick={() => !isEditing && setExpandedEmail(isExpanded ? null : email.id)}
                 >
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <Mail className="h-4 w-4 text-gray-400" />
-                      <p className="font-medium text-gray-900 dark:text-slate-100 truncate">
-                        {email.subject || 'No subject'}
-                      </p>
-                    </div>
-                    {email.sender && (
-                      <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">
-                        From: {email.sender}
-                      </p>
+                    {isEditing ? (
+                      <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-500 dark:text-slate-400 mb-1">Subject</label>
+                          <input
+                            type="text"
+                            value={editSubject}
+                            onChange={(e) => setEditSubject(e.target.value)}
+                            placeholder="Email subject"
+                            className="w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100"
+                            autoFocus
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-500 dark:text-slate-400 mb-1">From</label>
+                          <input
+                            type="text"
+                            value={editSender}
+                            onChange={(e) => setEditSender(e.target.value)}
+                            placeholder="Sender name or email"
+                            className="w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100"
+                          />
+                        </div>
+                        <div className="flex items-center gap-2 mt-2">
+                          <button
+                            onClick={(e) => handleSaveEdit(email.id, e)}
+                            className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1 text-sm font-medium text-white hover:bg-blue-700"
+                          >
+                            <Check className="h-3.5 w-3.5" />
+                            Save
+                          </button>
+                          <button
+                            onClick={handleCancelEdit}
+                            className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-1 text-sm font-medium text-gray-600 hover:bg-gray-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex items-center gap-2">
+                          <Mail className="h-4 w-4 text-gray-400" />
+                          <p className="font-medium text-gray-900 dark:text-slate-100 truncate">
+                            {email.subject || 'No subject'}
+                          </p>
+                        </div>
+                        {email.sender && (
+                          <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">
+                            From: {email.sender}
+                          </p>
+                        )}
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                          <span className="text-gray-400 dark:text-slate-500">
+                            {formatDate(email.createdAt)}
+                          </span>
+                          {contactCount > 0 && (
+                            <span
+                              className="flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400 cursor-help"
+                              title={`${contactCount} contact${contactCount > 1 ? 's' : ''} extracted`}
+                            >
+                              <Users className="h-3 w-3" />
+                              {contactCount}
+                            </span>
+                          )}
+                          {priceCount > 0 && (
+                            <span
+                              className="flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400 cursor-help"
+                              title={`${priceCount} price${priceCount > 1 ? 's' : ''}/quote${priceCount > 1 ? 's' : ''} found`}
+                            >
+                              <FileText className="h-3 w-3" />
+                              {priceCount}
+                            </span>
+                          )}
+                          {dateCount > 0 && (
+                            <span
+                              className="flex items-center gap-1 rounded-full bg-purple-50 px-2 py-0.5 text-purple-600 dark:bg-purple-500/20 dark:text-purple-400 cursor-help"
+                              title={`${dateCount} date${dateCount > 1 ? 's' : ''}/visit${dateCount > 1 ? 's' : ''} scheduled`}
+                            >
+                              <Calendar className="h-3 w-3" />
+                              {dateCount}
+                            </span>
+                          )}
+                          {followUpCount > 0 && (
+                            <span
+                              className="flex items-center gap-1 rounded-full bg-orange-50 px-2 py-0.5 text-orange-600 dark:bg-orange-500/20 dark:text-orange-400 cursor-help"
+                              title={`${followUpCount} follow-up${followUpCount > 1 ? 's' : ''} needed`}
+                            >
+                              <Bell className="h-3 w-3" />
+                              {followUpCount}
+                            </span>
+                          )}
+                        </div>
+                      </>
                     )}
-                    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-                      <span className="text-gray-400 dark:text-slate-500">
-                        {formatDate(email.createdAt)}
-                      </span>
-                      {contactCount > 0 && (
-                        <span className="flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400">
-                          <Users className="h-3 w-3" />
-                          {contactCount}
-                        </span>
-                      )}
-                      {priceCount > 0 && (
-                        <span className="flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400">
-                          <FileText className="h-3 w-3" />
-                          {priceCount}
-                        </span>
-                      )}
-                      {dateCount > 0 && (
-                        <span className="flex items-center gap-1 rounded-full bg-purple-50 px-2 py-0.5 text-purple-600 dark:bg-purple-500/20 dark:text-purple-400">
-                          <Calendar className="h-3 w-3" />
-                          {dateCount}
-                        </span>
-                      )}
-                      {followUpCount > 0 && (
-                        <span className="flex items-center gap-1 rounded-full bg-orange-50 px-2 py-0.5 text-orange-600 dark:bg-orange-500/20 dark:text-orange-400">
-                          <Bell className="h-3 w-3" />
-                          {followUpCount}
-                        </span>
-                      )}
-                    </div>
                   </div>
                   <div className="flex items-center gap-2 ml-4">
-                    {!isReadOnly && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onRemoveEmail(email.id);
-                        }}
-                        className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-red-500 dark:hover:bg-slate-700"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                    {!isReadOnly && !isEditing && (
+                      <>
+                        <button
+                          onClick={(e) => handleStartEdit(email, e)}
+                          className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-blue-500 dark:hover:bg-slate-700"
+                          title="Edit email details"
+                        >
+                          <Edit2 className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onRemoveEmail(email.id);
+                          }}
+                          className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-red-500 dark:hover:bg-slate-700"
+                          title="Delete email"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </>
                     )}
                     {isExpanded ? (
                       <ChevronUp className="h-5 w-5 text-gray-400" />

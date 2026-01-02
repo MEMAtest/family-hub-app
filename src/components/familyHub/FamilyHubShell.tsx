@@ -14,6 +14,7 @@ import {
   Plus,
   ShoppingBag,
   Dumbbell,
+  Wrench,
 } from 'lucide-react';
 import { FamilyHubNavigation, NavItem } from './FamilyHubNavigation';
 import { FamilyHubHeader } from './FamilyHubHeader';
@@ -34,6 +35,7 @@ import { useAppView } from '@/contexts/familyHub/AppViewContext';
 import { useCalendarContext } from '@/contexts/familyHub/CalendarContext';
 import { useBudgetContext } from '@/contexts/familyHub/BudgetContext';
 import { useShoppingContext } from '@/contexts/familyHub/ShoppingContext';
+import { useContractorContext } from '@/contexts/familyHub/ContractorContext';
 import { useDatabaseSync } from '@/hooks/useDatabaseSync';
 import { useClientTime } from '@/hooks/useClientTime';
 import { formatDateConsistent } from '@/utils/date';
@@ -76,6 +78,7 @@ export const FamilyHubShell = () => {
   const { openCreateForm } = useCalendarContext();
   const { openForm: openBudgetForm } = useBudgetContext();
   const { openForm: openShoppingForm, lists } = useShoppingContext();
+  const { openQuickAppointment } = useContractorContext();
 
   // Setup Wizard state
   const [showSetupWizard, setShowSetupWizard] = useState(false);
@@ -159,6 +162,12 @@ export const FamilyHubShell = () => {
         <Plus className="h-4 w-4" /> Event
       </button>
       <button
+        onClick={openQuickAppointment}
+        className="inline-flex items-center gap-2 rounded-md bg-amber-500 px-3 py-2 text-sm font-medium text-white hover:bg-amber-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 dark:bg-amber-600 dark:hover:bg-amber-500"
+      >
+        <Wrench className="h-4 w-4" /> Contractor
+      </button>
+      <button
         onClick={() => openBudgetForm()}
         className="inline-flex items-center gap-2 rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
       >
@@ -171,7 +180,7 @@ export const FamilyHubShell = () => {
         <ShoppingBag className="h-4 w-4" /> Item
       </button>
     </div>
-  ), [lists, openBudgetForm, openCreateForm, openShoppingForm]);
+  ), [lists, openBudgetForm, openCreateForm, openQuickAppointment, openShoppingForm]);
 
   const subtitle = useMemo(() => {
     if (!isClient || !clientTime) return 'Loading family insights…';

@@ -19,6 +19,7 @@ import {
   Zap,
   ShoppingCart,
   PieChart,
+  Wrench,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -37,8 +38,10 @@ import { useShoppingContext } from '@/contexts/familyHub/ShoppingContext';
 import { useFamilyContext } from '@/contexts/familyHub/FamilyContext';
 import { useGoalsContext } from '@/contexts/familyHub/GoalsContext';
 import { useMealsContext } from '@/contexts/familyHub/MealsContext';
+import { useContractorContext } from '@/contexts/familyHub/ContractorContext';
 import { stewartFleming2025To2026, stewartFleming2026To2027 } from '@/data/schoolTerms';
 import { extractBudgetRecords, summariseBudgetForMonth } from '@/utils/budgetAnalytics';
+import { UpcomingContractorVisits } from '@/components/contractors';
 
 const currencyFormatter = new Intl.NumberFormat('en-GB', {
   style: 'currency',
@@ -115,6 +118,7 @@ export const DashboardView = () => {
   const { lists, openForm: openShoppingForm } = useShoppingContext();
   const { members, openForm: openFamilyForm } = useFamilyContext();
   const { goalsData, openQuickActivityForm, personalTracking } = useGoalsContext();
+  const { openQuickAppointment, upcomingAppointments } = useContractorContext();
   const mealPlanning = mealsContext.mealPlanning;
 
   // School year selector state - calculate dynamically based on current date
@@ -646,6 +650,18 @@ export const DashboardView = () => {
                 </div>
               </div>
             </button>
+            <button
+              onClick={openQuickAppointment}
+              className="flex items-center justify-between rounded-lg border border-gray-200 px-4 py-3 text-left text-sm hover:border-amber-300 hover:shadow dark:border-slate-700 dark:bg-slate-800"
+            >
+              <div className="flex items-center gap-3">
+                <Wrench className="h-5 w-5 text-amber-500 dark:text-amber-300" />
+                <div>
+                  <p className="font-medium text-gray-900 dark:text-slate-100">Book contractor</p>
+                  <p className="text-xs text-gray-500 dark:text-slate-400">Schedule a visit quickly</p>
+                </div>
+              </div>
+            </button>
           </div>
         </div>
       </section>
@@ -713,7 +729,7 @@ export const DashboardView = () => {
         </div>
       </section>
 
-      <section className="grid gap-6 lg:grid-cols-3">
+      <section className="grid gap-6 lg:grid-cols-4">
         <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
           <h3 className="flex items-center gap-2 text-base font-semibold text-gray-900 dark:text-slate-100">
             <Users className="h-5 w-5 text-indigo-500" /> Household members
@@ -760,6 +776,8 @@ export const DashboardView = () => {
             ))}
           </ul>
         </div>
+
+        <UpcomingContractorVisits />
       </section>
     </div>
   );

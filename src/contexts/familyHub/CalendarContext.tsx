@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, PropsWithChildren, useCallback, useContext, useMemo, useState } from 'react';
+import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { CalendarEvent, EventTemplate, Person } from '@/types/calendar.types';
 import { ConflictResolution, DetectedConflict } from '@/services/conflictDetectionService';
 import conflictDetectionService from '@/services/conflictDetectionService';
@@ -95,6 +95,86 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
   console.log('📆 CalendarContext: events from store:', events.length);
 
   const { scheduleEventReminders, cancelEventReminders, showNotification } = useNotifications();
+
+  // Track if we've already hydrated to prevent duplicate loads
+  const hasHydrated = useRef(false);
+
+  // Hydrate events from database/localStorage on mount
+  useEffect(() => {
+    if (hasHydrated.current) return;
+    if (events.length > 0) {
+      hasHydrated.current = true;
+      return;
+    }
+
+    const loadEvents = async () => {
+      hasHydrated.current = true;
+      console.log('📆 CalendarContext: Hydrating events...');
+
+      // Try database first
+      const familyId = typeof window !== 'undefined' ? localStorage.getItem('familyId') : null;
+      if (familyId) {
+        try {
+          const response = await fetch(`/api/families/${familyId}/events`);
+          if (response.ok) {
+            const dbEvents = await response.json();
+            if (Array.isArray(dbEvents) && dbEvents.length > 0) {
+              // Convert database events to app format
+              const formattedEvents = dbEvents.map((e: any) => {
+                const eventTime = new Date(e.eventTime);
+                const hours = eventTime.getUTCHours().toString().padStart(2, '0');
+                const minutes = eventTime.getUTCMinutes().toString().padStart(2, '0');
+
+                return {
+                  id: e.id,
+                  title: e.title,
+                  person: e.personId,
+                  date: e.eventDate ? e.eventDate.split('T')[0] : new Date().toISOString().split('T')[0],
+                  time: `${hours}:${minutes}`,
+                  duration: e.durationMinutes,
+                  location: e.location,
+                  recurring: e.recurringPattern,
+                  cost: e.cost,
+                  type: e.eventType,
+                  notes: e.notes,
+                  isRecurring: e.isRecurring,
+                  priority: 'medium',
+                  status: 'confirmed',
+                  createdAt: e.createdAt,
+                  updatedAt: e.updatedAt,
+                  reminders: [{ id: 'reminder-15', type: 'notification', time: 15, enabled: true }],
+                  attendees: [],
+                };
+              });
+              console.log('📆 CalendarContext: Loaded', formattedEvents.length, 'events from database');
+              setEvents(formattedEvents);
+              // Also update localStorage for offline access
+              localStorage.setItem('calendarEvents', JSON.stringify(formattedEvents));
+              return;
+            }
+          }
+        } catch (error) {
+          console.error('📆 CalendarContext: Failed to load events from database:', error);
+        }
+      }
+
+      // Fallback to localStorage
+      try {
+        const stored = typeof window !== 'undefined' ? localStorage.getItem('calendarEvents') : null;
+        if (stored) {
+          const storedEvents = JSON.parse(stored);
+          if (Array.isArray(storedEvents) && storedEvents.length > 0) {
+            console.log('📆 CalendarContext: Loaded', storedEvents.length, 'events from localStorage');
+            setEvents(storedEvents);
+          }
+        }
+      } catch (error) {
+        console.error('📆 CalendarContext: Failed to load events from localStorage:', error);
+      }
+    };
+
+    loadEvents();
+  }, [events.length, setEvents]);
 
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [defaultSlot, setDefaultSlot] = useState<{ start: Date; end: Date } | null>(null);

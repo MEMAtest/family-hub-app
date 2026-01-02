@@ -12,6 +12,8 @@ import { PropertyValueEntry } from '@/types/property.types';
 
 // Land Registry JSON-LD API endpoint
 const LAND_REGISTRY_API = 'https://landregistry.data.gov.uk/data/ppi/transaction-record.json';
+const LAND_REGISTRY_PAGE_SIZE = 200;
+const COMPARABLE_MONTHS = 24;
 
 interface PricePaidRecord {
   transactionId: string;
@@ -38,6 +40,8 @@ interface AreaValuationResult {
   period: { from: string; to: string };
   comparables: PricePaidRecord[];
 }
+
+type ComparableScope = 'area' | 'street' | 'nearby' | 'streets';
 
 // Postcode to district mapping for Land Registry lookups
 const POSTCODE_DISTRICTS: Record<string, string> = {
@@ -95,6 +99,171 @@ function mapPropertyType(type: { _about?: string; label?: Array<{ _value: string
   return 'O';
 }
 
+const mapLandRegistryItem = (item: Record<string, unknown>): PricePaidRecord => {
+  const addr = item.propertyAddress as Record<string, string>;
+  const transaction = item.hasTransaction as string || '';
+  const transactionDate = item.transactionDate as string;
+
+  return {
+    transactionId: transaction.split('/').pop() || '',
+    price: item.pricePaid as number || 0,
+    date: transactionDate || new Date().toISOString().split('T')[0],
+    postcode: addr?.postcode || '',
+    propertyType: mapPropertyType(item.propertyType as { _about?: string; label?: Array<{ _value: string }> }),
+    newBuild: item.newBuild as boolean || false,
+    tenure: (item.estateType as { _about?: string })?._about?.includes('leasehold') ? 'L' as const : 'F' as const,
+    paon: addr?.paon || '',
+    saon: addr?.saon,
+    street: addr?.street || '',
+    locality: addr?.locality,
+    town: addr?.town || '',
+    district: addr?.district || '',
+    county: addr?.county || '',
+  };
+};
+
+const fetchLandRegistryRecords = async (url: string): Promise<PricePaidRecord[]> => {
+  const response = await fetch(url, {
+    headers: {
+      'Accept': 'application/json',
+    },
+    next: { revalidate: 3600 }, // Cache for 1 hour
+  });
+
+  if (!response.ok) {
+    console.error('Land Registry API error:', response.status, await response.text());
+    return [];
+  }
+
+  const data = await response.json();
+  const items = data?.result?.items || [];
+
+  return items.map((item: Record<string, unknown>) => mapLandRegistryItem(item));
+};
+
+const filterByPostcodeArea = (records: PricePaidRecord[], postcodeArea: string) =>
+  records.filter((record) => record.postcode.toUpperCase().startsWith(postcodeArea));
+
+const normalizeStreetName = (value?: string): string =>
+  (value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const parseComparableDate = (value?: string): number => {
+  if (!value) return 0;
+  const parsed = new Date(value).getTime();
+  return Number.isNaN(parsed) ? 0 : parsed;
+};
+
+const filterRecentSales = (sales: PricePaidRecord[], months: number): PricePaidRecord[] => {
+  const cutoff = new Date();
+  cutoff.setMonth(cutoff.getMonth() - months);
+  return sales.filter((sale) => {
+    const timestamp = parseComparableDate(sale.date);
+    return timestamp > 0 && timestamp >= cutoff.getTime();
+  });
+};
+
+const selectComparableSales = (
+  sales: PricePaidRecord[],
+  street?: string,
+  nearbyStreets?: string[]
+): {
+  comparables: PricePaidRecord[];
+  scope: ComparableScope;
+  streetsUsed: string[];
+} => {
+  const streetCandidates = [street, ...(nearbyStreets || [])]
+    .map((value) => value?.trim())
+    .filter((value): value is string => Boolean(value));
+
+  if (streetCandidates.length === 0) {
+    return {
+      comparables: sales,
+      scope: 'area',
+      streetsUsed: [],
+    };
+  }
+
+  const normalizedLookup = new Map<string, string>();
+  for (const candidate of streetCandidates) {
+    const normalized = normalizeStreetName(candidate);
+    if (normalized) {
+      normalizedLookup.set(normalized, candidate);
+    }
+  }
+
+  const filtered = sales.filter((sale) =>
+    normalizedLookup.has(normalizeStreetName(sale.street))
+  );
+
+  if (filtered.length === 0) {
+    return {
+      comparables: sales,
+      scope: 'area',
+      streetsUsed: [],
+    };
+  }
+
+  const streetsUsedSet = new Set<string>();
+  for (const sale of filtered) {
+    const normalized = normalizeStreetName(sale.street);
+    const label = normalizedLookup.get(normalized);
+    if (label) {
+      streetsUsedSet.add(label);
+    }
+  }
+
+  const streetsUsed = streetCandidates.filter((candidate) =>
+    streetsUsedSet.has(candidate)
+  );
+  const normalizedMain = normalizeStreetName(street);
+  const normalizedUsed = new Set(streetsUsed.map((value) => normalizeStreetName(value)));
+
+  let scope: ComparableScope = 'nearby';
+  if (normalizedMain && normalizedUsed.has(normalizedMain)) {
+    scope = streetsUsed.length > 1 ? 'streets' : 'street';
+  }
+
+  return {
+    comparables: filtered,
+    scope,
+    streetsUsed,
+  };
+};
+
+const fetchStreetSales = async (
+  postcode: string,
+  streets: string[]
+): Promise<PricePaidRecord[]> => {
+  const postcodeArea = getPostcodeArea(postcode);
+  const district = getDistrictForPostcode(postcode);
+  const seen = new Set<string>();
+  const results: PricePaidRecord[] = [];
+
+  for (const street of streets) {
+    const trimmed = street.trim();
+    if (!trimmed) {
+      continue;
+    }
+
+    const url = `${LAND_REGISTRY_API}?_pageSize=${LAND_REGISTRY_PAGE_SIZE}&propertyAddress.district=${encodeURIComponent(district)}&propertyAddress.street=${encodeURIComponent(trimmed)}&_sort=-transactionDate`;
+    const records = await fetchLandRegistryRecords(url);
+    const filtered = filterByPostcodeArea(records, postcodeArea);
+
+    for (const record of filtered) {
+      if (!seen.has(record.transactionId)) {
+        results.push(record);
+        seen.add(record.transactionId);
+      }
+    }
+  }
+
+  return results;
+};
+
 /**
  * Fetch recent property sales from Land Registry JSON API
  */
@@ -107,61 +276,11 @@ export async function fetchAreaSales(
 
   try {
     // Fetch sales from the district
-    const url = `${LAND_REGISTRY_API}?_pageSize=200&propertyAddress.district=${encodeURIComponent(district)}&_sort=-pricePaid`;
-
-    const response = await fetch(url, {
-      headers: {
-        'Accept': 'application/json',
-      },
-      next: { revalidate: 3600 }, // Cache for 1 hour
-    });
-
-    if (!response.ok) {
-      console.error('Land Registry API error:', response.status, await response.text());
-      return [];
-    }
-
-    const data = await response.json();
-    const items = data?.result?.items || [];
-
-    // Filter by postcode area and map to our format
-    const records: PricePaidRecord[] = items
-      .filter((item: Record<string, unknown>) => {
-        const addr = item.propertyAddress as Record<string, string>;
-        const itemPostcode = addr?.postcode || '';
-        return itemPostcode.toUpperCase().startsWith(postcodeArea);
-      })
-      .map((item: Record<string, unknown>) => {
-        const addr = item.propertyAddress as Record<string, string>;
-        const transaction = item.hasTransaction as string || '';
-        const transactionDate = item.transactionDate as string;
-
-        return {
-          transactionId: transaction.split('/').pop() || '',
-          price: item.pricePaid as number || 0,
-          date: transactionDate || new Date().toISOString().split('T')[0],
-          postcode: addr?.postcode || '',
-          propertyType: mapPropertyType(item.propertyType as { _about?: string; label?: Array<{ _value: string }> }),
-          newBuild: item.newBuild as boolean || false,
-          tenure: (item.estateType as { _about?: string })?._about?.includes('leasehold') ? 'L' as const : 'F' as const,
-          paon: addr?.paon || '',
-          saon: addr?.saon,
-          street: addr?.street || '',
-          locality: addr?.locality,
-          town: addr?.town || '',
-          district: addr?.district || '',
-          county: addr?.county || '',
-        };
-      });
-
-    // Filter by date if needed
-    const fromDate = new Date();
-    fromDate.setMonth(fromDate.getMonth() - months);
-
-    return records.filter(r => {
-      if (!r.date) return true;
-      return new Date(r.date) >= fromDate;
-    });
+    const url = `${LAND_REGISTRY_API}?_pageSize=${LAND_REGISTRY_PAGE_SIZE}&propertyAddress.district=${encodeURIComponent(district)}&_sort=-transactionDate`;
+    const records = await fetchLandRegistryRecords(url);
+    const filtered = filterByPostcodeArea(records, postcodeArea);
+    const recent = filterRecentSales(filtered, months);
+    return recent.length > 0 ? recent : filtered;
   } catch (error) {
     console.error('Failed to fetch Land Registry data:', error);
     return [];
@@ -275,24 +394,71 @@ export async function getPropertyValuation(
   postcode: string,
   purchasePrice?: number,
   purchaseDate?: string,
-  propertyType?: string
+  propertyType?: string,
+  street?: string,
+  nearbyStreets?: string[]
 ): Promise<{
   areaStats: AreaValuationResult | null;
+  areaStatsScope: 'property_type' | 'all';
   estimatedValue: number | null;
   comparables: PricePaidRecord[];
+  comparableScope: ComparableScope;
+  streetsUsed: string[];
 }> {
   const sales = await fetchAreaSales(postcode, 36); // 3 years of data
-  const areaStats = calculateAreaValuation(sales, propertyType);
+  let areaStats = calculateAreaValuation(sales, propertyType);
+  let areaStatsScope: 'property_type' | 'all' = 'property_type';
+  if (!areaStats && propertyType) {
+    areaStats = calculateAreaValuation(sales);
+    areaStatsScope = 'all';
+  }
 
   let estimatedValue: number | null = null;
   if (purchasePrice && purchaseDate) {
     estimatedValue = estimateCurrentValue(purchasePrice, purchaseDate, areaStats);
   }
 
+  const streetCandidates = [street, ...(nearbyStreets || [])]
+    .map((value) => value?.trim())
+    .filter((value): value is string => Boolean(value));
+  let rawComparables: PricePaidRecord[] = [];
+  let scope: ComparableScope = 'area';
+  let streetsUsed: string[] = [];
+
+  if (streetCandidates.length > 0) {
+    const streetSales = await fetchStreetSales(postcode, streetCandidates);
+    if (streetSales.length > 0) {
+      const selected = selectComparableSales(streetSales, street, nearbyStreets);
+      rawComparables = selected.comparables;
+      scope = selected.scope;
+      streetsUsed = selected.streetsUsed;
+    }
+  }
+
+  if (rawComparables.length === 0) {
+    const selected = selectComparableSales(sales, street, nearbyStreets);
+    rawComparables = selected.comparables;
+    scope = selected.scope;
+    streetsUsed = selected.streetsUsed;
+  }
+  if (propertyType) {
+    const typeMatches = rawComparables.filter((sale) => sale.propertyType === propertyType);
+    if (typeMatches.length > 0) {
+      rawComparables = typeMatches;
+    }
+  }
+  const recentComparables = filterRecentSales(rawComparables, COMPARABLE_MONTHS);
+  const sortedComparables = (recentComparables.length > 0 ? recentComparables : rawComparables)
+    .slice()
+    .sort((a, b) => parseComparableDate(b.date) - parseComparableDate(a.date));
+
   return {
     areaStats,
+    areaStatsScope,
     estimatedValue,
-    comparables: sales.slice(0, 20),
+    comparables: sortedComparables.slice(0, 20),
+    comparableScope: scope,
+    streetsUsed,
   };
 }
 

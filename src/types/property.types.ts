@@ -19,6 +19,8 @@ export interface PropertyDocument {
 export interface PropertyBaseline {
   propertyName: string;
   address: string;
+  propertyType?: 'D' | 'S' | 'T' | 'F' | 'O';
+  nearbyStreets?: string[];
   purchaseDate?: string;
   purchasePrice?: number;
   documents: PropertyDocument[];

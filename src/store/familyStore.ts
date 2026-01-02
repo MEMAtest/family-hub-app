@@ -19,6 +19,7 @@ import {
   ProjectTask,
   ProjectMilestone,
 } from '@/types/property.types';
+import { Contractor, ContractorAppointment } from '@/types/contractor.types';
 import {
   tremaineRoadAreaWatch,
   tremaineRoadBaseline,
@@ -235,8 +236,21 @@ interface DatabaseSlice {
   setDatabaseStatus: (status: { connected: boolean; familyId: string | null; mode: string }) => void;
 }
 
+interface ContractorSlice {
+  contractors: Contractor[];
+  contractorAppointments: ContractorAppointment[];
+  setContractors: (contractors: Contractor[]) => void;
+  addContractor: (contractor: Contractor) => void;
+  updateContractor: (id: string, updates: Partial<Contractor>) => void;
+  deleteContractor: (id: string) => void;
+  setContractorAppointments: (appointments: ContractorAppointment[]) => void;
+  addContractorAppointment: (appointment: ContractorAppointment) => void;
+  updateContractorAppointment: (id: string, updates: Partial<ContractorAppointment>) => void;
+  deleteContractorAppointment: (id: string) => void;
+}
+
 // Combined state
-export type FamilyState = PeopleSlice & CalendarSlice & ViewSlice & BudgetSlice & MealPlanningSlice & ShoppingSlice & GoalsSlice & TimelineSlice & PropertySlice & DatabaseSlice;
+export type FamilyState = PeopleSlice & CalendarSlice & ViewSlice & BudgetSlice & MealPlanningSlice & ShoppingSlice & GoalsSlice & TimelineSlice & PropertySlice & DatabaseSlice & ContractorSlice;
 
 // =================================================================
 // SLICE CREATORS
@@ -827,6 +841,37 @@ const createDatabaseSlice: StateCreator<FamilyState, [], [], DatabaseSlice> = (s
   setDatabaseStatus: (status) => set({ databaseStatus: status }),
 });
 
+const createContractorSlice: StateCreator<FamilyState, [], [], ContractorSlice> = (set) => ({
+  contractors: [],
+  contractorAppointments: [],
+  setContractors: (contractors) => set({ contractors }),
+  addContractor: (contractor) =>
+    set((state) => ({ contractors: [...state.contractors, contractor] })),
+  updateContractor: (id, updates) =>
+    set((state) => ({
+      contractors: state.contractors.map((c) =>
+        c.id === id ? { ...c, ...updates, updatedAt: new Date().toISOString() } : c
+      ),
+    })),
+  deleteContractor: (id) =>
+    set((state) => ({
+      contractors: state.contractors.filter((c) => c.id !== id),
+    })),
+  setContractorAppointments: (appointments) => set({ contractorAppointments: appointments }),
+  addContractorAppointment: (appointment) =>
+    set((state) => ({ contractorAppointments: [...state.contractorAppointments, appointment] })),
+  updateContractorAppointment: (id, updates) =>
+    set((state) => ({
+      contractorAppointments: state.contractorAppointments.map((a) =>
+        a.id === id ? { ...a, ...updates, updatedAt: new Date().toISOString() } : a
+      ),
+    })),
+  deleteContractorAppointment: (id) =>
+    set((state) => ({
+      contractorAppointments: state.contractorAppointments.filter((a) => a.id !== id),
+    })),
+});
+
 // =================================================================
 // STORE CREATION
 // =================================================================
@@ -844,10 +889,11 @@ export const useFamilyStore = create<FamilyState>()(
       ...createTimelineSlice(...a),
       ...createPropertySlice(...a),
       ...createDatabaseSlice(...a),
+      ...createContractorSlice(...a),
     }),
     {
       name: 'family-storage',
-      version: 4, // Bumped to clear old cache with hardcoded data
+      version: 6, // Bumped to sync property baseline updates
       partialize: (state) => ({
         // Only persist UI preferences, NOT dynamic data
         // Dynamic data (people, events, budgetData, mealPlanning, shoppingLists, goalsData)
@@ -867,12 +913,31 @@ export const useFamilyStore = create<FamilyState>()(
         // Projects
         propertyProjects: state.propertyProjects,
         activeProjectId: state.activeProjectId,
+        // Contractors (persisted locally for now)
+        contractors: state.contractors,
+        contractorAppointments: state.contractorAppointments,
       }),
       migrate: (persistedState: any, version: number) => {
         // Clear old cache to force fresh load from database
         if (version < 4) {
           console.log('Migrating from version', version, 'to version 4 - clearing old cache');
           return {} as any;
+        }
+        if (version < 6 && persistedState?.propertyProfile?.propertyName === tremaineRoadBaseline.propertyName) {
+          const updatedProfile = {
+            ...tremaineRoadBaseline,
+            ...persistedState.propertyProfile,
+          };
+          updatedProfile.address = tremaineRoadBaseline.address;
+          updatedProfile.propertyType = tremaineRoadBaseline.propertyType;
+          updatedProfile.nearbyStreets = tremaineRoadBaseline.nearbyStreets;
+          if (updatedProfile.purchasePrice == null) {
+            updatedProfile.purchasePrice = tremaineRoadBaseline.purchasePrice;
+          }
+          if (!updatedProfile.purchaseDate) {
+            updatedProfile.purchaseDate = tremaineRoadBaseline.purchaseDate;
+          }
+          persistedState.propertyProfile = updatedProfile;
         }
         return persistedState;
       },

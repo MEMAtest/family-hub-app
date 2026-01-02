@@ -23,6 +23,7 @@ export const PropertyProjectsTab = ({ isReadOnly = false }: PropertyProjectsTabP
 
   // Project email actions
   const addProjectEmail = useFamilyStore((state) => state.addProjectEmail);
+  const updateProjectEmail = useFamilyStore((state) => state.updateProjectEmail);
   const removeProjectEmail = useFamilyStore((state) => state.removeProjectEmail);
 
   // Project task actions
@@ -69,6 +70,7 @@ export const PropertyProjectsTab = ({ isReadOnly = false }: PropertyProjectsTabP
         onBack={handleBack}
         onUpdateProject={(updates) => updatePropertyProject(activeProject.id, updates)}
         onAddEmail={(email) => addProjectEmail(activeProject.id, email)}
+        onUpdateEmail={(emailId, updates) => updateProjectEmail(activeProject.id, emailId, updates)}
         onRemoveEmail={(emailId) => removeProjectEmail(activeProject.id, emailId)}
         onAddContact={(contact) => addProjectContact(activeProject.id, contact)}
         onUpdateContact={(contactId, updates) => updateProjectContact(activeProject.id, contactId, updates)}

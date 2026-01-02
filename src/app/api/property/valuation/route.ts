@@ -22,6 +22,13 @@ export async function GET(request: NextRequest) {
     const purchasePrice = searchParams.get('purchasePrice');
     const purchaseDate = searchParams.get('purchaseDate');
     const propertyType = searchParams.get('propertyType');
+    const address = searchParams.get('address');
+    const street = searchParams.get('street');
+    const nearbyStreets = searchParams
+      .getAll('nearbyStreets')
+      .flatMap((value) => value.split(','))
+      .map((value) => value.trim())
+      .filter(Boolean);
 
     if (!postcode) {
       return NextResponse.json(
@@ -39,17 +46,31 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const resolveStreetFromAddress = (value?: string | null) => {
+      if (!value) return undefined;
+      const line1 = value.split(',')[0]?.trim() || '';
+      const withoutNumber = line1.replace(/^[0-9A-Z-]+\s+/i, '').trim();
+      return withoutNumber || undefined;
+    };
+
+    const resolvedStreet = street?.trim() || resolveStreetFromAddress(address);
+
     const result = await getPropertyValuation(
       postcode,
       purchasePrice ? parseFloat(purchasePrice) : undefined,
       purchaseDate || undefined,
-      propertyType || undefined
+      propertyType || undefined,
+      resolvedStreet,
+      nearbyStreets
     );
 
     // Generate a PropertyValueEntry if we have area stats
     const valueEntry = result.areaStats
       ? toPropertyValueEntry(result.areaStats)
       : null;
+    if (valueEntry && result.areaStatsScope === 'all' && propertyType) {
+      valueEntry.notes = `${valueEntry.notes} (all property types)`;
+    }
 
     return NextResponse.json({
       success: true,
@@ -61,6 +82,7 @@ export async function GET(request: NextRequest) {
             transactions: result.areaStats.transactions,
             priceRange: result.areaStats.priceRange,
             period: result.areaStats.period,
+            scope: result.areaStatsScope,
           }
         : null,
       estimatedValue: result.estimatedValue,
@@ -73,6 +95,8 @@ export async function GET(request: NextRequest) {
         propertyType: sale.propertyType,
         newBuild: sale.newBuild,
       })),
+      comparableScope: result.comparableScope,
+      streetsUsed: result.streetsUsed,
       valueEntry,
       dataSource: 'HM Land Registry Price Paid Data',
       disclaimer:

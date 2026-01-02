@@ -115,17 +115,34 @@ export const EmailParseModal = ({
       setExtractedData(data.extractedData);
       setParseMethod(data.method || 'regex');
 
-      // Auto-update subject if empty and we have summary/topics
+      // Auto-generate smart subject if empty
       if (!subject.trim() && data.extractedData) {
-        if (data.extractedData.summary) {
-          // Use a shortened version of summary (first 50 chars)
-          const shortSummary = data.extractedData.summary.length > 50
-            ? data.extractedData.summary.substring(0, 50) + '...'
-            : data.extractedData.summary;
-          setSubject(shortSummary);
-        } else if (data.extractedData.topics && data.extractedData.topics.length > 0) {
-          // Use first 2-3 topics
-          setSubject(data.extractedData.topics.slice(0, 3).join(', '));
+        const { contacts, topics } = data.extractedData;
+        const primaryTopic = topics && topics.length > 0 ? topics[0] : 'Enquiry';
+
+        // Priority 1: Company name + topic (e.g., "InstaFlame - Bathroom Quote")
+        if (contacts && contacts.length > 0 && contacts[0].company) {
+          setSubject(`${contacts[0].company} - ${primaryTopic}`);
+        }
+        // Priority 2: Contact name + topic (e.g., "Jason Barrett - Site Visit")
+        else if (contacts && contacts.length > 0 && contacts[0].name) {
+          setSubject(`${contacts[0].name} - ${primaryTopic}`);
+        }
+        // Priority 3: Sender name + topic (extract readable name from email)
+        else if (sender) {
+          // Clean up email address to extract name
+          const senderName = sender.includes('@')
+            ? sender.split('@')[0].replace(/[._-]/g, ' ').split(' ').map(
+                word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+              ).join(' ')
+            : sender;
+          setSubject(`${senderName} - ${primaryTopic}`);
+        }
+        // Fallback: Use topics or generic
+        else if (topics && topics.length > 0) {
+          setSubject(topics.slice(0, 2).join(', '));
+        } else {
+          setSubject('Email Communication');
         }
       }
 
@@ -183,6 +200,31 @@ export const EmailParseModal = ({
       };
     });
 
+    // Get contractor name from contacts or sender
+    const getContractorName = () => {
+      // First check if we have any selected contacts
+      if (selectedContacts.size > 0) {
+        const firstContactIdx = Array.from(selectedContacts)[0];
+        const contact = extractedData.contacts[firstContactIdx];
+        if (contact) {
+          return contact.company
+            ? `${contact.name} (${contact.company})`
+            : contact.name;
+        }
+      }
+      // Fall back to any contact in the extracted data
+      if (extractedData.contacts.length > 0) {
+        const contact = extractedData.contacts[0];
+        return contact.company
+          ? `${contact.name} (${contact.company})`
+          : contact.name;
+      }
+      // Fall back to sender
+      return sender || 'Contractor TBC';
+    };
+
+    const contractorName = getContractorName();
+
     // Create selected quotes from prices
     const quotes: TaskQuote[] = Array.from(selectedPrices)
       .filter((idx) => extractedData.prices[idx].type === 'quote' || extractedData.prices[idx].type === 'estimate')
@@ -192,7 +234,7 @@ export const EmailParseModal = ({
         email.quotesCreated.push(id);
         return {
           id,
-          contractorName: sender || 'Unknown',
+          contractorName,
           amount: price.amount,
           currency: 'GBP' as const,
           notes: price.description,
@@ -211,7 +253,7 @@ export const EmailParseModal = ({
         return {
           id,
           date: date.date,
-          contractorName: sender || 'Unknown',
+          contractorName,
           purpose: date.description,
           completed: false,
         };

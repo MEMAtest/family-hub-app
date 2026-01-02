@@ -8,20 +8,23 @@ import { BudgetProvider } from './BudgetContext';
 import { MealsProvider } from './MealsContext';
 import { ShoppingProvider } from './ShoppingContext';
 import { GoalsProvider } from './GoalsContext';
+import { ContractorProvider } from './ContractorContext';
 
 export const FamilyHubProviders = ({ children }: PropsWithChildren) => (
   <FamilyProvider>
     <AppViewProvider>
       <CalendarProvider>
-        <BudgetProvider>
-          <MealsProvider>
-            <ShoppingProvider>
-              <GoalsProvider>
-                {children}
-              </GoalsProvider>
-            </ShoppingProvider>
-          </MealsProvider>
-        </BudgetProvider>
+        <ContractorProvider>
+          <BudgetProvider>
+            <MealsProvider>
+              <ShoppingProvider>
+                <GoalsProvider>
+                  {children}
+                </GoalsProvider>
+              </ShoppingProvider>
+            </MealsProvider>
+          </BudgetProvider>
+        </ContractorProvider>
       </CalendarProvider>
     </AppViewProvider>
   </FamilyProvider>
