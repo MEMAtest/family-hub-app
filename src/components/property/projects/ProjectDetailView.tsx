@@ -106,7 +106,7 @@ export const ProjectDetailView = ({
 
   const { createEvent } = useCalendarContext();
   const people = useFamilyStore((state) => state.people);
-  const familyId = useFamilyStore((state) => state.familyId);
+  const familyId = useFamilyStore((state) => state.databaseStatus.familyId);
   const contractors = useFamilyStore((state) => state.contractors);
   const addContractor = useFamilyStore((state) => state.addContractor);
   const [validPersonId, setValidPersonId] = useState<string | null>(null);

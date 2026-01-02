@@ -701,7 +701,7 @@ export const PropertyAwarenessTab = () => {
                 : '—'
             }
             subtext={
-              valueChangePercent
+              valueChangePercent && valueChange !== null
                 ? `${valueChange >= 0 ? '+' : ''}${valueChangePercent}% since purchase`
                 : 'Add purchase price to compare'
             }

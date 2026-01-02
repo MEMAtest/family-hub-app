@@ -138,11 +138,11 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
                   type: e.eventType,
                   notes: e.notes,
                   isRecurring: e.isRecurring,
-                  priority: 'medium',
-                  status: 'confirmed',
+                  priority: 'medium' as const,
+                  status: 'confirmed' as const,
                   createdAt: e.createdAt,
                   updatedAt: e.updatedAt,
-                  reminders: [{ id: 'reminder-15', type: 'notification', time: 15, enabled: true }],
+                  reminders: [{ id: 'reminder-15', type: 'notification' as const, time: 15, enabled: true }],
                   attendees: [],
                 };
               });
