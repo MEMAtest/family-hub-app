@@ -47,6 +47,14 @@ prisma/generated/
 *.temp
 .vercel
 
+# Local model data
+/data/postcodes/
+/data/property-model/*.json
+/data/property-model/ppd/
+/data/property-model/ukhpi/
+/data/property-model/planning/
+/data/property-model/epc/
+
 # Test and utility scripts (root level only)
 /test-*.ts
 /add-*.ts

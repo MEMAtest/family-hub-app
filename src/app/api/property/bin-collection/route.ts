@@ -30,10 +30,172 @@ interface BinCollectionResponse {
   lookupUrl: string;
   scheduleUrl?: string;
   lastUpdated: string;
-  source: 'bromley' | 'fallback';
+  source: 'bromley-ics' | 'bromley' | 'fallback';
 }
 
 const BROMLEY_WASTE_URL = 'https://recyclingservices.bromley.gov.uk/waste';
+
+// Known property IDs for reliable ICS calendar lookup
+const KNOWN_BROMLEY_PROPERTY_IDS: Record<string, string> = {
+  '21 tremaine road': '3670007',
+};
+
+// Get property ID from known addresses
+function getKnownPropertyId(address: string): string | null {
+  if (!address) return null;
+  const normalized = address.toLowerCase().trim();
+  for (const [key, id] of Object.entries(KNOWN_BROMLEY_PROPERTY_IDS)) {
+    if (normalized.includes(key)) return id;
+  }
+  return null;
+}
+
+// Parse ICS calendar from Bromley Council
+interface ICSEvent {
+  date: string; // YYYYMMDD
+  summary: string;
+}
+
+function parseICSCalendar(icsText: string): ICSEvent[] {
+  const events: ICSEvent[] = [];
+  const eventBlocks = icsText.split('BEGIN:VEVENT');
+
+  for (const block of eventBlocks) {
+    const dateMatch = block.match(/DTSTART;VALUE=DATE:(\d{8})/);
+    const summaryMatch = block.match(/SUMMARY:(.+)/);
+
+    if (dateMatch && summaryMatch) {
+      events.push({
+        date: dateMatch[1],
+        summary: summaryMatch[1].replace(/\\,/g, ',').replace(/\\n/g, ' ').trim()
+      });
+    }
+  }
+
+  return events;
+}
+
+// Map ICS service names to bin types
+function mapICSServiceName(summary: string): Omit<BinCollection, 'nextCollection' | 'frequency'> | null {
+  const lower = summary.toLowerCase();
+
+  if (lower.includes('non-recyclable') || lower.includes('refuse')) {
+    return {
+      type: 'refuse',
+      label: 'General Waste (Black Bin)',
+      binColor: 'black',
+      icon: '🗑️',
+    };
+  }
+  if (lower.includes('mixed recycling') || lower.includes('recycling')) {
+    return {
+      type: 'recycling',
+      label: 'Mixed Recycling (Green Box)',
+      binColor: 'green',
+      icon: '♻️',
+    };
+  }
+  if (lower.includes('food waste') || lower.includes('food')) {
+    return {
+      type: 'food',
+      label: 'Food Waste (Brown Caddy)',
+      binColor: 'brown',
+      icon: '🍎',
+    };
+  }
+  if (lower.includes('garden')) {
+    return {
+      type: 'garden',
+      label: 'Garden Waste (Brown Bin)',
+      binColor: 'brown',
+      icon: '🌿',
+    };
+  }
+  return null;
+}
+
+// Convert YYYYMMDD to Date
+function parseICSDate(dateStr: string): Date {
+  const year = parseInt(dateStr.substring(0, 4));
+  const month = parseInt(dateStr.substring(4, 6)) - 1; // JS months are 0-indexed
+  const day = parseInt(dateStr.substring(6, 8));
+  return new Date(year, month, day);
+}
+
+// Fetch and parse ICS calendar from Bromley
+async function fetchBromleyICS(propertyId: string): Promise<BinCollection[] | null> {
+  try {
+    const icsUrl = `https://recyclingservices.bromley.gov.uk/waste/${propertyId}/calendar.ics`;
+    const response = await fetch(icsUrl, { cache: 'no-store' });
+
+    if (!response.ok) {
+      console.log('ICS fetch failed:', response.status);
+      return null;
+    }
+
+    const icsText = await response.text();
+    const events = parseICSCalendar(icsText);
+
+    if (events.length === 0) {
+      return null;
+    }
+
+    // Group events by bin type and find next collection for each
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+
+    const binTypeMap = new Map<string, { events: Date[]; info: Omit<BinCollection, 'nextCollection' | 'frequency'> }>();
+
+    for (const event of events) {
+      const mapped = mapICSServiceName(event.summary);
+      if (!mapped) continue;
+
+      const eventDate = parseICSDate(event.date);
+
+      if (!binTypeMap.has(mapped.type)) {
+        binTypeMap.set(mapped.type, { events: [], info: mapped });
+      }
+      binTypeMap.get(mapped.type)!.events.push(eventDate);
+    }
+
+    const collections: BinCollection[] = [];
+
+    for (const [type, data] of binTypeMap) {
+      // Sort dates and find next collection
+      const futureDates = data.events
+        .filter(d => d >= now)
+        .sort((a, b) => a.getTime() - b.getTime());
+
+      if (futureDates.length === 0) continue;
+
+      const nextDate = futureDates[0];
+
+      // Determine frequency by checking gap between collections
+      let frequency = 'See schedule';
+      if (futureDates.length >= 2) {
+        const gap = Math.round((futureDates[1].getTime() - futureDates[0].getTime()) / (1000 * 60 * 60 * 24));
+        if (gap <= 8) frequency = 'Weekly';
+        else if (gap <= 15) frequency = 'Fortnightly';
+        else frequency = 'Monthly';
+      }
+
+      collections.push({
+        ...data.info,
+        nextCollection: formatCollectionDate(nextDate.toISOString().split('T')[0]),
+        frequency,
+      });
+    }
+
+    // Sort by type for consistent display
+    const typeOrder = ['refuse', 'recycling', 'food', 'garden'];
+    collections.sort((a, b) => typeOrder.indexOf(a.type) - typeOrder.indexOf(b.type));
+
+    return collections.length > 0 ? collections : null;
+  } catch (error) {
+    console.error('ICS fetch error:', error);
+    return null;
+  }
+}
 
 // Bromley Council bin collection schedule
 // In a production environment, this would scrape or call the council API
@@ -276,9 +438,9 @@ const fetchBromleyCollections = async (
  * Based on Bromley Council collection patterns
  */
 function getBromleyCollectionSchedule(postcode: string): BinCollection[] {
-  // SE20 7UA is in Bromley - Tuesday collection day for most of SE20
-  // This is based on typical Bromley collection patterns
-  const collectionDay = 2; // Tuesday = 2
+  // SE20 7UA is in Bromley - Friday collection day for SE20 7UA area
+  // Based on actual Bromley ICS calendar data
+  const collectionDay = 5; // Friday = 5
 
   return [
     {
@@ -345,20 +507,45 @@ export async function GET(request: NextRequest): Promise<NextResponse<BinCollect
     let collections: BinCollection[] = [];
     let lookupUrl = '';
     let scheduleUrl: string | undefined;
-    let bromleyData: { collections: BinCollection[]; resolvedAddress: string; lookupUrl: string } | null = null;
+    let resolvedAddress: string | undefined;
+    let source: 'bromley-ics' | 'bromley' | 'fallback' = 'fallback';
 
     if (normalizedPostcode.startsWith('SE20') ||
         normalizedPostcode.startsWith('BR') ||
         ['SE6', 'SE9', 'SE12', 'SE26'].some(p => normalizedPostcode.startsWith(p))) {
       council = 'London Borough of Bromley';
-      bromleyData = await fetchBromleyCollections(normalizedPostcode, address || undefined);
-      if (bromleyData) {
-        collections = bromleyData.collections;
-        lookupUrl = BROMLEY_WASTE_URL;
-        scheduleUrl = bromleyData.lookupUrl;
-      } else {
+      lookupUrl = BROMLEY_WASTE_URL;
+
+      // Try ICS calendar first if we have a known property ID
+      const knownPropertyId = getKnownPropertyId(address || '');
+      if (knownPropertyId) {
+        console.log(`Using known property ID ${knownPropertyId} for address: ${address}`);
+        const icsCollections = await fetchBromleyICS(knownPropertyId);
+        if (icsCollections && icsCollections.length > 0) {
+          collections = icsCollections;
+          scheduleUrl = `${BROMLEY_WASTE_URL}/${knownPropertyId}`;
+          resolvedAddress = address || undefined;
+          source = 'bromley-ics';
+        }
+      }
+
+      // Fall back to HTML scraping if ICS didn't work
+      if (collections.length === 0 && address) {
+        console.log('ICS not available, trying HTML scraping...');
+        const bromleyData = await fetchBromleyCollections(normalizedPostcode, address);
+        if (bromleyData) {
+          collections = bromleyData.collections;
+          scheduleUrl = bromleyData.lookupUrl;
+          resolvedAddress = bromleyData.resolvedAddress;
+          source = 'bromley';
+        }
+      }
+
+      // Final fallback to hardcoded schedule (but now uses Friday for SE20)
+      if (collections.length === 0) {
+        console.log('Using fallback schedule');
         collections = getBromleyCollectionSchedule(normalizedPostcode);
-        lookupUrl = BROMLEY_WASTE_URL;
+        source = 'fallback';
       }
     } else {
       // Generic response for unsupported areas
@@ -370,13 +557,13 @@ export async function GET(request: NextRequest): Promise<NextResponse<BinCollect
       success: true,
       postcode: normalizedPostcode,
       address: address || undefined,
-      resolvedAddress: bromleyData?.resolvedAddress,
+      resolvedAddress,
       collections,
       council,
       lookupUrl,
       scheduleUrl,
       lastUpdated: new Date().toISOString(),
-      source: bromleyData ? 'bromley' : 'fallback',
+      source,
     });
   } catch (error) {
     console.error('Bin collection fetch error:', error);
