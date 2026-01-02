@@ -167,6 +167,13 @@ const formatStreetList = (streets?: string[]) => {
   return streets.join(', ');
 };
 
+const formatEstimateSources = (sources: Array<{ label: string }>) => {
+  if (sources.length === 0) return 'Not enough data yet';
+  if (sources.length === 1) return sources[0].label;
+  if (sources.length === 2) return `${sources[0].label} + ${sources[1].label}`;
+  return `${sources[0].label} + ${sources[1].label} + ${sources.length - 2} more`;
+};
+
 const insightIconMap: Record<string, typeof Home> = {
   'council-tax': Landmark,
   'planning-history': ClipboardCheck,
@@ -184,6 +191,20 @@ const formatCurrency = (value: number | null | undefined) => {
     return '—';
   }
   return currencyFormatter.format(value);
+};
+
+const formatPercent = (value: number | null | undefined) => {
+  if (!isFiniteNumber(value)) {
+    return '—';
+  }
+  return `${(value * 100).toFixed(1)}%`;
+};
+
+const formatRatio = (value: number | null | undefined) => {
+  if (!isFiniteNumber(value)) {
+    return '—';
+  }
+  return value.toFixed(2);
 };
 
 const formatDate = (dateStr: string) => {
@@ -453,13 +474,21 @@ export const PropertyAwarenessTab = () => {
   const estimateMedian = estimateBreakdown?.medianEstimate ??
     calculateMedianValue(estimateSources.map((source) => source.value));
   const estimatedValue = valuationData?.estimatedValue ?? estimateMedian ?? blendedEstimate;
-  const estimateSubtext = estimateSources.length >= 2
+  const singleSourceId = estimateSources[0]?.id;
+  const estimateSubtext = estimateSources.length === 0
+    ? 'Add purchase price + date to enable estimates'
+    : estimateSources.length >= 2
     ? 'Median of available sources'
-    : isFiniteNumber(modelEstimate)
+    : singleSourceId === 'model'
     ? 'Local model estimate'
-    : areaMedian
+    : singleSourceId === 'area-median'
     ? 'Area median for this postcode'
     : 'Growth estimate from purchase price';
+  const modelMeta = estimateBreakdown?.model?.meta;
+  const modelInputs = estimateBreakdown?.model?.inputs;
+  const modelWarnings = estimateBreakdown?.model?.warnings ?? [];
+  const modelCoverage = modelMeta?.coverage;
+  const modelMetrics = modelMeta?.metrics;
 
   // Calculate value change
   const latestValue =
@@ -832,7 +861,7 @@ export const PropertyAwarenessTab = () => {
             Bin Collection Days
           </h3>
           <a
-            href={binCollectionMeta?.lookupUrl || 'https://www.gov.uk/bin-collection-find-your-council'}
+            href={binCollectionMeta?.scheduleUrl || binCollectionMeta?.lookupUrl || 'https://www.gov.uk/bin-collection-find-your-council'}
             target="_blank"
             rel="noopener noreferrer"
             className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
@@ -912,7 +941,7 @@ export const PropertyAwarenessTab = () => {
 
         <p className="mt-4 text-xs text-gray-500 dark:text-slate-400 flex items-center gap-1">
           <Info className="h-3 w-3" />
-          {binCollectionMeta?.source === 'bromley'
+          {binCollectionMeta?.source === 'bromley' || binCollectionMeta?.source === 'bromley-ics'
             ? `Pulled from Bromley waste services for ${binCollectionMeta.resolvedAddress || binCollectionMeta.address || formattedPostcode}.`
             : binCollectionMeta?.council
             ? `Based on typical ${binCollectionMeta.council} collection patterns.`
@@ -1144,7 +1173,7 @@ export const PropertyAwarenessTab = () => {
                   {isFiniteNumber(estimatedValue) ? formatCurrency(estimatedValue) : '—'}
                 </p>
                 <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">
-                  Source: HM Land Registry Price Paid Data + internal growth model.
+                  Source: {formatEstimateSources(estimateSources)}.
                 </p>
               </div>
 
@@ -1192,6 +1221,12 @@ export const PropertyAwarenessTab = () => {
                   </p>
                   <div className="mt-2 space-y-2 text-sm text-gray-700 dark:text-slate-300">
                     <div className="flex items-center justify-between">
+                      <span>Model estimate</span>
+                      <span className="font-medium text-gray-900 dark:text-slate-100">
+                        {isFiniteNumber(modelEstimate) ? formatCurrency(modelEstimate) : '—'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
                       <span>Growth estimate</span>
                       <span className="font-medium text-gray-900 dark:text-slate-100">
                         {isFiniteNumber(growthEstimate) ? formatCurrency(growthEstimate) : '—'}
@@ -1204,7 +1239,7 @@ export const PropertyAwarenessTab = () => {
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span>Median (available sources)</span>
+                      <span>Median of sources</span>
                       <span className="font-medium text-gray-900 dark:text-slate-100">
                         {isFiniteNumber(estimateMedian) ? formatCurrency(estimateMedian) : '—'}
                       </span>
@@ -1217,6 +1252,123 @@ export const PropertyAwarenessTab = () => {
                   </div>
                 </div>
               </div>
+
+              {modelInputs && (
+                <div className="rounded-lg border border-gray-200 p-4 dark:border-slate-700">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">
+                    Model inputs
+                  </p>
+                  <div className="mt-2 grid gap-2 text-sm text-gray-700 dark:text-slate-300 sm:grid-cols-2">
+                    <div className="flex items-center justify-between">
+                      <span>Postcode</span>
+                      <span className="font-medium text-gray-900 dark:text-slate-100">
+                        {modelInputs.postcode}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>Outcode</span>
+                      <span className="font-medium text-gray-900 dark:text-slate-100">
+                        {modelInputs.outcode}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>Distance to center</span>
+                      <span className="font-medium text-gray-900 dark:text-slate-100">
+                        {modelInputs.distanceKm.toFixed(2)} km
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>HPI index</span>
+                      <span className="font-medium text-gray-900 dark:text-slate-100">
+                        {modelInputs.hpiIndex.toFixed(1)}
+                        {modelInputs.hpiDate ? ` (${modelInputs.hpiDate})` : ''}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>Planning (12m)</span>
+                      <span className="font-medium text-gray-900 dark:text-slate-100">
+                        {modelInputs.planningCount12m}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>Property type</span>
+                      <span className="font-medium text-gray-900 dark:text-slate-100">
+                        {getPropertyTypeLabel(modelInputs.propertyType)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>Tenure</span>
+                      <span className="font-medium text-gray-900 dark:text-slate-100">
+                        {modelInputs.tenure === 'L' ? 'Leasehold' : 'Freehold'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>New build</span>
+                      <span className="font-medium text-gray-900 dark:text-slate-100">
+                        {modelInputs.newBuild ? 'Yes' : 'No'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>Model year</span>
+                      <span className="font-medium text-gray-900 dark:text-slate-100">
+                        {modelInputs.saleYear}
+                      </span>
+                    </div>
+                  </div>
+                  {modelWarnings.length > 0 && (
+                    <p className="mt-2 text-xs text-amber-600 dark:text-amber-300">
+                      {modelWarnings.join(' ')}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {modelMetrics && (
+                <div className="rounded-lg border border-gray-200 p-4 dark:border-slate-700">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">
+                    Model performance
+                  </p>
+                  <div className="mt-2 grid gap-2 text-sm text-gray-700 dark:text-slate-300 sm:grid-cols-2">
+                    <div className="flex items-center justify-between">
+                      <span>Test MAE</span>
+                      <span className="font-medium text-gray-900 dark:text-slate-100">
+                        {formatCurrency(modelMetrics.test.mae)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>Test RMSE</span>
+                      <span className="font-medium text-gray-900 dark:text-slate-100">
+                        {formatCurrency(modelMetrics.test.rmse)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>Test MAPE</span>
+                      <span className="font-medium text-gray-900 dark:text-slate-100">
+                        {formatPercent(modelMetrics.test.mape)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>Test R²</span>
+                      <span className="font-medium text-gray-900 dark:text-slate-100">
+                        {formatRatio(modelMetrics.test.r2)}
+                      </span>
+                    </div>
+                  </div>
+                  {modelCoverage && (
+                    <p className="mt-2 text-xs text-gray-500 dark:text-slate-400">
+                      Trained on {modelCoverage.transactions.toLocaleString('en-GB')} sales
+                      {modelCoverage.minDate && modelCoverage.maxDate
+                        ? ` (${formatDate(modelCoverage.minDate)} to ${formatDate(modelCoverage.maxDate)})`
+                        : ''} within {modelCoverage.radiusKm ?? '—'} km.
+                    </p>
+                  )}
+                  {modelMeta?.generatedAt && (
+                    <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">
+                      Model updated {formatDate(modelMeta.generatedAt)}.
+                    </p>
+                  )}
+                </div>
+              )}
 
               <div className="rounded-lg border border-gray-200 p-4 dark:border-slate-700">
                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">

@@ -401,16 +401,14 @@ export function estimateCurrentValue(
   // If we have area data, use it to adjust estimation
   if (areaValuation && areaValuation.medianPrice > 0) {
     // Use a blend of growth rate and area median
-    const annualGrowthRate = 0.04; // 4% annual growth
-    const baseEstimate = purchasePrice * (1 + (annualGrowthRate * (monthsHeld / 12)));
+    const baseEstimate = purchasePrice * (1 + (ANNUAL_GROWTH_RATE * (monthsHeld / 12)));
 
     // Weight between growth estimate and area median (70/30)
     return Math.round(baseEstimate * 0.7 + areaValuation.medianPrice * 0.3);
   }
 
   // Simple growth-based estimate
-  const annualGrowthRate = 0.04;
-  return Math.round(purchasePrice * (1 + (annualGrowthRate * (monthsHeld / 12))));
+  return Math.round(purchasePrice * (1 + (ANNUAL_GROWTH_RATE * (monthsHeld / 12))));
 }
 
 /**
@@ -472,13 +470,13 @@ export async function getPropertyValuation(
   const modelEstimate = modelEstimateResult.estimate;
 
   const estimateSources: EstimateSource[] = [];
-  if (Number.isFinite(modelEstimate)) {
+  if (modelEstimate !== null && Number.isFinite(modelEstimate)) {
     estimateSources.push({ id: 'model', label: 'Local price model', value: modelEstimate });
   }
-  if (Number.isFinite(areaMedian)) {
+  if (areaMedian !== null && Number.isFinite(areaMedian)) {
     estimateSources.push({ id: 'area-median', label: 'Area median', value: areaMedian });
   }
-  if (Number.isFinite(growthEstimate)) {
+  if (growthEstimate !== null && Number.isFinite(growthEstimate)) {
     estimateSources.push({ id: 'growth', label: 'Purchase growth', value: growthEstimate });
   }
 

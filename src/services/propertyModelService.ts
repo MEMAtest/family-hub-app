@@ -175,14 +175,6 @@ const ensureModelContext = () => {
   };
 };
 
-const calculateMedian = (values: number[]) => {
-  if (values.length === 0) return null;
-  const sorted = values.slice().sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 !== 0
-    ? sorted[mid]
-    : (sorted[mid - 1] + sorted[mid]) / 2;
-};
 
 const buildFeatureVector = (
   model: ModelFile,
@@ -309,5 +301,3 @@ export const getPropertyModelEstimate = (params: PropertyModelInputs): PropertyM
     },
   };
 };
-
-export const getModelMedianEstimate = (values: number[]) => calculateMedian(values);

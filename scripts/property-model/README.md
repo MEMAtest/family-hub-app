@@ -49,7 +49,8 @@ Dataset build
 ```
 npm run model:dataset
 ```
-Output: `data/property-model/training/transactions.jsonl` and `data/property-model/training/dataset-metadata.json`.
+Output: `data/property-model/training/transactions.jsonl`, `data/property-model/training/dataset-metadata.json`,
+plus `postcode-lookup.json`, `hpi-latest.json`, and `planning-counts.json` for inference.
 
 Model training
 ```

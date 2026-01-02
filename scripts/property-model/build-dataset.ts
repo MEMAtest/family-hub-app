@@ -469,8 +469,8 @@ const run = async () => {
       outputStream.write(`${JSON.stringify(record)}\n`);
       includedRows += 1;
 
-      minDate = minDate ? (record.date < minDate ? record.date : minDate) : record.date;
-      maxDate = maxDate ? (record.date > maxDate ? record.date : maxDate) : record.date;
+      if (!minDate || record.date < minDate) minDate = record.date;
+      if (!maxDate || record.date > maxDate) maxDate = record.date;
     }
   }
 
