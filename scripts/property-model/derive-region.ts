@@ -6,54 +6,13 @@ import {
   ONSPD_SOURCE_PATH,
   REGION_OUTPUT_PATH,
 } from './config';
+import { haversineKm, parseCsvLine } from './utils';
 
 type HeaderIndex = {
   postcode: number;
   latitude: number;
   longitude: number;
   termination: number;
-};
-
-const toRadians = (value: number) => (value * Math.PI) / 180;
-
-const haversineKm = (lat1: number, lon1: number, lat2: number, lon2: number) => {
-  const radius = 6371;
-  const dLat = toRadians(lat2 - lat1);
-  const dLon = toRadians(lon2 - lon1);
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRadians(lat1)) *
-      Math.cos(toRadians(lat2)) *
-      Math.sin(dLon / 2) ** 2;
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return radius * c;
-};
-
-const splitCsvLine = (line: string): string[] => {
-  const values: string[] = [];
-  let current = '';
-  let inQuotes = false;
-
-  for (let i = 0; i < line.length; i += 1) {
-    const char = line[i];
-    if (char === '"') {
-      if (inQuotes && line[i + 1] === '"') {
-        current += '"';
-        i += 1;
-      } else {
-        inQuotes = !inQuotes;
-      }
-      continue;
-    }
-    if (char === ',' && !inQuotes) {
-      values.push(current);
-      current = '';
-      continue;
-    }
-    current += char;
-  }
-  values.push(current);
-  return values.map((value) => value.trim());
 };
 
 const resolveHeaderIndex = (header: string[]): HeaderIndex => {
@@ -95,11 +54,11 @@ const run = async () => {
 
   for await (const line of rl) {
     if (!headerIndex) {
-      headerIndex = resolveHeaderIndex(splitCsvLine(line));
+      headerIndex = resolveHeaderIndex(parseCsvLine(line));
       continue;
     }
 
-    const values = splitCsvLine(line);
+    const values = parseCsvLine(line);
     const termination = headerIndex.termination >= 0 ? values[headerIndex.termination] : '';
     if (termination) {
       continue;

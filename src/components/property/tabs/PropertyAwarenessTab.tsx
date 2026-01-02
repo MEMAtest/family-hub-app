@@ -48,6 +48,44 @@ interface AreaStatistics {
 interface ValuationData {
   areaStatistics: AreaStatistics | null;
   estimatedValue: number | null;
+  estimateBreakdown?: {
+    estimatedValue: number | null;
+    medianEstimate: number | null;
+    growthEstimate: number | null;
+    blendedEstimate: number | null;
+    areaMedian: number | null;
+    modelEstimate: number | null;
+    sources: Array<{ id: string; label: string; value: number }>;
+    model?: {
+      estimate: number | null;
+      inputs?: {
+        postcode: string;
+        outcode: string;
+        distanceKm: number;
+        hpiIndex: number;
+        hpiDate: string | null;
+        planningCount12m: number;
+        propertyType: string;
+        tenure: string;
+        newBuild: boolean;
+        saleYear: number;
+      };
+      warnings?: string[];
+      meta?: {
+        generatedAt: string;
+        metrics?: {
+          train: { mae: number; rmse: number; mape: number; r2: number };
+          test: { mae: number; rmse: number; mape: number; r2: number };
+        };
+        coverage?: {
+          transactions: number;
+          minDate: string | null;
+          maxDate: string | null;
+          radiusKm: number | null;
+        };
+      };
+    };
+  };
   comparableSales: AreaSaleRecord[];
   disclaimer: string;
   comparableScope?: 'area' | 'street' | 'nearby' | 'streets';
@@ -368,7 +406,7 @@ export const PropertyAwarenessTab = () => {
     address?: string;
     resolvedAddress?: string;
     scheduleUrl?: string;
-    source?: 'bromley' | 'fallback';
+    source?: 'bromley-ics' | 'bromley' | 'fallback';
   } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingNews, setIsLoadingNews] = useState(false);
@@ -395,20 +433,32 @@ export const PropertyAwarenessTab = () => {
   const lookupKey = `${formattedPostcode || 'no-postcode'}::${address || 'no-address'}::${propertyType}::${nearbyStreets.join('|')}`;
   const propertyTypeLabel = getPropertyTypeLabel(propertyType);
   const hasPurchaseData = isFiniteNumber(purchasePrice) && Boolean(purchaseDate);
-  const growthEstimate = hasPurchaseData
+  const estimateBreakdown = valuationData?.estimateBreakdown;
+  const modelEstimate = estimateBreakdown?.modelEstimate ?? null;
+  const areaMedian = estimateBreakdown?.areaMedian ?? valuationData?.areaStatistics?.medianPrice ?? null;
+  const growthEstimate = estimateBreakdown?.growthEstimate ?? (hasPurchaseData
     ? calculateGrowthEstimate(purchasePrice, purchaseDate as string)
-    : null;
-  const areaMedian = valuationData?.areaStatistics?.medianPrice ?? null;
-  const blendedEstimate = isFiniteNumber(growthEstimate) && isFiniteNumber(areaMedian)
-    ? Math.round(growthEstimate * 0.7 + areaMedian * 0.3)
-    : growthEstimate;
-  const estimatedValue = valuationData?.estimatedValue ?? blendedEstimate;
-  const estimateSources = [growthEstimate, areaMedian].filter(isFiniteNumber);
-  const estimateMedian = calculateMedianValue(estimateSources);
-  const estimateSubtext = !hasPurchaseData
-    ? 'Add purchase price + date to enable estimates'
+    : null);
+  const blendedEstimate = estimateBreakdown?.blendedEstimate ??
+    (isFiniteNumber(growthEstimate) && isFiniteNumber(areaMedian)
+      ? Math.round(growthEstimate * 0.7 + areaMedian * 0.3)
+      : growthEstimate);
+  const estimateSources = estimateBreakdown?.sources?.length
+    ? estimateBreakdown.sources
+    : [
+        ...(isFiniteNumber(modelEstimate) ? [{ id: 'model', label: 'Local price model', value: modelEstimate }] : []),
+        ...(isFiniteNumber(areaMedian) ? [{ id: 'area-median', label: 'Area median', value: areaMedian }] : []),
+        ...(isFiniteNumber(growthEstimate) ? [{ id: 'growth', label: 'Purchase growth', value: growthEstimate }] : []),
+      ];
+  const estimateMedian = estimateBreakdown?.medianEstimate ??
+    calculateMedianValue(estimateSources.map((source) => source.value));
+  const estimatedValue = valuationData?.estimatedValue ?? estimateMedian ?? blendedEstimate;
+  const estimateSubtext = estimateSources.length >= 2
+    ? 'Median of available sources'
+    : isFiniteNumber(modelEstimate)
+    ? 'Local model estimate'
     : areaMedian
-    ? 'Blend of growth estimate + area median (70/30)'
+    ? 'Area median for this postcode'
     : 'Growth estimate from purchase price';
 
   // Calculate value change
@@ -682,15 +732,22 @@ export const PropertyAwarenessTab = () => {
             icon={TrendingUp}
             trend={valueTrend}
             labelAction={
-              <button
-                type="button"
-                onClick={() => setIsAnalysisOpen(true)}
-                className="rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-slate-700 dark:hover:text-slate-200"
-                title="View valuation analysis"
-                aria-label="View valuation analysis"
-              >
-                <Info className="h-3.5 w-3.5" />
-              </button>
+              <div className="flex items-center gap-1">
+                {justUpdated && (
+                  <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300">
+                    Updated
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setIsAnalysisOpen(true)}
+                  className="rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-slate-700 dark:hover:text-slate-200"
+                  title="View valuation analysis"
+                  aria-label="View valuation analysis"
+                >
+                  <Info className="h-3.5 w-3.5" />
+                </button>
+              </div>
             }
           />
           <StatCard
@@ -724,7 +781,7 @@ export const PropertyAwarenessTab = () => {
           />
         </div>
         <p className="mt-4 text-xs text-gray-500 dark:text-slate-400">
-          Estimated value blends 4% annual growth from the purchase price with Land Registry area median sales (70/30 when data is available).
+          Estimated value uses the median of available sources (local model, purchase growth, and Land Registry area median).
           If no matching property-type sales exist, the median falls back to all property types.
         </p>
       </div>

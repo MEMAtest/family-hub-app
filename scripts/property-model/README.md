@@ -45,6 +45,27 @@ PLANNING_POSTCODES="SE20,SE19,SE21" npm run model:planning
 ```
 Defaults to the postcode districts in `data/property-model/region.json` when available.
 
+Dataset build
+```
+npm run model:dataset
+```
+Output: `data/property-model/training/transactions.jsonl` and `data/property-model/training/dataset-metadata.json`.
+
+Model training
+```
+npm run model:train
+```
+Optional flags:
+- `MODEL_SPLIT=temporal` to use the most recent 12 months as the test set.
+- `MODEL_TEST_RATIO=0.2` for random split ratio.
+- `MODEL_LAMBDA=1` to adjust ridge regularization strength.
+- `MODEL_SEED=42` for deterministic random splits.
+
+Full pipeline
+```
+npm run model:build
+```
+
 Notes
 - The region is centered on SE20 7UA with a 5km radius.
 - Postcode areas are limited to `SE` and `BR` to keep coverage in South East London

@@ -9,11 +9,13 @@
  */
 
 import { PropertyValueEntry } from '@/types/property.types';
+import { getPropertyModelEstimate } from './propertyModelService';
 
 // Land Registry JSON-LD API endpoint
 const LAND_REGISTRY_API = 'https://landregistry.data.gov.uk/data/ppi/transaction-record.json';
 const LAND_REGISTRY_PAGE_SIZE = 200;
 const COMPARABLE_MONTHS = 24;
+const ANNUAL_GROWTH_RATE = 0.04;
 
 interface PricePaidRecord {
   transactionId: string;
@@ -39,6 +41,23 @@ interface AreaValuationResult {
   priceRange: { min: number; max: number };
   period: { from: string; to: string };
   comparables: PricePaidRecord[];
+}
+
+export interface EstimateSource {
+  id: 'model' | 'area-median' | 'growth';
+  label: string;
+  value: number;
+}
+
+export interface EstimateBreakdown {
+  estimatedValue: number | null;
+  medianEstimate: number | null;
+  growthEstimate: number | null;
+  blendedEstimate: number | null;
+  areaMedian: number | null;
+  modelEstimate: number | null;
+  sources: EstimateSource[];
+  model?: ReturnType<typeof getPropertyModelEstimate>;
 }
 
 type ComparableScope = 'area' | 'street' | 'nearby' | 'streets';
@@ -342,6 +361,29 @@ export function calculateAreaValuation(
   };
 }
 
+const calculateGrowthEstimate = (purchasePrice: number, purchaseDate: string): number | null => {
+  const purchaseDateObj = new Date(purchaseDate);
+  if (Number.isNaN(purchaseDateObj.getTime())) {
+    return null;
+  }
+  const now = new Date();
+  const monthsHeld = Math.round(
+    (now.getTime() - purchaseDateObj.getTime()) / (1000 * 60 * 60 * 24 * 30)
+  );
+  const baseEstimate = purchasePrice * (1 + (ANNUAL_GROWTH_RATE * (monthsHeld / 12)));
+  return Math.round(baseEstimate);
+};
+
+const calculateMedianValue = (values: number[]): number | null => {
+  if (values.length === 0) return null;
+  const sorted = values.slice().sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  const median = sorted.length % 2 !== 0
+    ? sorted[mid]
+    : (sorted[mid - 1] + sorted[mid]) / 2;
+  return Math.round(median);
+};
+
 /**
  * Estimate current property value
  */
@@ -401,6 +443,7 @@ export async function getPropertyValuation(
   areaStats: AreaValuationResult | null;
   areaStatsScope: 'property_type' | 'all';
   estimatedValue: number | null;
+  estimateBreakdown: EstimateBreakdown;
   comparables: PricePaidRecord[];
   comparableScope: ComparableScope;
   streetsUsed: string[];
@@ -413,10 +456,34 @@ export async function getPropertyValuation(
     areaStatsScope = 'all';
   }
 
-  let estimatedValue: number | null = null;
-  if (purchasePrice && purchaseDate) {
-    estimatedValue = estimateCurrentValue(purchasePrice, purchaseDate, areaStats);
+  const areaMedian = areaStats?.medianPrice ?? null;
+  const growthEstimate = purchasePrice && purchaseDate
+    ? calculateGrowthEstimate(purchasePrice, purchaseDate)
+    : null;
+  const blendedEstimate =
+    growthEstimate && areaMedian
+      ? Math.round(growthEstimate * 0.7 + areaMedian * 0.3)
+      : growthEstimate;
+
+  const modelEstimateResult = getPropertyModelEstimate({
+    postcode,
+    propertyType: (propertyType as 'D' | 'S' | 'T' | 'F' | 'O' | undefined),
+  });
+  const modelEstimate = modelEstimateResult.estimate;
+
+  const estimateSources: EstimateSource[] = [];
+  if (Number.isFinite(modelEstimate)) {
+    estimateSources.push({ id: 'model', label: 'Local price model', value: modelEstimate });
   }
+  if (Number.isFinite(areaMedian)) {
+    estimateSources.push({ id: 'area-median', label: 'Area median', value: areaMedian });
+  }
+  if (Number.isFinite(growthEstimate)) {
+    estimateSources.push({ id: 'growth', label: 'Purchase growth', value: growthEstimate });
+  }
+
+  const medianEstimate = calculateMedianValue(estimateSources.map((source) => source.value));
+  const estimatedValue = medianEstimate ?? blendedEstimate ?? null;
 
   const streetCandidates = [street, ...(nearbyStreets || [])]
     .map((value) => value?.trim())
@@ -456,6 +523,16 @@ export async function getPropertyValuation(
     areaStats,
     areaStatsScope,
     estimatedValue,
+    estimateBreakdown: {
+      estimatedValue,
+      medianEstimate,
+      growthEstimate,
+      blendedEstimate,
+      areaMedian,
+      modelEstimate,
+      sources: estimateSources,
+      model: modelEstimateResult,
+    },
     comparables: sortedComparables.slice(0, 20),
     comparableScope: scope,
     streetsUsed,

@@ -54,6 +54,8 @@ prisma/generated/
 /data/property-model/ukhpi/
 /data/property-model/planning/
 /data/property-model/epc/
+/data/property-model/training/
+/data/property-model/model.json
 
 # Test and utility scripts (root level only)
 /test-*.ts

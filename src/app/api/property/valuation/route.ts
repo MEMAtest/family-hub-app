@@ -86,6 +86,7 @@ export async function GET(request: NextRequest) {
           }
         : null,
       estimatedValue: result.estimatedValue,
+      estimateBreakdown: result.estimateBreakdown,
       comparableSales: result.comparables.map((sale) => ({
         address: [sale.paon, sale.street, sale.town, sale.postcode]
           .filter(Boolean)
@@ -98,7 +99,7 @@ export async function GET(request: NextRequest) {
       comparableScope: result.comparableScope,
       streetsUsed: result.streetsUsed,
       valueEntry,
-      dataSource: 'HM Land Registry Price Paid Data',
+      dataSource: 'HM Land Registry Price Paid Data + local model',
       disclaimer:
         'This is an indicative estimate based on publicly available data. For accurate valuation, please consult a qualified surveyor or estate agent.',
     });
