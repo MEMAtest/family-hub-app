@@ -160,7 +160,7 @@ export const PropertyOverviewTab = ({
   return (
     <div className="space-y-6">
       {/* Metric Cards */}
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <PropertyMetricCard
           label="Outstanding"
           value={outstandingTasks.length}

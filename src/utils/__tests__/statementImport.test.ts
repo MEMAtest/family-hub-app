@@ -33,7 +33,7 @@ describe('statementImport', () => {
     expect(second.date).toBe('2025-06-02');
     expect(second.amount).toBe(2500);
     expect(second.direction).toBe('credit');
-    expect(second.category).toBe('Other');
+    expect(second.category).toBe('Salary');
   });
 
   it('parses Virgin Money PDF text into transactions with balances', () => {

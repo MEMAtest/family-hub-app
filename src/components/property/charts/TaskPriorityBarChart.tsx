@@ -79,6 +79,7 @@ export const TaskPriorityBarChart = ({ tasks, height = 200, onBarClick }: TaskPr
             backgroundColor: 'var(--tooltip-bg, white)',
             borderRadius: '8px',
             border: '1px solid var(--tooltip-border, #e5e7eb)',
+            color: 'var(--tooltip-text, #0f172a)',
           }}
         />
         <Bar

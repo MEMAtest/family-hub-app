@@ -82,6 +82,21 @@ const buildEvent = (draft: CalendarDraft, id?: string): CalendarEvent => ({
   status: draft.status ?? 'confirmed',
 });
 
+const mergeEvents = (primary: CalendarEvent[], secondary: CalendarEvent[]) => {
+  const merged = new Map<string, CalendarEvent>();
+  secondary.forEach((event) => {
+    if (event?.id) {
+      merged.set(event.id, event);
+    }
+  });
+  primary.forEach((event) => {
+    if (event?.id) {
+      merged.set(event.id, event);
+    }
+  });
+  return Array.from(merged.values());
+};
+
 export const CalendarProvider = ({ children }: PropsWithChildren) => {
   const events = useFamilyStore((state) => state.events);
   const setEvents = useFamilyStore((state) => state.setEvents);
@@ -111,6 +126,18 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
       hasHydrated.current = true;
       console.log('📆 CalendarContext: Hydrating events...');
 
+      const storedEvents = (() => {
+        if (typeof window === 'undefined') return [] as CalendarEvent[];
+        try {
+          const stored = localStorage.getItem('calendarEvents');
+          const parsed = stored ? JSON.parse(stored) : [];
+          return Array.isArray(parsed) ? parsed : [];
+        } catch (error) {
+          console.error('📆 CalendarContext: Failed to parse calendarEvents cache:', error);
+          return [];
+        }
+      })();
+
       // Try database first
       const familyId = typeof window !== 'undefined' ? localStorage.getItem('familyId') : null;
       if (familyId) {
@@ -118,7 +145,7 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
           const response = await fetch(`/api/families/${familyId}/events`);
           if (response.ok) {
             const dbEvents = await response.json();
-            if (Array.isArray(dbEvents) && dbEvents.length > 0) {
+            if (Array.isArray(dbEvents)) {
               // Convert database events to app format
               const formattedEvents = dbEvents.map((e: any) => {
                 const eventTime = new Date(e.eventTime);
@@ -146,10 +173,14 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
                   attendees: [],
                 };
               });
-              console.log('📆 CalendarContext: Loaded', formattedEvents.length, 'events from database');
-              setEvents(formattedEvents);
-              // Also update localStorage for offline access
-              localStorage.setItem('calendarEvents', JSON.stringify(formattedEvents));
+              const mergedEvents = mergeEvents(formattedEvents, storedEvents);
+              console.log('📆 CalendarContext: Loaded', mergedEvents.length, 'events from database/local cache');
+              if (mergedEvents.length > 0) {
+                setEvents(mergedEvents);
+              }
+              if (typeof window !== 'undefined') {
+                localStorage.setItem('calendarEvents', JSON.stringify(mergedEvents));
+              }
               return;
             }
           }
@@ -160,13 +191,9 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
 
       // Fallback to localStorage
       try {
-        const stored = typeof window !== 'undefined' ? localStorage.getItem('calendarEvents') : null;
-        if (stored) {
-          const storedEvents = JSON.parse(stored);
-          if (Array.isArray(storedEvents) && storedEvents.length > 0) {
-            console.log('📆 CalendarContext: Loaded', storedEvents.length, 'events from localStorage');
-            setEvents(storedEvents);
-          }
+        if (storedEvents.length > 0) {
+          console.log('📆 CalendarContext: Loaded', storedEvents.length, 'events from localStorage');
+          setEvents(storedEvents);
         }
       } catch (error) {
         console.error('📆 CalendarContext: Failed to load events from localStorage:', error);
@@ -443,12 +470,13 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
     const conflict = detectedConflicts.find((item) => item.id === conflictId);
     if (!conflict) return;
 
+    const savedEvent = await databaseService.saveEvent(conflict.newEvent) ?? conflict.newEvent;
     const currentEvents = useFamilyStore.getState().events;
-    setEvents([...currentEvents, conflict.newEvent]);
+    setEvents([...currentEvents, savedEvent]);
     await showNotification({
       type: 'system',
       title: 'Conflict Ignored',
-      message: `"${conflict.newEvent.title}" has been added despite the conflict.`,
+      message: `"${savedEvent.title}" has been added despite the conflict.`,
       priority: 'medium',
       category: 'conflict',
       read: false,

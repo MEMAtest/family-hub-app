@@ -90,6 +90,7 @@ export const CostTrackingChart = ({ tasks, height = 300 }: CostTrackingChartProp
             backgroundColor: 'var(--tooltip-bg, white)',
             borderRadius: '8px',
             border: '1px solid var(--tooltip-border, #e5e7eb)',
+            color: 'var(--tooltip-text, #0f172a)',
           }}
         />
         <Legend />

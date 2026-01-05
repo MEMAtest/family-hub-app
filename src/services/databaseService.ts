@@ -7,6 +7,21 @@ class DatabaseService {
   private familyId: string | null = null;
   private syncEnabled = true;
 
+  private mergeEvents(primary: CalendarEvent[], secondary: CalendarEvent[]) {
+    const merged = new Map<string, CalendarEvent>();
+    secondary.forEach((event) => {
+      if (event?.id) {
+        merged.set(event.id, event);
+      }
+    });
+    primary.forEach((event) => {
+      if (event?.id) {
+        merged.set(event.id, event);
+      }
+    });
+    return Array.from(merged.values());
+  }
+
   async initialize() {
     try {
       // Get or create family with timeout (15s to allow for cold start compilation)
@@ -143,7 +158,16 @@ class DatabaseService {
           };
         });
         if (typeof window !== 'undefined') {
-          localStorage.setItem('calendarEvents', JSON.stringify(formattedEvents));
+          let storedEvents: CalendarEvent[] = [];
+          try {
+            const stored = localStorage.getItem('calendarEvents');
+            const parsed = stored ? JSON.parse(stored) : [];
+            storedEvents = Array.isArray(parsed) ? parsed : [];
+          } catch (error) {
+            console.warn('Failed to read cached calendar events, resetting cache:', error);
+          }
+          const mergedEvents = this.mergeEvents(formattedEvents, storedEvents);
+          localStorage.setItem('calendarEvents', JSON.stringify(mergedEvents));
         }
       }
 

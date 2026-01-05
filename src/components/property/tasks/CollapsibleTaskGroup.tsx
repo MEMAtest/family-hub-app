@@ -181,7 +181,7 @@ export const CollapsibleTaskGroup = ({
                         <p className="text-sm text-gray-700 dark:text-slate-300 mt-1 break-words">{task.impact}</p>
                       </div>
                     )}
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid gap-4 sm:grid-cols-2">
                       {task.nextDueDate && (
                         <div>
                           <p className="text-xs font-semibold uppercase text-gray-500 dark:text-slate-400">Due Date</p>

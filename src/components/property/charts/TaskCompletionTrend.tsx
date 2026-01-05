@@ -80,6 +80,7 @@ export const TaskCompletionTrend = ({ tasks, height = 250 }: TaskCompletionTrend
             backgroundColor: 'var(--tooltip-bg, white)',
             borderRadius: '8px',
             border: '1px solid var(--tooltip-border, #e5e7eb)',
+            color: 'var(--tooltip-text, #0f172a)',
           }}
           formatter={(value: number, name: string) => [
             value,

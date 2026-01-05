@@ -185,7 +185,7 @@ const CATEGORY_HINTS: Array<{ keywords: string[]; category: string }> = [
     'tk maxx', 'tkmaxx', 'matalan', 'new look', 'sports direct', 'jd sports',
     'footlocker', 'nike', 'adidas', 'puma', 'dr martens', 'clarks',
     'debenhams', 'john lewis', 'harrods', 'selfridges', 'house of fraser',
-    'clothing', 'apparel', 'fashion', 'shoes', 'footwear', 'accessories',
+    'amazon', 'clothing', 'apparel', 'fashion', 'shoes', 'footwear', 'accessories',
     'jewellery', 'jewelry', 'watch', 'bag', 'handbag'
   ], category: 'Clothing' },
   // Shopping - General/Online (not clothing-specific)

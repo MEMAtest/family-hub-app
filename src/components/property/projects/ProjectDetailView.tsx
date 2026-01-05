@@ -492,7 +492,7 @@ export const ProjectDetailView = ({
             {/* Add Quote Form */}
             {showAddQuoteForm && (
               <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-500/30 dark:bg-emerald-500/10 space-y-3">
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid gap-3 sm:grid-cols-2">
                   <input
                     type="text"
                     value={newQuote.contractorName}
@@ -513,7 +513,7 @@ export const ProjectDetailView = ({
                     />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid gap-3 sm:grid-cols-2">
                   <div>
                     <label className="block text-xs text-gray-500 dark:text-slate-400 mb-1">Valid Until (optional)</label>
                     <input
@@ -639,7 +639,7 @@ export const ProjectDetailView = ({
             {/* Add Visit Form */}
             {showAddVisitForm && (
               <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-500/30 dark:bg-blue-500/10 space-y-3">
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid gap-3 sm:grid-cols-2">
                   <input
                     type="text"
                     value={newVisit.contractorName}
@@ -655,7 +655,7 @@ export const ProjectDetailView = ({
                     className="rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid gap-3 sm:grid-cols-2">
                   <input
                     type="date"
                     value={newVisit.date}
@@ -824,7 +824,7 @@ export const ProjectDetailView = ({
                     className="rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid gap-3 sm:grid-cols-2">
                   <div>
                     <label className="block text-xs text-gray-500 dark:text-slate-400 mb-1">Due Date *</label>
                     <input
@@ -1122,7 +1122,7 @@ export const ProjectDetailView = ({
               <p className="text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
                 Contractor Type(s):
               </p>
-              <div className="grid grid-cols-2 gap-2 max-h-60 overflow-y-auto">
+              <div className="grid gap-2 max-h-60 overflow-y-auto sm:grid-cols-2">
                 {CONTRACTOR_SPECIALTIES.map((specialty) => (
                   <label
                     key={specialty.value}

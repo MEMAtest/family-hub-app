@@ -186,7 +186,7 @@ export const CreateProjectModal = ({
             </div>
 
             {/* Target Dates */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-slate-300">
                   Target Start

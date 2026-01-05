@@ -249,7 +249,7 @@ const ContactsTab = ({
             onChange={(e) => setForm({ ...form, company: e.target.value })}
             className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
           />
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid gap-2 sm:grid-cols-2">
             <input
               type="tel"
               placeholder="Phone"
@@ -438,7 +438,7 @@ const QuotesTab = ({
             onChange={(e) => setForm({ ...form, company: e.target.value })}
             className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
           />
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid gap-2 sm:grid-cols-2">
             <input
               type="tel"
               placeholder="Phone"
@@ -454,7 +454,7 @@ const QuotesTab = ({
               className="rounded-md border border-gray-300 px-3 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
             />
           </div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid gap-2 sm:grid-cols-2">
             <input
               type="number"
               placeholder="Amount (GBP) *"
@@ -646,7 +646,7 @@ const VisitsTab = ({
             onChange={(e) => setForm({ ...form, company: e.target.value })}
             className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
           />
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid gap-2 sm:grid-cols-2">
             <input
               type="date"
               placeholder="Date *"

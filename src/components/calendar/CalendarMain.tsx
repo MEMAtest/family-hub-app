@@ -82,6 +82,7 @@ interface CalendarMainProps {
   currentDate: Date
   onDateChange: (date: Date) => void
   onTemplateManage?: () => void
+  onConflictSettings?: () => void
   onEventsSync?: (importedEvents: CalendarEvent[]) => void
   onWorkEventCreate?: (event: Omit<CalendarEvent, 'id' | 'createdAt' | 'updatedAt'>) => void
   familyId?: string
@@ -97,6 +98,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
   currentDate,
   onDateChange,
   onTemplateManage,
+  onConflictSettings,
   onEventsSync,
   onWorkEventCreate,
   familyId: providedFamilyId
@@ -559,16 +561,16 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
   }
 
   const categoryColors = {
-    sport: 'bg-green-100 text-green-800',
-    meeting: 'bg-blue-100 text-blue-800',
-    fitness: 'bg-purple-100 text-purple-800',
-    social: 'bg-pink-100 text-pink-800',
-    education: 'bg-yellow-100 text-yellow-800',
-    family: 'bg-red-100 text-red-800',
-    other: 'bg-gray-100 text-gray-800 dark:text-slate-200',
-    appointment: 'bg-orange-100 text-orange-800',
-    work: 'bg-indigo-100 text-indigo-800',
-    personal: 'bg-teal-100 text-teal-800'
+    sport: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-200',
+    meeting: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-200',
+    fitness: 'bg-purple-100 text-purple-800 dark:bg-purple-500/20 dark:text-purple-200',
+    social: 'bg-pink-100 text-pink-800 dark:bg-pink-500/20 dark:text-pink-200',
+    education: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-200',
+    family: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-200',
+    other: 'bg-gray-100 text-gray-800 dark:bg-slate-700 dark:text-slate-200',
+    appointment: 'bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-200',
+    work: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-500/20 dark:text-indigo-200',
+    personal: 'bg-teal-100 text-teal-800 dark:bg-teal-500/20 dark:text-teal-200'
   }
 
   // Month analytics calculations
@@ -714,7 +716,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
           <button
             onClick={() => setShowFilters(!showFilters)}
             className={`p-2 rounded-lg touch-target transition-colors ${
-              showFilters ? 'bg-blue-100 text-blue-600' : 'hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-600 dark:text-slate-300'
+              showFilters ? 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-200' : 'hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-600 dark:text-slate-300'
             }`}
           >
             <Filter className="w-4 h-4" />
@@ -1153,7 +1155,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
             onClick={() => setShowFilters(!showFilters)}
             className={`p-2 rounded-md transition-colors ${
               showFilters
-                ? 'bg-blue-100 text-blue-600'
+                ? 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-200'
                 : 'hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-600 dark:text-slate-300'
             }`}
           >
@@ -1190,7 +1192,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
             onClick={() => setShowSettings(!showSettings)}
             className={`p-2 rounded-md transition-colors ${
               showSettings
-                ? 'bg-blue-100 text-blue-600'
+                ? 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-200'
                 : 'hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-600 dark:text-slate-300'
             }`}
           >
@@ -1236,6 +1238,19 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
               >
                 <Bookmark className="w-5 h-5 text-gray-600 dark:text-slate-300" />
                 <span>Manage Templates</span>
+              </button>
+            )}
+
+            {onConflictSettings && (
+              <button
+                onClick={() => {
+                  onConflictSettings()
+                  setShowMobileMenu(false)
+                }}
+                className="w-full flex items-center gap-3 p-3 text-left hover:bg-gray-50 dark:bg-slate-800 rounded-lg touch-target"
+              >
+                <AlertTriangle className="w-5 h-5 text-gray-600 dark:text-slate-300" />
+                <span>Conflict Rules</span>
               </button>
             )}
 
@@ -1353,7 +1368,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
             </div>
 
             {/* Settings Tabs */}
-            <div className="flex space-x-1 mb-6 bg-gray-100 p-1 rounded-lg">
+            <div className="flex space-x-1 mb-6 bg-gray-100 p-1 rounded-lg dark:bg-slate-800">
               <button
                 onClick={() => setSettingsTab('sync')}
                 className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
@@ -1409,7 +1424,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
               {settingsTab === 'import' && (
                 <div className="space-y-6">
                   {/* Import Type Selection */}
-                  <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg w-fit">
+                  <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg w-fit dark:bg-slate-800">
                     <button
                       onClick={() => setImportType('pdf')}
                       className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
@@ -1480,13 +1495,13 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
               <div className="flex gap-2">
                 <button
                   onClick={() => setIsAIConflictOpen(true)}
-                  className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-xs font-medium text-purple-700 bg-purple-100 hover:bg-purple-200"
+                  className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-xs font-medium text-purple-700 bg-purple-100 hover:bg-purple-200 dark:bg-purple-500/20 dark:text-purple-200 dark:hover:bg-purple-500/30"
                 >
                   <AlertTriangle className="w-4 h-4" /> Conflicts
                 </button>
                 <button
                   onClick={() => setIsAIScheduleOpen(true)}
-                  className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-xs font-medium text-blue-700 bg-blue-100 hover:bg-blue-200"
+                  className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-xs font-medium text-blue-700 bg-blue-100 hover:bg-blue-200 dark:bg-blue-500/20 dark:text-blue-200 dark:hover:bg-blue-500/30"
                 >
                   <Sparkles className="w-4 h-4" /> Smart Scheduling
                 </button>
@@ -1555,7 +1570,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                   <div
                     key={type}
                     className={`px-3 py-1 rounded-full text-sm font-medium ${
-                      categoryColors[type as keyof typeof categoryColors] || 'bg-gray-100 text-gray-800 dark:text-slate-200'
+                      categoryColors[type as keyof typeof categoryColors] || 'bg-gray-100 text-gray-800 dark:bg-slate-700 dark:text-slate-200'
                     }`}
                   >
                     {type}: {count}
@@ -1605,6 +1620,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
             eventPropGetter={eventStyleGetter}
             popup={!isMobile}
             popupOffset={isMobile ? 0 : 30}
+            toolbar={false}
             className={`family-hub-calendar ${isMobile ? 'mobile-calendar' : ''}`}
             formats={{
               timeGutterFormat: isMobile ? 'HH:mm' : 'HH:mm',
@@ -1665,7 +1681,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                 <div className="flex items-center justify-between">
                   <h3 className="font-semibold text-gray-900 dark:text-slate-100">{hoveredEvent.title}</h3>
                   <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                    categoryColors[hoveredEvent.type as keyof typeof categoryColors] || 'bg-gray-100 text-gray-800 dark:text-slate-200'
+                    categoryColors[hoveredEvent.type as keyof typeof categoryColors] || 'bg-gray-100 text-gray-800 dark:bg-slate-700 dark:text-slate-200'
                   }`}>
                     {hoveredEvent.type}
                   </span>

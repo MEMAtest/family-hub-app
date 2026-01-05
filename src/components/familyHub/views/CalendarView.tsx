@@ -30,7 +30,7 @@ export const CalendarView = () => {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <div className="border-b border-gray-200 bg-white px-3 sm:px-4 py-2.5 sm:py-3 dark:border-slate-800 dark:bg-slate-900">
+      <div className="hidden md:block border-b border-gray-200 bg-white px-3 sm:px-4 py-2.5 sm:py-3 dark:border-slate-800 dark:bg-slate-900">
         <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3">
           <div className="min-w-0 flex-1">
             <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-100">Family Calendar</h2>
@@ -80,6 +80,7 @@ export const CalendarView = () => {
           currentDate={currentDate}
           onDateChange={setCurrentDate}
           onTemplateManage={openTemplateManager}
+          onConflictSettings={openConflictSettings}
         />
       </div>
     </div>

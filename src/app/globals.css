@@ -17,6 +17,18 @@
     -moz-osx-font-smoothing: grayscale;
   }
 
+  :root {
+    --tooltip-bg: #ffffff;
+    --tooltip-border: #e5e7eb;
+    --tooltip-text: #0f172a;
+  }
+
+  html.dark {
+    --tooltip-bg: #0f172a;
+    --tooltip-border: #334155;
+    --tooltip-text: #e2e8f0;
+  }
+
   body {
     @apply bg-gray-50 text-gray-900 antialiased;
     overscroll-behavior: none;
@@ -318,7 +330,7 @@
 
   /* Mobile-first responsive containers */
   .mobile-card {
-    @apply bg-white rounded-xl border border-gray-200 shadow-sm;
+    @apply bg-white rounded-xl border border-gray-200 shadow-sm dark:bg-slate-900 dark:border-slate-700;
   }
 
   .mobile-section {
@@ -326,46 +338,46 @@
   }
 
   .mobile-header {
-    @apply px-4 py-3 border-b border-gray-200 bg-white sticky top-0 z-40;
+    @apply px-4 py-3 border-b border-gray-200 bg-white sticky top-0 z-40 dark:border-slate-800 dark:bg-slate-900;
   }
 
   /* Mobile typography */
   .mobile-title {
-    @apply text-lg sm:text-xl font-semibold text-gray-900;
+    @apply text-lg sm:text-xl font-semibold text-gray-900 dark:text-slate-100;
   }
 
   .mobile-subtitle {
-    @apply text-sm text-gray-600;
+    @apply text-sm text-gray-600 dark:text-slate-400;
   }
 
   .mobile-body {
-    @apply text-sm sm:text-base text-gray-700;
+    @apply text-sm sm:text-base text-gray-700 dark:text-slate-300;
   }
 
   /* Mobile button variants */
   .mobile-btn-primary {
-    @apply bg-blue-600 text-white px-4 py-3 rounded-xl font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 touch-friendly active:scale-95;
+    @apply bg-blue-600 text-white px-4 py-3 rounded-xl font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 touch-friendly active:scale-95 dark:focus:ring-offset-slate-900;
   }
 
   .mobile-btn-secondary {
-    @apply bg-gray-100 text-gray-700 px-4 py-3 rounded-xl font-medium hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all duration-200 touch-friendly active:scale-95;
+    @apply bg-gray-100 text-gray-700 px-4 py-3 rounded-xl font-medium hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all duration-200 touch-friendly active:scale-95 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 dark:focus:ring-slate-500 dark:focus:ring-offset-slate-900;
   }
 
   .mobile-btn-ghost {
-    @apply text-gray-600 px-4 py-3 rounded-xl font-medium hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all duration-200 touch-friendly active:scale-95;
+    @apply text-gray-600 px-4 py-3 rounded-xl font-medium hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all duration-200 touch-friendly active:scale-95 dark:text-slate-300 dark:hover:bg-slate-800 dark:focus:ring-slate-600 dark:focus:ring-offset-slate-900;
   }
 
   /* Mobile form elements */
   .mobile-input {
-    @apply block w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200 text-base;
+    @apply block w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200 text-base dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:placeholder-slate-400;
   }
 
   .mobile-select {
-    @apply block w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200 text-base bg-white;
+    @apply block w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200 text-base bg-white dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100;
   }
 
   .mobile-textarea {
-    @apply block w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200 text-base resize-none;
+    @apply block w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200 text-base resize-none dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:placeholder-slate-400;
   }
 
   /* Mobile grid systems */
@@ -937,6 +949,24 @@
 
   .mobile-calendar .rbc-time-slot {
     @apply border-gray-100;
+  }
+
+  html.dark .mobile-calendar .rbc-month-row + .rbc-month-row {
+    border-top-color: #1e293b;
+  }
+
+  html.dark .mobile-calendar .rbc-day-bg + .rbc-day-bg {
+    border-left-color: #1e293b;
+  }
+
+  html.dark .mobile-calendar .rbc-time-slot {
+    border-top-color: #1e293b;
+  }
+
+  html.dark .mobile-calendar .rbc-time-header,
+  html.dark .mobile-calendar .rbc-time-content,
+  html.dark .mobile-calendar .rbc-time-header-gutter {
+    border-color: #1e293b;
   }
 
   /* Agenda view mobile optimizations */
