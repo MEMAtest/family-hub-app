@@ -1,6 +1,27 @@
 import { test, expect, devices, type Page } from '@playwright/test';
 
-const BASE_URL = 'http://localhost:3003';
+const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3003';
+
+const skipSetupWizard = () => {
+  localStorage.setItem('familyHub_setupComplete', 'skipped');
+};
+
+const dismissSetupWizard = async (page: Page) => {
+  const skipButton = page.getByRole('button', { name: 'Skip Setup' });
+  if (await skipButton.isVisible().catch(() => false)) {
+    await skipButton.click();
+    await page.waitForTimeout(500);
+  }
+};
+
+const preparePage = async (page: Page) => {
+  await page.waitForLoadState('networkidle');
+  await dismissSetupWizard(page);
+};
+
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(skipSetupWizard);
+});
 
 /**
  * QA Smoke Checklist - Automated Testing
@@ -77,7 +98,7 @@ test.describe('QA Smoke Checklist - Desktop Responsive (1440x900)', () => {
   test('should render dashboard on desktop', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(BASE_URL);
-    await page.waitForLoadState('networkidle');
+    await preparePage(page);
 
     await takeScreenshot(page, 'desktop-1440x900-dashboard.png');
 
@@ -90,7 +111,7 @@ test.describe('QA Smoke Checklist - Desktop Responsive (1440x900)', () => {
   test('should navigate to Calendar view', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(BASE_URL);
-    await page.waitForLoadState('networkidle');
+    await preparePage(page);
 
     const calendarButton = page.locator('text=Calendar').first();
     await calendarButton.click();
@@ -104,7 +125,7 @@ test.describe('QA Smoke Checklist - Desktop Responsive (1440x900)', () => {
   test('should navigate to Budget view', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(BASE_URL);
-    await page.waitForLoadState('networkidle');
+    await preparePage(page);
 
     const budgetButton = page.locator('text=Budget').first();
     await budgetButton.click();
@@ -121,7 +142,7 @@ test.describe('QA Smoke Checklist - Laptop (1280x720)', () => {
   test('should render dashboard on laptop', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 720 });
     await page.goto(BASE_URL);
-    await page.waitForLoadState('networkidle');
+    await preparePage(page);
 
     await takeScreenshot(page, 'laptop-1280x720-dashboard.png');
 
@@ -134,7 +155,7 @@ test.describe('QA Smoke Checklist - Tablet (iPad - 834x1112)', () => {
   test('should render dashboard on tablet', async ({ page }) => {
     await page.setViewportSize({ width: 834, height: 1112 });
     await page.goto(BASE_URL);
-    await page.waitForLoadState('networkidle');
+    await preparePage(page);
 
     await takeScreenshot(page, 'tablet-834x1112-dashboard.png');
 
@@ -144,7 +165,7 @@ test.describe('QA Smoke Checklist - Tablet (iPad - 834x1112)', () => {
   test('should show appropriate navigation on tablet', async ({ page }) => {
     await page.setViewportSize({ width: 834, height: 1112 });
     await page.goto(BASE_URL);
-    await page.waitForLoadState('networkidle');
+    await preparePage(page);
 
     const hasNavigation = await page.locator('nav').count();
     expect(hasNavigation).toBeGreaterThan(0);
@@ -158,7 +179,7 @@ test.describe('QA Smoke Checklist - Mobile (iPhone 14 - 390x844)', () => {
   test('should render dashboard on mobile', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(BASE_URL);
-    await page.waitForLoadState('networkidle');
+    await preparePage(page);
 
     await takeScreenshot(page, 'mobile-390x844-dashboard.png');
 
@@ -168,7 +189,7 @@ test.describe('QA Smoke Checklist - Mobile (iPhone 14 - 390x844)', () => {
   test('should check bottom navigation visibility on mobile', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(BASE_URL);
-    await page.waitForLoadState('networkidle');
+    await preparePage(page);
 
     await takeScreenshot(page, 'mobile-390x844-bottom-nav.png');
 
@@ -178,7 +199,7 @@ test.describe('QA Smoke Checklist - Mobile (iPhone 14 - 390x844)', () => {
   test('should navigate between views on mobile', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(BASE_URL);
-    await page.waitForLoadState('networkidle');
+    await preparePage(page);
 
     // Test Calendar navigation
     const calendarButton = page.locator('text=Calendar').first();
@@ -213,7 +234,7 @@ test.describe('QA Smoke Checklist - Android (Pixel - 360x800)', () => {
   test('should render dashboard on Android', async ({ page }) => {
     await page.setViewportSize({ width: 360, height: 800 });
     await page.goto(BASE_URL);
-    await page.waitForLoadState('networkidle');
+    await preparePage(page);
 
     await takeScreenshot(page, 'android-360x800-dashboard.png');
 
@@ -223,7 +244,7 @@ test.describe('QA Smoke Checklist - Android (Pixel - 360x800)', () => {
   test('should have touch-friendly targets', async ({ page }) => {
     await page.setViewportSize({ width: 360, height: 800 });
     await page.goto(BASE_URL);
-    await page.waitForLoadState('networkidle');
+    await preparePage(page);
 
     // Dismiss any modals/overlays that might be blocking buttons
     const closeButton = page.locator('button:has-text("Skip Setup"), button:has-text("Get Started"), [aria-label="Close"]').first();
@@ -261,7 +282,7 @@ test.describe('QA Smoke Checklist - Landscape Orientation', () => {
   test('should handle landscape on mobile (844x390)', async ({ page }) => {
     await page.setViewportSize({ width: 844, height: 390 });
     await page.goto(BASE_URL);
-    await page.waitForLoadState('networkidle');
+    await preparePage(page);
 
     await takeScreenshot(page, 'mobile-landscape-844x390.png');
 
@@ -275,7 +296,7 @@ test.describe('QA Smoke Checklist - Share Target', () => {
     const shareUrl = `${BASE_URL}/?title=Test%20Share&text=Shared%20content&url=https://example.com`;
 
     await page.goto(shareUrl);
-    await page.waitForLoadState('networkidle');
+    await preparePage(page);
 
     const url = page.url();
     expect(url).toContain('title=');
@@ -291,7 +312,7 @@ test.describe('QA Smoke Checklist - Regression Tests', () => {
   test('should load Budget view and verify charts', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(BASE_URL);
-    await page.waitForLoadState('networkidle');
+    await preparePage(page);
 
     const budgetButton = page.locator('text=Budget').first();
     await budgetButton.click();
@@ -305,7 +326,7 @@ test.describe('QA Smoke Checklist - Regression Tests', () => {
   test('should navigate to Shopping and verify UI', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(BASE_URL);
-    await page.waitForLoadState('networkidle');
+    await preparePage(page);
 
     const shoppingButton = page.locator('text=Shopping').first();
     if (await shoppingButton.isVisible()) {
@@ -321,7 +342,7 @@ test.describe('QA Smoke Checklist - Regression Tests', () => {
   test('should load Goals view', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(BASE_URL);
-    await page.waitForLoadState('networkidle');
+    await preparePage(page);
 
     const goalsButton = page.locator('text=Goals').first();
     if (await goalsButton.isVisible()) {

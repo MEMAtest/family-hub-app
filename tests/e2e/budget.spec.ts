@@ -10,6 +10,53 @@ const prisma = new PrismaClient();
 const createdIncomeIds: string[] = [];
 const createdExpenseIds: string[] = [];
 let familyId: string;
+const fixtureDate = new Date().toISOString();
+const budgetFixtures = {
+  income: [
+    {
+      id: 'e2e-income',
+      incomeName: 'Playwright Income Search',
+      amount: 1234.56,
+      category: 'Playwright QA',
+      isRecurring: false,
+      paymentDate: fixtureDate,
+      createdAt: fixtureDate,
+    },
+  ],
+  expenses: [
+    {
+      id: 'e2e-expense',
+      expenseName: 'Playwright Filter Expense',
+      amount: 87.75,
+      category: 'Playwright QA',
+      isRecurring: false,
+      paymentDate: fixtureDate,
+      createdAt: fixtureDate,
+      isReceiptScan: false,
+    },
+    {
+      id: 'e2e-receipt',
+      expenseName: 'Playwright Receipt Expense',
+      amount: 42.5,
+      category: 'Playwright QA',
+      isRecurring: false,
+      paymentDate: fixtureDate,
+      createdAt: fixtureDate,
+      isReceiptScan: true,
+      receiptScanDate: fixtureDate,
+    },
+  ],
+};
+
+const seedLocalStorage = (fixtures: typeof budgetFixtures) => {
+  localStorage.setItem('familyHub_setupComplete', 'skipped');
+  localStorage.setItem('budgetIncome', JSON.stringify(fixtures.income));
+  localStorage.setItem('budgetExpenses', JSON.stringify(fixtures.expenses));
+};
+
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(seedLocalStorage, budgetFixtures);
+});
 
 test.beforeAll(async () => {
   const family = await prisma.family.findFirst();
@@ -77,10 +124,6 @@ test.afterAll(async () => {
 });
 
 test('budget search and receipt filter behave as expected', async ({ page }) => {
-  await page.addInitScript(() => {
-    window.localStorage.setItem('familyHub_setupComplete', 'skipped');
-  });
-
   await page.goto('/');
 
   const budgetNavButton = page.locator('aside').getByRole('button', { name: 'Budget', exact: true });
@@ -114,10 +157,6 @@ test('budget search and receipt filter behave as expected', async ({ page }) => 
 });
 
 test('receipt scanner opens and shows offline OCR UI', async ({ page }) => {
-  await page.addInitScript(() => {
-    window.localStorage.setItem('familyHub_setupComplete', 'skipped');
-  });
-
   await page.goto('/');
 
   // Navigate to budget

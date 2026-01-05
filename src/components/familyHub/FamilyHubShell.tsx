@@ -57,6 +57,10 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'news', label: 'News', icon: Newspaper },
 ];
 
+const SHOULD_SKIP_SETUP =
+  process.env.NEXT_PUBLIC_SKIP_SETUP === 'true' ||
+  process.env.NEXT_PUBLIC_E2E === 'true';
+
 export const FamilyHubShell = () => {
   useDatabaseSync();
 
@@ -145,6 +149,10 @@ export const FamilyHubShell = () => {
   // Check if setup wizard should be shown on mount (client-side only)
   useEffect(() => {
     if (typeof window !== 'undefined') {
+      if (SHOULD_SKIP_SETUP) {
+        localStorage.setItem('familyHub_setupComplete', 'skipped');
+        return;
+      }
       const setupComplete = localStorage.getItem('familyHub_setupComplete');
       if (!setupComplete) {
         // Show wizard after a brief delay for better UX

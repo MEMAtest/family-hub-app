@@ -26,6 +26,9 @@ const config: PlaywrightTestConfig = {
       ...process.env,
       PORT: String(PORT),
       HOST,
+      NEXT_PUBLIC_E2E: 'true',
+      NEXT_PUBLIC_E2E_SEED: 'true',
+      NEXT_PUBLIC_SKIP_SETUP: 'true',
     },
   },
 };

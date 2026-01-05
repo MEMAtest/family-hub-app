@@ -5,6 +5,9 @@ import { useFamilyStore, FamilyState, BudgetData, MealPlanning, ShoppingList, Go
 import databaseService from '@/services/databaseService';
 import { createId } from '@/utils/id';
 
+const SHOULD_SEED_E2E = process.env.NEXT_PUBLIC_E2E_SEED === 'true';
+const E2E_SEED_KEY = 'familyHub_e2eSeeded';
+
 const safeJsonParse = <T,>(raw: string | null, fallback: T): T => {
   if (!raw) return fallback;
   try {
@@ -95,6 +98,9 @@ const normaliseBudgetEntry = (entry: any, fallbackId: string, kind?: 'income' | 
     recurringStartDate: entry?.recurringStartDate ?? undefined,
     recurringEndDate: entry?.recurringEndDate ?? undefined,
     personId: entry?.personId ?? entry?.person ?? undefined,
+    budgetLimit: entry?.budgetLimit ?? undefined,
+    isReceiptScan: Boolean(entry?.isReceiptScan),
+    receiptScanDate: entry?.receiptScanDate ?? undefined,
     type: kind ?? entry?.type,
     createdAt: entry?.createdAt ?? new Date().toISOString(),
   };
@@ -222,6 +228,61 @@ const normaliseShoppingLists = (lists: any[]): ShoppingList[] => {
   });
 };
 
+const seedE2EBudgetFixtures = () => {
+  if (typeof window === 'undefined') return;
+  if (!SHOULD_SEED_E2E) return;
+  if (localStorage.getItem(E2E_SEED_KEY)) return;
+
+  const now = new Date().toISOString();
+  const incomeFixture = {
+    id: 'e2e-income',
+    incomeName: 'Playwright Income Search',
+    amount: 1234.56,
+    category: 'Playwright QA',
+    isRecurring: false,
+    paymentDate: now,
+    createdAt: now,
+  };
+  const expenseFixture = {
+    id: 'e2e-expense',
+    expenseName: 'Playwright Filter Expense',
+    amount: 87.75,
+    category: 'Playwright QA',
+    isRecurring: false,
+    paymentDate: now,
+    createdAt: now,
+    isReceiptScan: false,
+  };
+  const receiptFixture = {
+    id: 'e2e-receipt',
+    expenseName: 'Playwright Receipt Expense',
+    amount: 42.5,
+    category: 'Playwright QA',
+    isRecurring: false,
+    paymentDate: now,
+    createdAt: now,
+    isReceiptScan: true,
+    receiptScanDate: now,
+  };
+
+  const ensureFixture = (items: any[], fixture: any, key: string) => {
+    if (items.some((item) => item?.[key] === fixture[key])) {
+      return items;
+    }
+    return [...items, fixture];
+  };
+
+  const existingIncome = readCacheArray<any>('budgetIncome');
+  const existingExpenses = readCacheArray<any>('budgetExpenses');
+  const nextIncome = ensureFixture(existingIncome, incomeFixture, 'incomeName');
+  const withExpense = ensureFixture(existingExpenses, expenseFixture, 'expenseName');
+  const nextExpenses = ensureFixture(withExpense, receiptFixture, 'expenseName');
+
+  localStorage.setItem('budgetIncome', JSON.stringify(nextIncome));
+  localStorage.setItem('budgetExpenses', JSON.stringify(nextExpenses));
+  localStorage.setItem(E2E_SEED_KEY, now);
+};
+
 const normaliseGoal = (goal: any, fallbackId: string) => {
   const createdAt = goal?.createdAt ? new Date(goal.createdAt).toISOString() : new Date().toISOString();
   const deadline = goal?.deadline ?? goal?.targetDate ?? null;
@@ -284,6 +345,8 @@ export const useDatabaseSync = () => {
 
     const initDatabase = async () => {
       console.log('🔄 Initializing database connection...');
+
+      seedE2EBudgetFixtures();
 
       const hydrateFromCache = (familyId?: string) => {
         const storeState = useFamilyStore.getState();
