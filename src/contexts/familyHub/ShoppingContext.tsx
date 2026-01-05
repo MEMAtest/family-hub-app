@@ -158,10 +158,18 @@ export const ShoppingProvider = ({ children }: PropsWithChildren) => {
       await databaseService.toggleShoppingItem(itemId);
     }
 
+    const updatedItems = list.items.map((item: any) =>
+      item.id === itemId ? { ...item, completed: !item.completed } : item
+    );
+    const estimatedTotal = updatedItems.reduce((sum: number, item: any) => sum + Number(item.price || 0), 0);
+    const total = updatedItems
+      .filter((item: any) => item.completed)
+      .reduce((sum: number, item: any) => sum + Number(item.price || 0), 0);
+
     updateListStore(listId, {
-      items: list.items.map((item: any) =>
-        item.id === itemId ? { ...item, completed: !item.completed } : item
-      ),
+      items: updatedItems,
+      estimatedTotal,
+      total,
     });
   }, [familyId, lists, updateListStore]);
 
@@ -173,8 +181,16 @@ export const ShoppingProvider = ({ children }: PropsWithChildren) => {
       await databaseService.deleteShoppingItem(itemId);
     }
 
+    const updatedItems = list.items.filter((item: any) => item.id !== itemId);
+    const estimatedTotal = updatedItems.reduce((sum: number, item: any) => sum + Number(item.price || 0), 0);
+    const total = updatedItems
+      .filter((item: any) => item.completed)
+      .reduce((sum: number, item: any) => sum + Number(item.price || 0), 0);
+
     updateListStore(listId, {
-      items: list.items.filter((item: any) => item.id !== itemId),
+      items: updatedItems,
+      estimatedTotal,
+      total,
     });
   }, [familyId, lists, updateListStore]);
 

@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Plus,
   Search,
@@ -20,69 +20,138 @@ import {
   AlertCircle,
   X
 } from 'lucide-react';
-import { useFamilyStore } from '@/store/familyStore';
+import { useFamilyStore, ShoppingList as StoreShoppingList } from '@/store/familyStore';
+import { useShoppingContext } from '@/contexts/familyHub/ShoppingContext';
+import databaseService from '@/services/databaseService';
+import { createId } from '@/utils/id';
 
 interface ShoppingListManagerProps {
   onClose?: () => void;
 }
 
-interface ShoppingItem {
+type ShoppingItemView = {
   id: string;
-  listId: string;
-  itemName: string;
-  estimatedPrice: number;
+  listId?: string;
+  itemName?: string;
+  name?: string;
+  estimatedPrice?: number;
+  price?: number;
   category: string;
   frequency?: string | null;
   personId?: string | null;
-  isCompleted: boolean;
+  person?: string | null;
+  isCompleted?: boolean;
+  completed?: boolean;
   completedAt?: Date | null;
-  createdAt: Date;
-}
+  createdAt?: Date | string;
+};
 
-interface ShoppingList {
-  id: string;
-  familyId: string;
-  listName: string;
-  category: string;
+type ShoppingListView = StoreShoppingList & {
+  listName?: string;
   storeChain?: string | null;
   customStore?: string | null;
-  isActive: boolean;
-  createdAt: Date;
-  items: ShoppingItem[];
-}
+  isActive?: boolean;
+  createdAt?: Date | string;
+  items: ShoppingItemView[];
+};
+
+const getListName = (list: ShoppingListView) => list.listName ?? list.name ?? 'Shopping List';
+const getListActive = (list: ShoppingListView) => list.isActive ?? true;
+const getItemName = (item: ShoppingItemView) => item.itemName ?? item.name ?? 'Item';
+const getItemCompleted = (item: ShoppingItemView) => item.isCompleted ?? item.completed ?? false;
+const getItemPrice = (item: ShoppingItemView) => Number(item.estimatedPrice ?? item.price ?? 0);
+
+const mapApiList = (list: any): ShoppingListView => {
+  const items = Array.isArray(list?.items) ? list.items : [];
+  const mappedItems = items.map((item: any) => ({
+    id: item?.id ?? createId('item'),
+    listId: item?.listId,
+    itemName: item?.itemName ?? item?.name ?? 'Item',
+    name: item?.itemName ?? item?.name ?? 'Item',
+    estimatedPrice: Number(item?.estimatedPrice ?? item?.price ?? 0),
+    price: Number(item?.estimatedPrice ?? item?.price ?? 0),
+    category: item?.category ?? 'General',
+    frequency: item?.frequency ?? null,
+    personId: item?.personId ?? null,
+    isCompleted: Boolean(item?.isCompleted ?? item?.completed),
+    completed: Boolean(item?.isCompleted ?? item?.completed),
+    completedAt: item?.completedAt ?? null,
+    createdAt: item?.createdAt ?? undefined,
+  }));
+
+  const estimatedTotal = mappedItems.reduce((sum, item) => sum + getItemPrice(item), 0);
+  const total = mappedItems
+    .filter((item) => getItemCompleted(item))
+    .reduce((sum, item) => sum + getItemPrice(item), 0);
+
+  return {
+    id: list?.id ?? createId('list'),
+    name: list?.listName ?? list?.name ?? 'Shopping List',
+    listName: list?.listName ?? list?.name ?? 'Shopping List',
+    category: list?.category ?? 'General',
+    items: mappedItems,
+    total,
+    estimatedTotal,
+    lastWeekSpent: Number(list?.lastWeekSpent ?? 0),
+    avgWeeklySpend: Number(list?.avgWeeklySpend ?? 0),
+    storeChain: list?.storeChain ?? null,
+    customStore: list?.customStore ?? null,
+    isActive: list?.isActive ?? true,
+    createdAt: list?.createdAt ?? undefined,
+  };
+};
 
 const ShoppingListManager: React.FC<ShoppingListManagerProps> = ({ onClose }) => {
-  const [selectedList, setSelectedList] = useState<ShoppingList | null>(null);
+  const [selectedListId, setSelectedListId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'archived'>('all');
   const [showNewListForm, setShowNewListForm] = useState(false);
   const [showNewItemForm, setShowNewItemForm] = useState(false);
-  const [lists, setLists] = useState<ShoppingList[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Get familyId from store
   const familyId = useFamilyStore((state) => state.databaseStatus.familyId);
+  const setShoppingLists = useFamilyStore((state) => state.setShoppingLists);
+  const {
+    lists,
+    addItem,
+    toggleItem,
+    addList,
+  } = useShoppingContext();
+
+  const viewLists = lists as ShoppingListView[];
+  const selectedList = useMemo(
+    () => viewLists.find((list) => list.id === selectedListId) ?? null,
+    [selectedListId, viewLists]
+  );
+
+  useEffect(() => {
+    if (selectedListId && !selectedList) {
+      setSelectedListId(null);
+    }
+  }, [selectedList, selectedListId]);
+
 
   // Fetch shopping lists from API
   useEffect(() => {
     const fetchLists = async () => {
-      if (!familyId) {
-        setError('No family ID available');
-        setLoading(false);
-        return;
-      }
-
       try {
-        setLoading(true);
-        const response = await fetch(`/api/families/${familyId}/shopping-lists`);
-
-        if (!response.ok) {
-          throw new Error('Failed to fetch shopping lists');
+        const existingLists = useFamilyStore.getState().shoppingLists;
+        if (!familyId) {
+          if (!existingLists.length) {
+            setError('No family ID available');
+          }
+          setLoading(false);
+          return;
         }
 
-        const data = await response.json();
-        setLists(data);
+        setLoading(true);
+        const data = await databaseService.getShoppingLists();
+        if (data.length > 0 || !existingLists.length) {
+          const mappedLists = data.map(mapApiList);
+          setShoppingLists(mappedLists);
+        }
         setError(null);
       } catch (err) {
         console.error('Error fetching shopping lists:', err);
@@ -93,13 +162,13 @@ const ShoppingListManager: React.FC<ShoppingListManagerProps> = ({ onClose }) =>
     };
 
     fetchLists();
-  }, [familyId]);
+  }, [familyId, setShoppingLists]);
 
-  const filteredLists = lists.filter(list => {
-    const matchesSearch = list.listName.toLowerCase().includes(searchTerm.toLowerCase());
+  const filteredLists = viewLists.filter(list => {
+    const matchesSearch = getListName(list).toLowerCase().includes(searchTerm.toLowerCase());
     const matchesFilter = filterStatus === 'all' ||
-      (filterStatus === 'active' && list.isActive) ||
-      (filterStatus === 'archived' && !list.isActive);
+      (filterStatus === 'active' && getListActive(list)) ||
+      (filterStatus === 'archived' && !getListActive(list));
     return matchesSearch && matchesFilter;
   });
 
@@ -123,48 +192,8 @@ const ShoppingListManager: React.FC<ShoppingListManagerProps> = ({ onClose }) =>
   };
 
   const toggleItemCompletion = async (listId: string, itemId: string) => {
-    if (!familyId) return;
-
     try {
-      const response = await fetch(`/api/shopping-items/${itemId}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ action: 'toggle' }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to toggle item completion');
-      }
-
-      const updatedItem = await response.json();
-
-      // Update local state
-      setLists(prev => prev.map(list => {
-        if (list.id === listId) {
-          return {
-            ...list,
-            items: list.items.map(item =>
-              item.id === itemId ? { ...item, ...updatedItem } : item
-            )
-          };
-        }
-        return list;
-      }));
-
-      // Update selected list if it's the current one
-      if (selectedList && selectedList.id === listId) {
-        setSelectedList(prev => {
-          if (!prev) return null;
-          return {
-            ...prev,
-            items: prev.items.map(item =>
-              item.id === itemId ? { ...item, ...updatedItem } : item
-            )
-          };
-        });
-      }
+      await toggleItem(listId, itemId);
     } catch (err) {
       console.error('Error toggling item completion:', err);
       alert('Failed to update item. Please try again.');
@@ -183,32 +212,35 @@ const ShoppingListManager: React.FC<ShoppingListManagerProps> = ({ onClose }) =>
     const handleSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
 
-      if (!familyId) {
-        alert('No family ID available');
-        return;
-      }
-
       try {
         setSubmitting(true);
-        const response = await fetch(`/api/families/${familyId}/shopping-lists`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            listName: formData.listName,
-            category: formData.category,
-            storeChain: formData.storeChain || null,
-            customStore: formData.customStore || null
-          }),
-        });
+        const savedList = familyId
+          ? await databaseService.createShoppingList({
+              listName: formData.listName,
+              category: formData.category,
+              storeChain: formData.storeChain || undefined,
+              customStore: formData.storeChain === 'Custom' ? formData.customStore : undefined,
+            })
+          : null;
 
-        if (!response.ok) {
-          throw new Error('Failed to create shopping list');
-        }
+        const newList = savedList
+          ? mapApiList(savedList)
+          : ({
+              id: createId('list'),
+              name: formData.listName,
+              listName: formData.listName,
+              category: formData.category,
+              items: [],
+              total: 0,
+              estimatedTotal: 0,
+              lastWeekSpent: 0,
+              avgWeeklySpend: 0,
+              storeChain: formData.storeChain || null,
+              customStore: formData.storeChain === 'Custom' ? formData.customStore : null,
+              isActive: true,
+            } as ShoppingListView);
 
-        const newList = await response.json();
-        setLists(prev => [newList, ...prev]);
+        addList(newList);
         setShowNewListForm(false);
         setFormData({
           listName: '',
@@ -346,47 +378,15 @@ const ShoppingListManager: React.FC<ShoppingListManagerProps> = ({ onClose }) =>
 
     const handleSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
-      if (!selectedList || !familyId) return;
+      if (!selectedList) return;
 
       try {
         setSubmitting(true);
-        const response = await fetch(`/api/families/${familyId}/shopping-lists/${selectedList.id}/items`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            itemName: formData.itemName,
-            estimatedPrice: formData.estimatedPrice ? parseFloat(formData.estimatedPrice) : 0,
-            category: formData.category,
-            frequency: formData.frequency || null
-          }),
-        });
-
-        if (!response.ok) {
-          throw new Error('Failed to add item');
-        }
-
-        const newItem = await response.json();
-
-        // Update local state
-        setLists(prev => prev.map(list => {
-          if (list.id === selectedList.id) {
-            return {
-              ...list,
-              items: [...list.items, newItem]
-            };
-          }
-          return list;
-        }));
-
-        // Update selected list
-        setSelectedList(prev => {
-          if (!prev) return null;
-          return {
-            ...prev,
-            items: [...prev.items, newItem]
-          };
+        await addItem(selectedList.id, {
+          name: formData.itemName,
+          price: formData.estimatedPrice ? parseFloat(formData.estimatedPrice) : 0,
+          category: formData.category,
+          frequency: formData.frequency || undefined,
         });
 
         setShowNewItemForm(false);
@@ -510,11 +510,11 @@ const ShoppingListManager: React.FC<ShoppingListManagerProps> = ({ onClose }) =>
     );
   };
 
-  const ListDetailView = ({ list }: { list: ShoppingList }) => {
-    const completedItems = list.items.filter(item => item.isCompleted).length;
+  const ListDetailView = ({ list }: { list: ShoppingListView }) => {
+    const completedItems = list.items.filter(item => getItemCompleted(item)).length;
     const totalItems = list.items.length;
     const progress = totalItems > 0 ? (completedItems / totalItems) * 100 : 0;
-    const estimatedTotal = list.items.reduce((sum, item) => sum + (item.estimatedPrice || 0), 0);
+    const estimatedTotal = list.items.reduce((sum, item) => sum + getItemPrice(item), 0);
 
     return (
       <div className="space-y-6">
@@ -522,10 +522,10 @@ const ShoppingListManager: React.FC<ShoppingListManagerProps> = ({ onClose }) =>
         <div className="bg-white border border-gray-200 rounded-lg p-6">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="text-2xl font-semibold text-gray-900">{list.listName}</h2>
+              <h2 className="text-2xl font-semibold text-gray-900">{getListName(list)}</h2>
               <div className="flex items-center space-x-4 mt-2 text-sm text-gray-600">
-                <span className={`px-2 py-1 rounded-full text-xs ${list.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
-                  {list.isActive ? 'Active' : 'Archived'}
+                <span className={`px-2 py-1 rounded-full text-xs ${getListActive(list) ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+                  {getListActive(list) ? 'Active' : 'Archived'}
                 </span>
                 <span className="capitalize">{list.category}</span>
                 {list.storeChain && (
@@ -537,7 +537,7 @@ const ShoppingListManager: React.FC<ShoppingListManagerProps> = ({ onClose }) =>
               </div>
             </div>
             <button
-              onClick={() => setSelectedList(null)}
+              onClick={() => setSelectedListId(null)}
               className="text-gray-400 hover:text-gray-600"
             >
               <X className="w-5 h-5" />
@@ -599,7 +599,7 @@ const ShoppingListManager: React.FC<ShoppingListManagerProps> = ({ onClose }) =>
                 <div
                   key={item.id}
                   className={`flex items-center justify-between p-4 border rounded-lg ${
-                    item.isCompleted
+                    getItemCompleted(item)
                       ? 'bg-green-50 border-green-200'
                       : 'bg-white border-gray-200'
                   }`}
@@ -608,21 +608,21 @@ const ShoppingListManager: React.FC<ShoppingListManagerProps> = ({ onClose }) =>
                     <button
                       onClick={() => toggleItemCompletion(list.id, item.id)}
                       className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
-                        item.isCompleted
+                        getItemCompleted(item)
                           ? 'bg-green-500 border-green-500 text-white'
                           : 'border-gray-300 hover:border-gray-400'
                       }`}
                     >
-                      {item.isCompleted && <CheckCircle className="w-3 h-3" />}
+                      {getItemCompleted(item) && <CheckCircle className="w-3 h-3" />}
                     </button>
-                    <div className={item.isCompleted ? 'line-through text-gray-500' : ''}>
-                      <h4 className="font-medium">{item.itemName}</h4>
+                    <div className={getItemCompleted(item) ? 'line-through text-gray-500' : ''}>
+                      <h4 className="font-medium">{getItemName(item)}</h4>
                       <div className="flex items-center space-x-2 text-sm text-gray-600">
                         <span>{item.category}</span>
-                        {item.estimatedPrice > 0 && (
+                        {getItemPrice(item) > 0 && (
                           <>
                             <span>•</span>
-                            <span>£{item.estimatedPrice.toFixed(2)}</span>
+                            <span>£{getItemPrice(item).toFixed(2)}</span>
                           </>
                         )}
                         {item.frequency && (
@@ -719,21 +719,21 @@ const ShoppingListManager: React.FC<ShoppingListManagerProps> = ({ onClose }) =>
       {!loading && !error && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredLists.map((list) => {
-            const completedItems = list.items.filter(item => item.isCompleted).length;
+            const completedItems = list.items.filter(item => getItemCompleted(item)).length;
             const totalItems = list.items.length;
             const progress = totalItems > 0 ? (completedItems / totalItems) * 100 : 0;
-            const estimatedTotal = list.items.reduce((sum, item) => sum + (item.estimatedPrice || 0), 0);
+            const estimatedTotal = list.items.reduce((sum, item) => sum + getItemPrice(item), 0);
 
             return (
               <div
                 key={list.id}
                 className="bg-white border border-gray-200 rounded-lg p-6 cursor-pointer hover:shadow-md transition-shadow"
-                onClick={() => setSelectedList(list)}
+                onClick={() => setSelectedListId(list.id)}
               >
                 <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-semibold text-gray-900 truncate">{list.listName}</h3>
-                  <span className={`px-2 py-1 rounded-full text-xs ${list.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
-                    {list.isActive ? 'Active' : 'Archived'}
+                  <h3 className="font-semibold text-gray-900 truncate">{getListName(list)}</h3>
+                  <span className={`px-2 py-1 rounded-full text-xs ${getListActive(list) ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+                    {getListActive(list) ? 'Active' : 'Archived'}
                   </span>
                 </div>
 

@@ -207,12 +207,17 @@ const normaliseShoppingLists = (lists: any[]): ShoppingList[] => {
     return {
       id: list?.id ?? `list-${index}`,
       name: list?.listName ?? list?.name ?? 'Shopping List',
+      listName: list?.listName ?? list?.name ?? 'Shopping List',
       category: list?.category ?? 'General',
       items: mappedItems as any,
       total,
       estimatedTotal,
       lastWeekSpent: Number(list?.lastWeekSpent ?? 0),
       avgWeeklySpend: Number(list?.avgWeeklySpend ?? 0),
+      storeChain: list?.storeChain ?? null,
+      customStore: list?.customStore ?? null,
+      isActive: list?.isActive ?? true,
+      createdAt: list?.createdAt ?? undefined,
     };
   });
 };

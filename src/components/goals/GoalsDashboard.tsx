@@ -1,7 +1,7 @@
 'use client'
 
-import React, { useState, useEffect } from 'react';
-import { useFamilyStore } from '@/store/familyStore';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useFamilyStore, GoalsData } from '@/store/familyStore';
 import {
   Target,
   Plus,
@@ -49,6 +49,70 @@ import { AIGoalCoachPlan, AIGoalProgressSummary } from '@/types/goals.types';
 interface GoalsDashboardProps {
   onClose?: () => void;
 }
+
+const toUiGoal = (goal: any) => ({
+  id: goal.id,
+  title: goal.goalTitle ?? goal.title ?? 'Goal',
+  description: goal.goalDescription ?? goal.description ?? '',
+  category: goal.category ?? 'personal',
+  type: goal.goalType ?? goal.type ?? 'family',
+  participants: goal.participants || [],
+  priority: goal.priority ?? 'medium',
+  status: goal.status ?? 'active',
+  progress: goal.currentProgress ?? goal.progress ?? 0,
+  target: { type: 'numeric', value: goal.targetValue ?? goal.target?.value ?? '' },
+  current: { value: goal.currentProgress ?? goal.progress ?? 0, lastUpdated: new Date(goal.updatedAt ?? goal.createdAt ?? Date.now()) },
+  startDate: goal.createdAt ? new Date(goal.createdAt) : new Date(),
+  targetDate: goal.deadline ? new Date(goal.deadline) : (goal.targetDate ? new Date(goal.targetDate) : null),
+  milestones: goal.milestones || [],
+  tags: goal.tags || [],
+  createdAt: goal.createdAt ? new Date(goal.createdAt) : new Date(),
+});
+
+const normaliseGoalForStore = (goal: any) => {
+  const createdAt = goal?.createdAt ? new Date(goal.createdAt).toISOString() : new Date().toISOString();
+  const deadline = goal?.deadline ?? goal?.targetDate ?? null;
+  const progress = Number(goal?.currentProgress ?? goal?.progress ?? 0);
+
+  return {
+    id: goal?.id ?? `goal-${Math.random().toString(36).slice(2, 8)}`,
+    title: goal?.goalTitle ?? goal?.title ?? 'Goal',
+    description: goal?.goalDescription ?? goal?.description ?? '',
+    type: goal?.goalType ?? goal?.type ?? 'family',
+    participants: Array.isArray(goal?.participants) ? goal.participants : [],
+    progress,
+    currentProgress: progress,
+    targetValue: goal?.targetValue ?? goal?.target?.value ?? '',
+    deadline,
+    createdAt,
+    updatedAt: goal?.updatedAt ? new Date(goal.updatedAt).toISOString() : createdAt,
+  };
+};
+
+const buildGoalsData = (goals: any[]): GoalsData => {
+  const familyGoals: any[] = [];
+  const individualGoals: any[] = [];
+
+  goals.forEach((goal) => {
+    const record = normaliseGoalForStore(goal);
+    const type = String(record.type ?? '').toLowerCase();
+    if (type === 'individual' || type === 'personal') {
+      individualGoals.push(record);
+    } else {
+      familyGoals.push(record);
+    }
+  });
+
+  return {
+    familyGoals,
+    individualGoals,
+    achievements: [],
+    rewardSystem: {
+      points: {},
+      badges: {},
+    },
+  };
+};
 
 const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
   const isMobile = useMediaQuery('(max-width: 1023px)');
@@ -137,6 +201,30 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
 
   // Get familyId from store
   const familyId = useFamilyStore((state) => state.databaseStatus.familyId) || 'cmg741w2h0000ljcb3f6fo19g';
+  const goalsData = useFamilyStore((state) => state.goalsData);
+  const setGoalsData = useFamilyStore((state) => state.setGoalsData);
+
+  const persistGoalsData = useCallback((data: GoalsData) => {
+    setGoalsData(data);
+    if (typeof window === 'undefined') return;
+    try {
+      localStorage.setItem('goalsData', JSON.stringify(data));
+      const flattened = [...(data.familyGoals || []), ...(data.individualGoals || [])];
+      localStorage.setItem('familyGoals', JSON.stringify(flattened));
+    } catch (error) {
+      console.warn('Failed to persist goals cache', error);
+    }
+  }, [setGoalsData]);
+
+  const upsertGoalInStore = useCallback((goal: any) => {
+    const current = useFamilyStore.getState().goalsData;
+    const existingGoals = current ? [...(current.familyGoals || []), ...(current.individualGoals || [])] : [];
+    const nextGoals = [...existingGoals.filter((g) => g.id !== goal.id), normaliseGoalForStore(goal)];
+    const nextData = buildGoalsData(nextGoals);
+    nextData.achievements = current?.achievements ?? [];
+    nextData.rewardSystem = current?.rewardSystem ?? { points: {}, badges: {} };
+    persistGoalsData(nextData);
+  }, [persistGoalsData]);
 
   const handleGenerateGoalCoach = async () => {
     if (!familyId) {
@@ -203,6 +291,13 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
     }
   };
 
+  useEffect(() => {
+    if (!goalsData) return;
+    const merged = [...(goalsData.familyGoals || []), ...(goalsData.individualGoals || [])];
+    if (!merged.length) return;
+    setGoals(merged.map(toUiGoal));
+  }, [goalsData]);
+
   // Fetch goals from API
   useEffect(() => {
     const fetchGoals = async () => {
@@ -222,26 +317,14 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
         const data = await response.json();
 
         // Transform API data to match component's expected format
-        const transformedGoals = data.map((goal: any) => ({
-          id: goal.id,
-          title: goal.goalTitle,
-          description: goal.goalDescription,
-          category: 'personal', // Default since not in DB schema
-          type: goal.goalType,
-          participants: goal.participants || [],
-          priority: 'medium', // Default since not in DB schema
-          status: 'active', // Default since not in DB schema
-          progress: goal.currentProgress || 0,
-          target: { type: 'numeric', value: goal.targetValue },
-          current: { value: goal.currentProgress, lastUpdated: new Date(goal.updatedAt) },
-          startDate: goal.createdAt ? new Date(goal.createdAt) : new Date(),
-          targetDate: goal.deadline ? new Date(goal.deadline) : null,
-          milestones: goal.milestones || [],
-          tags: [], // Not in DB schema
-          createdAt: goal.createdAt ? new Date(goal.createdAt) : new Date()
-        }));
+        const transformedGoals = data.map(toUiGoal);
 
         setGoals(transformedGoals);
+        const currentGoalsData = useFamilyStore.getState().goalsData;
+        const nextGoalsData = buildGoalsData(data);
+        nextGoalsData.achievements = currentGoalsData?.achievements ?? [];
+        nextGoalsData.rewardSystem = currentGoalsData?.rewardSystem ?? { points: {}, badges: {} };
+        persistGoalsData(nextGoalsData);
         setError(null);
       } catch (err) {
         console.error('Error fetching goals:', err);
@@ -252,7 +335,7 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
     };
 
     fetchGoals();
-  }, [familyId]);
+  }, [familyId, persistGoalsData]);
 
   // Update goal function
   const updateGoal = async (goalId: string, updates: any) => {
@@ -277,26 +360,10 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
       const updatedGoal = await response.json();
 
       // Transform and update local state
-      const transformedGoal = {
-        id: updatedGoal.id,
-        title: updatedGoal.goalTitle,
-        description: updatedGoal.goalDescription,
-        category: 'personal',
-        type: updatedGoal.goalType,
-        participants: updatedGoal.participants || [],
-        priority: 'medium',
-        status: 'active',
-        progress: updatedGoal.currentProgress || 0,
-        target: { type: 'numeric', value: updatedGoal.targetValue },
-        current: { value: updatedGoal.currentProgress, lastUpdated: new Date(updatedGoal.updatedAt) },
-        startDate: new Date(updatedGoal.createdAt),
-        targetDate: updatedGoal.deadline ? new Date(updatedGoal.deadline) : null,
-        milestones: updatedGoal.milestones || [],
-        tags: [],
-        createdAt: new Date(updatedGoal.createdAt)
-      };
+      const transformedGoal = toUiGoal(updatedGoal);
 
       setGoals(prev => prev.map(g => g.id === goalId ? transformedGoal : g));
+      upsertGoalInStore(updatedGoal);
       console.log('Goal updated successfully:', transformedGoal);
     } catch (error) {
       console.error('Failed to update goal:', error);
@@ -1652,26 +1719,10 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
               const savedGoal = await response.json();
 
               // Transform and add to local state
-              const transformedGoal = {
-                id: savedGoal.id,
-                title: savedGoal.goalTitle,
-                description: savedGoal.goalDescription,
-                category: 'personal',
-                type: savedGoal.goalType,
-                participants: savedGoal.participants || [],
-                priority: 'medium',
-                status: 'active',
-                progress: savedGoal.currentProgress || 0,
-                target: { type: 'numeric', value: savedGoal.targetValue },
-                current: { value: savedGoal.currentProgress, lastUpdated: new Date() },
-                startDate: new Date(savedGoal.createdAt),
-                targetDate: savedGoal.deadline ? new Date(savedGoal.deadline) : null,
-                milestones: savedGoal.milestones || [],
-                tags: [],
-                createdAt: new Date(savedGoal.createdAt)
-              };
+              const transformedGoal = toUiGoal(savedGoal);
 
               setGoals(prev => [transformedGoal, ...prev]);
+              upsertGoalInStore(savedGoal);
               console.log('Goal created successfully:', transformedGoal);
             } catch (error) {
               console.error('Failed to save goal:', error);
