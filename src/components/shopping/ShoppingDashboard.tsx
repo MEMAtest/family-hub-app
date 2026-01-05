@@ -220,11 +220,11 @@ const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose, onSubVie
 
   // Mobile Header Component
   const renderMobileHeader = () => (
-    <div className="lg:hidden bg-white border-b border-gray-200 px-4 py-3 sticky top-0 z-40 pwa-safe-top">
+    <div className="lg:hidden bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 px-4 py-3 sticky top-0 z-40 pwa-safe-top">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-3">
-          <ShoppingCart className="w-6 h-6 text-blue-600" />
-          <h1 className="mobile-title">Shopping</h1>
+          <ShoppingCart className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+          <h1 className="mobile-title dark:text-slate-100">Shopping</h1>
         </div>
         <button
           onClick={() => setShowMobileMenu(true)}
@@ -236,7 +236,7 @@ const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose, onSubVie
 
       {/* View Tabs - Mobile */}
       {activeView === 'dashboard' && (
-        <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg overflow-x-auto">
+        <div className="flex space-x-1 bg-gray-100 dark:bg-slate-800 p-1 rounded-lg overflow-x-auto">
           {[
             { id: 'lists', label: 'Lists', icon: List },
             { id: 'stores', label: 'Stores', icon: Store },
@@ -246,7 +246,7 @@ const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose, onSubVie
             <button
               key={id}
               onClick={() => setActiveView(id as any)}
-              className="flex items-center gap-1 px-3 py-2 text-xs font-medium text-gray-600 hover:text-gray-900 hover:bg-white rounded-md transition-colors whitespace-nowrap"
+              className="flex items-center gap-1 px-3 py-2 text-xs font-medium text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-slate-100 hover:bg-white dark:hover:bg-slate-700 rounded-md transition-colors whitespace-nowrap"
             >
               <Icon className="w-3 h-3" />
               <span>{label}</span>
@@ -263,19 +263,19 @@ const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose, onSubVie
 
     return (
       <div className="lg:hidden fixed inset-0 bg-black bg-opacity-50 z-50" onClick={() => setShowMobileMenu(false)}>
-        <div className="absolute right-0 top-0 h-full w-80 bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
-          <div className="flex items-center justify-between p-4 border-b border-gray-200 pwa-safe-top">
-            <h2 className="text-lg font-semibold text-gray-900">Shopping Menu</h2>
+        <div className="absolute right-0 top-0 h-full w-80 bg-white dark:bg-slate-900 shadow-xl" onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-slate-800 pwa-safe-top">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Shopping Menu</h2>
             <button
               onClick={() => setShowMobileMenu(false)}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
             >
-              <X className="w-5 h-5" />
+              <X className="w-5 h-5 dark:text-slate-300" />
             </button>
           </div>
           <div className="p-4 space-y-4">
-            <div className="border-b border-gray-200 pb-4">
-              <h3 className="text-sm font-medium text-gray-900 mb-3">Quick Actions</h3>
+            <div className="border-b border-gray-200 dark:border-slate-800 pb-4">
+              <h3 className="text-sm font-medium text-gray-900 dark:text-slate-100 mb-3">Quick Actions</h3>
               <div className="space-y-2">
                 {quickActions.map((action) => (
                   <button
@@ -284,14 +284,14 @@ const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose, onSubVie
                       action.onClick();
                       setShowMobileMenu(false);
                     }}
-                    className="w-full flex items-center gap-3 px-3 py-2 text-left text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
+                    className="w-full flex items-center gap-3 px-3 py-2 text-left text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-lg transition-colors"
                   >
                     <div className="flex-shrink-0">
                       {action.icon}
                     </div>
                     <div>
-                      <h4 className="text-sm font-medium">{action.title}</h4>
-                      <p className="text-xs text-gray-500">{action.description}</p>
+                      <h4 className="text-sm font-medium dark:text-slate-100">{action.title}</h4>
+                      <p className="text-xs text-gray-500 dark:text-slate-400">{action.description}</p>
                     </div>
                   </button>
                 ))}
@@ -299,7 +299,7 @@ const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose, onSubVie
             </div>
 
             <div>
-              <h3 className="text-sm font-medium text-gray-900 mb-3">View Options</h3>
+              <h3 className="text-sm font-medium text-gray-900 dark:text-slate-100 mb-3">View Options</h3>
               <div className="space-y-2">
                 {[
                   { id: 'dashboard', label: 'Dashboard Overview', icon: BarChart3 },
@@ -316,8 +316,8 @@ const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose, onSubVie
                     }}
                     className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-left ${
                       activeView === id
-                        ? 'bg-blue-50 text-blue-600'
-                        : 'text-gray-700 hover:bg-gray-50'
+                        ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
+                        : 'text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800'
                     }`}
                   >
                     <Icon className="w-4 h-4" />
@@ -338,7 +338,7 @@ const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose, onSubVie
       <div className={`grid gap-4 ${
         isMobile ? 'grid-cols-2' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4'
       }`}>
-        <div className={`bg-white border border-gray-200 rounded-lg ${
+        <div className={`bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg ${
           isMobile ? 'p-3' : 'p-3 sm:p-4 md:p-6'
         }`}>
           <div className="flex items-center justify-between">
@@ -363,11 +363,11 @@ const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose, onSubVie
           )}
         </div>
 
-        <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
+        <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg p-3 sm:p-4 md:p-6">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Active Lists</p>
-              <p className="text-xl md:text-2xl font-bold text-gray-900">{activeLists.length}</p>
+              <p className="text-xl md:text-2xl font-bold text-gray-900 dark:text-slate-100">{activeLists.length}</p>
             </div>
             <List className="w-8 h-8 text-blue-500" />
           </div>
@@ -378,11 +378,11 @@ const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose, onSubVie
           </div>
         </div>
 
-        <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
+        <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg p-3 sm:p-4 md:p-6">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Avg Savings</p>
-              <p className="text-xl md:text-2xl font-bold text-gray-900">£{weeklyStats.avgSavings}</p>
+              <p className="text-xl md:text-2xl font-bold text-gray-900 dark:text-slate-100">£{weeklyStats.avgSavings}</p>
             </div>
             <TrendingDown className="w-8 h-8 text-orange-500" />
           </div>
@@ -393,11 +393,11 @@ const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose, onSubVie
           </div>
         </div>
 
-        <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
+        <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg p-3 sm:p-4 md:p-6">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Price Alerts</p>
-              <p className="text-xl md:text-2xl font-bold text-gray-900">{weeklyStats.priceAlerts}</p>
+              <p className="text-xl md:text-2xl font-bold text-gray-900 dark:text-slate-100">{weeklyStats.priceAlerts}</p>
             </div>
             <Bell className="w-8 h-8 text-red-500" />
           </div>
@@ -410,9 +410,9 @@ const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose, onSubVie
       </div>
 
       {/* Active Shopping Lists */}
-      <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
+      <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg p-3 sm:p-4 md:p-6">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-semibold text-gray-900">Active Shopping Lists</h2>
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-100">Active Shopping Lists</h2>
           <button
             onClick={() => setActiveView('lists')}
             className="text-sm text-blue-600 hover:text-blue-800 font-medium"
@@ -472,21 +472,21 @@ const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose, onSubVie
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Quick Actions */}
-        <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Quick Actions</h2>
+        <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg p-3 sm:p-4 md:p-6">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-100 mb-4">Quick Actions</h2>
           <div className="grid grid-cols-1 gap-3">
             {quickActions.map((action) => (
               <button
                 key={action.id}
                 onClick={action.onClick}
-                className="flex items-center space-x-4 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-left"
+                className="flex items-center space-x-4 p-4 border border-gray-200 dark:border-slate-700 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors text-left"
               >
                 <div className="flex-shrink-0">
                   {action.icon}
                 </div>
                 <div>
-                  <h3 className="font-medium text-gray-900">{action.title}</h3>
-                  <p className="text-sm text-gray-600">{action.description}</p>
+                  <h3 className="font-medium text-gray-900 dark:text-slate-100">{action.title}</h3>
+                  <p className="text-sm text-gray-600 dark:text-slate-400">{action.description}</p>
                 </div>
               </button>
             ))}
@@ -494,10 +494,10 @@ const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose, onSubVie
         </div>
 
         {/* AI Suggestions */}
-        <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
+        <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg p-3 sm:p-4 md:p-6">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="text-xl font-semibold text-gray-900">AI Savings Suggestions</h2>
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-100">AI Savings Suggestions</h2>
               <p className="text-sm text-gray-600">Optimise lists, stores, and swaps</p>
             </div>
             <button
@@ -599,9 +599,9 @@ const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose, onSubVie
         </div>
 
         {/* Price Alerts */}
-        <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
+        <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg p-3 sm:p-4 md:p-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold text-gray-900">Price Alerts</h2>
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-100">Price Alerts</h2>
             <button
               onClick={() => setActiveView('prices')}
               className="text-sm text-blue-600 hover:text-blue-800 font-medium"
@@ -646,8 +646,8 @@ const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose, onSubVie
       </div>
 
       {/* Recent Activity */}
-      <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">Recent Activity</h2>
+      <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg p-3 sm:p-4 md:p-6">
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-100 mb-4">Recent Activity</h2>
 
         {recentActivity.length === 0 ? (
           <div className="text-center py-8">
@@ -685,7 +685,7 @@ const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose, onSubVie
   );
 
   return (
-    <div className={`bg-gray-50 min-h-screen ${isMobile ? 'pb-safe-bottom' : 'p-3 sm:p-4 md:p-6 lg:p-8'}`}>
+    <div className={`bg-gray-50 dark:bg-slate-950 min-h-screen ${isMobile ? 'pb-safe-bottom' : 'p-3 sm:p-4 md:p-6 lg:p-8'}`}>
       {/* Mobile Header */}
       {isMobile && renderMobileHeader()}
 
@@ -726,24 +726,24 @@ const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose, onSubVie
       {/* Navigation Tabs - Desktop Only */}
       {!isMobile && activeView === 'dashboard' && (
         <div className="mb-6">
-          <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg w-fit">
+          <div className="flex space-x-1 bg-gray-100 dark:bg-slate-800 p-1 rounded-lg w-fit">
             <button
               onClick={() => setActiveView('lists')}
-              className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-white rounded-md transition-colors"
+              className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-slate-100 hover:bg-white dark:hover:bg-slate-700 rounded-md transition-colors"
             >
               <List className="w-4 h-4" />
               <span>Lists</span>
             </button>
             <button
               onClick={() => setActiveView('stores')}
-              className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-white rounded-md transition-colors"
+              className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-slate-100 hover:bg-white dark:hover:bg-slate-700 rounded-md transition-colors"
             >
               <Store className="w-4 h-4" />
               <span>Stores</span>
             </button>
             <button
               onClick={() => setActiveView('prices')}
-              className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-white rounded-md transition-colors"
+              className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-slate-100 hover:bg-white dark:hover:bg-slate-700 rounded-md transition-colors"
             >
               <TrendingDown className="w-4 h-4" />
               <span>Prices</span>

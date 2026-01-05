@@ -131,33 +131,33 @@ export const FamilyView = () => {
   }
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="border-b border-gray-200 bg-white px-4 py-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900">Family Management</h2>
-            <p className="text-sm text-gray-500">Manage members, timeline milestones, and engagement.</p>
+    <div className="flex h-full flex-col overflow-hidden">
+      <div className="border-b border-gray-200 bg-white px-3 sm:px-4 py-2.5 sm:py-3 dark:border-slate-800 dark:bg-slate-900">
+        <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3">
+          <div className="min-w-0 flex-1">
+            <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-100">Family Management</h2>
+            <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-400 truncate">Manage members, timeline milestones, and engagement.</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-shrink-0">
             {activeTab === 'timeline' && (
               <button
                 onClick={() => refetchMilestones()}
-                className="rounded-md border border-gray-200 px-3 py-2 text-xs text-gray-600 hover:bg-gray-50"
+                className="rounded-md border border-gray-200 px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs text-gray-600 hover:bg-gray-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 touch-manipulation"
               >
-                Refresh timeline
+                Refresh
               </button>
             )}
           </div>
         </div>
-        <div className="mt-3 flex flex-wrap gap-2">
+        <div className="mt-2 sm:mt-3 flex flex-wrap gap-1.5 sm:gap-2">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
+              className={`rounded-full px-3 sm:px-4 py-1 sm:py-1.5 text-xs sm:text-sm font-medium transition-colors touch-manipulation ${
                 activeTab === tab.id
                   ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
               }`}
             >
               {tab.label}
@@ -165,7 +165,7 @@ export const FamilyView = () => {
           ))}
         </div>
       </div>
-      <div className="flex-1 overflow-y-auto bg-gray-50 p-4 lg:p-6">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden bg-gray-50 p-3 sm:p-4 lg:p-6 dark:bg-slate-950">
         {activeTabContent}
       </div>
     </div>

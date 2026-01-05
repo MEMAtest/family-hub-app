@@ -72,20 +72,20 @@ const FamilyDashboard: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 rounded-lg border border-gray-200 bg-white p-6">
+      <div className="flex flex-col gap-4 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h2 className="text-2xl font-semibold text-gray-900">Family</h2>
-            <p className="text-sm text-gray-600">
+            <h2 className="text-2xl font-semibold text-gray-900 dark:text-slate-100">Family</h2>
+            <p className="text-sm text-gray-600 dark:text-slate-400">
               Manage family members and keep roles and age groups up to date.
             </p>
           </div>
-          <div className="flex items-center gap-3 text-xs text-gray-500">
-            <span className="rounded-full border border-gray-200 px-3 py-1">
+          <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-slate-400">
+            <span className="rounded-full border border-gray-200 dark:border-slate-700 px-3 py-1">
               {databaseStatus.connected ? 'Connected' : 'Offline'} • {databaseStatus.mode}
             </span>
             {databaseStatus.familyId && (
-              <span className="rounded-full border border-gray-200 px-3 py-1">
+              <span className="rounded-full border border-gray-200 dark:border-slate-700 px-3 py-1">
                 Family ID: {databaseStatus.familyId.slice(0, 8)}…
               </span>
             )}
@@ -93,21 +93,21 @@ const FamilyDashboard: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <div className="rounded-lg bg-blue-50 p-4">
-            <p className="text-sm text-blue-700">Total Members</p>
-            <p className="text-2xl font-semibold text-blue-900">{stats.total}</p>
+          <div className="rounded-lg bg-blue-50 dark:bg-blue-900/20 p-4">
+            <p className="text-sm text-blue-700 dark:text-blue-300">Total Members</p>
+            <p className="text-2xl font-semibold text-blue-900 dark:text-blue-100">{stats.total}</p>
           </div>
-          <div className="rounded-lg bg-green-50 p-4">
-            <p className="text-sm text-green-700">Parents</p>
-            <p className="text-2xl font-semibold text-green-900">{stats.parents}</p>
+          <div className="rounded-lg bg-green-50 dark:bg-green-900/20 p-4">
+            <p className="text-sm text-green-700 dark:text-green-300">Parents</p>
+            <p className="text-2xl font-semibold text-green-900 dark:text-green-100">{stats.parents}</p>
           </div>
-          <div className="rounded-lg bg-purple-50 p-4">
-            <p className="text-sm text-purple-700">Students</p>
-            <p className="text-2xl font-semibold text-purple-900">{stats.students}</p>
+          <div className="rounded-lg bg-purple-50 dark:bg-purple-900/20 p-4">
+            <p className="text-sm text-purple-700 dark:text-purple-300">Students</p>
+            <p className="text-2xl font-semibold text-purple-900 dark:text-purple-100">{stats.students}</p>
           </div>
-          <div className="rounded-lg bg-gray-50 p-4">
-            <p className="text-sm text-gray-600">Other</p>
-            <p className="text-2xl font-semibold text-gray-900">{stats.other}</p>
+          <div className="rounded-lg bg-gray-50 dark:bg-slate-800 p-4">
+            <p className="text-sm text-gray-600 dark:text-slate-400">Other</p>
+            <p className="text-2xl font-semibold text-gray-900 dark:text-slate-100">{stats.other}</p>
           </div>
         </div>
       </div>
@@ -115,21 +115,21 @@ const FamilyDashboard: React.FC = () => {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex flex-1 flex-wrap items-center gap-3">
           <div className="relative w-full max-w-sm">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-slate-500" />
             <input
               type="search"
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
               placeholder="Search members"
-              className="w-full rounded-md border border-gray-300 py-2 pl-10 pr-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+              className="w-full rounded-md border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 py-2 pl-10 pr-3 text-sm text-gray-900 dark:text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800"
             />
           </div>
-          <div className="flex items-center gap-2 text-sm text-gray-600">
+          <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
             <Filter className="h-4 w-4" />
             <select
               value={filterRole}
               onChange={(event) => setFilterRole(event.target.value as typeof filterRole)}
-              className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+              className="rounded-md border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-gray-900 dark:text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800"
             >
               {roleOptions.map((role) => (
                 <option key={role.value} value={role.value}>
@@ -150,7 +150,7 @@ const FamilyDashboard: React.FC = () => {
           </button>
           <button
             onClick={() => refetch()}
-            className="inline-flex items-center gap-2 rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+            className="inline-flex items-center gap-2 rounded-md border border-gray-300 dark:border-slate-700 px-3 py-2 text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800"
           >
             <RefreshCw className="h-4 w-4" />
             Refresh
@@ -166,16 +166,16 @@ const FamilyDashboard: React.FC = () => {
       )}
 
       {loading && (
-        <div className="rounded-lg border border-gray-200 bg-white p-6 text-sm text-gray-600">
+        <div className="rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 text-sm text-gray-600 dark:text-slate-400">
           Loading family members…
         </div>
       )}
 
       {!loading && members.length === 0 && (
-        <div className="rounded-lg border border-dashed border-gray-300 bg-white p-8 text-center">
-          <Users className="mx-auto mb-3 h-8 w-8 text-gray-400" />
-          <h3 className="text-lg font-semibold text-gray-900">No family members yet</h3>
-          <p className="mt-2 text-sm text-gray-600">
+        <div className="rounded-lg border border-dashed border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-8 text-center">
+          <Users className="mx-auto mb-3 h-8 w-8 text-gray-400 dark:text-slate-500" />
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">No family members yet</h3>
+          <p className="mt-2 text-sm text-gray-600 dark:text-slate-400">
             Add your first member to start managing roles, age groups, and family details.
           </p>
           <button
@@ -191,7 +191,7 @@ const FamilyDashboard: React.FC = () => {
       {!loading && members.length > 0 && (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {filteredMembers.map((member) => (
-            <div key={member.id} className="flex items-start gap-4 rounded-lg border border-gray-200 bg-white p-4">
+            <div key={member.id} className="flex items-start gap-4 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4">
               {member.avatarUrl ? (
                 <img
                   src={member.avatarUrl}
@@ -209,8 +209,8 @@ const FamilyDashboard: React.FC = () => {
               <div className="flex-1">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div>
-                    <p className="text-base font-semibold text-gray-900">{member.name}</p>
-                    <p className="text-sm text-gray-500">
+                    <p className="text-base font-semibold text-gray-900 dark:text-slate-100">{member.name}</p>
+                    <p className="text-sm text-gray-500 dark:text-slate-400">
                       {member.role}
                       {(() => {
                         const age = member.age ?? getAgeFromDob(member.dateOfBirth);
@@ -219,12 +219,12 @@ const FamilyDashboard: React.FC = () => {
                       })()}
                     </p>
                   </div>
-                  <span className="rounded-full border border-gray-200 px-2 py-1 text-xs text-gray-500">
+                  <span className="rounded-full border border-gray-200 dark:border-slate-700 px-2 py-1 text-xs text-gray-500 dark:text-slate-400">
                     {databaseStatus.connected && member.familyId !== 'local-family' ? 'Synced' : 'Local'}
                   </span>
                 </div>
                 {member.fitnessGoals && Object.keys(member.fitnessGoals).length > 0 && (
-                  <div className="mt-2 text-xs text-gray-500">
+                  <div className="mt-2 text-xs text-gray-500 dark:text-slate-400">
                     Fitness goals set
                   </div>
                 )}
@@ -232,14 +232,14 @@ const FamilyDashboard: React.FC = () => {
               <div className="flex flex-col gap-2">
                 <button
                   onClick={() => openForm(member)}
-                  className="inline-flex items-center gap-1 rounded-md border border-gray-200 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50"
+                  className="inline-flex items-center gap-1 rounded-md border border-gray-200 dark:border-slate-700 px-2 py-1 text-xs text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800"
                 >
                   <Edit className="h-3 w-3" />
                   Edit
                 </button>
                 <button
                   onClick={() => handleDelete(member.id, member.name)}
-                  className="inline-flex items-center gap-1 rounded-md border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50"
+                  className="inline-flex items-center gap-1 rounded-md border border-red-200 dark:border-red-800 px-2 py-1 text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
                 >
                   <Trash2 className="h-3 w-3" />
                   Remove
@@ -251,17 +251,17 @@ const FamilyDashboard: React.FC = () => {
       )}
 
       {!loading && members.length > 0 && filteredMembers.length === 0 && (
-        <div className="rounded-lg border border-gray-200 bg-white p-6 text-sm text-gray-600">
+        <div className="rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 text-sm text-gray-600 dark:text-slate-400">
           No members match your search.
         </div>
       )}
 
       {Object.keys(stats.ageGroups).length > 0 && (
-        <div className="rounded-lg border border-gray-200 bg-white p-6">
-          <h3 className="text-sm font-semibold text-gray-900">Age Groups</h3>
+        <div className="rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6">
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-100">Age Groups</h3>
           <div className="mt-3 flex flex-wrap gap-2">
             {Object.entries(stats.ageGroups).map(([group, count]) => (
-              <span key={group} className="rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-600">
+              <span key={group} className="rounded-full bg-gray-100 dark:bg-slate-800 px-3 py-1 text-xs text-gray-600 dark:text-slate-300">
                 {group}: {count}
               </span>
             ))}

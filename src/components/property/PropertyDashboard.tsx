@@ -29,18 +29,18 @@ const ModalShell = ({
 }) => {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-6">
-      <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl bg-white shadow-xl dark:bg-slate-900">
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-200 bg-white px-5 py-4 dark:border-slate-800 dark:bg-slate-900">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">{title}</h3>
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 px-2 sm:px-4 py-4 sm:py-6 overflow-y-auto">
+      <div className="w-full max-w-[95vw] sm:max-w-md lg:max-w-2xl max-h-[85vh] sm:max-h-[90vh] overflow-y-auto rounded-t-2xl sm:rounded-xl bg-white shadow-xl dark:bg-slate-900">
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-200 bg-white px-4 sm:px-5 py-3 sm:py-4 dark:border-slate-800 dark:bg-slate-900 rounded-t-2xl sm:rounded-t-xl">
+          <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-100 truncate pr-2">{title}</h3>
           <button
             onClick={onClose}
-            className="rounded-md p-1 text-gray-500 hover:bg-gray-100 dark:text-slate-300 dark:hover:bg-slate-800"
+            className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 dark:text-slate-300 dark:hover:bg-slate-800 flex-shrink-0 touch-manipulation"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
-        <div className="px-5 py-4">{children}</div>
+        <div className="px-4 sm:px-5 py-4">{children}</div>
       </div>
     </div>
   );
@@ -232,19 +232,19 @@ export const PropertyDashboard = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 p-3 sm:p-4 lg:p-6">
       {/* Header */}
-      <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="rounded-lg bg-blue-50 p-3 text-blue-600 dark:bg-blue-500/20 dark:text-blue-200">
-              <Home className="h-6 w-6" />
+      <section className="rounded-xl sm:rounded-2xl border border-gray-200 bg-white p-4 sm:p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+          <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+            <div className="rounded-lg bg-blue-50 p-2.5 sm:p-3 text-blue-600 dark:bg-blue-500/20 dark:text-blue-200 flex-shrink-0">
+              <Home className="h-5 w-5 sm:h-6 sm:w-6" />
             </div>
-            <div>
-              <h1 className="text-xl font-bold text-gray-900 dark:text-slate-100">
+            <div className="min-w-0 flex-1">
+              <h1 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-slate-100 truncate">
                 {propertyProfile.propertyName}
               </h1>
-              <p className="text-sm text-gray-500 dark:text-slate-400">
+              <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-400 truncate">
                 {propertyProfile.address}
               </p>
             </div>
@@ -287,11 +287,11 @@ export const PropertyDashboard = () => {
       </section>
 
       {/* Tab Navigation */}
-      <div className="rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 overflow-hidden">
+      <div className="rounded-xl sm:rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 overflow-hidden">
         <PropertyTabNavigation activeTab={activeTab} onTabChange={setActiveTab} />
 
         {/* Tab Content */}
-        <div className="p-5">
+        <div className="p-3 sm:p-5">
           {activeTab === 'overview' && (
             <PropertyOverviewTab
               tasks={visibleTasks}

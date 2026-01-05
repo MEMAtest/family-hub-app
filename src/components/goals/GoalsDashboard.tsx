@@ -306,11 +306,11 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
 
   // Mobile Header Component
   const renderMobileHeader = () => (
-    <div className="lg:hidden bg-white border-b border-gray-200 px-4 py-3 sticky top-0 z-40 pwa-safe-top">
+    <div className="lg:hidden bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 px-4 py-3 sticky top-0 z-40 pwa-safe-top">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-3">
-          <Target className="w-6 h-6 text-blue-600" />
-          <h1 className="mobile-title">Goals</h1>
+          <Target className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+          <h1 className="mobile-title dark:text-slate-100">Goals</h1>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -330,7 +330,7 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
       </div>
 
       {/* View Tabs - Mobile */}
-      <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg overflow-x-auto">
+      <div className="flex space-x-1 bg-gray-100 dark:bg-slate-800 p-1 rounded-lg overflow-x-auto">
         {[
           { id: 'dashboard', label: 'Overview', icon: BarChart3 },
           { id: 'family', label: 'Family', icon: Users },
@@ -343,8 +343,8 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
             onClick={() => setActiveView(id as any)}
             className={`flex items-center gap-1 px-3 py-2 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
               activeView === id
-                ? 'bg-white text-blue-600 shadow-sm'
-                : 'text-gray-600 hover:text-gray-900'
+                ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm'
+                : 'text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-slate-100'
             }`}
           >
             <Icon className="w-3 h-3" />
@@ -355,7 +355,7 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
 
       {/* Mobile Filters Dropdown */}
       {showMobileFilters && (
-        <div className="absolute left-4 right-4 top-full bg-white border border-gray-200 rounded-xl shadow-lg z-50 p-4 space-y-3">
+        <div className="absolute left-4 right-4 top-full bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl shadow-lg z-50 p-4 space-y-3">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
             <input
@@ -408,14 +408,14 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
 
     return (
       <div className="lg:hidden fixed inset-0 bg-black bg-opacity-50 z-50" onClick={() => setShowMobileMenu(false)}>
-        <div className="absolute right-0 top-0 h-full w-80 bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
-          <div className="flex items-center justify-between p-4 border-b border-gray-200 pwa-safe-top">
-            <h2 className="text-lg font-semibold text-gray-900">Goals Menu</h2>
+        <div className="absolute right-0 top-0 h-full w-80 bg-white dark:bg-slate-900 shadow-xl" onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-slate-800 pwa-safe-top">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Goals Menu</h2>
             <button
               onClick={() => setShowMobileMenu(false)}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
             >
-              <X className="w-5 h-5" />
+              <X className="w-5 h-5 dark:text-slate-300" />
             </button>
           </div>
           <div className="p-4 space-y-4">
@@ -458,8 +458,8 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
               {isGeneratingSummary ? 'Summarising…' : 'Progress Summary'}
             </button>
 
-            <div className="border-t border-gray-200 pt-4">
-              <h3 className="text-sm font-medium text-gray-900 mb-3">View Options</h3>
+            <div className="border-t border-gray-200 dark:border-slate-700 pt-4">
+              <h3 className="text-sm font-medium text-gray-900 dark:text-slate-100 mb-3">View Options</h3>
               <div className="space-y-2">
                 {[
                   { id: 'dashboard', label: 'Dashboard Overview', icon: BarChart3 },
@@ -476,8 +476,8 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
                     }}
                     className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-left ${
                       activeView === id
-                        ? 'bg-blue-50 text-blue-600'
-                        : 'text-gray-700 hover:bg-gray-50'
+                        ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
+                        : 'text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800'
                     }`}
                   >
                     <Icon className="w-4 h-4" />
@@ -597,15 +597,15 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
           ? 'grid-cols-2'
           : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4'
       }`}>
-        <div className={`bg-white border border-gray-200 rounded-lg ${
+        <div className={`bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg ${
           isMobile ? 'p-3' : 'p-3 sm:p-4 md:p-6'
         }`}>
           <div className="flex items-center justify-between">
             <div>
-              <p className={`text-gray-600 ${
+              <p className={`text-gray-600 dark:text-slate-400 ${
                 isMobile ? 'text-xs' : 'text-sm'
               }`}>Active Goals</p>
-              <p className={`font-bold text-gray-900 ${
+              <p className={`font-bold text-gray-900 dark:text-slate-100 ${
                 isMobile ? 'text-lg' : 'text-xl md:text-2xl'
               }`}>{activeGoals}</p>
             </div>
@@ -614,7 +614,7 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
             }`} />
           </div>
           <div className="mt-2">
-            <span className={`text-gray-500 ${
+            <span className={`text-gray-500 dark:text-slate-500 ${
               isMobile ? 'text-xs' : 'text-sm'
             }`}>
               {totalGoals} total goals
@@ -622,15 +622,15 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
           </div>
         </div>
 
-        <div className={`bg-white border border-gray-200 rounded-lg ${
+        <div className={`bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg ${
           isMobile ? 'p-3' : 'p-3 sm:p-4 md:p-6'
         }`}>
           <div className="flex items-center justify-between">
             <div>
-              <p className={`text-gray-600 ${
+              <p className={`text-gray-600 dark:text-slate-400 ${
                 isMobile ? 'text-xs' : 'text-sm'
               }`}>Avg Progress</p>
-              <p className={`font-bold text-gray-900 ${
+              <p className={`font-bold text-gray-900 dark:text-slate-100 ${
                 isMobile ? 'text-lg' : 'text-xl md:text-2xl'
               }`}>{averageProgress.toFixed(0)}%</p>
             </div>
@@ -639,7 +639,7 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
             }`} />
           </div>
           <div className="mt-2">
-            <div className={`w-full bg-gray-200 rounded-full ${
+            <div className={`w-full bg-gray-200 dark:bg-slate-700 rounded-full ${
               isMobile ? 'h-1.5' : 'h-2'
             }`}>
               <div
@@ -652,15 +652,15 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
           </div>
         </div>
 
-        <div className={`bg-white border border-gray-200 rounded-lg ${
+        <div className={`bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg ${
           isMobile ? 'p-3' : 'p-3 sm:p-4 md:p-6'
         }`}>
           <div className="flex items-center justify-between">
             <div>
-              <p className={`text-gray-600 ${
+              <p className={`text-gray-600 dark:text-slate-400 ${
                 isMobile ? 'text-xs' : 'text-sm'
               }`}>Achievements</p>
-              <p className={`font-bold text-gray-900 ${
+              <p className={`font-bold text-gray-900 dark:text-slate-100 ${
                 isMobile ? 'text-lg' : 'text-xl md:text-2xl'
               }`}>{totalAchievements}</p>
             </div>
@@ -669,7 +669,7 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
             }`} />
           </div>
           <div className="mt-2">
-            <span className={`text-gray-500 ${
+            <span className={`text-gray-500 dark:text-slate-500 ${
               isMobile ? 'text-xs' : 'text-sm'
             }`}>
               {achievements.filter(a => new Date(a.earnedDate).getMonth() === new Date().getMonth()).length} this month
@@ -677,15 +677,15 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
           </div>
         </div>
 
-        <div className={`bg-white border border-gray-200 rounded-lg ${
+        <div className={`bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg ${
           isMobile ? 'p-3' : 'p-3 sm:p-4 md:p-6'
         }`}>
           <div className="flex items-center justify-between">
             <div>
-              <p className={`text-gray-600 ${
+              <p className={`text-gray-600 dark:text-slate-400 ${
                 isMobile ? 'text-xs' : 'text-sm'
               }`}>Total Points</p>
-              <p className={`font-bold text-gray-900 ${
+              <p className={`font-bold text-gray-900 dark:text-slate-100 ${
                 isMobile ? 'text-lg' : 'text-xl md:text-2xl'
               }`}>{isMobile ? `${Math.round(totalPoints / 1000)}k` : totalPoints.toLocaleString()}</p>
             </div>
@@ -704,10 +704,10 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
       </div>
 
       {/* Quick Actions */}
-      <div className={`bg-white border border-gray-200 rounded-lg ${
+      <div className={`bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg ${
         isMobile ? 'p-3' : 'p-3 sm:p-4 md:p-6'
       }`}>
-        <h2 className={`font-semibold text-gray-900 mb-4 ${
+        <h2 className={`font-semibold text-gray-900 dark:text-slate-100 mb-4 ${
           isMobile ? 'text-lg' : 'text-xl'
         }`}>Quick Actions</h2>
         <div className={`grid gap-4 ${
@@ -715,7 +715,7 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
         }`}>
           <button
             onClick={() => setShowNewGoalForm(true)}
-            className={`flex items-center border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors ${
+            className={`flex items-center border border-gray-200 dark:border-slate-700 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors ${
               isMobile ? 'flex-col space-y-2 p-3 text-center' : 'space-x-3 p-4'
             }`}
           >
@@ -723,11 +723,11 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
               isMobile ? 'w-5 h-5' : 'w-6 h-6'
             }`} />
             <div className={isMobile ? '' : 'text-left'}>
-              <h3 className={`font-medium text-gray-900 ${
+              <h3 className={`font-medium text-gray-900 dark:text-slate-100 ${
                 isMobile ? 'text-sm' : ''
               }`}>New Goal</h3>
               {!isMobile && (
-                <p className="text-sm text-gray-600">Create a new goal</p>
+                <p className="text-sm text-gray-600 dark:text-slate-400">Create a new goal</p>
               )}
             </div>
           </button>
@@ -735,15 +735,15 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
           <button
             onClick={handleGenerateGoalCoach}
             disabled={isGeneratingCoach}
-            className={`flex items-center border border-gray-200 rounded-lg transition-colors ${
+            className={`flex items-center border border-gray-200 dark:border-slate-700 rounded-lg transition-colors ${
               isMobile ? 'flex-col space-y-2 p-3 text-center' : 'space-x-3 p-4'
-            } ${isGeneratingCoach ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'hover:bg-gray-50'}`}
+            } ${isGeneratingCoach ? 'bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-400 cursor-not-allowed' : 'hover:bg-gray-50 dark:hover:bg-slate-800'}`}
           >
             <Zap className={`text-purple-500 ${
               isMobile ? 'w-5 h-5' : 'w-6 h-6'
             }`} />
             <div className={isMobile ? '' : 'text-left'}>
-              <h3 className={`font-medium text-gray-900 ${
+              <h3 className={`font-medium text-gray-900 dark:text-slate-100 ${
                 isMobile ? 'text-sm' : ''
               }`}>{isGeneratingCoach ? 'Generating…' : 'AI Goal Coach'}</h3>
               {!isMobile && (
@@ -755,26 +755,26 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
           <button
             onClick={handleGenerateGoalSummary}
             disabled={isGeneratingSummary}
-            className={`flex items-center border border-gray-200 rounded-lg transition-colors ${
+            className={`flex items-center border border-gray-200 dark:border-slate-700 rounded-lg transition-colors ${
               isMobile ? 'flex-col space-y-2 p-3 text-center' : 'space-x-3 p-4'
-            } ${isGeneratingSummary ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'hover:bg-gray-50'}`}
+            } ${isGeneratingSummary ? 'bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-400 cursor-not-allowed' : 'hover:bg-gray-50 dark:hover:bg-slate-800'}`}
           >
             <BarChart3 className={`text-blue-500 ${
               isMobile ? 'w-5 h-5' : 'w-6 h-6'
             }`} />
             <div className={isMobile ? '' : 'text-left'}>
-              <h3 className={`font-medium text-gray-900 ${
+              <h3 className={`font-medium text-gray-900 dark:text-slate-100 ${
                 isMobile ? 'text-sm' : ''
               }`}>{isGeneratingSummary ? 'Summarising…' : 'Progress Summary'}</h3>
               {!isMobile && (
-                <p className="text-sm text-gray-600">Snapshot of progress & risks</p>
+                <p className="text-sm text-gray-600 dark:text-slate-400">Snapshot of progress & risks</p>
               )}
             </div>
           </button>
 
           <button
             onClick={() => setActiveView('achievements')}
-            className={`flex items-center border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors ${
+            className={`flex items-center border border-gray-200 dark:border-slate-700 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors ${
               isMobile ? 'flex-col space-y-2 p-3 text-center' : 'space-x-3 p-4'
             }`}
           >
@@ -782,18 +782,18 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
               isMobile ? 'w-5 h-5' : 'w-6 h-6'
             }`} />
             <div className={isMobile ? '' : 'text-left'}>
-              <h3 className={`font-medium text-gray-900 ${
+              <h3 className={`font-medium text-gray-900 dark:text-slate-100 ${
                 isMobile ? 'text-sm' : ''
               }`}>Achievements</h3>
               {!isMobile && (
-                <p className="text-sm text-gray-600">View all badges</p>
+                <p className="text-sm text-gray-600 dark:text-slate-400">View all badges</p>
               )}
             </div>
           </button>
 
           <button
             onClick={() => setActiveView('analytics')}
-            className={`flex items-center border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors ${
+            className={`flex items-center border border-gray-200 dark:border-slate-700 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors ${
               isMobile ? 'flex-col space-y-2 p-3 text-center' : 'space-x-3 p-4'
             }`}
           >
@@ -801,27 +801,27 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
               isMobile ? 'w-5 h-5' : 'w-6 h-6'
             }`} />
             <div className={isMobile ? '' : 'text-left'}>
-              <h3 className={`font-medium text-gray-900 ${
+              <h3 className={`font-medium text-gray-900 dark:text-slate-100 ${
                 isMobile ? 'text-sm' : ''
               }`}>Analytics</h3>
               {!isMobile && (
-                <p className="text-sm text-gray-600">View progress data</p>
+                <p className="text-sm text-gray-600 dark:text-slate-400">View progress data</p>
               )}
             </div>
           </button>
 
-          <button className={`flex items-center border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors ${
+          <button className={`flex items-center border border-gray-200 dark:border-slate-700 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors ${
             isMobile ? 'flex-col space-y-2 p-3 text-center' : 'space-x-3 p-4'
           }`}>
             <Users className={`text-purple-500 ${
               isMobile ? 'w-5 h-5' : 'w-6 h-6'
             }`} />
             <div className={isMobile ? '' : 'text-left'}>
-              <h3 className={`font-medium text-gray-900 ${
+              <h3 className={`font-medium text-gray-900 dark:text-slate-100 ${
                 isMobile ? 'text-sm' : ''
               }`}>Team Challenge</h3>
               {!isMobile && (
-                <p className="text-sm text-gray-600">Start a challenge</p>
+                <p className="text-sm text-gray-600 dark:text-slate-400">Start a challenge</p>
               )}
             </div>
           </button>
@@ -829,15 +829,15 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
     </div>
 
       {/* AI Goal Coach */}
-      <div className={`bg-white border border-gray-200 rounded-lg ${
+      <div className={`bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg ${
         isMobile ? 'p-3' : 'p-3 sm:p-4 md:p-6'
       }`}>
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className={`font-semibold text-gray-900 ${
+            <h2 className={`font-semibold text-gray-900 dark:text-slate-100 ${
               isMobile ? 'text-lg' : 'text-xl'
             }`}>AI Goal Coach</h2>
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-gray-600 dark:text-slate-400">
               Celebrate wins, focus efforts, and get weekly action ideas
             </p>
           </div>
@@ -952,11 +952,11 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
         isMobile ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-2'
       }`}>
         {/* Active Goals Progress */}
-        <div className={`bg-white border border-gray-200 rounded-lg ${
+        <div className={`bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg ${
           isMobile ? 'p-3' : 'p-3 sm:p-4 md:p-6'
         }`}>
           <div className="flex items-center justify-between mb-4">
-            <h2 className={`font-semibold text-gray-900 ${
+            <h2 className={`font-semibold text-gray-900 dark:text-slate-100 ${
               isMobile ? 'text-lg' : 'text-xl'
             }`}>Active Goals Progress</h2>
             <button
@@ -991,9 +991,9 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
         </div>
 
         {/* Active Goals Overview */}
-        <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
+        <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg p-3 sm:p-4 md:p-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold text-gray-900">Active Goals</h2>
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-100">Active Goals</h2>
             <button
               onClick={() => setActiveView('family')}
               className="text-sm text-blue-600 hover:text-blue-800 font-medium"
@@ -1069,8 +1069,8 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
         </div>
 
         {/* Goals by Category */}
-        <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Goals by Category</h2>
+        <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg p-3 sm:p-4 md:p-6">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-100 mb-4">Goals by Category</h2>
 
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
@@ -1094,8 +1094,8 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
         </div>
 
         {/* Weekly Activity */}
-        <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Weekly Activity</h2>
+        <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg p-3 sm:p-4 md:p-6">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-100 mb-4">Weekly Activity</h2>
 
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
@@ -1114,9 +1114,9 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
       </div>
 
       {/* Recent Achievements */}
-      <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
+      <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg p-3 sm:p-4 md:p-6">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold text-gray-900">Recent Achievements</h2>
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-100">Recent Achievements</h2>
           <button
             onClick={() => setActiveView('achievements')}
             className="text-sm text-blue-600 hover:text-blue-800 font-medium"
@@ -1231,7 +1231,7 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
           const completedMilestones = goal.milestones.filter((m: any) => m.isCompleted).length;
 
           return (
-            <div key={goal.id} className={`bg-white border border-gray-200 rounded-lg hover:shadow-md transition-shadow ${
+            <div key={goal.id} className={`bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg hover:shadow-md transition-shadow ${
               isMobile ? 'p-4' : 'p-6'
             }`}>
               <div className={`flex items-start justify-between ${
@@ -1372,7 +1372,7 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
   );
 
   return (
-    <div className={`bg-gray-50 min-h-screen ${isMobile ? 'pb-safe-bottom' : 'p-3 sm:p-4 md:p-6 lg:p-8'}`}>
+    <div className={`bg-gray-50 dark:bg-slate-950 min-h-screen ${isMobile ? 'pb-safe-bottom' : 'p-3 sm:p-4 md:p-6 lg:p-8'}`}>
       {/* Mobile Header */}
       {isMobile && renderMobileHeader()}
 
@@ -1383,13 +1383,13 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
           <nav className="flex items-center space-x-2 text-sm mb-4">
             <button
               onClick={() => onClose && onClose()}
-              className="flex items-center text-gray-500 hover:text-gray-700"
+              className="flex items-center text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200"
             >
               <Home className="w-4 h-4 mr-1" />
               Dashboard
             </button>
-            <ChevronRight className="w-4 h-4 text-gray-400" />
-            <span className="text-gray-900 font-medium">
+            <ChevronRight className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+            <span className="text-gray-900 dark:text-slate-100 font-medium">
               {activeView === 'dashboard' && 'Goals'}
               {activeView === 'family' && 'Family Goals'}
               {activeView === 'individual' && 'Individual Goals'}
@@ -1400,14 +1400,14 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
 
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl md:text-3xl font-light text-gray-900 mb-2">
+              <h1 className="text-2xl md:text-3xl font-light text-gray-900 dark:text-slate-100 mb-2">
                 {activeView === 'dashboard' && 'Goals & Achievements'}
                 {activeView === 'family' && 'Family Goals'}
                 {activeView === 'individual' && 'Individual Goals'}
                 {activeView === 'achievements' && 'Achievements & Badges'}
                 {activeView === 'analytics' && 'Goal Analytics'}
               </h1>
-              <p className="text-gray-600">
+              <p className="text-gray-600 dark:text-slate-400">
                 {activeView === 'dashboard' && 'Track your family\'s goals and celebrate achievements'}
                 {activeView === 'family' && 'Collaborate on family goals and challenges'}
                 {activeView === 'individual' && 'Personal goals and individual progress'}
@@ -1419,7 +1419,7 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
             {activeView !== 'dashboard' && (
               <button
                 onClick={() => setActiveView('dashboard')}
-                className="flex items-center space-x-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-sm hover:bg-gray-50 transition-colors"
+                className="flex items-center space-x-2 px-4 py-2 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-300 rounded-sm hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
               >
                 <BarChart3 className="w-4 h-4" />
                 <span>Dashboard</span>
@@ -1431,15 +1431,15 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
 
       {/* Goal Progress Summary */}
       {activeView === 'dashboard' && (
-      <div className={`bg-white border border-gray-200 rounded-lg ${
+      <div className={`bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg ${
         isMobile ? 'p-3' : 'p-3 sm:p-4 md:p-6'
       }`}>
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className={`font-semibold text-gray-900 ${
+            <h2 className={`font-semibold text-gray-900 dark:text-slate-100 ${
               isMobile ? 'text-lg' : 'text-xl'
             }`}>Goal Progress Summary</h2>
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-gray-600 dark:text-slate-400">
               Understand overall momentum, risks, and suggested focus areas
             </p>
           </div>
@@ -1572,31 +1572,31 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
       {/* Navigation Tabs - Desktop Only */}
       {!isMobile && activeView === 'dashboard' && (
         <div className="mb-6">
-          <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg w-fit">
+          <div className="flex space-x-1 bg-gray-100 dark:bg-slate-800 p-1 rounded-lg w-fit">
             <button
               onClick={() => setActiveView('family')}
-              className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-white rounded-md transition-colors"
+              className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-slate-100 hover:bg-white dark:hover:bg-slate-700 rounded-md transition-colors"
             >
               <Users className="w-4 h-4" />
               <span>Family Goals</span>
             </button>
             <button
               onClick={() => setActiveView('individual')}
-              className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-white rounded-md transition-colors"
+              className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-slate-100 hover:bg-white dark:hover:bg-slate-700 rounded-md transition-colors"
             >
               <User className="w-4 h-4" />
               <span>Individual</span>
             </button>
             <button
               onClick={() => setActiveView('achievements')}
-              className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-white rounded-md transition-colors"
+              className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-slate-100 hover:bg-white dark:hover:bg-slate-700 rounded-md transition-colors"
             >
               <Trophy className="w-4 h-4" />
               <span>Achievements</span>
             </button>
             <button
               onClick={() => setActiveView('analytics')}
-              className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-white rounded-md transition-colors"
+              className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-slate-100 hover:bg-white dark:hover:bg-slate-700 rounded-md transition-colors"
             >
               <BarChart3 className="w-4 h-4" />
               <span>Analytics</span>

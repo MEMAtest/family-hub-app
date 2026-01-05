@@ -247,7 +247,7 @@ export const FamilyHubShell = () => {
   }, [currentSubView, currentView, setSubView]);
 
   return (
-    <div className="flex min-h-screen bg-gray-50 dark:bg-slate-950">
+    <div className="flex min-h-screen overflow-x-hidden bg-gray-50 dark:bg-slate-950">
       <FamilyHubNavigation
         items={NAV_ITEMS}
         activeId={currentView}
@@ -256,7 +256,7 @@ export const FamilyHubShell = () => {
         onCloseMobile={closeMobileMenu}
       />
 
-      <div className="flex flex-1 flex-col bg-white dark:bg-slate-900">
+      <div className="flex flex-1 flex-col min-w-0 bg-white dark:bg-slate-900">
         <FamilyHubHeader
           title={headerTitle}
           subtitle={subtitle}
@@ -264,9 +264,9 @@ export const FamilyHubShell = () => {
           rightContent={rightContent}
           databaseStatus={databaseStatus}
         />
-        <main className="flex-1 overflow-y-auto pb-24 lg:pb-0">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden pb-20 sm:pb-24 lg:pb-0">
           {currentView !== 'dashboard' && breadcrumbItems.length > 0 && (
-            <div className="px-4 pt-4 lg:px-8">
+            <div className="px-3 pt-3 sm:px-4 sm:pt-4 lg:px-8">
               <Breadcrumb
                 items={breadcrumbItems}
                 onHomeClick={() => setView('dashboard')}

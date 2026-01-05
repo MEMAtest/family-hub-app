@@ -849,15 +849,22 @@ html.dark .rbc-calendar {
 html.dark .rbc-header {
   border-bottom: 1px solid #1e293b;
   color: #e2e8f0;
+  background-color: #1e293b;
 }
 html.dark .rbc-header + .rbc-header {
-  border-left: 1px solid #1e293b;
+  border-left: 1px solid #334155;
+}
+html.dark .rbc-row-bg {
+  background-color: #0f172a;
+}
+html.dark .rbc-day-bg {
+  background-color: #0f172a;
 }
 html.dark .rbc-off-range {
   color: #475569;
 }
 html.dark .rbc-off-range-bg {
-  background: #1e293b;
+  background-color: #1e293b;
 }
 html.dark .rbc-today {
   background-color: rgba(59,130,246,0.15);
@@ -866,6 +873,9 @@ html.dark .rbc-month-view,
 html.dark .rbc-time-view,
 html.dark .rbc-agenda-view {
   background-color: #0f172a;
+}
+html.dark .rbc-month-header {
+  background-color: #1e293b;
 }
 html.dark .rbc-agenda-table,
 html.dark .rbc-time-view,
@@ -888,4 +898,137 @@ html.dark .rbc-agenda-date-cell,
 html.dark .rbc-agenda-time-cell,
 html.dark .rbc-agenda-event-cell {
   border-color: #1e293b;
+}
+
+/* Dark mode toolbar buttons (Today, Day, Week, Month) */
+html.dark .rbc-toolbar button {
+  color: #e2e8f0;
+  background-color: #1e293b;
+  border-color: #334155;
+}
+html.dark .rbc-toolbar button:hover {
+  color: #f1f5f9;
+  background-color: #334155;
+  border-color: #475569;
+}
+html.dark .rbc-toolbar button:active,
+html.dark .rbc-toolbar button.rbc-active {
+  color: #f1f5f9;
+  background-color: #3b82f6;
+  border-color: #2563eb;
+}
+html.dark .rbc-toolbar button:active:hover,
+html.dark .rbc-toolbar button:active:focus,
+html.dark .rbc-toolbar button.rbc-active:hover,
+html.dark .rbc-toolbar button.rbc-active:focus {
+  color: #ffffff;
+  background-color: #2563eb;
+  border-color: #1d4ed8;
+}
+html.dark .rbc-toolbar button:focus {
+  color: #f1f5f9;
+  background-color: #334155;
+  border-color: #475569;
+}
+
+/* Dark mode toolbar label (month/week display) */
+html.dark .rbc-toolbar-label {
+  color: #f1f5f9;
+}
+
+/* Dark mode month row borders */
+html.dark .rbc-month-row + .rbc-month-row {
+  border-top-color: #1e293b;
+}
+
+/* Dark mode date cells */
+html.dark .rbc-date-cell {
+  color: #e2e8f0;
+}
+html.dark .rbc-date-cell.rbc-now {
+  color: #60a5fa;
+}
+html.dark .rbc-date-cell > a,
+html.dark .rbc-date-cell > a:active,
+html.dark .rbc-date-cell > a:visited {
+  color: inherit;
+}
+
+/* Dark mode button link (day numbers) */
+html.dark .rbc-button-link {
+  color: #e2e8f0;
+}
+
+/* Dark mode show more link */
+html.dark .rbc-show-more {
+  color: #60a5fa;
+  background-color: rgba(30, 41, 59, 0.8);
+}
+html.dark .rbc-show-more:hover,
+html.dark .rbc-show-more:focus {
+  color: #93c5fd;
+}
+
+/* Dark mode time gutter */
+html.dark .rbc-time-gutter .rbc-label,
+html.dark .rbc-label {
+  color: #94a3b8;
+}
+
+/* Dark mode time slot border */
+html.dark .rbc-day-slot .rbc-time-slot {
+  border-top-color: #1e293b;
+}
+
+/* Dark mode timeslot group */
+html.dark .rbc-timeslot-group {
+  border-bottom-color: #1e293b;
+}
+
+/* Dark mode time content border */
+html.dark .rbc-time-content {
+  border-top-color: #334155;
+}
+html.dark .rbc-time-content > * + * > * {
+  border-left-color: #1e293b;
+}
+
+/* Dark mode time header */
+html.dark .rbc-time-header > .rbc-row:first-child {
+  border-bottom-color: #1e293b;
+}
+html.dark .rbc-time-header.rbc-overflowing {
+  border-right-color: #1e293b;
+}
+
+/* Dark mode overlay popup */
+html.dark .rbc-overlay {
+  background-color: #1e293b;
+  border-color: #334155;
+}
+html.dark .rbc-overlay-header {
+  border-bottom-color: #334155;
+  color: #e2e8f0;
+}
+
+/* Dark mode agenda view */
+html.dark .rbc-agenda-view table.rbc-agenda-table thead > tr > th {
+  color: #e2e8f0;
+  border-bottom-color: #334155;
+}
+html.dark .rbc-agenda-view table.rbc-agenda-table tbody > tr > td {
+  color: #cbd5e1;
+}
+html.dark .rbc-agenda-view table.rbc-agenda-table tbody > tr > td + td {
+  border-left-color: #1e293b;
+}
+html.dark .rbc-agenda-view table.rbc-agenda-table tbody > tr + tr {
+  border-top-color: #1e293b;
+}
+
+/* Dark mode resource view gutter */
+html.dark .rbc-time-view-resources .rbc-time-gutter,
+html.dark .rbc-time-view-resources .rbc-time-header-gutter {
+  background-color: #0f172a;
+  border-right-color: #1e293b;
 }

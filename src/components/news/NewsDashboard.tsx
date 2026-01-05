@@ -284,7 +284,7 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({
     const IconComponent = config.icon;
 
     return (
-      <div className={`bg-white rounded-lg border border-gray-200 overflow-hidden hover:shadow-md transition-shadow ${
+      <div className={`bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700 overflow-hidden hover:shadow-md transition-shadow ${
         !article.isRead ? 'border-l-4 border-l-blue-500' : ''
       }`}>
         {article.imageUrl && (
@@ -304,21 +304,21 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({
               {config.label}
             </span>
             {article.familyRelevant && (
-              <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
+              <span className="text-xs bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 px-2 py-1 rounded-full">
                 Family Relevant
               </span>
             )}
           </div>
 
-          <h3 className="text-lg font-semibold text-gray-900 mb-2 line-clamp-2">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100 mb-2 line-clamp-2">
             {article.title}
           </h3>
 
-          <p className="text-gray-600 text-sm mb-4 line-clamp-3">
+          <p className="text-gray-600 dark:text-slate-400 text-sm mb-4 line-clamp-3">
             {article.description}
           </p>
 
-          <div className="flex items-center justify-between text-sm text-gray-500 mb-4">
+          <div className="flex items-center justify-between text-sm text-gray-500 dark:text-slate-400 mb-4">
             <div className="flex items-center gap-4">
               <span className="font-medium">{article.source}</span>
               <div className="flex items-center gap-1">
@@ -334,13 +334,13 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({
                 onClick={() => handleToggleSave(article.id)}
                 className={`p-2 rounded-lg transition-colors ${
                   article.isSaved
-                    ? 'bg-yellow-100 text-yellow-600'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400'
+                    : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-600'
                 }`}
               >
                 <Bookmark className="w-4 h-4" />
               </button>
-              <button className="p-2 bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-lg transition-colors">
+              <button className="p-2 bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-600 rounded-lg transition-colors">
                 <Share2 className="w-4 h-4" />
               </button>
             </div>
@@ -349,7 +349,7 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({
               {!article.isRead && (
                 <button
                   onClick={() => handleMarkAsRead(article.id)}
-                  className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                  className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium"
                 >
                   Mark as read
                 </button>
@@ -358,7 +358,7 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({
                 href={article.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 font-medium"
+                className="flex items-center gap-1 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium"
               >
                 Read more
                 <ExternalLink className="w-4 h-4" />
@@ -378,16 +378,16 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-      <div className="p-6 border-b border-gray-200">
+    <div className="bg-white dark:bg-slate-900 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700">
+      <div className="p-6 border-b border-gray-200 dark:border-slate-700">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <Newspaper className="w-6 h-6 text-blue-600" />
+            <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+              <Newspaper className="w-6 h-6 text-blue-600 dark:text-blue-400" />
             </div>
             <div>
-              <h2 className="text-xl font-semibold text-gray-900">Family News</h2>
-              <p className="text-sm text-gray-600">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-100">Family News</h2>
+              <p className="text-sm text-gray-600 dark:text-slate-400">
                 {stats.unreadArticles} unread • {stats.familyRelevant} family relevant
               </p>
             </div>
@@ -397,14 +397,14 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({
             <button
               onClick={handleRefresh}
               disabled={refreshing}
-              className="flex items-center gap-2 px-3 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50"
+              className="flex items-center gap-2 px-3 py-2 text-gray-700 dark:text-slate-300 bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50"
             >
               <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
               Refresh
             </button>
             <button
               onClick={() => setShowSettings(true)}
-              className="flex items-center gap-2 px-3 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+              className="flex items-center gap-2 px-3 py-2 text-gray-700 dark:text-slate-300 bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 rounded-lg transition-colors"
             >
               <Settings className="w-4 h-4" />
               Settings
@@ -414,22 +414,22 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({
 
         <div className="mt-4 flex flex-wrap items-center gap-4">
           <div className="flex items-center gap-2">
-            <Search className="w-4 h-4 text-gray-400" />
+            <Search className="w-4 h-4 text-gray-400 dark:text-slate-500" />
             <input
               type="text"
               placeholder="Search news..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="px-3 py-2 border border-gray-300 dark:border-slate-700 rounded-lg text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
 
           <div className="flex items-center gap-2">
-            <Filter className="w-4 h-4 text-gray-400" />
+            <Filter className="w-4 h-4 text-gray-400 dark:text-slate-500" />
             <select
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value as any)}
-              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="px-3 py-2 border border-gray-300 dark:border-slate-700 rounded-lg text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
               <option value="all">All Categories</option>
               {Object.entries(categoryConfig).map(([category, config]) => (
@@ -441,12 +441,12 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-600">View:</span>
-            <div className="flex items-center border border-gray-300 rounded-lg">
+            <span className="text-sm text-gray-600 dark:text-slate-400">View:</span>
+            <div className="flex items-center border border-gray-300 dark:border-slate-700 rounded-lg">
               <button
                 onClick={() => setViewMode('cards')}
                 className={`px-3 py-1 text-sm transition-colors ${
-                  viewMode === 'cards' ? 'bg-blue-100 text-blue-700' : 'text-gray-600'
+                  viewMode === 'cards' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400' : 'text-gray-600 dark:text-slate-400'
                 }`}
               >
                 Cards
@@ -454,7 +454,7 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({
               <button
                 onClick={() => setViewMode('list')}
                 className={`px-3 py-1 text-sm transition-colors ${
-                  viewMode === 'list' ? 'bg-blue-100 text-blue-700' : 'text-gray-600'
+                  viewMode === 'list' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400' : 'text-gray-600 dark:text-slate-400'
                 }`}
               >
                 List
@@ -466,36 +466,36 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({
 
       <div className="p-6">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-          <div className="bg-blue-50 p-4 rounded-lg">
+          <div className="bg-blue-50 dark:bg-blue-900/30 p-4 rounded-lg">
             <div className="flex items-center gap-2">
-              <Newspaper className="w-5 h-5 text-blue-600" />
-              <span className="text-sm font-medium text-blue-900">Total Articles</span>
+              <Newspaper className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+              <span className="text-sm font-medium text-blue-900 dark:text-blue-200">Total Articles</span>
             </div>
-            <p className="text-2xl font-bold text-blue-900 mt-1">{stats.totalArticles}</p>
+            <p className="text-2xl font-bold text-blue-900 dark:text-blue-100 mt-1">{stats.totalArticles}</p>
           </div>
 
-          <div className="bg-orange-50 p-4 rounded-lg">
+          <div className="bg-orange-50 dark:bg-orange-900/30 p-4 rounded-lg">
             <div className="flex items-center gap-2">
-              <Eye className="w-5 h-5 text-orange-600" />
-              <span className="text-sm font-medium text-orange-900">Unread</span>
+              <Eye className="w-5 h-5 text-orange-600 dark:text-orange-400" />
+              <span className="text-sm font-medium text-orange-900 dark:text-orange-200">Unread</span>
             </div>
-            <p className="text-2xl font-bold text-orange-900 mt-1">{stats.unreadArticles}</p>
+            <p className="text-2xl font-bold text-orange-900 dark:text-orange-100 mt-1">{stats.unreadArticles}</p>
           </div>
 
-          <div className="bg-yellow-50 p-4 rounded-lg">
+          <div className="bg-yellow-50 dark:bg-yellow-900/30 p-4 rounded-lg">
             <div className="flex items-center gap-2">
-              <Bookmark className="w-5 h-5 text-yellow-600" />
-              <span className="text-sm font-medium text-yellow-900">Saved</span>
+              <Bookmark className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
+              <span className="text-sm font-medium text-yellow-900 dark:text-yellow-200">Saved</span>
             </div>
-            <p className="text-2xl font-bold text-yellow-900 mt-1">{stats.savedArticles}</p>
+            <p className="text-2xl font-bold text-yellow-900 dark:text-yellow-100 mt-1">{stats.savedArticles}</p>
           </div>
 
-          <div className="bg-green-50 p-4 rounded-lg">
+          <div className="bg-green-50 dark:bg-green-900/30 p-4 rounded-lg">
             <div className="flex items-center gap-2">
-              <Users className="w-5 h-5 text-green-600" />
-              <span className="text-sm font-medium text-green-900">Family Relevant</span>
+              <Users className="w-5 h-5 text-green-600 dark:text-green-400" />
+              <span className="text-sm font-medium text-green-900 dark:text-green-200">Family Relevant</span>
             </div>
-            <p className="text-2xl font-bold text-green-900 mt-1">{stats.familyRelevant}</p>
+            <p className="text-2xl font-bold text-green-900 dark:text-green-100 mt-1">{stats.familyRelevant}</p>
           </div>
         </div>
 
@@ -507,9 +507,9 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({
           </div>
         ) : (
           <div className="text-center py-12">
-            <Newspaper className="w-16 h-16 mx-auto text-gray-300 mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No News Found</h3>
-            <p className="text-gray-600">
+            <Newspaper className="w-16 h-16 mx-auto text-gray-300 dark:text-slate-600 mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 dark:text-slate-100 mb-2">No News Found</h3>
+            <p className="text-gray-600 dark:text-slate-400">
               {searchTerm || selectedCategory !== 'all'
                 ? 'Try adjusting your search or filter criteria.'
                 : 'Check back later for the latest family-relevant news.'}

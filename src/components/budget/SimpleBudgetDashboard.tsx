@@ -458,20 +458,20 @@ const SimpleBudgetDashboard: React.FC = () => {
       <div className="flex items-center justify-between">
         <button
           onClick={goToPreviousMonth}
-          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+          className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-4 h-4 dark:text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
         </button>
-        <p className="text-sm font-medium text-gray-900">
+        <p className="text-sm font-medium text-gray-900 dark:text-slate-100">
           {getMonthName(selectedMonth)} {selectedYear}
         </p>
         <button
           onClick={goToNextMonth}
-          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+          className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-4 h-4 dark:text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
         </button>
@@ -487,12 +487,12 @@ const SimpleBudgetDashboard: React.FC = () => {
       <div className="lg:hidden fixed inset-0 bg-black bg-opacity-50 z-50" onClick={() => setShowMobileMenu(false)}>
         <div className="absolute right-0 top-0 h-full w-80 surface-card shadow-xl" onClick={(e) => e.stopPropagation()}>
           <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-slate-800 pwa-safe-top">
-            <h2 className="text-lg font-semibold text-gray-900">Budget Actions</h2>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Budget Actions</h2>
             <button
               onClick={() => setShowMobileMenu(false)}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
             >
-              <X className="w-5 h-5" />
+              <X className="w-5 h-5 dark:text-slate-300" />
             </button>
           </div>
           <div className="p-4 space-y-4">
@@ -601,26 +601,26 @@ const SimpleBudgetDashboard: React.FC = () => {
         <div className="mb-8">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h1 className="text-2xl md:text-3xl font-light text-gray-900 mb-2">Budget Management</h1>
+              <h1 className="text-2xl md:text-3xl font-light text-gray-900 dark:text-slate-100 mb-2">Budget Management</h1>
               <div className="flex items-center gap-3">
                 <button
                   onClick={goToPreviousMonth}
-                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                  className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
                   title="Previous month"
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-5 h-5 dark:text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                   </svg>
                 </button>
-                <p className="text-lg font-medium text-gray-900 min-w-[200px] text-center">
+                <p className="text-lg font-medium text-gray-900 dark:text-slate-100 min-w-[200px] text-center">
                   {getMonthName(selectedMonth)} {selectedYear}
                 </p>
                 <button
                   onClick={goToNextMonth}
-                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                  className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
                   title="Next month"
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-5 h-5 dark:text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
                 </button>
@@ -691,7 +691,7 @@ const SimpleBudgetDashboard: React.FC = () => {
         }`}>
           <div className="flex items-center justify-between">
             <div>
-              <p className={`font-medium text-gray-600 uppercase tracking-wide ${
+              <p className={`font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wide ${
                 isMobile ? 'text-xs' : 'text-sm'
               }`}>Total Income</p>
               <p className={`font-light text-green-600 mt-2 ${
@@ -714,7 +714,7 @@ const SimpleBudgetDashboard: React.FC = () => {
         }`}>
           <div className="flex items-center justify-between">
             <div>
-              <p className={`font-medium text-gray-600 uppercase tracking-wide ${
+              <p className={`font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wide ${
                 isMobile ? 'text-xs' : 'text-sm'
               }`}>Total Expenses</p>
               <p className={`font-light text-red-600 mt-2 ${
@@ -737,7 +737,7 @@ const SimpleBudgetDashboard: React.FC = () => {
         }`}>
           <div className="flex items-center justify-between">
             <div>
-              <p className={`font-medium text-gray-600 uppercase tracking-wide ${
+              <p className={`font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wide ${
                 isMobile ? 'text-xs' : 'text-sm'
               }`}>Net Income</p>
               <p className={`font-light mt-2 ${
@@ -762,7 +762,7 @@ const SimpleBudgetDashboard: React.FC = () => {
         }`}>
           <div className="flex items-center justify-between">
             <div>
-              <p className={`font-medium text-gray-600 uppercase tracking-wide ${
+              <p className={`font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wide ${
                 isMobile ? 'text-xs' : 'text-sm'
               }`}>Savings Rate</p>
               <p className={`font-light mt-2 ${getHealthColor(dashboardData.savingsRate)} ${
@@ -782,7 +782,7 @@ const SimpleBudgetDashboard: React.FC = () => {
       <div className={`surface-card mb-4 md:mb-8 ${
         isMobile ? 'mx-4 p-4 rounded-xl' : 'p-6'
       }`}>
-        <h2 className={`font-medium text-gray-900 mb-6 ${
+        <h2 className={`font-medium text-gray-900 dark:text-slate-100 mb-6 ${
           isMobile ? 'text-base' : 'text-lg'
         }`}>
           6-Month Trend
@@ -801,7 +801,7 @@ const SimpleBudgetDashboard: React.FC = () => {
             </LineChart>
           </ResponsiveContainer>
         </div>
-        <div className="mt-4 text-sm text-gray-600">
+        <div className="mt-4 text-sm text-gray-600 dark:text-slate-400">
           <p>Showing trends from {monthlyTrendsData[0]?.month} to {monthlyTrendsData[5]?.month} {selectedYear}</p>
         </div>
       </div>
@@ -823,7 +823,7 @@ const SimpleBudgetDashboard: React.FC = () => {
         <div className={`surface-card ${
           isMobile ? 'p-4 rounded-xl' : 'p-6'
         }`}>
-          <h2 className={`font-medium text-gray-900 mb-6 ${
+          <h2 className={`font-medium text-gray-900 dark:text-slate-100 mb-6 ${
             isMobile ? 'text-base' : 'text-lg'
           }`}>
             Income vs Expenses
@@ -844,7 +844,7 @@ const SimpleBudgetDashboard: React.FC = () => {
               </BarChart>
             </ResponsiveContainer>
           </div>
-          <div className="mt-4 text-sm text-gray-600">
+          <div className="mt-4 text-sm text-gray-600 dark:text-slate-400">
             <p><strong>Savings Rate:</strong> {dashboardData.savingsRate.toFixed(1)}% - This is calculated as (Net Income / Total Income) × 100</p>
             <p className="mt-2"><strong>Net Income:</strong> Total Income (£{dashboardData.totalIncome.toLocaleString()}) - Total Expenses (£{dashboardData.totalExpenses.toLocaleString()}) = £{dashboardData.netIncome.toLocaleString()}</p>
           </div>
@@ -855,24 +855,25 @@ const SimpleBudgetDashboard: React.FC = () => {
           <div className={`surface-card ${
             isMobile ? 'p-4 rounded-xl' : 'p-6'
           }`}>
-            <h2 className={`font-medium text-gray-900 mb-6 flex items-center ${
+            <h2 className={`font-medium text-gray-900 dark:text-slate-100 mb-6 flex items-center ${
               isMobile ? 'text-base' : 'text-lg'
             }`}>
               <PieChartIcon className="w-5 h-5 mr-2" />
               Expense Breakdown
             </h2>
-            <div className={isMobile ? 'h-64' : 'h-80'}>
+            <div className={isMobile ? 'h-72' : 'h-96'}>
               <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
+                <PieChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
                   <Pie
                     data={dashboardData.categorySpending}
                     cx="50%"
-                    cy="50%"
-                    labelLine={false}
+                    cy="45%"
+                    labelLine={true}
                     label={({ name, percentage }: any) => `${name}: ${(percentage as number).toFixed(0)}%`}
-                    outerRadius={isMobile ? 90 : 120}
+                    outerRadius={isMobile ? 70 : 100}
                     dataKey="value"
                     nameKey="name"
+                    style={{ fontSize: isMobile ? '10px' : '12px' }}
                   >
                     {dashboardData.categorySpending.map((entry, index) => (
                       <Cell key={`cell-expense-${index}`} fill={entry.color} />
@@ -897,24 +898,25 @@ const SimpleBudgetDashboard: React.FC = () => {
           <div className={`surface-card ${
             isMobile ? 'p-4 rounded-xl' : 'p-6'
           }`}>
-            <h2 className={`font-medium text-gray-900 mb-6 flex items-center ${
+            <h2 className={`font-medium text-gray-900 dark:text-slate-100 mb-6 flex items-center ${
               isMobile ? 'text-base' : 'text-lg'
             }`}>
               <PieChartIcon className="w-5 h-5 mr-2" />
               Income Breakdown
             </h2>
-            <div className={isMobile ? 'h-64' : 'h-80'}>
+            <div className={isMobile ? 'h-72' : 'h-96'}>
               <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
+                <PieChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
                   <Pie
                     data={dashboardData.incomeByCategory}
                     cx="50%"
-                    cy="50%"
-                    labelLine={false}
+                    cy="45%"
+                    labelLine={true}
                     label={({ name, percentage }: any) => `${name}: ${(percentage as number).toFixed(0)}%`}
-                    outerRadius={isMobile ? 90 : 120}
+                    outerRadius={isMobile ? 70 : 100}
                     dataKey="value"
                     nameKey="name"
+                    style={{ fontSize: isMobile ? '10px' : '12px' }}
                   >
                     {dashboardData.incomeByCategory.map((entry, index) => (
                       <Cell key={`cell-income-${index}`} fill={entry.color} />
@@ -938,7 +940,7 @@ const SimpleBudgetDashboard: React.FC = () => {
         <div className={`surface-card ${
           isMobile ? 'p-4 rounded-xl' : 'p-6'
         }`}>
-          <h2 className={`font-medium text-gray-900 mb-4 ${
+          <h2 className={`font-medium text-gray-900 dark:text-slate-100 mb-4 ${
             isMobile ? 'text-base' : 'text-lg'
           }`}>
             Category Summary
@@ -987,7 +989,7 @@ const SimpleBudgetDashboard: React.FC = () => {
               onChange={(event) => setSearchQuery(event.target.value)}
               type="search"
               placeholder="Search income, expenses, or amounts"
-              className="w-full border border-gray-200 dark:border-slate-800 rounded-md pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full border border-gray-200 dark:border-slate-700 rounded-md pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-400"
             />
           </div>
           <div className={`flex ${isMobile ? 'w-full' : ''} gap-2`}>
@@ -997,7 +999,7 @@ const SimpleBudgetDashboard: React.FC = () => {
               className={`px-3 py-2 text-sm font-medium rounded-md transition-colors ${
                 viewTab === 'all'
                   ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  : 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-700'
               } ${isMobile ? 'flex-1 text-center' : ''}`}
             >
               All items
@@ -1008,7 +1010,7 @@ const SimpleBudgetDashboard: React.FC = () => {
               className={`px-3 py-2 text-sm font-medium rounded-md transition-colors ${
                 viewTab === 'receipt-scans'
                   ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  : 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-700'
               } ${isMobile ? 'flex-1 text-center' : ''}`}
             >
               Receipt scans
@@ -1027,7 +1029,7 @@ const SimpleBudgetDashboard: React.FC = () => {
         <div className={`surface-card ${
           isMobile ? 'p-4 rounded-xl' : 'p-6'
         }`}>
-          <h3 className={`font-medium text-gray-900 mb-4 flex items-center ${
+          <h3 className={`font-medium text-gray-900 dark:text-slate-100 mb-4 flex items-center ${
             isMobile ? 'text-base' : 'text-lg'
           }`}>
             <span className="w-3 h-3 bg-green-500 rounded-full mr-2"></span>
@@ -1035,7 +1037,7 @@ const SimpleBudgetDashboard: React.FC = () => {
           </h3>
           {visibleIncome.length === 0 ? (
             <div className={`text-center ${isMobile ? 'py-6' : 'py-8'}`}>
-              <p className="text-gray-500 text-sm">
+              <p className="text-gray-500 dark:text-slate-400 text-sm">
                 {searchQuery
                   ? `No income matching "${searchQuery}"`
                   : `No income for ${getMonthName(selectedMonth)} ${selectedYear}`}
@@ -1057,15 +1059,15 @@ const SimpleBudgetDashboard: React.FC = () => {
                       setEditingIncome(income);
                       setShowAddIncome(true);
                     }}
-                    className={`flex justify-between items-center bg-green-50 border cursor-pointer hover:bg-green-100 transition-colors ${
+                    className={`flex justify-between items-center bg-green-50 dark:bg-green-900/20 border dark:border-green-800/30 cursor-pointer hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors ${
                       isMobile ? 'p-2 rounded-lg' : 'p-3 rounded-lg'
                     }`}
                   >
                     <div className="flex-1 min-w-0">
-                      <h4 className={`font-medium text-gray-900 truncate ${
+                      <h4 className={`font-medium text-gray-900 dark:text-slate-100 truncate ${
                         isMobile ? 'text-sm' : ''
                       }`}>{income.incomeName}</h4>
-                      <p className={`text-gray-600 ${
+                      <p className={`text-gray-600 dark:text-slate-400 ${
                         isMobile ? 'text-xs' : 'text-sm'
                       }`}>{income.category}</p>
                       {income.isRecurring && (
@@ -1079,10 +1081,10 @@ const SimpleBudgetDashboard: React.FC = () => {
                         isMobile ? 'text-sm' : ''
                       }`}>£{income.amount?.toLocaleString()}</p>
                       {income.paymentDate && (
-                        <p className="text-xs text-gray-500">Date: {formatDate(income.paymentDate)}</p>
+                        <p className="text-xs text-gray-500 dark:text-slate-500">Date: {formatDate(income.paymentDate)}</p>
                       )}
                       {income.createdAt && !income.paymentDate && (
-                        <p className="text-xs text-gray-500">Added: {formatDate(income.createdAt)}</p>
+                        <p className="text-xs text-gray-500 dark:text-slate-500">Added: {formatDate(income.createdAt)}</p>
                       )}
                     </div>
                   </div>
@@ -1091,7 +1093,7 @@ const SimpleBudgetDashboard: React.FC = () => {
               {visibleIncome.length > 5 && (
                 <button
                   onClick={() => setShowAllIncome(!showAllIncome)}
-                  className="mt-3 w-full text-center text-sm text-blue-600 hover:text-blue-700 font-medium py-2 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors"
+                  className="mt-3 w-full text-center text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium py-2 border border-blue-200 dark:border-blue-800 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors"
                 >
                   {showAllIncome ? '▲ Show Less' : `▼ Show More (${visibleIncome.length - 5} more)`}
                 </button>
@@ -1104,7 +1106,7 @@ const SimpleBudgetDashboard: React.FC = () => {
         <div className={`surface-card ${
           isMobile ? 'p-4 rounded-xl' : 'p-6'
         }`}>
-          <h3 className={`font-medium text-gray-900 mb-4 flex items-center ${
+          <h3 className={`font-medium text-gray-900 dark:text-slate-100 mb-4 flex items-center ${
             isMobile ? 'text-base' : 'text-lg'
           }`}>
             <span className="w-3 h-3 bg-red-500 rounded-full mr-2"></span>
@@ -1112,7 +1114,7 @@ const SimpleBudgetDashboard: React.FC = () => {
           </h3>
           {visibleExpenses.length === 0 ? (
             <div className={`text-center ${isMobile ? 'py-6' : 'py-8'}`}>
-              <p className="text-gray-500 text-sm">
+              <p className="text-gray-500 dark:text-slate-400 text-sm">
                 {searchQuery || viewTab === 'receipt-scans'
                   ? `No ${viewTab === 'receipt-scans' ? 'receipt scans' : 'expenses'} matching your filters`
                   : `No expenses for ${getMonthName(selectedMonth)} ${selectedYear}`}
@@ -1136,19 +1138,19 @@ const SimpleBudgetDashboard: React.FC = () => {
                   // Determine color based on usage
                   let budgetColor = 'bg-green-500'; // Good: < 70%
                   let textColor = 'text-green-700';
-                  let bgColor = 'bg-red-50';
-                  let borderColor = 'border-green-200';
+                  let bgColor = 'bg-red-50 dark:bg-red-900/20';
+                  let borderColor = 'border-green-200 dark:border-green-800/30';
 
                   if (percentageUsed >= 90) {
                     budgetColor = 'bg-red-500'; // Danger: >= 90%
                     textColor = 'text-red-700';
-                    bgColor = 'bg-red-100';
-                    borderColor = 'border-red-300';
+                    bgColor = 'bg-red-100 dark:bg-red-900/30';
+                    borderColor = 'border-red-300 dark:border-red-800/30';
                   } else if (percentageUsed >= 70) {
                     budgetColor = 'bg-yellow-500'; // Warning: >= 70%
                     textColor = 'text-yellow-700';
-                    bgColor = 'bg-yellow-50';
-                    borderColor = 'border-yellow-200';
+                    bgColor = 'bg-yellow-50 dark:bg-yellow-900/20';
+                    borderColor = 'border-yellow-200 dark:border-yellow-800/30';
                   }
 
                   return (
@@ -1164,10 +1166,10 @@ const SimpleBudgetDashboard: React.FC = () => {
                     >
                       <div className="flex justify-between items-start">
                         <div className="flex-1 min-w-0">
-                          <h4 className={`font-medium text-gray-900 truncate ${
+                          <h4 className={`font-medium text-gray-900 dark:text-slate-100 truncate ${
                             isMobile ? 'text-sm' : ''
                           }`}>{expense.expenseName}</h4>
-                          <p className={`text-gray-600 ${
+                          <p className={`text-gray-600 dark:text-slate-400 ${
                             isMobile ? 'text-xs' : 'text-sm'
                           }`}>{expense.category}</p>
                           {expense.isRecurring && (
@@ -1181,10 +1183,10 @@ const SimpleBudgetDashboard: React.FC = () => {
                             isMobile ? 'text-sm' : ''
                           }`}>£{expense.amount?.toLocaleString()}</p>
                           {expense.paymentDate && (
-                            <p className="text-xs text-gray-500">Date: {formatDate(expense.paymentDate)}</p>
+                            <p className="text-xs text-gray-500 dark:text-slate-500">Date: {formatDate(expense.paymentDate)}</p>
                           )}
                           {expense.createdAt && !expense.paymentDate && (
-                            <p className="text-xs text-gray-500">Added: {formatDate(expense.createdAt)}</p>
+                            <p className="text-xs text-gray-500 dark:text-slate-500">Added: {formatDate(expense.createdAt)}</p>
                           )}
                         </div>
                       </div>
@@ -1201,7 +1203,7 @@ const SimpleBudgetDashboard: React.FC = () => {
                             </span>
                           </div>
                           {/* Progress Bar */}
-                          <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                          <div className="w-full bg-gray-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
                             <div
                               className={`h-full ${budgetColor} transition-all duration-300 rounded-full`}
                               style={{ width: `${Math.min(percentageUsed, 100)}%` }}
@@ -1232,7 +1234,7 @@ const SimpleBudgetDashboard: React.FC = () => {
               {visibleExpenses.length > 5 && (
                 <button
                   onClick={() => setShowAllExpenses(!showAllExpenses)}
-                  className="mt-3 w-full text-center text-sm text-blue-600 hover:text-blue-700 font-medium py-2 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors"
+                  className="mt-3 w-full text-center text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium py-2 border border-blue-200 dark:border-blue-800 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors"
                 >
                   {showAllExpenses ? '▲ Show Less' : `▼ Show More (${visibleExpenses.length - 5} more)`}
                 </button>

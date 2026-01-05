@@ -681,7 +681,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
       </div>
 
       {/* Mobile View Switcher */}
-      <div className="grid grid-cols-4 gap-1 bg-gray-100 rounded-lg p-1">
+      <div className="grid grid-cols-4 gap-1 bg-gray-100 dark:bg-slate-800 rounded-lg p-1">
         {[
           { view: Views.DAY, label: 'Day' },
           { view: Views.WEEK, label: 'Week' },
@@ -1126,7 +1126,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
           <NotificationBell />
 
           {/* View Switcher */}
-          <div className="flex bg-gray-100 rounded-lg p-1">
+          <div className="flex bg-gray-100 dark:bg-slate-800 rounded-lg p-1">
             {[
               { view: Views.DAY, label: 'Day' },
               { view: Views.WEEK, label: 'Week' },
@@ -1140,7 +1140,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                 className={`px-3 py-1 text-sm rounded-md transition-colors ${
                   view === viewType
                     ? 'bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 shadow-sm'
-                    : 'text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:text-slate-100'
+                    : 'text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-slate-100'
                 }`}
               >
                 {label}

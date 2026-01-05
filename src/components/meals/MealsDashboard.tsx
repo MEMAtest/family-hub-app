@@ -313,11 +313,11 @@ const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
 
   // Mobile Header Component
   const renderMobileHeader = () => (
-    <div className="lg:hidden bg-white border-b border-gray-200 px-4 py-3 sticky top-0 z-40 pwa-safe-top">
+    <div className="lg:hidden bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 px-4 py-3 sticky top-0 z-40 pwa-safe-top">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-3">
-          <ChefHat className="w-6 h-6 text-blue-600" />
-          <h1 className="mobile-title">Meals</h1>
+          <ChefHat className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+          <h1 className="mobile-title dark:text-slate-100">Meals</h1>
         </div>
         <button
           onClick={() => setShowMobileMenu(true)}
@@ -329,7 +329,7 @@ const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
 
       {/* View Tabs - Mobile */}
       {activeView === 'dashboard' && (
-        <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg overflow-x-auto">
+        <div className="flex space-x-1 bg-gray-100 dark:bg-slate-800 p-1 rounded-lg overflow-x-auto">
           {[
             { id: 'planner', label: 'Planner', icon: Calendar },
             { id: 'recipes', label: 'Recipes', icon: Book },
@@ -338,7 +338,7 @@ const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
             <button
               key={id}
               onClick={() => setActiveView(id as any)}
-              className="flex items-center gap-1 px-3 py-2 text-xs font-medium text-gray-600 hover:text-gray-900 hover:bg-white rounded-md transition-colors whitespace-nowrap"
+              className="flex items-center gap-1 px-3 py-2 text-xs font-medium text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-slate-100 hover:bg-white dark:hover:bg-slate-700 rounded-md transition-colors whitespace-nowrap"
             >
               <Icon className="w-3 h-3" />
               <span>{label}</span>
@@ -355,19 +355,19 @@ const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
 
     return (
       <div className="lg:hidden fixed inset-0 bg-black bg-opacity-50 z-50" onClick={() => setShowMobileMenu(false)}>
-        <div className="absolute right-0 top-0 h-full w-80 bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
-          <div className="flex items-center justify-between p-4 border-b border-gray-200 pwa-safe-top">
-            <h2 className="text-lg font-semibold text-gray-900">Meals Menu</h2>
+        <div className="absolute right-0 top-0 h-full w-80 bg-white dark:bg-slate-900 shadow-xl" onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-slate-800 pwa-safe-top">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Meals Menu</h2>
             <button
               onClick={() => setShowMobileMenu(false)}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
             >
-              <X className="w-5 h-5" />
+              <X className="w-5 h-5 dark:text-slate-300" />
             </button>
           </div>
           <div className="p-4 space-y-4">
-            <div className="border-b border-gray-200 pb-4">
-              <h3 className="text-sm font-medium text-gray-900 mb-3">Quick Actions</h3>
+            <div className="border-b border-gray-200 dark:border-slate-800 pb-4">
+              <h3 className="text-sm font-medium text-gray-900 dark:text-slate-100 mb-3">Quick Actions</h3>
               <div className="space-y-2">
                 {quickActions.map((action) => (
                   <button
@@ -376,14 +376,14 @@ const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
                       action.onClick();
                       setShowMobileMenu(false);
                     }}
-                    className="w-full flex items-center gap-3 px-3 py-2 text-left text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
+                    className="w-full flex items-center gap-3 px-3 py-2 text-left text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-lg transition-colors"
                   >
                     <div className="flex-shrink-0">
                       {action.icon}
                     </div>
                     <div>
-                      <h4 className="text-sm font-medium">{action.title}</h4>
-                      <p className="text-xs text-gray-500">{action.description}</p>
+                      <h4 className="text-sm font-medium dark:text-slate-100">{action.title}</h4>
+                      <p className="text-xs text-gray-500 dark:text-slate-400">{action.description}</p>
                     </div>
                   </button>
                 ))}
@@ -391,7 +391,7 @@ const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
             </div>
 
             <div>
-              <h3 className="text-sm font-medium text-gray-900 mb-3">View Options</h3>
+              <h3 className="text-sm font-medium text-gray-900 dark:text-slate-100 mb-3">View Options</h3>
               <div className="space-y-2">
                 {[
                   { id: 'dashboard', label: 'Dashboard Overview', icon: BarChart3 },
@@ -407,8 +407,8 @@ const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
                     }}
                     className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-left ${
                       activeView === id
-                        ? 'bg-blue-50 text-blue-600'
-                        : 'text-gray-700 hover:bg-gray-50'
+                        ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
+                        : 'text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800'
                     }`}
                   >
                     <Icon className="w-4 h-4" />
@@ -426,18 +426,18 @@ const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
   const renderDashboard = () => (
     <div className={isMobile ? 'space-y-6' : 'space-y-8'}>
       {/* Today's Meals */}
-      <div className={`bg-white border border-gray-200 rounded-lg ${
+      <div className={`bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg ${
         isMobile ? 'p-3' : 'p-3 sm:p-4 md:p-6'
       }`}>
         <div className={`flex items-center justify-between ${
           isMobile ? 'mb-4' : 'mb-6'
         }`}>
-          <h2 className={`font-semibold text-gray-900 ${
+          <h2 className={`font-semibold text-gray-900 dark:text-slate-100 ${
             isMobile ? 'text-lg' : 'text-xl'
           }`}>Today's Meals</h2>
           <button
             onClick={() => setActiveView('planner')}
-            className={`text-blue-600 hover:text-blue-800 font-medium ${
+            className={`text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium ${
               isMobile ? 'text-xs' : 'text-sm'
             }`}
           >
@@ -449,21 +449,21 @@ const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
           isMobile ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-3'
         }`}>
           {Object.entries(todaysMeals).map(([mealType, meal]) => (
-            <div key={mealType} className={`border border-gray-200 rounded-lg ${
+            <div key={mealType} className={`border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg ${
               isMobile ? 'p-3' : 'p-4'
             }`}>
               <div className="flex items-center space-x-2 mb-2">
                 {getMealIcon(mealType)}
-                <span className={`font-medium text-gray-900 capitalize ${
+                <span className={`font-medium text-gray-900 dark:text-slate-100 capitalize ${
                   isMobile ? 'text-sm' : ''
                 }`}>{mealType}</span>
               </div>
               {meal ? (
                 <>
-                  <h3 className={`font-medium text-gray-900 ${
+                  <h3 className={`font-medium text-gray-900 dark:text-slate-100 ${
                     isMobile ? 'text-sm' : ''
                   }`}>{meal.mealName}</h3>
-                  <div className={`flex items-center justify-between text-gray-600 mt-2 ${
+                  <div className={`flex items-center justify-between text-gray-600 dark:text-slate-400 mt-2 ${
                     isMobile ? 'text-xs' : 'text-sm'
                   }`}>
                     <span>{new Date(meal.mealDate).toLocaleDateString()}</span>
@@ -472,10 +472,10 @@ const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
                 </>
               ) : (
                 <div className="text-center py-4">
-                  <p className="text-gray-500 text-sm mb-2">No meal logged</p>
+                  <p className="text-gray-500 dark:text-slate-400 text-sm mb-2">No meal logged</p>
                   <button
                     onClick={() => setShowQuickLogModal(true)}
-                    className="text-blue-600 hover:text-blue-800 text-xs font-medium"
+                    className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 text-xs font-medium"
                   >
                     + Log meal
                   </button>
@@ -487,113 +487,113 @@ const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
       </div>
 
       {/* Week Overview */}
-      <div className={`bg-white border border-gray-200 rounded-lg ${
+      <div className={`bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg ${
         isMobile ? 'p-3' : 'p-3 sm:p-4 md:p-6'
       }`}>
-        <h2 className={`font-semibold text-gray-900 ${
+        <h2 className={`font-semibold text-gray-900 dark:text-slate-100 ${
           isMobile ? 'text-lg mb-4' : 'text-xl mb-6'
         }`}>This Week's Overview</h2>
 
         <div className={`grid gap-4 ${
           isMobile ? 'grid-cols-2' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-5'
         }`}>
-          <div className={`text-center bg-blue-50 rounded-lg ${
+          <div className={`text-center bg-blue-50 dark:bg-blue-900/30 rounded-lg ${
             isMobile ? 'p-3' : 'p-4'
           }`}>
-            <Calendar className={`text-blue-500 mx-auto mb-2 ${
+            <Calendar className={`text-blue-500 dark:text-blue-400 mx-auto mb-2 ${
               isMobile ? 'w-6 h-6' : 'w-8 h-8'
             }`} />
-            <p className={`font-bold text-blue-800 ${
+            <p className={`font-bold text-blue-800 dark:text-blue-200 ${
               isMobile ? 'text-lg' : 'text-xl md:text-2xl'
             }`}>{weekStats.plannedMeals}</p>
-            <p className={`text-blue-600 ${
+            <p className={`text-blue-600 dark:text-blue-300 ${
               isMobile ? 'text-xs' : 'text-sm'
             }`}>Meals Planned</p>
             {!isMobile && (
-              <p className="text-xs text-blue-500">of {weekStats.totalMeals} total</p>
+              <p className="text-xs text-blue-500 dark:text-blue-400">of {weekStats.totalMeals} total</p>
             )}
           </div>
 
-          <div className={`text-center bg-green-50 rounded-lg ${
+          <div className={`text-center bg-green-50 dark:bg-green-900/30 rounded-lg ${
             isMobile ? 'p-3' : 'p-4'
           }`}>
-            <Target className={`text-green-500 mx-auto mb-2 ${
+            <Target className={`text-green-500 dark:text-green-400 mx-auto mb-2 ${
               isMobile ? 'w-6 h-6' : 'w-8 h-8'
             }`} />
-            <p className={`font-bold text-green-800 ${
+            <p className={`font-bold text-green-800 dark:text-green-200 ${
               isMobile ? 'text-lg' : 'text-xl md:text-2xl'
             }`}>{weekStats.avgNutritionScore}/10</p>
-            <p className={`text-green-600 ${
+            <p className={`text-green-600 dark:text-green-300 ${
               isMobile ? 'text-xs' : 'text-sm'
             }`}>Nutrition Score</p>
             {!isMobile && (
-              <p className="text-xs text-green-500">Weekly average</p>
+              <p className="text-xs text-green-500 dark:text-green-400">Weekly average</p>
             )}
           </div>
 
-          <div className={`text-center bg-purple-50 rounded-lg ${
+          <div className={`text-center bg-purple-50 dark:bg-purple-900/30 rounded-lg ${
             isMobile ? 'p-3' : 'p-4'
           }`}>
-            <ShoppingCart className={`text-purple-500 mx-auto mb-2 ${
+            <ShoppingCart className={`text-purple-500 dark:text-purple-400 mx-auto mb-2 ${
               isMobile ? 'w-6 h-6' : 'w-8 h-8'
             }`} />
-            <p className={`font-bold text-purple-800 ${
+            <p className={`font-bold text-purple-800 dark:text-purple-200 ${
               isMobile ? 'text-lg' : 'text-xl md:text-2xl'
             }`}>£{weekStats.estimatedCost}</p>
-            <p className={`text-purple-600 ${
+            <p className={`text-purple-600 dark:text-purple-300 ${
               isMobile ? 'text-xs' : 'text-sm'
             }`}>Estimated Cost</p>
             {!isMobile && (
-              <p className="text-xs text-purple-500">This week</p>
+              <p className="text-xs text-purple-500 dark:text-purple-400">This week</p>
             )}
           </div>
 
-          <div className={`text-center bg-orange-50 rounded-lg ${
+          <div className={`text-center bg-orange-50 dark:bg-orange-900/30 rounded-lg ${
             isMobile ? 'p-3' : 'p-4'
           }`}>
-            <Clock className={`text-orange-500 mx-auto mb-2 ${
+            <Clock className={`text-orange-500 dark:text-orange-400 mx-auto mb-2 ${
               isMobile ? 'w-6 h-6' : 'w-8 h-8'
             }`} />
-            <p className={`font-bold text-orange-800 ${
+            <p className={`font-bold text-orange-800 dark:text-orange-200 ${
               isMobile ? 'text-lg' : 'text-xl md:text-2xl'
             }`}>{Math.round(weekStats.prepTimeTotal / 60)}h</p>
-            <p className={`text-orange-600 ${
+            <p className={`text-orange-600 dark:text-orange-300 ${
               isMobile ? 'text-xs' : 'text-sm'
             }`}>Prep Time</p>
             {!isMobile && (
-              <p className="text-xs text-orange-500">Total weekly</p>
+              <p className="text-xs text-orange-500 dark:text-orange-400">Total weekly</p>
             )}
           </div>
 
-          <div className={`text-center bg-red-50 rounded-lg ${
+          <div className={`text-center bg-red-50 dark:bg-red-900/30 rounded-lg ${
             isMobile ? 'p-3' : 'p-4'
           }`}>
-            <Users className={`text-red-500 mx-auto mb-2 ${
+            <Users className={`text-red-500 dark:text-red-400 mx-auto mb-2 ${
               isMobile ? 'w-6 h-6' : 'w-8 h-8'
             }`} />
-            <p className={`font-bold text-red-800 ${
+            <p className={`font-bold text-red-800 dark:text-red-200 ${
               isMobile ? 'text-lg' : 'text-xl md:text-2xl'
             }`}>{familyMembers.length}</p>
-            <p className={`text-red-600 ${
+            <p className={`text-red-600 dark:text-red-300 ${
               isMobile ? 'text-xs' : 'text-sm'
             }`}>Family Size</p>
             {!isMobile && (
-              <p className="text-xs text-red-500">Active members</p>
+              <p className="text-xs text-red-500 dark:text-red-400">Active members</p>
             )}
           </div>
       </div>
     </div>
 
     {/* AI Meal Plan */}
-    <div className={`bg-white border border-gray-200 rounded-lg ${
+    <div className={`bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg ${
       isMobile ? 'p-3' : 'p-3 sm:p-4 md:p-6'
     }`}>
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h2 className={`font-semibold text-gray-900 ${
+          <h2 className={`font-semibold text-gray-900 dark:text-slate-100 ${
             isMobile ? 'text-lg' : 'text-xl'
           }`}>AI Weekly Meal Plan</h2>
-          <p className="text-sm text-gray-600">
+          <p className="text-sm text-gray-600 dark:text-slate-400">
             Generate a 7-day meal schedule with shopping highlights
           </p>
         </div>
@@ -625,28 +625,28 @@ const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
       {aiMealPlan ? (
         <div className="space-y-6">
           <div>
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-gray-500 dark:text-slate-400">
               Week beginning {formatPlanDate(aiMealPlan.weekStart)}
             </p>
-            <p className="mt-2 text-gray-700 leading-relaxed">{aiMealPlan.summary}</p>
+            <p className="mt-2 text-gray-700 dark:text-slate-300 leading-relaxed">{aiMealPlan.summary}</p>
           </div>
 
           <div className={`grid gap-4 ${isMobile ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2'}`}>
             {aiMealPlan.days.map((day) => (
-              <div key={day.date} className="border border-gray-200 rounded-lg p-4">
-                <p className="text-sm font-semibold text-gray-900 mb-2">
+              <div key={day.date} className="border border-gray-200 dark:border-slate-700 rounded-lg p-4 bg-white dark:bg-slate-800">
+                <p className="text-sm font-semibold text-gray-900 dark:text-slate-100 mb-2">
                   {formatPlanDate(day.date)}
                 </p>
-                <div className="space-y-3 text-sm text-gray-700">
+                <div className="space-y-3 text-sm text-gray-700 dark:text-slate-300">
                   {(['breakfast', 'lunch', 'dinner'] as const).map((mealKey) => {
                     const meal = day.meals[mealKey];
                     if (!meal) return null;
                     return (
                       <div key={mealKey}>
-                        <p className="font-medium text-gray-900 capitalize">{mealKey}</p>
+                        <p className="font-medium text-gray-900 dark:text-slate-100 capitalize">{mealKey}</p>
                         <p>{meal.name}</p>
                         {meal.description && (
-                          <p className="text-xs text-gray-500 mt-1">{meal.description}</p>
+                          <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">{meal.description}</p>
                         )}
                       </div>
                     );
@@ -658,15 +658,15 @@ const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
 
           {aiMealPlan.shoppingList.length > 0 && (
             <div>
-              <h3 className="text-sm font-semibold text-gray-900 mb-2">Shopping Highlights</h3>
-              <ul className="grid gap-2 text-sm text-gray-700 md:grid-cols-2">
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-100 mb-2">Shopping Highlights</h3>
+              <ul className="grid gap-2 text-sm text-gray-700 dark:text-slate-300 md:grid-cols-2">
                 {aiMealPlan.shoppingList.map((item, index) => (
                   <li key={`${item.item}-${index}`} className="flex items-start gap-2">
                     <span className="mt-1 h-2 w-2 rounded-full bg-purple-400" />
                     <span>
-                      <span className="font-medium text-gray-900">{item.item}</span>
+                      <span className="font-medium text-gray-900 dark:text-slate-100">{item.item}</span>
                       {item.quantity && ` – ${item.quantity}`}
-                      {item.notes && <span className="block text-xs text-gray-500">{item.notes}</span>}
+                      {item.notes && <span className="block text-xs text-gray-500 dark:text-slate-400">{item.notes}</span>}
                     </span>
                   </li>
                 ))}
@@ -676,8 +676,8 @@ const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
 
           {aiMealPlan.tips && aiMealPlan.tips.length > 0 && (
             <div>
-              <h3 className="text-sm font-semibold text-gray-900 mb-2">Prep & Budget Tips</h3>
-              <ul className="list-disc pl-5 text-sm text-gray-700 space-y-1">
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-100 mb-2">Prep & Budget Tips</h3>
+              <ul className="list-disc pl-5 text-sm text-gray-700 dark:text-slate-300 space-y-1">
                 {aiMealPlan.tips.map((tip, index) => (
                   <li key={index}>{tip}</li>
                 ))}
@@ -686,29 +686,29 @@ const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
           )}
         </div>
       ) : (
-        <div className="rounded-lg border border-dashed border-gray-300 p-6 text-center text-sm text-gray-500">
-          Tap “Generate Plan” to create a personalised 7-day meal schedule with shopping list and prep tips.
+        <div className="rounded-lg border border-dashed border-gray-300 dark:border-slate-600 p-6 text-center text-sm text-gray-500 dark:text-slate-400">
+          Tap "Generate Plan" to create a personalised 7-day meal schedule with shopping list and prep tips.
         </div>
       )}
     </div>
 
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
       {/* Quick Actions */}
-      <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">Quick Actions</h2>
+      <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg p-3 sm:p-4 md:p-6">
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-100 mb-4">Quick Actions</h2>
         <div className="grid grid-cols-1 gap-3">
             {quickActions.map((action) => (
               <button
                 key={action.id}
                 onClick={action.onClick}
-                className="flex items-center space-x-4 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-left"
+                className="flex items-center space-x-4 p-4 border border-gray-200 dark:border-slate-700 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors text-left"
               >
                 <div className="flex-shrink-0">
                   {action.icon}
                 </div>
                 <div>
-                  <h3 className="font-medium text-gray-900">{action.title}</h3>
-                  <p className="text-sm text-gray-600">{action.description}</p>
+                  <h3 className="font-medium text-gray-900 dark:text-slate-100">{action.title}</h3>
+                  <p className="text-sm text-gray-600 dark:text-slate-400">{action.description}</p>
                 </div>
               </button>
             ))}
@@ -716,9 +716,9 @@ const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
         </div>
 
         {/* Recent Recipes */}
-        <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
+        <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg p-3 sm:p-4 md:p-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold text-gray-900">Recent Recipes</h2>
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-100">Recent Recipes</h2>
             <button
               onClick={() => setActiveView('recipes')}
               className="text-sm text-blue-600 hover:text-blue-800 font-medium"
@@ -766,9 +766,9 @@ const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
       </div>
 
       {/* Nutrition Highlights */}
-      <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6">
+      <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg p-3 sm:p-4 md:p-6">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold text-gray-900">Nutrition Highlights</h2>
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-100">Nutrition Highlights</h2>
           <button
             onClick={() => setActiveView('nutrition')}
             className="text-sm text-blue-600 hover:text-blue-800 font-medium"
@@ -833,7 +833,7 @@ const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
   );
 
   return (
-    <div className={`bg-gray-50 min-h-screen ${isMobile ? 'pb-safe-bottom' : 'p-3 sm:p-4 md:p-6 lg:p-8'}`}>
+    <div className={`bg-gray-50 dark:bg-slate-950 min-h-screen ${isMobile ? 'pb-safe-bottom' : 'p-3 sm:p-4 md:p-6 lg:p-8'}`}>
       {/* Mobile Header */}
       {isMobile && renderMobileHeader()}
 
@@ -844,13 +844,13 @@ const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
           <nav className="flex items-center space-x-2 text-sm mb-4">
             <button
               onClick={() => onClose && onClose()}
-              className="flex items-center text-gray-500 hover:text-gray-700"
+              className="flex items-center text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200"
             >
               <Home className="w-4 h-4 mr-1" />
               Dashboard
             </button>
-            <ChevronRight className="w-4 h-4 text-gray-400" />
-            <span className="text-gray-900 font-medium">
+            <ChevronRight className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+            <span className="text-gray-900 dark:text-slate-100 font-medium">
               {activeView === 'dashboard' && 'Meals'}
               {activeView === 'planner' && 'Meal Planner'}
               {activeView === 'recipes' && 'Recipe Manager'}
@@ -860,13 +860,13 @@ const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
 
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl md:text-3xl font-light text-gray-900 mb-2">
+              <h1 className="text-2xl md:text-3xl font-light text-gray-900 dark:text-slate-100 mb-2">
                 {activeView === 'dashboard' && 'Meal Planning'}
                 {activeView === 'planner' && 'Meal Planner'}
                 {activeView === 'recipes' && 'Recipe Manager'}
                 {activeView === 'nutrition' && 'Nutrition Tracker'}
               </h1>
-              <p className="text-gray-600">
+              <p className="text-gray-600 dark:text-slate-400">
                 {activeView === 'dashboard' && 'Manage your family\'s meals and nutrition'}
                 {activeView === 'planner' && 'Plan your weekly meals and shopping'}
                 {activeView === 'recipes' && 'Organize and manage your recipe collection'}
@@ -877,7 +877,7 @@ const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
             {activeView !== 'dashboard' && (
               <button
                 onClick={() => setActiveView('dashboard')}
-                className="flex items-center space-x-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-sm hover:bg-gray-50 transition-colors"
+                className="flex items-center space-x-2 px-4 py-2 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-300 rounded-sm hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
               >
                 <BarChart3 className="w-4 h-4" />
                 <span>Dashboard</span>
@@ -901,10 +901,10 @@ const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
       {/* Quick Log Meal Modal */}
       {showQuickLogModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg w-full max-w-md max-h-[90vh] overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-lg w-full max-w-md max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-semibold text-gray-900">Quick Log Meal</h2>
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-100">Quick Log Meal</h2>
                 <button
                   onClick={() => setShowQuickLogModal(false)}
                   className="text-gray-400 hover:text-gray-600"

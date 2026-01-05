@@ -26,7 +26,7 @@ interface TaskStatusPieChartProps {
   onSegmentClick?: (status: PropertyTaskStatus, tasks: PropertyTask[]) => void;
 }
 
-export const TaskStatusPieChart = ({ tasks, height = 250, onSegmentClick }: TaskStatusPieChartProps) => {
+export const TaskStatusPieChart = ({ tasks, height = 300, onSegmentClick }: TaskStatusPieChartProps) => {
   const data = useMemo(() => {
     const counts: Record<string, number> = {};
     tasks.forEach(task => {
@@ -59,19 +59,19 @@ export const TaskStatusPieChart = ({ tasks, height = 250, onSegmentClick }: Task
 
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <PieChart>
+      <PieChart margin={{ top: 30, right: 80, bottom: 30, left: 80 }}>
         <Pie
           data={data}
           cx="50%"
           cy="50%"
-          innerRadius={50}
-          outerRadius={80}
+          innerRadius={35}
+          outerRadius={55}
           paddingAngle={2}
           dataKey="value"
+          labelLine={true}
           label={({ name, percent }: Record<string, unknown>) => `${name} ${((percent as number) * 100).toFixed(0)}%`}
-          labelLine={false}
           onClick={handleClick as never}
-          style={{ cursor: onSegmentClick ? 'pointer' : 'default' }}
+          style={{ cursor: onSegmentClick ? 'pointer' : 'default', fontSize: '10px' }}
         >
           {data.map((entry, index) => (
             <Cell key={`cell-${index}`} fill={entry.color} />

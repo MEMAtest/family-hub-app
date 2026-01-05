@@ -359,7 +359,7 @@ export const DashboardView = () => {
   ]), [avgGoalProgress, budgetCardTotals, lists, setView, totalGoals, upcomingEvents]);
 
   return (
-    <div className="space-y-6 p-4 lg:p-8">
+    <div className="space-y-4 sm:space-y-6 p-3 sm:p-4 lg:p-8 overflow-x-hidden">
       <section>
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <h2 className="text-lg font-semibold text-gray-900">Today&apos;s Snapshot</h2>
@@ -367,7 +367,7 @@ export const DashboardView = () => {
             {formatDateLong(new Date())}
           </p>
         </div>
-        <div className="-mx-4 mt-4 flex snap-x gap-3 overflow-x-auto px-4 pb-2 sm:hidden">
+        <div className="-mx-3 mt-4 flex snap-x gap-2 sm:gap-3 overflow-x-auto px-3 pb-2 sm:hidden scrollbar-hide">
           {snapshotCards.map((card) => (
             <StatCard
               key={card.key}
@@ -376,7 +376,7 @@ export const DashboardView = () => {
               subtext={card.subtext}
               icon={card.icon}
               onClick={card.onClick}
-              className="min-w-[220px] snap-start"
+              className="min-w-[180px] xs:min-w-[200px] snap-start flex-shrink-0"
             />
           ))}
         </div>
