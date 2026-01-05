@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, PropsWithChildren, useCallback, useContext, useMemo, useState } from 'react';
+import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { MealPlanning } from '@/store/familyStore';
 import { useFamilyStore } from '@/store/familyStore';
 
@@ -48,6 +48,19 @@ export const MealsProvider = ({ children }: PropsWithChildren) => {
   const setFormState = useCallback<MealsContextValue['setFormState']>((updater) => {
     setFormStateInternal((prev) => (typeof updater === 'function' ? (updater as any)(prev) : updater));
   }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!mealPlanning) {
+      localStorage.removeItem('mealPlanning');
+      return;
+    }
+    try {
+      localStorage.setItem('mealPlanning', JSON.stringify(mealPlanning));
+    } catch (error) {
+      console.warn('Failed to persist meal planning cache', error);
+    }
+  }, [mealPlanning]);
 
   const openMealForm = useCallback((date: string) => {
     setSelectedDate(date);

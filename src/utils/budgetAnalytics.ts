@@ -284,13 +284,6 @@ const normaliseRecord = (input: any): NormalisedBudgetRecord => {
 };
 
 export const extractBudgetRecords = (budgetData: BudgetData | null) => {
-  if (!budgetData) {
-    return {
-      incomeRecords: [] as IncomeLike[],
-      expenseRecords: [] as ExpenseLike[],
-    };
-  }
-
   const readLocalArray = (key: string) => {
     if (typeof window === 'undefined') return [];
     try {
@@ -302,6 +295,30 @@ export const extractBudgetRecords = (budgetData: BudgetData | null) => {
       console.warn(`Failed to parse localStorage item "${key}"`, error);
       return [];
     }
+  };
+
+  const flattenEntries = (input: unknown): any[] => {
+    if (!input) return [];
+    if (Array.isArray(input)) return input.filter(Boolean);
+    if (typeof input !== 'object') return [];
+
+    const values = Object.values(input as Record<string, unknown>).filter(Boolean);
+    if (!values.length) return [];
+
+    const looksLikeEntry = values.some((value) =>
+      value &&
+      typeof value === 'object' &&
+      ('amount' in (value as Record<string, unknown>) ||
+        'incomeName' in (value as Record<string, unknown>) ||
+        'expenseName' in (value as Record<string, unknown>) ||
+        'paymentDate' in (value as Record<string, unknown>))
+    );
+
+    if (looksLikeEntry) {
+      return values;
+    }
+
+    return values.flatMap((value) => flattenEntries(value));
   };
 
   const mergeRecords = (primary: any[], fallback: any[]) => {
@@ -323,25 +340,27 @@ export const extractBudgetRecords = (budgetData: BudgetData | null) => {
     return Array.from(byId.values());
   };
 
+  const incomeFromStore = budgetData
+    ? [
+        ...flattenEntries(budgetData.income?.monthly ?? {}),
+        ...flattenEntries(budgetData.income?.oneTime ?? []),
+      ]
+    : [];
+
+  const expenseFromStore = budgetData
+    ? [
+        ...flattenEntries(budgetData.expenses?.recurringMonthly ?? {}),
+        ...flattenEntries(budgetData.expenses?.oneTimeSpends ?? []),
+      ]
+    : [];
+
   const incomeRecordsRaw: any[] = mergeRecords(
-    [
-      ...Object.values(budgetData.income?.monthly ?? {}),
-      ...(budgetData.income?.oneTime ?? []),
-    ],
+    incomeFromStore,
     readLocalArray('budgetIncome')
   );
 
-  const recurringSections = budgetData.expenses?.recurringMonthly ?? {};
-  const flattenedRecurringExpenses = Object.values(recurringSections).flatMap((section) => {
-    if (!section || typeof section !== 'object') return [] as any[];
-    return Object.values(section as Record<string, any>);
-  });
-
   const expenseRecordsRaw: any[] = mergeRecords(
-    [
-      ...flattenedRecurringExpenses,
-      ...(budgetData.expenses?.oneTimeSpends ?? []),
-    ],
+    expenseFromStore,
     readLocalArray('budgetExpenses')
   );
 

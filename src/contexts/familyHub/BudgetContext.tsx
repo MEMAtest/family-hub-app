@@ -4,6 +4,7 @@ import { createContext, PropsWithChildren, useCallback, useContext, useMemo, use
 import { BudgetData } from '@/store/familyStore';
 import { useFamilyStore } from '@/store/familyStore';
 import { createId } from '@/utils/id';
+import databaseService from '@/services/databaseService';
 
 export type BudgetEntryType = 'income' | 'expense';
 
@@ -20,7 +21,7 @@ interface BudgetContextValue {
   data: BudgetData | null;
   setData: (data: BudgetData | null) => void;
   updateData: (updates: Partial<BudgetData>) => void;
-  addEntry: (entry: BudgetFormState) => void;
+  addEntry: (entry: BudgetFormState) => Promise<void> | void;
   isFormOpen: boolean;
   openForm: () => void;
   closeForm: () => void;
@@ -43,6 +44,7 @@ export const BudgetProvider = ({ children }: PropsWithChildren) => {
   const data = useFamilyStore((state) => state.budgetData);
   const setDataStore = useFamilyStore((state) => state.setBudgetData);
   const updateDataStore = useFamilyStore((state) => state.updateBudgetData);
+  const familyId = useFamilyStore((state) => state.databaseStatus.familyId);
 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [formState, setFormStateInternal] = useState<BudgetFormState>(INITIAL_FORM_STATE);
@@ -51,8 +53,14 @@ export const BudgetProvider = ({ children }: PropsWithChildren) => {
     setFormStateInternal((prev) => (typeof updater === 'function' ? (updater as any)(prev) : updater));
   }, []);
 
-  const addEntry = useCallback((entry: BudgetFormState) => {
-    if (!data) return;
+  const addEntry = useCallback(async (entry: BudgetFormState) => {
+    const baseData: BudgetData = data ?? {
+      income: { monthly: {}, oneTime: [] },
+      expenses: { recurringMonthly: {}, oneTimeSpends: [] },
+      priorMonths: {},
+      budgetLimits: {},
+      actualSpend: {},
+    };
 
     const amount = parseFloat(entry.amount);
     if (Number.isNaN(amount)) {
@@ -61,55 +69,112 @@ export const BudgetProvider = ({ children }: PropsWithChildren) => {
 
     const newItem = {
       id: createId('budget'),
-      name: entry.name,
+      name: entry.name.trim() || 'Budget Item',
       amount,
       category: entry.category,
       person: entry.person,
       type: entry.type,
       date: new Date().toISOString(),
+      isRecurring: entry.isRecurring,
+    };
+
+    let persistedId = newItem.id;
+    const payload = {
+      id: newItem.id,
+      amount: newItem.amount,
+      category: newItem.category,
+      isRecurring: entry.isRecurring,
+      paymentDate: newItem.date,
+      personId: newItem.person || undefined,
+    };
+
+    if (familyId) {
+      if (entry.type === 'income') {
+        const savedIncome = await databaseService.saveBudgetIncome({
+          ...payload,
+          incomeName: newItem.name,
+        });
+        if (savedIncome?.id) {
+          persistedId = savedIncome.id;
+        }
+      } else {
+        const savedExpense = await databaseService.saveBudgetExpense({
+          ...payload,
+          expenseName: newItem.name,
+          budgetLimit: undefined,
+        });
+        if (savedExpense?.id) {
+          persistedId = savedExpense.id;
+        }
+      }
+    } else {
+      if (entry.type === 'income') {
+        await databaseService.saveBudgetIncome({
+          ...payload,
+          incomeName: newItem.name,
+        });
+      } else {
+        await databaseService.saveBudgetExpense({
+          ...payload,
+          expenseName: newItem.name,
+          budgetLimit: undefined,
+        });
+      }
+    }
+
+    const storedEntry = {
+      ...newItem,
+      id: persistedId,
+      paymentDate: newItem.date,
+      incomeName: entry.type === 'income' ? newItem.name : undefined,
+      expenseName: entry.type === 'expense' ? newItem.name : undefined,
     };
 
     if (entry.isRecurring) {
-      const section = entry.type === 'income' ? 'income' : 'expenses';
-      const category = entry.type === 'income' ? 'monthly' : 'recurringMonthly';
-      const key = entry.category.toLowerCase().replace(/\s+/g, '_');
-
-      setDataStore({
-        ...data,
-        [section]: {
-          ...data[section],
-          [category]: {
-            ...(data as any)[section]?.[category],
-            [key]: {
-              ...(data as any)[section]?.[category]?.[key],
-              [newItem.id]: {
-                name: newItem.name,
-                amount: newItem.amount,
-                category: newItem.category,
-                person: newItem.person,
-                type: newItem.type,
-              },
+      if (entry.type === 'income') {
+        setDataStore({
+          ...baseData,
+          income: {
+            ...baseData.income,
+            monthly: {
+              ...baseData.income.monthly,
+              [persistedId]: storedEntry,
             },
           },
+        });
+      } else {
+        setDataStore({
+          ...baseData,
+          expenses: {
+            ...baseData.expenses,
+            recurringMonthly: {
+              ...baseData.expenses.recurringMonthly,
+              [persistedId]: storedEntry,
+            },
+          },
+        });
+      }
+    } else if (entry.type === 'income') {
+      setDataStore({
+        ...baseData,
+        income: {
+          ...baseData.income,
+          oneTime: [...(baseData.income.oneTime || []), storedEntry],
         },
       });
     } else {
-      const section = entry.type === 'income' ? 'income' : 'expenses';
-      const listName = entry.type === 'income' ? 'oneTime' : 'oneTimeSpends';
-      const existingList = ((data as any)[section]?.[listName] ?? []) as any[];
-
       setDataStore({
-        ...data,
-        [section]: {
-          ...data[section],
-          [listName]: [...existingList, newItem],
+        ...baseData,
+        expenses: {
+          ...baseData.expenses,
+          oneTimeSpends: [...(baseData.expenses.oneTimeSpends || []), storedEntry],
         },
       });
     }
 
     setFormStateInternal(INITIAL_FORM_STATE);
     setIsFormOpen(false);
-  }, [data, setDataStore]);
+  }, [data, familyId, setDataStore]);
 
   const openForm = useCallback(() => setIsFormOpen(true), []);
   const closeForm = useCallback(() => {

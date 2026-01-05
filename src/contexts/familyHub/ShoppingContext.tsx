@@ -1,9 +1,10 @@
 'use client'
 
-import { createContext, PropsWithChildren, useCallback, useContext, useMemo, useState } from 'react';
+import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { ShoppingList } from '@/store/familyStore';
 import { useFamilyStore } from '@/store/familyStore';
 import { createId } from '@/utils/id';
+import databaseService from '@/services/databaseService';
 
 export interface ShoppingItem {
   id: string;
@@ -38,9 +39,9 @@ interface ShoppingContextValue {
   addList: (list: ShoppingList) => void;
   updateList: (id: string, updates: Partial<ShoppingList>) => void;
   deleteList: (id: string) => void;
-  addItem: (listId: string, item: Omit<ShoppingItem, 'id' | 'completed'>) => void;
-  toggleItem: (listId: string, itemId: string) => void;
-  removeItem: (listId: string, itemId: string) => void;
+  addItem: (listId: string, item: Omit<ShoppingItem, 'id' | 'completed'>) => Promise<void> | void;
+  toggleItem: (listId: string, itemId: string) => Promise<void> | void;
+  removeItem: (listId: string, itemId: string) => Promise<void> | void;
   habits: ShoppingHabits;
   setHabits: (habits: ShoppingHabits) => void;
   isFormOpen: boolean;
@@ -87,6 +88,7 @@ export const ShoppingProvider = ({ children }: PropsWithChildren) => {
   const addListStore = useFamilyStore((state) => state.addShoppingList);
   const updateListStore = useFamilyStore((state) => state.updateShoppingList);
   const deleteListStore = useFamilyStore((state) => state.deleteShoppingList);
+  const familyId = useFamilyStore((state) => state.databaseStatus.familyId);
 
   const [habits, setHabitsState] = useState<ShoppingHabits>(DEFAULT_HABITS);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -96,45 +98,85 @@ export const ShoppingProvider = ({ children }: PropsWithChildren) => {
     setFormStateInternal((prev) => (typeof updater === 'function' ? (updater as any)(prev) : updater));
   }, []);
 
-  const addItem = useCallback<ShoppingContextValue['addItem']>((listId, item) => {
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      localStorage.setItem('shoppingLists', JSON.stringify(lists));
+    } catch (error) {
+      console.warn('Failed to persist shopping lists cache', error);
+    }
+  }, [lists]);
+
+  const addItem = useCallback<ShoppingContextValue['addItem']>(async (listId, item) => {
     const list = lists.find((l) => l.id === listId);
     if (!list) return;
 
-    const newItem: ShoppingItem = {
+    let newItem: ShoppingItem = {
       id: createId('item'),
       completed: false,
       ...item,
       price: Number.isNaN(Number(item.price)) ? 0 : Number(item.price),
     };
 
+    if (familyId) {
+      const savedItem = await databaseService.addShoppingItem(listId, {
+        itemName: newItem.name,
+        estimatedPrice: newItem.price,
+        category: newItem.category,
+        frequency: newItem.frequency,
+        personId: newItem.person,
+      });
+
+      if (savedItem?.id) {
+        newItem = {
+          id: savedItem.id,
+          name: savedItem.itemName ?? newItem.name,
+          completed: Boolean(savedItem.isCompleted ?? newItem.completed),
+          price: Number(savedItem.estimatedPrice ?? newItem.price),
+          category: savedItem.category ?? newItem.category,
+          person: savedItem.personId ?? newItem.person,
+          frequency: savedItem.frequency ?? newItem.frequency,
+        };
+      }
+    }
+
     updateListStore(listId, {
       items: [...list.items, newItem] as any,
       estimatedTotal: (list.estimatedTotal || 0) + newItem.price,
+      total: (list.total || 0) + (newItem.completed ? newItem.price : 0),
     });
 
     setIsFormOpen(false);
     setFormStateInternal(INITIAL_FORM_STATE);
-  }, [lists, updateListStore]);
+  }, [familyId, lists, updateListStore]);
 
-  const toggleItem = useCallback((listId: string, itemId: string) => {
+  const toggleItem = useCallback(async (listId: string, itemId: string) => {
     const list = lists.find((l) => l.id === listId);
     if (!list) return;
+
+    if (familyId) {
+      await databaseService.toggleShoppingItem(itemId);
+    }
 
     updateListStore(listId, {
       items: list.items.map((item: any) =>
         item.id === itemId ? { ...item, completed: !item.completed } : item
       ),
     });
-  }, [lists, updateListStore]);
+  }, [familyId, lists, updateListStore]);
 
-  const removeItem = useCallback((listId: string, itemId: string) => {
+  const removeItem = useCallback(async (listId: string, itemId: string) => {
     const list = lists.find((l) => l.id === listId);
     if (!list) return;
+
+    if (familyId) {
+      await databaseService.deleteShoppingItem(itemId);
+    }
 
     updateListStore(listId, {
       items: list.items.filter((item: any) => item.id !== itemId),
     });
-  }, [lists, updateListStore]);
+  }, [familyId, lists, updateListStore]);
 
   const openForm = useCallback((listId?: string) => {
     setFormStateInternal((prev) => ({ ...prev, listId: listId ?? '' }));
