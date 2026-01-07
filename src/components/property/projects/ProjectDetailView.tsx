@@ -1,8 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Mail, Users, FileText, Calendar, Bell, CheckSquare, Settings, Edit2, Plus, CalendarPlus, Phone, Building2, UserPlus } from 'lucide-react';
+import { ArrowLeft, Mail, Users, FileText, Calendar, Bell, CheckSquare, Settings, Edit2, Plus, CalendarPlus, Phone, Building2, UserPlus, Upload, BarChart3, PieChart } from 'lucide-react';
 import { ProjectEmailInbox } from './ProjectEmailInbox';
+import PDFQuoteExtractor from '@/components/projects/PDFQuoteExtractor';
+import QuoteCostBreakdownChart from '@/components/projects/charts/QuoteCostBreakdownChart';
+import QuoteComparisonChart from '@/components/projects/charts/QuoteComparisonChart';
+import QuoteItemsTable from '@/components/projects/charts/QuoteItemsTable';
+import Modal from '@/components/common/Modal';
+import { ExtractedQuote } from '@/types/quote.types';
 import { useCalendarContext } from '@/contexts/familyHub/CalendarContext';
 import { useFamilyStore } from '@/store/familyStore';
 import { createId } from '@/utils/id';
@@ -94,6 +100,13 @@ export const ProjectDetailView = ({
   // Quote form state
   const [showAddQuoteForm, setShowAddQuoteForm] = useState(false);
   const [newQuote, setNewQuote] = useState({ contractorName: '', amount: '', validUntil: '', notes: '' });
+
+  // PDF Quote Extractor state
+  const [showPDFExtractor, setShowPDFExtractor] = useState(false);
+  const [extractedQuotes, setExtractedQuotes] = useState<ExtractedQuote[]>([]);
+  const [selectedExtractedQuote, setSelectedExtractedQuote] = useState<ExtractedQuote | null>(null);
+  const [showQuoteComparison, setShowQuoteComparison] = useState(false);
+  const [showQuoteDetails, setShowQuoteDetails] = useState(false);
 
   // Follow-up form state
   const [showAddFollowUpForm, setShowAddFollowUpForm] = useState(false);
@@ -298,6 +311,32 @@ export const ProjectDetailView = ({
     setShowAddQuoteForm(false);
   };
 
+  // Handle extracted quote from PDF
+  const handleQuoteExtracted = (extractedQuote: ExtractedQuote) => {
+    // Add to local extracted quotes for comparison
+    setExtractedQuotes((prev) => [...prev, extractedQuote]);
+
+    // Also add to project quotes (simplified version)
+    const quote: TaskQuote = {
+      id: createId('quote'),
+      contractorName: extractedQuote.contractorName,
+      company: extractedQuote.company,
+      phone: extractedQuote.phone,
+      email: extractedQuote.email,
+      amount: extractedQuote.total,
+      currency: 'GBP',
+      validUntil: extractedQuote.validUntil,
+      notes: `Extracted from PDF: ${extractedQuote.sourceFileName}\nLabour: £${extractedQuote.labourTotal.toFixed(2)}\nMaterials: £${extractedQuote.materialsTotal.toFixed(2)}\nFixtures: £${extractedQuote.fixturesTotal.toFixed(2)}\n${extractedQuote.lineItems.length} line items`,
+      status: 'pending',
+      createdAt: new Date().toISOString(),
+    };
+
+    onAddQuote(quote);
+    toast.success(`Quote from ${extractedQuote.contractorName} extracted and added`);
+    setShowPDFExtractor(false);
+    setSelectedExtractedQuote(extractedQuote);
+  };
+
   // Add follow-up handler
   const handleAddFollowUp = () => {
     if (!newFollowUp.description || !newFollowUp.dueDate) return;
@@ -474,20 +513,84 @@ export const ProjectDetailView = ({
 
         {activeTab === 'quotes' && (
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <h3 className="font-medium text-gray-900 dark:text-slate-100">
                 Quotes ({project.quotes?.length || 0})
               </h3>
               {!isReadOnly && (
-                <button
-                  onClick={() => setShowAddQuoteForm(true)}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700"
-                >
-                  <Plus className="h-4 w-4" />
-                  Add Quote
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setShowPDFExtractor(true)}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
+                  >
+                    <Upload className="h-4 w-4" />
+                    Upload PDF Quote
+                  </button>
+                  <button
+                    onClick={() => setShowAddQuoteForm(true)}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add Manual
+                  </button>
+                  {extractedQuotes.length >= 2 && (
+                    <button
+                      onClick={() => setShowQuoteComparison(true)}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-purple-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-purple-700"
+                    >
+                      <BarChart3 className="h-4 w-4" />
+                      Compare
+                    </button>
+                  )}
+                </div>
               )}
             </div>
+
+            {/* Extracted Quotes with Details */}
+            {extractedQuotes.length > 0 && (
+              <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-500/30 dark:bg-blue-500/10">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="font-medium text-blue-800 dark:text-blue-300">
+                    Extracted Quotes ({extractedQuotes.length})
+                  </h4>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {extractedQuotes.map((eq) => (
+                    <div
+                      key={eq.id}
+                      className="rounded-lg border border-blue-300 bg-white p-3 dark:border-blue-500/40 dark:bg-slate-800 cursor-pointer hover:shadow-md transition-shadow"
+                      onClick={() => {
+                        setSelectedExtractedQuote(eq);
+                        setShowQuoteDetails(true);
+                      }}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <p className="font-semibold text-gray-900 dark:text-slate-100">
+                            {eq.contractorName}
+                          </p>
+                          <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                            {currencyFormatter.format(eq.total)}
+                          </p>
+                        </div>
+                        <PieChart className="h-5 w-5 text-blue-400" />
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-1.5 text-xs">
+                        <span className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded dark:bg-blue-500/20 dark:text-blue-300">
+                          Labour: {currencyFormatter.format(eq.labourTotal)}
+                        </span>
+                        <span className="px-2 py-0.5 bg-green-100 text-green-800 rounded dark:bg-green-500/20 dark:text-green-300">
+                          Materials: {currencyFormatter.format(eq.materialsTotal)}
+                        </span>
+                      </div>
+                      <p className="mt-2 text-xs text-gray-500 dark:text-slate-400">
+                        {eq.lineItems.length} line items &bull; Click to view details
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Add Quote Form */}
             {showAddQuoteForm && (
@@ -1165,6 +1268,81 @@ export const ProjectDetailView = ({
           </div>
         </div>
       )}
+
+      {/* PDF Quote Extractor Modal */}
+      <Modal
+        isOpen={showPDFExtractor}
+        onClose={() => setShowPDFExtractor(false)}
+        title="Upload Quote PDF"
+        size="2xl"
+      >
+        <PDFQuoteExtractor
+          onQuoteExtracted={handleQuoteExtracted}
+          onCancel={() => setShowPDFExtractor(false)}
+          projectName={project.title}
+        />
+      </Modal>
+
+      {/* Quote Comparison Modal */}
+      <Modal
+        isOpen={showQuoteComparison}
+        onClose={() => setShowQuoteComparison(false)}
+        title="Compare Quotes"
+        size="2xl"
+      >
+        <QuoteComparisonChart quotes={extractedQuotes} height={400} showBreakdown />
+      </Modal>
+
+      {/* Quote Details Modal */}
+      <Modal
+        isOpen={showQuoteDetails && !!selectedExtractedQuote}
+        onClose={() => {
+          setShowQuoteDetails(false);
+          setSelectedExtractedQuote(null);
+        }}
+        title={selectedExtractedQuote ? `${selectedExtractedQuote.contractorName} - Quote Details` : 'Quote Details'}
+        size="2xl"
+      >
+        {selectedExtractedQuote && (
+          <div className="space-y-6">
+            {/* Summary */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="bg-blue-50 rounded-lg p-3 dark:bg-blue-500/20">
+                <p className="text-xs text-blue-600 dark:text-blue-300">Subtotal</p>
+                <p className="text-lg font-bold text-blue-800 dark:text-blue-100">
+                  {currencyFormatter.format(selectedExtractedQuote.subtotal)}
+                </p>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-3 dark:bg-slate-700">
+                <p className="text-xs text-gray-600 dark:text-slate-300">VAT</p>
+                <p className="text-lg font-bold text-gray-800 dark:text-slate-100">
+                  {currencyFormatter.format(selectedExtractedQuote.vatAmount || 0)}
+                </p>
+              </div>
+              <div className="bg-emerald-50 rounded-lg p-3 col-span-2 dark:bg-emerald-500/20">
+                <p className="text-xs text-emerald-600 dark:text-emerald-300">Total</p>
+                <p className="text-2xl font-bold text-emerald-800 dark:text-emerald-100">
+                  {currencyFormatter.format(selectedExtractedQuote.total)}
+                </p>
+              </div>
+            </div>
+
+            {/* Cost Breakdown Chart */}
+            <div>
+              <h4 className="font-medium text-gray-900 dark:text-slate-100 mb-3">Cost Breakdown</h4>
+              <QuoteCostBreakdownChart quote={selectedExtractedQuote} height={250} />
+            </div>
+
+            {/* Itemised Table */}
+            <div>
+              <h4 className="font-medium text-gray-900 dark:text-slate-100 mb-3">
+                Line Items ({selectedExtractedQuote.lineItems.length})
+              </h4>
+              <QuoteItemsTable quote={selectedExtractedQuote} enableExport />
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 };
