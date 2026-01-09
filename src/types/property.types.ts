@@ -62,8 +62,18 @@ export interface TaskContact {
 
 export type TaskQuoteStatus = 'pending' | 'accepted' | 'rejected';
 
+// Manual quote line item (for multi-room quotes)
+export interface ManualQuoteLineItem {
+  id: string;
+  description: string;  // e.g., "Main Bathroom", "Shower room"
+  labour?: number;
+  materials?: number;
+  amount: number;  // Total for this line
+}
+
 export interface TaskQuote {
   id: string;
+  title?: string;  // Editable title (e.g., "Bathroom Renovation Quote")
   contractorName: string;
   company?: string;
   phone?: string;
@@ -72,9 +82,16 @@ export interface TaskQuote {
   currency: 'GBP';
   validUntil?: string;
   notes?: string;
+  terms?: string;  // Terms/conditions/caveats
   status: TaskQuoteStatus;
   attachments?: PropertyDocument[];
   createdAt: string;
+  // Manual quote line items (for multi-room/multi-item quotes)
+  manualLineItems?: ManualQuoteLineItem[];
+  includesVat?: boolean;  // Whether VAT is included
+  // Enhanced fields for PDF extraction
+  extractedQuoteData?: import('./quote.types').ExtractedQuote;  // Full extracted data from PDF
+  contractorId?: string;  // Link to contractor record
 }
 
 export interface TaskScheduledVisit {

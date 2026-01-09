@@ -57,14 +57,8 @@ export default function QuoteCostBreakdownChart({
     },
   ].filter(item => item.value > 0);
 
-  if (quote.vatAmount && quote.vatAmount > 0) {
-    chartData.push({
-      name: 'VAT',
-      value: quote.vatAmount,
-      color: CATEGORY_COLORS.VAT,
-      percentage: quote.total > 0 ? (quote.vatAmount / quote.total) * 100 : 0,
-    });
-  }
+  // Note: VAT is NOT included in the cost breakdown - it's shown separately in the totals summary
+  // The cost breakdown only shows the category split of the subtotal (exc VAT)
 
   const RADIAN = Math.PI / 180;
 

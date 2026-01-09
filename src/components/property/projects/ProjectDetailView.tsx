@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { ArrowLeft, Mail, Users, FileText, Calendar, Bell, CheckSquare, Settings, Edit2, Plus, CalendarPlus, Phone, Building2, UserPlus, Upload, BarChart3, PieChart } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { ArrowLeft, Mail, Users, FileText, Calendar, Bell, CheckSquare, Settings, Edit2, Plus, CalendarPlus, Phone, Building2, UserPlus, Upload, BarChart3, PieChart, Download, FileSpreadsheet, FileJson, Printer } from 'lucide-react';
 import { ProjectEmailInbox } from './ProjectEmailInbox';
 import PDFQuoteExtractor from '@/components/projects/PDFQuoteExtractor';
 import QuoteCostBreakdownChart from '@/components/projects/charts/QuoteCostBreakdownChart';
 import QuoteComparisonChart from '@/components/projects/charts/QuoteComparisonChart';
 import QuoteItemsTable from '@/components/projects/charts/QuoteItemsTable';
+import QuoteValidityTimeline from '@/components/projects/charts/QuoteValidityTimeline';
 import Modal from '@/components/common/Modal';
 import { ExtractedQuote } from '@/types/quote.types';
 import { useCalendarContext } from '@/contexts/familyHub/CalendarContext';
@@ -22,9 +23,11 @@ import type {
   TaskScheduledVisit,
   TaskFollowUp,
   ProjectTask,
+  ManualQuoteLineItem,
 } from '@/types/property.types';
 import { CONTRACTOR_SPECIALTIES, type ContractorSpecialty } from '@/types/contractor.types';
 import { formatDate } from '@/utils/formatDate';
+import { exportQuotesToCSV, exportQuotesToExcel, exportQuotesToJSON, exportQuotesToHTML } from '@/utils/quoteExporters';
 
 const statusStyles: Record<ProjectStatus, { bg: string; text: string; label: string }> = {
   planning: { bg: 'bg-blue-100 dark:bg-blue-500/20', text: 'text-blue-700 dark:text-blue-300', label: 'Planning' },
@@ -99,13 +102,52 @@ export const ProjectDetailView = ({
 
   // Quote form state
   const [showAddQuoteForm, setShowAddQuoteForm] = useState(false);
-  const [newQuote, setNewQuote] = useState({ contractorName: '', amount: '', validUntil: '', notes: '' });
+  const [newQuote, setNewQuote] = useState({
+    title: '',
+    contractorName: '',
+    company: '',
+    phone: '',
+    email: '',
+    validUntil: '',
+    notes: '',
+    terms: '',
+    includesVat: false,
+    lineItems: [{ id: '1', description: '', labour: '', materials: '' }] as { id: string; description: string; labour: string; materials: string }[],
+  });
+
+  // Quotes selected for comparison
+  const [selectedForComparison, setSelectedForComparison] = useState<Set<string>>(new Set());
+  const [showComparisonModal, setShowComparisonModal] = useState(false);
+
+  // Toggle quote selection for comparison
+  const toggleQuoteSelection = (quoteId: string) => {
+    setSelectedForComparison(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(quoteId)) {
+        newSet.delete(quoteId);
+      } else {
+        newSet.add(quoteId);
+      }
+      return newSet;
+    });
+  };
+
+  // Get selected quotes for comparison
+  const selectedQuotes = useMemo(() => {
+    return project.quotes?.filter(q => selectedForComparison.has(q.id)) || [];
+  }, [project.quotes, selectedForComparison]);
+
+  // Clear selection
+  const clearSelection = () => {
+    setSelectedForComparison(new Set());
+  };
 
   // PDF Quote Extractor state
   const [showPDFExtractor, setShowPDFExtractor] = useState(false);
   const [extractedQuotes, setExtractedQuotes] = useState<ExtractedQuote[]>([]);
   const [selectedExtractedQuote, setSelectedExtractedQuote] = useState<ExtractedQuote | null>(null);
   const [showQuoteComparison, setShowQuoteComparison] = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
   const [showQuoteDetails, setShowQuoteDetails] = useState(false);
 
   // Follow-up form state
@@ -116,6 +158,11 @@ export const ProjectDetailView = ({
   const [showContractorTypeModal, setShowContractorTypeModal] = useState(false);
   const [pendingContact, setPendingContact] = useState<TaskContact | null>(null);
   const [selectedSpecialties, setSelectedSpecialties] = useState<Set<ContractorSpecialty>>(new Set());
+
+  // Quote-based contractor creation state
+  const [showQuoteContractorModal, setShowQuoteContractorModal] = useState(false);
+  const [pendingQuoteForContractor, setPendingQuoteForContractor] = useState<ExtractedQuote | null>(null);
+  const [quoteContractorSpecialty, setQuoteContractorSpecialty] = useState<ContractorSpecialty>('other');
 
   const { createEvent } = useCalendarContext();
   const people = useFamilyStore((state) => state.people);
@@ -152,6 +199,39 @@ export const ProjectDetailView = ({
 
     fetchValidPersonId();
   }, [people, familyId]);
+
+  // Load extractedQuotes from persisted TaskQuotes on mount
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadedQuotes = (project.quotes || [])
+      .filter((q): q is TaskQuote & { extractedQuoteData: ExtractedQuote } =>
+        q.extractedQuoteData !== undefined
+      )
+      .map((q) => q.extractedQuoteData);
+
+    if (isMounted && loadedQuotes.length > 0) {
+      setExtractedQuotes(loadedQuotes);
+    }
+
+    return () => {
+      isMounted = false;
+    };
+  }, [project.quotes]);
+
+  // Group quotes by company for comparison
+  const quotesByCompany = useMemo(() => {
+    return extractedQuotes.reduce((acc, quote) => {
+      const company = quote.company || quote.contractorName;
+      if (!acc[company]) {
+        acc[company] = [];
+      }
+      acc[company].push(quote);
+      return acc;
+    }, {} as Record<string, ExtractedQuote[]>);
+  }, [extractedQuotes]);
+
+  const companyNames = useMemo(() => Object.keys(quotesByCompany), [quotesByCompany]);
 
   // Add visit to main calendar
   const addVisitToCalendar = async (visit: TaskScheduledVisit) => {
@@ -292,23 +372,113 @@ export const ProjectDetailView = ({
 
   // Add quote handler
   const handleAddQuote = () => {
-    if (!newQuote.contractorName || !newQuote.amount) return;
+    if (!newQuote.contractorName) return;
+
+    // Calculate total from line items if they exist
+    const validLineItems = newQuote.lineItems.filter(
+      (item) => item.description && (item.labour || item.materials)
+    );
+
+    const manualLineItems: ManualQuoteLineItem[] = validLineItems.map((item) => {
+      const labour = parseFloat(item.labour) || 0;
+      const materials = parseFloat(item.materials) || 0;
+      return {
+        id: createId('line'),
+        description: item.description,
+        labour: labour || undefined,
+        materials: materials || undefined,
+        amount: labour + materials,
+      };
+    });
+
+    const totalFromItems = manualLineItems.reduce((sum, item) => sum + item.amount, 0);
 
     const quote: TaskQuote = {
       id: createId('quote'),
+      title: newQuote.title || undefined,
       contractorName: newQuote.contractorName,
-      amount: parseFloat(newQuote.amount),
+      company: newQuote.company || undefined,
+      phone: newQuote.phone || undefined,
+      email: newQuote.email || undefined,
+      amount: totalFromItems,
       currency: 'GBP',
       validUntil: newQuote.validUntil || undefined,
       notes: newQuote.notes || undefined,
+      terms: newQuote.terms || undefined,
+      includesVat: newQuote.includesVat,
+      manualLineItems: manualLineItems.length > 0 ? manualLineItems : undefined,
       status: 'pending',
       createdAt: new Date().toISOString(),
     };
 
+    if (quote.amount === 0) {
+      toast.error('Please add at least one line item with labour or materials cost');
+      return;
+    }
+
     onAddQuote(quote);
     toast.success(`Quote from ${quote.contractorName} added`);
-    setNewQuote({ contractorName: '', amount: '', validUntil: '', notes: '' });
+    setNewQuote({
+      title: '',
+      contractorName: '',
+      company: '',
+      phone: '',
+      email: '',
+      validUntil: '',
+      notes: '',
+      terms: '',
+      includesVat: false,
+      lineItems: [{ id: '1', description: '', labour: '', materials: '' }],
+    });
     setShowAddQuoteForm(false);
+  };
+
+  // Add/remove line items in manual quote form
+  const addQuoteLineItem = () => {
+    setNewQuote((prev) => ({
+      ...prev,
+      lineItems: [...prev.lineItems, { id: createId('line'), description: '', labour: '', materials: '' }],
+    }));
+  };
+
+  const removeQuoteLineItem = (id: string) => {
+    setNewQuote((prev) => ({
+      ...prev,
+      lineItems: prev.lineItems.filter((item) => item.id !== id),
+    }));
+  };
+
+  const updateQuoteLineItem = (id: string, field: 'description' | 'labour' | 'materials', value: string) => {
+    setNewQuote((prev) => ({
+      ...prev,
+      lineItems: prev.lineItems.map((item) =>
+        item.id === id ? { ...item, [field]: value } : item
+      ),
+    }));
+  };
+
+  // Toggle quote selection for comparison
+  const toggleQuoteForComparison = (quoteId: string) => {
+    setSelectedForComparison((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(quoteId)) {
+        newSet.delete(quoteId);
+      } else {
+        newSet.add(quoteId);
+      }
+      return newSet;
+    });
+  };
+
+  // Helper to find existing contractor by details
+  const findContractorByDetails = (quote: ExtractedQuote) => {
+    const companyLower = (quote.company || quote.contractorName).toLowerCase();
+    return contractors.find((c) =>
+      c.email === quote.email ||
+      c.phone === quote.phone ||
+      c.name.toLowerCase() === companyLower ||
+      (c.company && c.company.toLowerCase() === companyLower)
+    );
   };
 
   // Handle extracted quote from PDF
@@ -316,7 +486,10 @@ export const ProjectDetailView = ({
     // Add to local extracted quotes for comparison
     setExtractedQuotes((prev) => [...prev, extractedQuote]);
 
-    // Also add to project quotes (simplified version)
+    // Check if contractor already exists
+    const existingContractor = findContractorByDetails(extractedQuote);
+
+    // Create TaskQuote with FULL extracted data
     const quote: TaskQuote = {
       id: createId('quote'),
       contractorName: extractedQuote.contractorName,
@@ -329,12 +502,77 @@ export const ProjectDetailView = ({
       notes: `Extracted from PDF: ${extractedQuote.sourceFileName}\nLabour: £${extractedQuote.labourTotal.toFixed(2)}\nMaterials: £${extractedQuote.materialsTotal.toFixed(2)}\nFixtures: £${extractedQuote.fixturesTotal.toFixed(2)}\n${extractedQuote.lineItems.length} line items`,
       status: 'pending',
       createdAt: new Date().toISOString(),
+      // Store full extracted data for comparison and display
+      extractedQuoteData: extractedQuote,
+      contractorId: existingContractor?.id,
     };
 
     onAddQuote(quote);
-    toast.success(`Quote from ${extractedQuote.contractorName} extracted and added`);
     setShowPDFExtractor(false);
     setSelectedExtractedQuote(extractedQuote);
+
+    if (existingContractor) {
+      toast.success(`Quote linked to existing contractor: ${existingContractor.name}`);
+    } else {
+      // Show contractor creation prompt
+      setPendingQuoteForContractor(extractedQuote);
+      // Pre-select specialty based on project category
+      const categoryToSpecialty: Record<string, ContractorSpecialty> = {
+        'Bathroom': 'plumber',
+        'Kitchen': 'plumber',
+        'Plumbing': 'plumber',
+        'Electrics': 'electrician',
+        'Heating': 'heating_engineer',
+        'Roofing': 'roofer',
+        'Extension': 'builder',
+        'Garden': 'gardener',
+        'Decoration': 'decorator',
+      };
+      setQuoteContractorSpecialty(categoryToSpecialty[project.category] || 'other');
+      setShowQuoteContractorModal(true);
+      toast.success(`Quote from ${extractedQuote.contractorName} extracted`);
+    }
+  };
+
+  // Create contractor from quote
+  const handleCreateContractorFromQuote = async () => {
+    if (!pendingQuoteForContractor) return;
+
+    try {
+      const newContractor = {
+        id: createId('contractor'),
+        name: pendingQuoteForContractor.company || pendingQuoteForContractor.contractorName,
+        company: pendingQuoteForContractor.company,
+        phone: pendingQuoteForContractor.phone,
+        email: pendingQuoteForContractor.email,
+        address: pendingQuoteForContractor.address,
+        specialty: quoteContractorSpecialty,
+        notes: pendingQuoteForContractor.contactName
+          ? `Contact: ${pendingQuoteForContractor.contactName}`
+          : undefined,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      // Add contractor to store
+      addContractor(newContractor);
+
+      // Update the quote with the new contractor ID
+      const quoteToUpdate = project.quotes?.find(
+        (q) => q.extractedQuoteData?.id === pendingQuoteForContractor.id
+      );
+      if (quoteToUpdate) {
+        onUpdateQuote(quoteToUpdate.id, { contractorId: newContractor.id });
+      }
+
+      toast.success(`${newContractor.name} added to contractors`);
+    } catch (error) {
+      console.error('Failed to create contractor:', error);
+      toast.error('Failed to create contractor');
+    } finally {
+      setShowQuoteContractorModal(false);
+      setPendingQuoteForContractor(null);
+    }
   };
 
   // Add follow-up handler
@@ -516,109 +754,398 @@ export const ProjectDetailView = ({
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h3 className="font-medium text-gray-900 dark:text-slate-100">
                 Quotes ({project.quotes?.length || 0})
+                {selectedForComparison.size > 0 && (
+                  <span className="ml-2 text-sm text-blue-600 dark:text-blue-400">
+                    ({selectedForComparison.size} selected)
+                  </span>
+                )}
               </h3>
-              {!isReadOnly && (
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setShowPDFExtractor(true)}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
-                  >
-                    <Upload className="h-4 w-4" />
-                    Upload PDF Quote
-                  </button>
-                  <button
-                    onClick={() => setShowAddQuoteForm(true)}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700"
-                  >
-                    <Plus className="h-4 w-4" />
-                    Add Manual
-                  </button>
-                  {extractedQuotes.length >= 2 && (
+              <div className="flex flex-wrap gap-2">
+                {/* Comparison toolbar - shows when 2+ quotes selected */}
+                {selectedForComparison.size >= 2 && (
+                  <>
                     <button
-                      onClick={() => setShowQuoteComparison(true)}
+                      onClick={() => setShowComparisonModal(true)}
                       className="inline-flex items-center gap-1.5 rounded-lg bg-purple-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-purple-700"
                     >
                       <BarChart3 className="h-4 w-4" />
-                      Compare
+                      Compare ({selectedForComparison.size})
                     </button>
-                  )}
-                </div>
-              )}
+                    <button
+                      onClick={clearSelection}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700"
+                    >
+                      Clear
+                    </button>
+                  </>
+                )}
+                {!isReadOnly && (
+                  <>
+                    <button
+                      onClick={() => setShowPDFExtractor(true)}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
+                    >
+                      <Upload className="h-4 w-4" />
+                      Upload PDF Quote
+                    </button>
+                    <button
+                      onClick={() => setShowAddQuoteForm(true)}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Add Manual
+                    </button>
+                    {extractedQuotes.length >= 2 && (
+                      <button
+                        onClick={() => setShowQuoteComparison(true)}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-purple-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-purple-700"
+                      >
+                        <BarChart3 className="h-4 w-4" />
+                        Compare Extracted
+                      </button>
+                    )}
+                  </>
+                )}
+
+                {/* Export dropdown - available when there are quotes */}
+                {(project.quotes?.length || 0) > 0 && (
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowExportMenu(!showExportMenu)}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700"
+                    >
+                      <Download className="h-4 w-4" />
+                      Export
+                      <svg className={`h-4 w-4 transition-transform ${showExportMenu ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+
+                    {showExportMenu && (
+                      <>
+                        {/* Backdrop to close menu */}
+                        <div
+                          className="fixed inset-0 z-10"
+                          onClick={() => setShowExportMenu(false)}
+                        />
+                        {/* Dropdown menu */}
+                        <div className="absolute right-0 top-full mt-1 z-20 w-48 rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-800">
+                          <button
+                            onClick={() => {
+                              exportQuotesToExcel(project.quotes || [], { projectName: project.title });
+                              setShowExportMenu(false);
+                              toast.success('Exported to Excel');
+                            }}
+                            className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-slate-300 dark:hover:bg-slate-700"
+                          >
+                            <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
+                            Export to Excel
+                          </button>
+                          <button
+                            onClick={() => {
+                              exportQuotesToCSV(project.quotes || [], { projectName: project.title });
+                              setShowExportMenu(false);
+                              toast.success('Exported to CSV');
+                            }}
+                            className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-slate-300 dark:hover:bg-slate-700"
+                          >
+                            <FileText className="h-4 w-4 text-blue-600" />
+                            Export to CSV
+                          </button>
+                          <button
+                            onClick={() => {
+                              exportQuotesToJSON(project.quotes || [], { projectName: project.title });
+                              setShowExportMenu(false);
+                              toast.success('Exported to JSON');
+                            }}
+                            className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-slate-300 dark:hover:bg-slate-700"
+                          >
+                            <FileJson className="h-4 w-4 text-amber-600" />
+                            Export to JSON
+                          </button>
+                          <div className="my-1 border-t border-gray-200 dark:border-slate-700" />
+                          <button
+                            onClick={() => {
+                              exportQuotesToHTML(project.quotes || [], { projectName: project.title });
+                              setShowExportMenu(false);
+                              toast.success('Opened printable report');
+                            }}
+                            className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-slate-300 dark:hover:bg-slate-700"
+                          >
+                            <Printer className="h-4 w-4 text-purple-600" />
+                            Print / Save as PDF
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
 
-            {/* Extracted Quotes with Details */}
+            {/* Quote Validity Timeline */}
+            {(project.quotes?.length || 0) > 0 && project.quotes?.some(q => q.validUntil) && (
+              <div className="rounded-lg border border-gray-200 dark:border-slate-700 overflow-hidden">
+                <details className="group">
+                  <summary className="flex items-center justify-between p-3 cursor-pointer bg-gray-50 dark:bg-slate-800 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors">
+                    <div className="flex items-center gap-2">
+                      <Calendar className="h-4 w-4 text-gray-500 dark:text-slate-400" />
+                      <span className="font-medium text-gray-900 dark:text-slate-100">Quote Validity Timeline</span>
+                      {project.quotes?.filter(q => {
+                        if (!q.validUntil) return false;
+                        const daysRemaining = Math.ceil((new Date(q.validUntil).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+                        return daysRemaining >= 0 && daysRemaining <= 7;
+                      }).length > 0 && (
+                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">
+                          {project.quotes?.filter(q => {
+                            if (!q.validUntil) return false;
+                            const daysRemaining = Math.ceil((new Date(q.validUntil).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+                            return daysRemaining >= 0 && daysRemaining <= 7;
+                          }).length} expiring soon
+                        </span>
+                      )}
+                    </div>
+                    <svg className="h-5 w-5 text-gray-400 transform group-open:rotate-180 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </summary>
+                  <div className="p-4 border-t border-gray-200 dark:border-slate-700">
+                    <QuoteValidityTimeline quotes={project.quotes || []} />
+                  </div>
+                </details>
+              </div>
+            )}
+
+            {/* Extracted Quotes Grouped by Company */}
             {extractedQuotes.length > 0 && (
               <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-500/30 dark:bg-blue-500/10">
                 <div className="flex items-center justify-between mb-3">
                   <h4 className="font-medium text-blue-800 dark:text-blue-300">
-                    Extracted Quotes ({extractedQuotes.length})
+                    Extracted Quotes ({extractedQuotes.length}) from {companyNames.length} {companyNames.length === 1 ? 'company' : 'companies'}
                   </h4>
                 </div>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {extractedQuotes.map((eq) => (
-                    <div
-                      key={eq.id}
-                      className="rounded-lg border border-blue-300 bg-white p-3 dark:border-blue-500/40 dark:bg-slate-800 cursor-pointer hover:shadow-md transition-shadow"
-                      onClick={() => {
-                        setSelectedExtractedQuote(eq);
-                        setShowQuoteDetails(true);
-                      }}
-                    >
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <p className="font-semibold text-gray-900 dark:text-slate-100">
-                            {eq.contractorName}
-                          </p>
-                          <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                            {currencyFormatter.format(eq.total)}
-                          </p>
+
+                {/* Grouped by Company */}
+                <div className="space-y-4">
+                  {companyNames.map((company) => {
+                    const companyQuotes = quotesByCompany[company];
+                    const lowestQuote = companyQuotes.reduce((min, q) => q.total < min.total ? q : min, companyQuotes[0]);
+                    return (
+                      <div key={company} className="rounded-lg border border-blue-300 bg-white p-3 dark:border-blue-500/40 dark:bg-slate-800">
+                        {/* Company Header */}
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <Building2 className="h-4 w-4 text-blue-500" />
+                            <span className="font-semibold text-gray-900 dark:text-slate-100">
+                              {company}
+                            </span>
+                            <span className="text-xs text-gray-500 dark:text-slate-400">
+                              ({companyQuotes.length} {companyQuotes.length === 1 ? 'quote' : 'quotes'})
+                            </span>
+                          </div>
+                          <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
+                            From {currencyFormatter.format(lowestQuote.total)}
+                          </span>
                         </div>
-                        <PieChart className="h-5 w-5 text-blue-400" />
+
+                        {/* Quotes Grid */}
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {companyQuotes.map((eq) => (
+                            <div
+                              key={eq.id}
+                              className="rounded-lg border border-gray-200 bg-gray-50 p-2.5 dark:border-slate-600 dark:bg-slate-700 cursor-pointer hover:shadow-md transition-shadow relative group"
+                              onClick={() => {
+                                setSelectedExtractedQuote(eq);
+                                setShowQuoteDetails(true);
+                              }}
+                            >
+                              {/* Delete button */}
+                              {!isReadOnly && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setExtractedQuotes((prev) => prev.filter((q) => q.id !== eq.id));
+                                    toast.success('Quote removed');
+                                  }}
+                                  className="absolute top-1.5 right-1.5 p-0.5 rounded-full bg-red-100 text-red-600 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-200 dark:bg-red-500/20 dark:text-red-400 dark:hover:bg-red-500/30"
+                                  title="Remove quote"
+                                >
+                                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                  </svg>
+                                </button>
+                              )}
+                              <div className="flex items-center justify-between">
+                                <p className="text-lg font-bold text-blue-600 dark:text-blue-400">
+                                  {currencyFormatter.format(eq.total)}
+                                </p>
+                                <PieChart className="h-4 w-4 text-blue-400" />
+                              </div>
+                              <div className="mt-1.5 flex flex-wrap gap-1 text-xs">
+                                <span className="px-1.5 py-0.5 bg-blue-100 text-blue-800 rounded dark:bg-blue-500/20 dark:text-blue-300">
+                                  L: {currencyFormatter.format(eq.labourTotal)}
+                                </span>
+                                <span className="px-1.5 py-0.5 bg-green-100 text-green-800 rounded dark:bg-green-500/20 dark:text-green-300">
+                                  M: {currencyFormatter.format(eq.materialsTotal)}
+                                </span>
+                              </div>
+                              <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">
+                                {eq.lineItems.length} items • {eq.sourceFileName}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                      <div className="mt-2 flex flex-wrap gap-1.5 text-xs">
-                        <span className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded dark:bg-blue-500/20 dark:text-blue-300">
-                          Labour: {currencyFormatter.format(eq.labourTotal)}
-                        </span>
-                        <span className="px-2 py-0.5 bg-green-100 text-green-800 rounded dark:bg-green-500/20 dark:text-green-300">
-                          Materials: {currencyFormatter.format(eq.materialsTotal)}
-                        </span>
-                      </div>
-                      <p className="mt-2 text-xs text-gray-500 dark:text-slate-400">
-                        {eq.lineItems.length} line items &bull; Click to view details
-                      </p>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
 
-            {/* Add Quote Form */}
+            {/* Add Quote Form - Enhanced */}
             {showAddQuoteForm && (
-              <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-500/30 dark:bg-emerald-500/10 space-y-3">
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-500/30 dark:bg-emerald-500/10 space-y-4">
+                {/* Title */}
+                <input
+                  type="text"
+                  value={newQuote.title}
+                  onChange={(e) => setNewQuote({ ...newQuote, title: e.target.value })}
+                  placeholder="Quote title (e.g., Bathroom Renovation)"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                />
+
+                {/* Contractor Details */}
                 <div className="grid gap-3 sm:grid-cols-2">
                   <input
                     type="text"
                     value={newQuote.contractorName}
                     onChange={(e) => setNewQuote({ ...newQuote, contractorName: e.target.value })}
-                    placeholder="Contractor name *"
+                    placeholder="Contractor/Company name *"
                     className="rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                   />
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">£</span>
-                    <input
-                      type="number"
-                      value={newQuote.amount}
-                      onChange={(e) => setNewQuote({ ...newQuote, amount: e.target.value })}
-                      placeholder="Amount *"
-                      min="0"
-                      step="0.01"
-                      className="w-full rounded-lg border border-gray-300 pl-7 pr-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
-                    />
-                  </div>
+                  <input
+                    type="text"
+                    value={newQuote.company}
+                    onChange={(e) => setNewQuote({ ...newQuote, company: e.target.value })}
+                    placeholder="Company (if different)"
+                    className="rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                  />
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
+                  <input
+                    type="tel"
+                    value={newQuote.phone}
+                    onChange={(e) => setNewQuote({ ...newQuote, phone: e.target.value })}
+                    placeholder="Phone"
+                    className="rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                  />
+                  <input
+                    type="email"
+                    value={newQuote.email}
+                    onChange={(e) => setNewQuote({ ...newQuote, email: e.target.value })}
+                    placeholder="Email"
+                    className="rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                  />
+                </div>
+
+                {/* Line Items */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium text-gray-700 dark:text-slate-300">Line Items</label>
+                    <button
+                      type="button"
+                      onClick={addQuoteLineItem}
+                      className="text-xs text-emerald-600 hover:text-emerald-700 dark:text-emerald-400"
+                    >
+                      + Add Room/Item
+                    </button>
+                  </div>
+                  <div className="space-y-2">
+                    {newQuote.lineItems.map((item, index) => (
+                      <div key={item.id} className="grid gap-2 sm:grid-cols-4 items-center bg-white dark:bg-slate-800 p-2 rounded-lg border border-gray-200 dark:border-slate-600">
+                        <input
+                          type="text"
+                          value={item.description}
+                          onChange={(e) => updateQuoteLineItem(item.id, 'description', e.target.value)}
+                          placeholder="Room/Item (e.g., Main Bathroom)"
+                          className="rounded border border-gray-300 px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100"
+                        />
+                        <div className="relative">
+                          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">£</span>
+                          <input
+                            type="number"
+                            value={item.labour}
+                            onChange={(e) => updateQuoteLineItem(item.id, 'labour', e.target.value)}
+                            placeholder="Labour"
+                            min="0"
+                            step="0.01"
+                            className="w-full rounded border border-gray-300 pl-5 pr-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100"
+                          />
+                        </div>
+                        <div className="relative">
+                          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">£</span>
+                          <input
+                            type="number"
+                            value={item.materials}
+                            onChange={(e) => updateQuoteLineItem(item.id, 'materials', e.target.value)}
+                            placeholder="Materials"
+                            min="0"
+                            step="0.01"
+                            className="w-full rounded border border-gray-300 pl-5 pr-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100"
+                          />
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium text-gray-700 dark:text-slate-300">
+                            = £{((parseFloat(item.labour) || 0) + (parseFloat(item.materials) || 0)).toLocaleString()}
+                          </span>
+                          {newQuote.lineItems.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => removeQuoteLineItem(item.id)}
+                              className="text-red-500 hover:text-red-700 p-1"
+                            >
+                              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {/* Total */}
+                  <div className="flex justify-end pt-2 border-t border-gray-200 dark:border-slate-600">
+                    <span className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
+                      Total: £{newQuote.lineItems.reduce((sum, item) => sum + (parseFloat(item.labour) || 0) + (parseFloat(item.materials) || 0), 0).toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Terms/Conditions */}
+                <div>
+                  <label className="block text-xs text-gray-500 dark:text-slate-400 mb-1">Terms & Conditions</label>
+                  <textarea
+                    value={newQuote.terms}
+                    onChange={(e) => setNewQuote({ ...newQuote, terms: e.target.value })}
+                    placeholder="e.g., All costs plus VAT. Materials not priced. Subject to no hidden issues..."
+                    rows={3}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                  />
+                </div>
+
+                {/* VAT & Valid Until */}
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-slate-300">
+                    <input
+                      type="checkbox"
+                      checked={newQuote.includesVat}
+                      onChange={(e) => setNewQuote({ ...newQuote, includesVat: e.target.checked })}
+                      className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                    />
+                    Prices include VAT
+                  </label>
                   <div>
-                    <label className="block text-xs text-gray-500 dark:text-slate-400 mb-1">Valid Until (optional)</label>
+                    <label className="block text-xs text-gray-500 dark:text-slate-400 mb-1">Valid Until</label>
                     <input
                       type="date"
                       value={newQuote.validUntil}
@@ -630,21 +1157,37 @@ export const ProjectDetailView = ({
                     type="text"
                     value={newQuote.notes}
                     onChange={(e) => setNewQuote({ ...newQuote, notes: e.target.value })}
-                    placeholder="Notes (optional)"
+                    placeholder="Notes"
                     className="rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 self-end"
                   />
                 </div>
-                <div className="flex justify-end gap-2">
+
+                {/* Actions */}
+                <div className="flex justify-end gap-2 pt-2">
                   <button
-                    onClick={() => setShowAddQuoteForm(false)}
+                    onClick={() => {
+                      setShowAddQuoteForm(false);
+                      setNewQuote({
+                        title: '',
+                        contractorName: '',
+                        company: '',
+                        phone: '',
+                        email: '',
+                        validUntil: '',
+                        notes: '',
+                        terms: '',
+                        includesVat: false,
+                        lineItems: [{ id: '1', description: '', labour: '', materials: '' }],
+                      });
+                    }}
                     className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 dark:text-slate-400"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={handleAddQuote}
-                    disabled={!newQuote.contractorName || !newQuote.amount}
-                    className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+                    disabled={!newQuote.contractorName}
+                    className="rounded-lg bg-emerald-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
                   >
                     Add Quote
                   </button>
@@ -669,16 +1212,82 @@ export const ProjectDetailView = ({
                 )}
               </div>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-3">
+                {/* Company totals summary */}
+                {(() => {
+                  const companyTotals = (project.quotes || []).reduce((acc, q) => {
+                    const company = q.company || q.contractorName;
+                    if (!acc[company]) acc[company] = { total: 0, count: 0 };
+                    acc[company].total += q.amount;
+                    acc[company].count += 1;
+                    return acc;
+                  }, {} as Record<string, { total: number; count: number }>);
+
+                  const companiesWithMultiple = Object.entries(companyTotals).filter(([, v]) => v.count > 1);
+
+                  return companiesWithMultiple.length > 0 && (
+                    <div className="rounded-lg bg-gray-50 p-3 dark:bg-slate-800 mb-2">
+                      <p className="text-xs font-medium text-gray-500 dark:text-slate-400 mb-2">Company Totals</p>
+                      <div className="flex flex-wrap gap-3">
+                        {companiesWithMultiple.map(([company, data]) => (
+                          <div key={company} className="text-sm">
+                            <span className="text-gray-700 dark:text-slate-300">{company}:</span>{' '}
+                            <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                              {currencyFormatter.format(data.total)}
+                            </span>
+                            <span className="text-xs text-gray-500 dark:text-slate-400"> ({data.count} quotes)</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {project.quotes?.map((quote) => (
                   <div
                     key={quote.id}
-                    className="rounded-lg border border-gray-200 p-3 dark:border-slate-700"
+                    className={`rounded-lg border p-3 relative group transition-colors ${
+                      selectedForComparison.has(quote.id)
+                        ? 'border-purple-400 bg-purple-50 dark:border-purple-500 dark:bg-purple-500/10'
+                        : 'border-gray-200 dark:border-slate-700'
+                    }`}
                   >
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <p className="font-semibold text-emerald-600 dark:text-emerald-400">
+                    {/* Selection checkbox for comparison */}
+                    <label className="absolute top-3 left-3 flex items-center cursor-pointer z-10">
+                      <input
+                        type="checkbox"
+                        checked={selectedForComparison.has(quote.id)}
+                        onChange={() => toggleQuoteSelection(quote.id)}
+                        className="h-4 w-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500 dark:border-slate-600 dark:bg-slate-800"
+                      />
+                    </label>
+
+                    {/* Delete button - always visible on hover */}
+                    {!isReadOnly && (
+                      <button
+                        onClick={() => {
+                          const quoteLabel = quote.title || quote.contractorName || 'this quote';
+                          if (window.confirm(`Are you sure you want to delete "${quoteLabel}"? This action cannot be undone.`)) {
+                            onRemoveQuote(quote.id);
+                          }
+                        }}
+                        className="absolute top-2 right-2 p-1 rounded-full bg-red-100 text-red-600 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-200 dark:bg-red-500/20 dark:text-red-400 dark:hover:bg-red-500/30"
+                        title="Delete quote"
+                      >
+                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    )}
+
+                    <div className="flex items-start justify-between pr-8 pl-7">
+                      <div className="flex-1">
+                        {/* Title */}
+                        {quote.title && (
+                          <p className="text-sm font-medium text-gray-900 dark:text-slate-100 mb-1">{quote.title}</p>
+                        )}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-lg font-semibold text-emerald-600 dark:text-emerald-400">
                             {currencyFormatter.format(quote.amount)}
                           </p>
                           <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
@@ -688,14 +1297,42 @@ export const ProjectDetailView = ({
                           }`}>
                             {quote.status}
                           </span>
+                          {quote.includesVat === false && (
+                            <span className="text-xs text-orange-600 dark:text-orange-400">+ VAT</span>
+                          )}
                         </div>
-                        <p className="text-sm text-gray-600 dark:text-slate-300">{quote.contractorName}</p>
+                        <p className="text-sm text-gray-600 dark:text-slate-300">
+                          {quote.contractorName}
+                          {quote.company && quote.company !== quote.contractorName && ` (${quote.company})`}
+                        </p>
+
+                        {/* Line items breakdown */}
+                        {quote.manualLineItems && quote.manualLineItems.length > 0 && (
+                          <div className="mt-2 space-y-1">
+                            {quote.manualLineItems.map((item) => (
+                              <div key={item.id} className="flex items-center gap-2 text-xs text-gray-500 dark:text-slate-400">
+                                <span className="font-medium">{item.description}:</span>
+                                {item.labour && <span>L: £{item.labour.toLocaleString()}</span>}
+                                {item.materials && <span>M: £{item.materials.toLocaleString()}</span>}
+                                <span className="text-gray-700 dark:text-slate-300">= £{item.amount.toLocaleString()}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Terms */}
+                        {quote.terms && (
+                          <p className="mt-2 text-xs text-gray-500 dark:text-slate-400 italic">{quote.terms}</p>
+                        )}
+
                         {quote.notes && (
                           <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">{quote.notes}</p>
                         )}
                       </div>
+
+                      {/* Actions */}
                       {!isReadOnly && (
-                        <div className="flex gap-1">
+                        <div className="flex flex-col gap-1 ml-2">
                           {quote.status === 'pending' && (
                             <>
                               <button
@@ -711,6 +1348,14 @@ export const ProjectDetailView = ({
                                 Reject
                               </button>
                             </>
+                          )}
+                          {quote.status !== 'pending' && (
+                            <button
+                              onClick={() => onUpdateQuote(quote.id, { status: 'pending' })}
+                              className="rounded px-2 py-1 text-xs text-gray-600 hover:bg-gray-50 dark:text-slate-400 dark:hover:bg-slate-700"
+                            >
+                              Reset
+                            </button>
                           )}
                         </div>
                       )}
@@ -1283,7 +1928,7 @@ export const ProjectDetailView = ({
         />
       </Modal>
 
-      {/* Quote Comparison Modal */}
+      {/* Quote Comparison Modal (for extracted quotes) */}
       <Modal
         isOpen={showQuoteComparison}
         onClose={() => setShowQuoteComparison(false)}
@@ -1291,6 +1936,207 @@ export const ProjectDetailView = ({
         size="2xl"
       >
         <QuoteComparisonChart quotes={extractedQuotes} height={400} showBreakdown />
+      </Modal>
+
+      {/* Selected Quotes Comparison Modal */}
+      <Modal
+        isOpen={showComparisonModal}
+        onClose={() => setShowComparisonModal(false)}
+        title={`Compare ${selectedQuotes.length} Quotes`}
+        size="2xl"
+      >
+        <div className="space-y-6">
+          {/* Summary Cards */}
+          <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(${Math.min(selectedQuotes.length, 3)}, 1fr)` }}>
+            {selectedQuotes.map((quote, index) => {
+              const isLowest = quote.amount === Math.min(...selectedQuotes.map(q => q.amount));
+              const isHighest = quote.amount === Math.max(...selectedQuotes.map(q => q.amount));
+              return (
+                <div
+                  key={quote.id}
+                  className={`rounded-lg border p-4 ${
+                    isLowest
+                      ? 'border-emerald-400 bg-emerald-50 dark:border-emerald-500 dark:bg-emerald-500/10'
+                      : isHighest
+                      ? 'border-red-300 bg-red-50 dark:border-red-500 dark:bg-red-500/10'
+                      : 'border-gray-200 dark:border-slate-700'
+                  }`}
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <div>
+                      <p className="text-sm font-medium text-gray-500 dark:text-slate-400">
+                        {quote.title || `Quote ${index + 1}`}
+                      </p>
+                      <p className="font-semibold text-gray-900 dark:text-slate-100">
+                        {quote.contractorName}
+                      </p>
+                      {quote.company && quote.company !== quote.contractorName && (
+                        <p className="text-xs text-gray-500 dark:text-slate-400">{quote.company}</p>
+                      )}
+                    </div>
+                    {isLowest && (
+                      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300">
+                        Lowest
+                      </span>
+                    )}
+                    {isHighest && selectedQuotes.length > 2 && (
+                      <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-500/20 dark:text-red-300">
+                        Highest
+                      </span>
+                    )}
+                  </div>
+                  <p className={`text-2xl font-bold ${isLowest ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-900 dark:text-slate-100'}`}>
+                    {currencyFormatter.format(quote.amount)}
+                  </p>
+                  {quote.includesVat === false && (
+                    <p className="text-xs text-orange-600 dark:text-orange-400">+ VAT</p>
+                  )}
+                  <span className={`mt-2 inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
+                    quote.status === 'accepted' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300'
+                      : quote.status === 'rejected' ? 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300'
+                      : 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300'
+                  }`}>
+                    {quote.status}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Price Difference Summary */}
+          {selectedQuotes.length >= 2 && (
+            <div className="rounded-lg bg-gray-50 p-4 dark:bg-slate-800">
+              <h4 className="font-medium text-gray-900 dark:text-slate-100 mb-2">Price Analysis</h4>
+              <div className="grid grid-cols-3 gap-4 text-sm">
+                <div>
+                  <p className="text-gray-500 dark:text-slate-400">Lowest</p>
+                  <p className="font-semibold text-emerald-600 dark:text-emerald-400">
+                    {currencyFormatter.format(Math.min(...selectedQuotes.map(q => q.amount)))}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-gray-500 dark:text-slate-400">Highest</p>
+                  <p className="font-semibold text-red-600 dark:text-red-400">
+                    {currencyFormatter.format(Math.max(...selectedQuotes.map(q => q.amount)))}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-gray-500 dark:text-slate-400">Difference</p>
+                  <p className="font-semibold text-gray-900 dark:text-slate-100">
+                    {currencyFormatter.format(Math.max(...selectedQuotes.map(q => q.amount)) - Math.min(...selectedQuotes.map(q => q.amount)))}
+                    <span className="text-xs text-gray-500 dark:text-slate-400 ml-1">
+                      ({Math.round(((Math.max(...selectedQuotes.map(q => q.amount)) - Math.min(...selectedQuotes.map(q => q.amount))) / Math.min(...selectedQuotes.map(q => q.amount))) * 100)}%)
+                    </span>
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Line Items Comparison */}
+          {selectedQuotes.some(q => q.manualLineItems && q.manualLineItems.length > 0) && (
+            <div>
+              <h4 className="font-medium text-gray-900 dark:text-slate-100 mb-3">Line Items Comparison</h4>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-200 dark:border-slate-700">
+                      <th className="text-left py-2 px-3 font-medium text-gray-500 dark:text-slate-400">Item</th>
+                      {selectedQuotes.map((quote, index) => (
+                        <th key={quote.id} className="text-right py-2 px-3 font-medium text-gray-500 dark:text-slate-400">
+                          {quote.contractorName.split(' ')[0]}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {/* Get all unique line item descriptions */}
+                    {(() => {
+                      const allDescriptions = new Set<string>();
+                      selectedQuotes.forEach(q => {
+                        q.manualLineItems?.forEach(item => allDescriptions.add(item.description));
+                      });
+                      return Array.from(allDescriptions).map(desc => (
+                        <tr key={desc} className="border-b border-gray-100 dark:border-slate-800">
+                          <td className="py-2 px-3 text-gray-700 dark:text-slate-300">{desc}</td>
+                          {selectedQuotes.map(quote => {
+                            const item = quote.manualLineItems?.find(i => i.description === desc);
+                            const amounts = selectedQuotes
+                              .map(q => q.manualLineItems?.find(i => i.description === desc)?.amount)
+                              .filter((a): a is number => a !== undefined);
+                            const minAmount = Math.min(...amounts);
+                            const maxAmount = Math.max(...amounts);
+                            const isMin = item?.amount === minAmount && amounts.length > 1;
+                            const isMax = item?.amount === maxAmount && amounts.length > 1 && minAmount !== maxAmount;
+                            return (
+                              <td key={quote.id} className={`py-2 px-3 text-right ${
+                                isMin ? 'text-emerald-600 font-medium dark:text-emerald-400' :
+                                isMax ? 'text-red-600 dark:text-red-400' :
+                                'text-gray-700 dark:text-slate-300'
+                              }`}>
+                                {item ? (
+                                  <div>
+                                    <span>{currencyFormatter.format(item.amount)}</span>
+                                    {(item.labour || item.materials) && (
+                                      <div className="text-xs text-gray-500 dark:text-slate-400">
+                                        {item.labour && <span>L: £{item.labour.toLocaleString()}</span>}
+                                        {item.labour && item.materials && ' / '}
+                                        {item.materials && <span>M: £{item.materials.toLocaleString()}</span>}
+                                      </div>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span className="text-gray-400 dark:text-slate-500">—</span>
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ));
+                    })()}
+                    {/* Total row */}
+                    <tr className="bg-gray-50 dark:bg-slate-800 font-semibold">
+                      <td className="py-2 px-3 text-gray-900 dark:text-slate-100">Total</td>
+                      {selectedQuotes.map(quote => {
+                        const isLowest = quote.amount === Math.min(...selectedQuotes.map(q => q.amount));
+                        return (
+                          <td key={quote.id} className={`py-2 px-3 text-right ${isLowest ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-900 dark:text-slate-100'}`}>
+                            {currencyFormatter.format(quote.amount)}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Notes comparison */}
+          {selectedQuotes.some(q => q.notes || q.terms) && (
+            <div>
+              <h4 className="font-medium text-gray-900 dark:text-slate-100 mb-3">Notes & Terms</h4>
+              <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(${Math.min(selectedQuotes.length, 3)}, 1fr)` }}>
+                {selectedQuotes.map(quote => (
+                  <div key={quote.id} className="rounded-lg border border-gray-200 p-3 dark:border-slate-700">
+                    <p className="text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                      {quote.contractorName}
+                    </p>
+                    {quote.terms && (
+                      <p className="text-xs text-gray-500 dark:text-slate-400 italic">{quote.terms}</p>
+                    )}
+                    {quote.notes && (
+                      <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">{quote.notes}</p>
+                    )}
+                    {!quote.terms && !quote.notes && (
+                      <p className="text-xs text-gray-400 dark:text-slate-500">No notes</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       </Modal>
 
       {/* Quote Details Modal */}
@@ -1306,22 +2152,22 @@ export const ProjectDetailView = ({
         {selectedExtractedQuote && (
           <div className="space-y-6">
             {/* Summary */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="bg-blue-50 rounded-lg p-3 dark:bg-blue-500/20">
-                <p className="text-xs text-blue-600 dark:text-blue-300">Subtotal</p>
-                <p className="text-lg font-bold text-blue-800 dark:text-blue-100">
+            <div className="grid grid-cols-3 gap-4">
+              <div className="bg-blue-100 rounded-lg p-4 dark:bg-blue-600">
+                <p className="text-sm font-medium text-blue-700 dark:text-blue-100">Subtotal</p>
+                <p className="text-xl font-bold text-blue-900 dark:text-white">
                   {currencyFormatter.format(selectedExtractedQuote.subtotal)}
                 </p>
               </div>
-              <div className="bg-gray-50 rounded-lg p-3 dark:bg-slate-700">
-                <p className="text-xs text-gray-600 dark:text-slate-300">VAT</p>
-                <p className="text-lg font-bold text-gray-800 dark:text-slate-100">
+              <div className="bg-gray-200 rounded-lg p-4 dark:bg-slate-600">
+                <p className="text-sm font-medium text-gray-700 dark:text-slate-200">VAT {selectedExtractedQuote.vatRate ? `(${selectedExtractedQuote.vatRate}%)` : ''}</p>
+                <p className="text-xl font-bold text-gray-900 dark:text-white">
                   {currencyFormatter.format(selectedExtractedQuote.vatAmount || 0)}
                 </p>
               </div>
-              <div className="bg-emerald-50 rounded-lg p-3 col-span-2 dark:bg-emerald-500/20">
-                <p className="text-xs text-emerald-600 dark:text-emerald-300">Total</p>
-                <p className="text-2xl font-bold text-emerald-800 dark:text-emerald-100">
+              <div className="bg-emerald-100 rounded-lg p-4 dark:bg-emerald-600">
+                <p className="text-sm font-medium text-emerald-700 dark:text-emerald-100">Total</p>
+                <p className="text-xl font-bold text-emerald-900 dark:text-white">
                   {currencyFormatter.format(selectedExtractedQuote.total)}
                 </p>
               </div>
@@ -1343,6 +2189,102 @@ export const ProjectDetailView = ({
           </div>
         )}
       </Modal>
+
+      {/* Quote Contractor Creation Modal */}
+      {showQuoteContractorModal && pendingQuoteForContractor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() => {
+              setShowQuoteContractorModal(false);
+              setPendingQuoteForContractor(null);
+            }}
+          />
+          <div className="relative z-10 w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl dark:bg-slate-900">
+            {/* Header */}
+            <div className="mb-4">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">
+                Save Contractor?
+              </h3>
+              <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">
+                Would you like to save this company to your contractors list?
+              </p>
+            </div>
+
+            {/* Contractor Details */}
+            <div className="mb-4 rounded-lg bg-gray-50 p-4 dark:bg-slate-800 space-y-2">
+              <div className="flex items-center gap-2">
+                <Building2 className="h-5 w-5 text-gray-400" />
+                <p className="font-medium text-gray-900 dark:text-slate-100">
+                  {pendingQuoteForContractor.company || pendingQuoteForContractor.contractorName}
+                </p>
+              </div>
+              {pendingQuoteForContractor.contactName && (
+                <p className="text-sm text-gray-600 dark:text-slate-400 pl-7">
+                  Contact: {pendingQuoteForContractor.contactName}
+                </p>
+              )}
+              <div className="pl-7 space-y-1 text-sm text-gray-500 dark:text-slate-400">
+                {pendingQuoteForContractor.phone && (
+                  <div className="flex items-center gap-2">
+                    <Phone className="h-3.5 w-3.5" />
+                    {pendingQuoteForContractor.phone}
+                  </div>
+                )}
+                {pendingQuoteForContractor.email && (
+                  <div className="flex items-center gap-2">
+                    <Mail className="h-3.5 w-3.5" />
+                    {pendingQuoteForContractor.email}
+                  </div>
+                )}
+                {pendingQuoteForContractor.address && (
+                  <p className="text-xs text-gray-400 dark:text-slate-500">
+                    {pendingQuoteForContractor.address}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Specialty Selection */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                Contractor Type
+              </label>
+              <select
+                value={quoteContractorSpecialty}
+                onChange={(e) => setQuoteContractorSpecialty(e.target.value as ContractorSpecialty)}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+              >
+                {CONTRACTOR_SPECIALTIES.map((spec) => (
+                  <option key={spec.value} value={spec.value}>
+                    {spec.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Actions */}
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setShowQuoteContractorModal(false);
+                  setPendingQuoteForContractor(null);
+                }}
+                className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"
+              >
+                Skip
+              </button>
+              <button
+                onClick={handleCreateContractorFromQuote}
+                className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+              >
+                <UserPlus className="h-4 w-4" />
+                Save Contractor
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
