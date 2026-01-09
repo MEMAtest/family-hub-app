@@ -6,14 +6,12 @@ on:
   pull_request:
     branches: [ main ]
 
-  jobs:
-    test:
-      runs-on: ubuntu-latest
-
+jobs:
+  test:
+    runs-on: ubuntu-latest
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       ANTHROPIC_API_KEY: dummy
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
