@@ -1,6 +1,6 @@
 import { test, expect, devices, type Page } from '@playwright/test';
 
-const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3003';
+const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3001';
 
 const skipSetupWizard = () => {
   localStorage.setItem('familyHub_setupComplete', 'skipped');

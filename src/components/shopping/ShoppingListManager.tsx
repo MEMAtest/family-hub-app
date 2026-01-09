@@ -79,10 +79,10 @@ const mapApiList = (list: any): ShoppingListView => {
     createdAt: item?.createdAt ?? undefined,
   }));
 
-  const estimatedTotal = mappedItems.reduce((sum, item) => sum + getItemPrice(item), 0);
+  const estimatedTotal = mappedItems.reduce((sum: number, item: ShoppingItemView) => sum + getItemPrice(item), 0);
   const total = mappedItems
-    .filter((item) => getItemCompleted(item))
-    .reduce((sum, item) => sum + getItemPrice(item), 0);
+    .filter((item: ShoppingItemView) => getItemCompleted(item))
+    .reduce((sum: number, item: ShoppingItemView) => sum + getItemPrice(item), 0);
 
   return {
     id: list?.id ?? createId('list'),

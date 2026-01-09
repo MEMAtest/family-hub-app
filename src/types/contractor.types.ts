@@ -6,6 +6,7 @@ export interface Contractor {
   company?: string;
   phone?: string;
   email?: string;
+  address?: string;  // Company address
   specialty: ContractorSpecialty;
   notes?: string;
   rating?: 1 | 2 | 3 | 4 | 5;
