@@ -205,10 +205,10 @@ const normaliseShoppingLists = (lists: any[]): ShoppingList[] => {
       frequency: item?.frequency ?? undefined,
     }));
 
-    const estimatedTotal = mappedItems.reduce((sum, item) => sum + item.price, 0);
+    const estimatedTotal = mappedItems.reduce((sum: number, item: { price: number }) => sum + item.price, 0);
     const total = mappedItems
-      .filter((item) => item.completed)
-      .reduce((sum, item) => sum + item.price, 0);
+      .filter((item: { completed: boolean }) => item.completed)
+      .reduce((sum: number, item: { price: number }) => sum + item.price, 0);
 
     return {
       id: list?.id ?? `list-${index}`,

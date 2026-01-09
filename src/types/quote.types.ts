@@ -16,8 +16,10 @@ export interface ExtractedQuote {
   id: string;
   contractorName: string;
   company?: string;
+  contactName?: string;  // Primary contact person (e.g., "Pauline", "Jack")
   phone?: string;
   email?: string;
+  address?: string;  // Company address extracted from PDF
   quoteDate?: string;
   validUntil?: string;
   reference?: string;
@@ -148,6 +150,7 @@ export interface QuoteChartData {
   value: number;
   color: string;
   percentage?: number;
+  [key: string]: string | number | undefined;
 }
 
 export interface QuoteComparisonChartData {
