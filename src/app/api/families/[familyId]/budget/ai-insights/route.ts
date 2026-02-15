@@ -1,21 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
 import Anthropic from '@anthropic-ai/sdk';
 import { deduplicateRecurringItems, filterBudgetItemsByMonth } from '@/utils/budgetMonthFilter';
-
-const prisma = new PrismaClient();
+import prisma from '@/lib/prisma';
+import { requireFamilyAccess } from '@/lib/auth-utils';
 
 // Initialize Anthropic client
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY || '',
 });
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { familyId: string } }
-) {
+export const GET = requireFamilyAccess(async (request: NextRequest, context, _authUser) => {
   try {
-    const { familyId } = params;
+    const { familyId } = await context.params;
     const { searchParams } = new URL(request.url);
     const month = searchParams.get('month');
     const year = searchParams.get('year');
@@ -175,7 +171,5 @@ ${expenses.length > 0 ? '✓ Good expense tracking habits in place' : ''}`;
       { error: 'Failed to generate budget insights', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
-  } finally {
-    await prisma.$disconnect();
   }
-}
+});

@@ -1,15 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
 import { deduplicateRecurringItems, filterBudgetItemsByMonth } from '@/utils/budgetMonthFilter';
+import prisma from '@/lib/prisma';
+import { requireFamilyAccess } from '@/lib/auth-utils';
 
-const prisma = new PrismaClient();
-
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { familyId: string } }
-) {
+export const GET = requireFamilyAccess(async (request: NextRequest, context, _authUser) => {
   try {
-    const { familyId } = params;
+    const { familyId } = await context.params;
     const { searchParams } = new URL(request.url);
     const month = searchParams.get('month');
     const year = searchParams.get('year');
@@ -44,14 +40,11 @@ export async function GET(
       { status: 500 }
     );
   }
-}
+});
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { familyId: string } }
-) {
+export const POST = requireFamilyAccess(async (request: NextRequest, context, _authUser) => {
   try {
-    const { familyId } = params;
+    const { familyId } = await context.params;
     const body = await request.json();
 
     // Handle personId - if it's not a valid database ID or doesn't exist, set to null
@@ -93,12 +86,26 @@ export async function POST(
       { status: 500 }
     );
   }
-}
+});
 
-export async function PUT(request: NextRequest) {
+export const PUT = requireFamilyAccess(async (request: NextRequest, context, _authUser) => {
   try {
+    const { familyId } = await context.params;
     const body = await request.json();
     const { id, ...updateData } = body;
+
+    if (!id) {
+      return NextResponse.json({ error: 'Income ID is required' }, { status: 400 });
+    }
+
+    const existing = await prisma.budgetIncome.findFirst({
+      where: { id, familyId },
+      select: { id: true },
+    });
+
+    if (!existing) {
+      return NextResponse.json({ error: 'Income not found' }, { status: 404 });
+    }
 
     const income = await prisma.budgetIncome.update({
       where: { id },
@@ -119,10 +126,11 @@ export async function PUT(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+});
 
-export async function DELETE(request: NextRequest) {
+export const DELETE = requireFamilyAccess(async (request: NextRequest, context, _authUser) => {
   try {
+    const { familyId } = await context.params;
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
 
@@ -131,6 +139,15 @@ export async function DELETE(request: NextRequest) {
         { error: 'Income ID is required' },
         { status: 400 }
       );
+    }
+
+    const existing = await prisma.budgetIncome.findFirst({
+      where: { id, familyId },
+      select: { id: true },
+    });
+
+    if (!existing) {
+      return NextResponse.json({ error: 'Income not found' }, { status: 404 });
     }
 
     await prisma.budgetIncome.delete({
@@ -145,4 +162,4 @@ export async function DELETE(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+});

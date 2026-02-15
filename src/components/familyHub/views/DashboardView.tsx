@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { formatDateLong } from '@/utils/formatDate';
 import {
   Activity,
@@ -42,6 +42,17 @@ import { useContractorContext } from '@/contexts/familyHub/ContractorContext';
 import { stewartFleming2025To2026, stewartFleming2026To2027 } from '@/data/schoolTerms';
 import { extractBudgetRecords, summariseBudgetForMonth } from '@/utils/budgetAnalytics';
 import { UpcomingContractorVisits } from '@/components/contractors';
+import { useFamilyStore } from '@/store/familyStore';
+
+type FeedItem = {
+  id: string;
+  type: string;
+  title: string;
+  summary: string;
+  timestamp: string;
+  severity: 'info' | 'attention' | 'urgent';
+  cta?: { label: string; view: string; params?: Record<string, string> };
+};
 
 const currencyFormatter = new Intl.NumberFormat('en-GB', {
   style: 'currency',
@@ -120,6 +131,35 @@ export const DashboardView = () => {
   const { goalsData, openQuickActivityForm, personalTracking } = useGoalsContext();
   const { openQuickAppointment, upcomingAppointments } = useContractorContext();
   const mealPlanning = mealsContext.mealPlanning;
+  const familyId = useFamilyStore((state) => state.databaseStatus.familyId);
+
+  const [feedItems, setFeedItems] = useState<FeedItem[]>([]);
+  const [feedLoading, setFeedLoading] = useState(false);
+  const [feedError, setFeedError] = useState<string | null>(null);
+
+  const reloadFeed = useCallback(async () => {
+    if (!familyId) return;
+    try {
+      setFeedLoading(true);
+      setFeedError(null);
+      const response = await fetch(`/api/families/${familyId}/feed?limit=12`);
+      if (!response.ok) {
+        throw new Error(`Feed request failed (${response.status})`);
+      }
+      const payload = await response.json();
+      const items = Array.isArray(payload) ? payload : [];
+      setFeedItems(items as FeedItem[]);
+    } catch (error) {
+      console.warn('Failed to load feed:', error);
+      setFeedError('Failed to load feed');
+    } finally {
+      setFeedLoading(false);
+    }
+  }, [familyId]);
+
+  useEffect(() => {
+    void reloadFeed();
+  }, [reloadFeed]);
 
   // School year selector state - calculate dynamically based on current date
   // Academic year starts in September
@@ -392,6 +432,63 @@ export const DashboardView = () => {
             />
           ))}
         </div>
+      </section>
+
+      <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+        <div className="flex items-center justify-between">
+          <h3 className="text-base font-semibold text-gray-900 dark:text-slate-100">Family Feed</h3>
+          <button
+            onClick={() => void reloadFeed()}
+            className="rounded-md border border-gray-200 px-3 py-1 text-sm text-gray-600 hover:bg-gray-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+          >
+            Refresh
+          </button>
+        </div>
+
+        {feedLoading ? (
+          <p className="mt-3 text-sm text-gray-500 dark:text-slate-400">Loading…</p>
+        ) : feedError ? (
+          <p className="mt-3 text-sm text-red-600 dark:text-red-300">{feedError}</p>
+        ) : feedItems.length === 0 ? (
+          <p className="mt-3 text-sm text-gray-500 dark:text-slate-400">Nothing new right now.</p>
+        ) : (
+          <div className="mt-4 space-y-2">
+            {feedItems.slice(0, 8).map((item) => (
+              <div
+                key={item.id}
+                className="flex flex-col gap-2 rounded-lg border border-gray-100 bg-gray-50 p-3 dark:border-slate-700 dark:bg-slate-800 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                        item.severity === 'urgent'
+                          ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-200'
+                          : item.severity === 'attention'
+                          ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-200'
+                          : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200'
+                      }`}
+                    >
+                      {item.type}
+                    </span>
+                    <p className="text-sm font-medium text-gray-900 dark:text-slate-100 truncate">
+                      {item.title}
+                    </p>
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500 dark:text-slate-400 line-clamp-2">{item.summary}</p>
+                </div>
+                {item.cta && (
+                  <button
+                    onClick={() => setView(item.cta!.view)}
+                    className="inline-flex items-center justify-center rounded-lg bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-100 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-900"
+                  >
+                    {item.cta.label}
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </section>
 
       <section className="grid gap-6 lg:grid-cols-3">

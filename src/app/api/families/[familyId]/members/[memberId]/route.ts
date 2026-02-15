@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { requireFamilyAccess } from '@/lib/auth-utils';
 
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: { familyId: string; memberId: string } }
-) {
+export const PATCH = requireFamilyAccess(async (request: NextRequest, context, _authUser) => {
   try {
+    const params = await context.params;
     const body = await request.json();
     const parsedDob = body.dateOfBirth ? new Date(body.dateOfBirth) : null;
     const dateOfBirthValue = parsedDob && !Number.isNaN(parsedDob.getTime()) ? parsedDob : null;
@@ -39,13 +38,11 @@ export async function PATCH(
     console.error('Error updating family member:', error);
     return NextResponse.json({ error: 'Failed to update family member' }, { status: 500 });
   }
-}
+});
 
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { familyId: string; memberId: string } }
-) {
+export const DELETE = requireFamilyAccess(async (_request: NextRequest, context, _authUser) => {
   try {
+    const params = await context.params;
     const existing = await prisma.familyMember.findFirst({
       where: {
         id: params.memberId,
@@ -66,4 +63,4 @@ export async function DELETE(
     console.error('Error deleting family member:', error);
     return NextResponse.json({ error: 'Failed to delete family member' }, { status: 500 });
   }
-}
+});

@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
 import type { FitnessStats, ActivityType } from '@/types/fitness.types';
-
-const prisma = new PrismaClient();
+import prisma from '@/lib/prisma';
+import { requireFamilyAccess } from '@/lib/auth-utils';
 
 /**
  * Get the start date for a given period
@@ -83,12 +82,9 @@ function groupByType(activities: Array<{ activityType: string }>): Partial<Recor
  * Get aggregated fitness statistics
  * Query params: personId, period (week|month|year)
  */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ familyId: string }> }
-) {
+export const GET = requireFamilyAccess(async (request: NextRequest, context, _authUser) => {
   try {
-    const { familyId } = await params;
+    const { familyId } = await context.params;
     const { searchParams } = new URL(request.url);
 
     const personId = searchParams.get('personId');
@@ -190,4 +186,4 @@ export async function GET(
       { status: 500 }
     );
   }
-}
+});

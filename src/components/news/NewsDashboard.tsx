@@ -39,6 +39,8 @@ interface NewsDashboardProps {
   onUpdatePreferences?: (preferences: Partial<NewsPreferences>) => void;
 }
 
+const NEWS_PREFERENCES_KEY = 'familyHub_newsPreferences_v1';
+
 const mockPreferences: NewsPreferences = {
   enabledCategories: ['general', 'local', 'family', 'education', 'safety'],
   sources: rssNewsService.getAvailableSources(),
@@ -197,6 +199,7 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({
   const [preferences, setPreferences] = useState<NewsPreferences>(
     initialPreferences || mockPreferences
   );
+  const [preferencesLoaded, setPreferencesLoaded] = useState(Boolean(initialPreferences));
   const [selectedCategory, setSelectedCategory] = useState<NewsCategory | 'all'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState<'cards' | 'list' | 'digest'>('cards');
@@ -223,6 +226,56 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({
         !article.description.toLowerCase().includes(searchTerm.toLowerCase())) return false;
     return true;
   });
+
+  useEffect(() => {
+    if (initialPreferences) return;
+    if (typeof window === 'undefined') return;
+
+    try {
+      const stored = window.localStorage.getItem(NEWS_PREFERENCES_KEY);
+      if (!stored) {
+        setPreferencesLoaded(true);
+        return;
+      }
+
+      const parsed = JSON.parse(stored) as Partial<NewsPreferences>;
+      const availableSources = rssNewsService.getAvailableSources();
+      const enabledMap = new Map(
+        (Array.isArray(parsed.sources) ? parsed.sources : []).map((source: any) => [source?.id, source?.isEnabled])
+      );
+
+      setPreferences((prev) => ({
+        ...prev,
+        enabledCategories: Array.isArray(parsed.enabledCategories) ? (parsed.enabledCategories as NewsCategory[]) : prev.enabledCategories,
+        ageFiltering: typeof parsed.ageFiltering === 'boolean' ? parsed.ageFiltering : prev.ageFiltering,
+        locationBased: typeof parsed.locationBased === 'boolean' ? parsed.locationBased : prev.locationBased,
+        location: typeof parsed.location === 'string' ? parsed.location : prev.location,
+        maxArticlesPerDay: typeof parsed.maxArticlesPerDay === 'number' ? parsed.maxArticlesPerDay : prev.maxArticlesPerDay,
+        notificationEnabled: typeof parsed.notificationEnabled === 'boolean' ? parsed.notificationEnabled : prev.notificationEnabled,
+        digestFrequency: (parsed.digestFrequency as any) ?? prev.digestFrequency,
+        keywords: Array.isArray(parsed.keywords) ? (parsed.keywords as string[]) : prev.keywords,
+        blockedKeywords: Array.isArray(parsed.blockedKeywords) ? (parsed.blockedKeywords as string[]) : prev.blockedKeywords,
+        sources: availableSources.map((source) => ({
+          ...source,
+          isEnabled: enabledMap.has(source.id) ? Boolean(enabledMap.get(source.id)) : source.isEnabled,
+        })),
+      }));
+    } catch (error) {
+      console.warn('Failed to load stored news preferences:', error);
+    } finally {
+      setPreferencesLoaded(true);
+    }
+  }, [initialPreferences]);
+
+  useEffect(() => {
+    if (!preferencesLoaded) return;
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(NEWS_PREFERENCES_KEY, JSON.stringify(preferences));
+    } catch (error) {
+      console.warn('Failed to persist news preferences:', error);
+    }
+  }, [preferences, preferencesLoaded]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -254,6 +307,13 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({
       setRefreshing(false);
     }
   };
+
+  useEffect(() => {
+    if (!preferencesLoaded) return;
+    void handleRefresh();
+    // Intentional: refresh once after preferences are loaded.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preferencesLoaded]);
 
   const handleToggleSave = (articleId: string) => {
     setArticles(prev => prev.map(article =>

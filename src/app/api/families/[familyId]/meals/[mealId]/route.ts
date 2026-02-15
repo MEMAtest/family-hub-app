@@ -1,15 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import prisma from '@/lib/prisma';
+import { requireFamilyAccess } from '@/lib/auth-utils';
 
 // GET - Fetch single meal by ID
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { familyId: string; mealId: string } }
-) {
+export const GET = requireFamilyAccess(async (_request: NextRequest, context, _authUser) => {
   try {
-    const { familyId, mealId } = params;
+    const { familyId, mealId } = await context.params;
 
     const meal = await prisma.mealPlan.findFirst({
       where: {
@@ -33,15 +29,12 @@ export async function GET(
       { status: 500 }
     );
   }
-}
+});
 
 // PUT - Update existing meal
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: { familyId: string; mealId: string } }
-) {
+export const PUT = requireFamilyAccess(async (request: NextRequest, context, _authUser) => {
   try {
-    const { familyId, mealId } = params;
+    const { familyId, mealId } = await context.params;
     const body = await request.json();
 
     // Check if meal exists and belongs to family
@@ -94,15 +87,12 @@ export async function PUT(
       { status: 500 }
     );
   }
-}
+});
 
 // DELETE - Delete meal
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { familyId: string; mealId: string } }
-) {
+export const DELETE = requireFamilyAccess(async (_request: NextRequest, context, _authUser) => {
   try {
-    const { familyId, mealId } = params;
+    const { familyId, mealId } = await context.params;
 
     // Check if meal exists and belongs to family
     const existingMeal = await prisma.mealPlan.findFirst({
@@ -134,15 +124,12 @@ export async function DELETE(
       { status: 500 }
     );
   }
-}
+});
 
 // PATCH - Mark meal as eaten
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: { familyId: string; mealId: string } }
-) {
+export const PATCH = requireFamilyAccess(async (request: NextRequest, context, _authUser) => {
   try {
-    const { familyId, mealId } = params;
+    const { familyId, mealId } = await context.params;
     const body = await request.json();
     const { action } = body;
 
@@ -194,4 +181,4 @@ export async function PATCH(
       { status: 500 }
     );
   }
-}
+});

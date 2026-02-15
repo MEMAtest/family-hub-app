@@ -9,6 +9,7 @@ import GymRoutinesStep from './steps/GymRoutinesStep';
 import ExerciseDetailsStep from './steps/ExerciseDetailsStep';
 import AdditionalActivitiesStep from './steps/AdditionalActivitiesStep';
 import NotesStep from './steps/NotesStep';
+import ImageUploadStep from './steps/ImageUploadStep';
 import SummaryStep from './steps/SummaryStep';
 import type { FitnessActivity, WizardStep } from '@/types/fitness.types';
 
@@ -19,6 +20,7 @@ interface ActivityLoggingWizardProps {
   personId: string;
   familyId: string;
   lastWorkout?: FitnessActivity;
+  editingActivity?: FitnessActivity | null;
 }
 
 // Progress indicator
@@ -36,6 +38,7 @@ const WizardProgress: React.FC = () => {
       : []),
     { key: 'additional_activities', label: 'Extras' },
     { key: 'notes', label: 'Notes' },
+    { key: 'image_upload', label: 'Images' },
     { key: 'summary', label: 'Review' },
   ];
 
@@ -100,6 +103,8 @@ const WizardContent: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         return <AdditionalActivitiesStep />;
       case 'notes':
         return <NotesStep />;
+      case 'image_upload':
+        return <ImageUploadStep />;
       case 'summary':
         return <SummaryStep onClose={onClose} />;
       default:
@@ -163,6 +168,7 @@ export const ActivityLoggingWizard: React.FC<ActivityLoggingWizardProps> = ({
   personId,
   familyId,
   lastWorkout,
+  editingActivity,
 }) => {
   if (!isOpen) return null;
 
@@ -174,6 +180,7 @@ export const ActivityLoggingWizard: React.FC<ActivityLoggingWizardProps> = ({
           familyId={familyId}
           onComplete={onComplete}
           lastWorkout={lastWorkout}
+          editingActivity={editingActivity ?? undefined}
         >
           <WizardContent onClose={onClose} />
         </WizardProvider>

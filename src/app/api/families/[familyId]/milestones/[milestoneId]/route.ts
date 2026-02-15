@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { requireFamilyAccess } from '@/lib/auth-utils';
 
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: { familyId: string; milestoneId: string } }
-) {
+export const PATCH = requireFamilyAccess(async (request: NextRequest, context, _authUser) => {
   try {
+    const params = await context.params;
     const body = await request.json();
     const parsedDate = body.date ? new Date(body.date) : null;
     const dateValue = parsedDate && !Number.isNaN(parsedDate.getTime()) ? parsedDate : undefined;
@@ -40,13 +39,11 @@ export async function PATCH(
     console.error('Error updating family milestone:', error);
     return NextResponse.json({ error: 'Failed to update family milestone' }, { status: 500 });
   }
-}
+});
 
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { familyId: string; milestoneId: string } }
-) {
+export const DELETE = requireFamilyAccess(async (_request: NextRequest, context, _authUser) => {
   try {
+    const params = await context.params;
     const existing = await prisma.familyMilestone.findFirst({
       where: { id: params.milestoneId, familyId: params.familyId },
     });
@@ -64,4 +61,4 @@ export async function DELETE(
     console.error('Error deleting family milestone:', error);
     return NextResponse.json({ error: 'Failed to delete family milestone' }, { status: 500 });
   }
-}
+});

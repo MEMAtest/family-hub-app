@@ -1,25 +1,31 @@
 'use client'
 
-import React, { useState } from 'react';
-import { X, Settings, Palette, Bell, DollarSign, Plus, Trash2 } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { X, Settings, Palette, Bell, Plus, Trash2 } from 'lucide-react';
 
 interface BudgetSettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: () => void;
+  familyId?: string | null;
 }
 
-const BudgetSettingsModal: React.FC<BudgetSettingsModalProps> = ({ isOpen, onClose, onSave }) => {
+type BudgetCategoryRow = {
+  id: string;
+  name: string;
+  type: 'income' | 'expense';
+  color: string;
+  limit: number | null;
+  isActive: boolean;
+  sortOrder: number;
+};
+
+const BudgetSettingsModal: React.FC<BudgetSettingsModalProps> = ({ isOpen, onClose, onSave, familyId }) => {
   const [activeTab, setActiveTab] = useState('categories');
 
-  // Mock categories data
-  const [categories, setCategories] = useState([
-    { id: '1', name: 'Housing', type: 'expense', color: '#374151', limit: 3500, isActive: true },
-    { id: '2', name: 'Transportation', type: 'expense', color: '#6B7280', limit: 500, isActive: true },
-    { id: '3', name: 'Food & Dining', type: 'expense', color: '#9CA3AF', limit: 400, isActive: true },
-    { id: '4', name: 'Salary', type: 'income', color: '#10b981', limit: null, isActive: true },
-    { id: '5', name: 'Freelance', type: 'income', color: '#059669', limit: null, isActive: true }
-  ]);
+  const [categories, setCategories] = useState<BudgetCategoryRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const [newCategory, setNewCategory] = useState({
     name: '',
@@ -27,15 +33,6 @@ const BudgetSettingsModal: React.FC<BudgetSettingsModalProps> = ({ isOpen, onClo
     color: '#6B7280',
     limit: '',
     isActive: true
-  });
-
-  // Mock alert settings
-  const [alertSettings, setAlertSettings] = useState({
-    budgetOverrun: true,
-    goalProgress: true,
-    recurringReminders: true,
-    weeklyDigest: false,
-    monthlyReport: true
   });
 
   const colorOptions = [
@@ -53,36 +50,157 @@ const BudgetSettingsModal: React.FC<BudgetSettingsModalProps> = ({ isOpen, onClo
     { id: 'preferences', label: 'Preferences', icon: <Settings className="w-4 h-4" /> }
   ];
 
-  const handleAddCategory = () => {
-    if (!newCategory.name.trim()) return;
+  useEffect(() => {
+    const loadCategories = async () => {
+      if (!isOpen) return;
+      if (!familyId) return;
 
-    const category = {
-      id: Date.now().toString(),
-      name: newCategory.name,
-      type: newCategory.type,
-      color: newCategory.color,
-      limit: newCategory.type === 'expense' && newCategory.limit ? parseFloat(newCategory.limit) : null,
-      isActive: true
+      try {
+        setLoading(true);
+        setErrorMessage(null);
+
+        const response = await fetch(`/api/families/${familyId}/budget/categories?includeInactive=true`);
+        if (!response.ok) {
+          throw new Error(`Failed to load categories (${response.status})`);
+        }
+        const payload = await response.json();
+        const rows = Array.isArray(payload) ? payload : [];
+
+        setCategories(rows.map((row: any): BudgetCategoryRow => ({
+          id: String(row.id),
+          name: String(row.categoryName ?? row.name ?? ''),
+          type: row.categoryType === 'income' ? 'income' : 'expense',
+          color: String(row.colorCode ?? row.color ?? '#6B7280'),
+          limit: row.budgetLimit === null || row.budgetLimit === undefined ? null : Number(row.budgetLimit),
+          isActive: Boolean(row.isActive ?? true),
+          sortOrder: Number(row.sortOrder ?? 0),
+        })));
+      } catch (error) {
+        console.error('Failed to load budget categories:', error);
+        setErrorMessage(error instanceof Error ? error.message : 'Failed to load categories');
+      } finally {
+        setLoading(false);
+      }
     };
 
-    setCategories([...categories, category]);
-    setNewCategory({
-      name: '',
-      type: 'expense',
-      color: '#6B7280',
-      limit: '',
-      isActive: true
-    });
+    void loadCategories();
+  }, [familyId, isOpen]);
+
+  const handleAddCategory = async () => {
+    if (!newCategory.name.trim()) return;
+    if (!familyId) {
+      setErrorMessage('Family not loaded yet');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setErrorMessage(null);
+
+      const response = await fetch(`/api/families/${familyId}/budget/categories`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          categoryName: newCategory.name,
+          categoryType: newCategory.type,
+          colorCode: newCategory.color,
+          budgetLimit: newCategory.type === 'expense' && newCategory.limit ? parseFloat(newCategory.limit) : null,
+          isActive: true,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorPayload = await response.json().catch(() => ({}));
+        throw new Error(errorPayload?.error || `Failed to create category (${response.status})`);
+      }
+
+      const created = await response.json();
+      setCategories((prev) => [
+        ...prev,
+        {
+          id: String(created.id),
+          name: String(created.categoryName),
+          type: created.categoryType === 'income' ? 'income' : 'expense',
+          color: String(created.colorCode ?? '#6B7280'),
+          limit: created.budgetLimit === null || created.budgetLimit === undefined ? null : Number(created.budgetLimit),
+          isActive: Boolean(created.isActive ?? true),
+          sortOrder: Number(created.sortOrder ?? 0),
+        },
+      ]);
+
+      setNewCategory({
+        name: '',
+        type: 'expense',
+        color: '#6B7280',
+        limit: '',
+        isActive: true,
+      });
+    } catch (error) {
+      console.error('Failed to create budget category:', error);
+      setErrorMessage(error instanceof Error ? error.message : 'Failed to create category');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleRemoveCategory = (id: string) => {
-    setCategories(categories.filter(cat => cat.id !== id));
+  const handleRemoveCategory = async (id: string) => {
+    if (!familyId) {
+      setErrorMessage('Family not loaded yet');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setErrorMessage(null);
+
+      const response = await fetch(`/api/families/${familyId}/budget/categories/${id}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const errorPayload = await response.json().catch(() => ({}));
+        throw new Error(errorPayload?.error || `Failed to delete category (${response.status})`);
+      }
+
+      setCategories((prev) => prev.filter((cat) => cat.id !== id));
+    } catch (error) {
+      console.error('Failed to delete budget category:', error);
+      setErrorMessage(error instanceof Error ? error.message : 'Failed to delete category');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleCategoryUpdate = (id: string, updates: any) => {
-    setCategories(categories.map(cat =>
-      cat.id === id ? { ...cat, ...updates } : cat
-    ));
+  const handleCategoryUpdate = async (id: string, updates: Partial<BudgetCategoryRow>) => {
+    if (!familyId) {
+      setErrorMessage('Family not loaded yet');
+      return;
+    }
+
+    setCategories((prev) => prev.map((cat) => (cat.id === id ? { ...cat, ...updates } : cat)));
+
+    try {
+      const response = await fetch(`/api/families/${familyId}/budget/categories/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          categoryName: updates.name,
+          categoryType: updates.type,
+          colorCode: updates.color,
+          budgetLimit: updates.limit,
+          isActive: updates.isActive,
+          sortOrder: updates.sortOrder,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorPayload = await response.json().catch(() => ({}));
+        throw new Error(errorPayload?.error || `Failed to update category (${response.status})`);
+      }
+    } catch (error) {
+      console.error('Failed to update budget category:', error);
+      setErrorMessage(error instanceof Error ? error.message : 'Failed to update category');
+    }
   };
 
   if (!isOpen) return null;
@@ -138,6 +256,11 @@ const BudgetSettingsModal: React.FC<BudgetSettingsModalProps> = ({ isOpen, onClo
                   <p className="text-gray-600 mb-6">
                     Manage your income and expense categories. Set budget limits for expense categories.
                   </p>
+                  {errorMessage && (
+                    <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                      {errorMessage}
+                    </div>
+                  )}
 
                   {/* Add New Category */}
                   <div className="bg-gray-50 p-4 rounded-lg mb-6">
@@ -179,6 +302,7 @@ const BudgetSettingsModal: React.FC<BudgetSettingsModalProps> = ({ isOpen, onClo
                       />
                       <button
                         onClick={handleAddCategory}
+                        disabled={loading}
                         className="flex items-center justify-center px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
                       >
                         <Plus className="w-4 h-4" />
@@ -188,6 +312,12 @@ const BudgetSettingsModal: React.FC<BudgetSettingsModalProps> = ({ isOpen, onClo
 
                   {/* Categories List */}
                   <div className="space-y-3">
+                    {loading && categories.length === 0 ? (
+                      <div className="p-4 text-sm text-gray-600">Loading categories...</div>
+                    ) : null}
+                    {!loading && categories.length === 0 ? (
+                      <div className="p-4 text-sm text-gray-600">No categories yet. Add one above.</div>
+                    ) : null}
                     {categories.map(category => (
                       <div key={category.id} className="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
                         <div className="flex items-center space-x-3">
@@ -239,35 +369,8 @@ const BudgetSettingsModal: React.FC<BudgetSettingsModalProps> = ({ isOpen, onClo
                   <p className="text-gray-600 mb-6">
                     Configure when and how you receive budget-related notifications.
                   </p>
-
-                  <div className="space-y-4">
-                    {Object.entries(alertSettings).map(([key, value]) => (
-                      <div key={key} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                        <div>
-                          <h5 className="font-medium text-gray-900 capitalize">
-                            {key.replace(/([A-Z])/g, ' $1').toLowerCase()}
-                          </h5>
-                          <p className="text-sm text-gray-600">
-                            {key === 'budgetOverrun' && 'Get notified when you exceed category budgets'}
-                            {key === 'goalProgress' && 'Receive updates on savings goal milestones'}
-                            {key === 'recurringReminders' && 'Reminders for upcoming recurring payments'}
-                            {key === 'weeklyDigest' && 'Weekly summary of your spending'}
-                            {key === 'monthlyReport' && 'Detailed monthly budget analysis'}
-                          </p>
-                        </div>
-                        <label className="flex items-center">
-                          <input
-                            type="checkbox"
-                            checked={value}
-                            onChange={(e) => setAlertSettings(prev => ({
-                              ...prev,
-                              [key]: e.target.checked
-                            }))}
-                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                          />
-                        </label>
-                      </div>
-                    ))}
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
+                    Alerts settings persistence is coming soon.
                   </div>
                 </div>
               </div>
@@ -277,34 +380,8 @@ const BudgetSettingsModal: React.FC<BudgetSettingsModalProps> = ({ isOpen, onClo
               <div className="space-y-6">
                 <div>
                   <h4 className="text-lg font-medium text-gray-900 mb-4">General Preferences</h4>
-
-                  <div className="space-y-4">
-                    <div className="p-4 bg-gray-50 rounded-lg">
-                      <h5 className="font-medium text-gray-900 mb-2">Currency</h5>
-                      <select className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm">
-                        <option value="GBP">British Pound (£)</option>
-                        <option value="USD">US Dollar ($)</option>
-                        <option value="EUR">Euro (€)</option>
-                      </select>
-                    </div>
-
-                    <div className="p-4 bg-gray-50 rounded-lg">
-                      <h5 className="font-medium text-gray-900 mb-2">Budget Cycle</h5>
-                      <select className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm">
-                        <option value="monthly">Monthly</option>
-                        <option value="weekly">Weekly</option>
-                        <option value="yearly">Yearly</option>
-                      </select>
-                    </div>
-
-                    <div className="p-4 bg-gray-50 rounded-lg">
-                      <h5 className="font-medium text-gray-900 mb-2">Date Format</h5>
-                      <select className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm">
-                        <option value="DD/MM/YYYY">DD/MM/YYYY</option>
-                        <option value="MM/DD/YYYY">MM/DD/YYYY</option>
-                        <option value="YYYY-MM-DD">YYYY-MM-DD</option>
-                      </select>
-                    </div>
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
+                    Preferences persistence is coming soon.
                   </div>
                 </div>
               </div>

@@ -53,6 +53,9 @@ model Family {
   familyGoals           FamilyGoal[]
   achievements          Achievement[]
   milestones            FamilyMilestone[]
+  contractors           Contractor[]
+  contractorAppointments ContractorAppointment[]
+  notifications         Notification[]
 
   @@map("families")
 }
@@ -402,6 +405,7 @@ model FitnessTracking {
   heartRateMax    Int?     @map("heart_rate_max")
   source          String   @default("manual")     // manual, garmin, ultrahuman
   externalId      String?  @map("external_id")    // ID from device sync
+  imageUrls       Json?    @map("image_urls")     // Array of image URLs (screenshots/photos)
 
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
@@ -432,4 +436,81 @@ model DeviceSync {
 
   @@unique([personId, provider])
   @@map("device_syncs")
+}
+
+// Contractors (Phase 2)
+model Contractor {
+  id        String   @id @default(cuid())
+  familyId  String   @map("family_id")
+  name      String
+  company   String?
+  phone     String?
+  email     String?
+  address   String?
+  specialty String
+  notes     String?
+  rating    Int?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  family       Family                 @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  appointments ContractorAppointment[]
+
+  @@index([familyId])
+  @@index([familyId, specialty])
+  @@map("contractors")
+}
+
+model ContractorAppointment {
+  id              String   @id @default(cuid())
+  familyId         String   @map("family_id")
+  contractorId     String   @map("contractor_id")
+  date            String   // YYYY-MM-DD
+  time            String   // HH:MM
+  durationMinutes Int      @map("duration_minutes")
+  purpose         String
+  location        String?
+  notes           String?
+  cost            Float?
+  status          String
+  calendarEventId String?  @map("calendar_event_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  family     Family      @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  contractor Contractor  @relation(fields: [contractorId], references: [id], onDelete: Cascade)
+
+  @@index([familyId])
+  @@index([familyId, date])
+  @@index([contractorId])
+  @@map("contractor_appointments")
+}
+
+// In-app notifications persistence (Phase 4)
+model Notification {
+  id              String   @id @default(cuid())
+  familyId         String   @map("family_id")
+  type            String
+  title           String
+  message         String
+  icon            String?
+  priority        String
+  category        String
+  timestamp       DateTime @default(now())
+  read            Boolean  @default(false)
+  actionRequired  Boolean  @default(false) @map("action_required")
+  actions         Json?
+  relatedEventId  String?  @map("related_event_id")
+  relatedPersonId String?  @map("related_person_id")
+  expiresAt       DateTime? @map("expires_at")
+  snoozedUntil    DateTime? @map("snoozed_until")
+  metadata        Json?
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  family Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  @@index([familyId, read])
+  @@index([familyId, timestamp])
+  @@map("notifications")
 }

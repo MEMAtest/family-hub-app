@@ -257,9 +257,9 @@ export const ProjectDetailView = ({
         status: 'confirmed',
       });
 
-      if (result === 'created') {
+      if (result.status === 'created') {
         toast.success(`Added "${visit.contractorName}" visit to calendar`);
-      } else if (result === 'conflict') {
+      } else if (result.status === 'conflict') {
         toast('Visit has a scheduling conflict', { icon: '⚠️' });
       }
     } catch (error) {

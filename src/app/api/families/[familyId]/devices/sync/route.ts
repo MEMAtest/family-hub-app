@@ -1,18 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient, Prisma } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { Prisma } from '@prisma/client';
+import prisma from '@/lib/prisma';
+import { requireFamilyAccess } from '@/lib/auth-utils';
 
 /**
  * POST /api/families/[familyId]/devices/sync
  * Sync data from connected devices
  */
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ familyId: string }> }
-) {
+export const POST = requireFamilyAccess(async (request: NextRequest, context, _authUser) => {
   try {
-    const { familyId } = await params;
+    const { familyId } = await context.params;
     const body = await request.json();
     const { personId, provider } = body;
 
@@ -75,7 +72,7 @@ export async function POST(
       { status: 500 }
     );
   }
-}
+});
 
 interface DeviceSyncRecord {
   id: string;

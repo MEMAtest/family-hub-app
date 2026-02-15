@@ -55,7 +55,7 @@ interface GoalsContextValue {
   closeQuickActivityForm: () => void;
   quickActivityForm: QuickActivityFormState;
   setQuickActivityForm: (updater: QuickActivityFormState | ((prev: QuickActivityFormState) => QuickActivityFormState)) => void;
-  logActivity: () => void;
+  logActivity: () => Promise<void>;
 }
 
 const DEFAULT_PERSONAL_TRACKING: PersonalTrackingState = {
@@ -103,8 +103,7 @@ export const GoalsProvider = ({ children }: PropsWithChildren) => {
   const [quickActivityForm, setQuickActivityFormState] = useState<QuickActivityFormState>(INITIAL_QUICK_ACTIVITY_FORM);
 
   // Fetch real fitness data when family/person changes
-  useEffect(() => {
-    const fetchFitnessData = async () => {
+  const fetchFitnessData = useCallback(async () => {
       if (!familyId) return;
 
       // Get selected person ID or first adult member
@@ -158,10 +157,11 @@ export const GoalsProvider = ({ children }: PropsWithChildren) => {
       } catch (error) {
         console.error('Failed to fetch fitness data:', error);
       }
-    };
+  }, [familyId, familyMembers, selectedPerson]);
 
-    fetchFitnessData();
-  }, [familyId, selectedPerson, familyMembers]);
+  useEffect(() => {
+    void fetchFitnessData();
+  }, [fetchFitnessData]);
 
   const setPersonalTracking = useCallback<GoalsContextValue['setPersonalTracking']>((updater) => {
     setPersonalTrackingState((prev) => (typeof updater === 'function' ? (updater as any)(prev) : updater));
@@ -177,26 +177,70 @@ export const GoalsProvider = ({ children }: PropsWithChildren) => {
     setQuickActivityFormState(INITIAL_QUICK_ACTIVITY_FORM);
   }, []);
 
-  const logActivity = useCallback(() => {
-    const newActivity: ActivityEntry = {
-      id: createId('activity'),
-      ...quickActivityForm,
-      date: new Date().toISOString(),
-      person: 'ade',
+  const logActivity = useCallback(async () => {
+    if (!familyId) {
+      closeQuickActivityForm();
+      return;
+    }
+
+    // Use selected person or first adult
+    let personId = selectedPerson;
+    if (!personId || personId === 'all') {
+      const adultMember = familyMembers.find((m: FamilyMember) => m.ageGroup === 'Adult');
+      personId = adultMember?.id || familyMembers[0]?.id;
+    }
+    if (!personId) {
+      closeQuickActivityForm();
+      return;
+    }
+
+    const typeMap: Record<string, string> = {
+      gym: 'gym',
+      running: 'run',
+      swimming: 'swim',
+      cycling: 'cycle',
+      yoga: 'yoga',
+      walking: 'walk',
     };
 
-    setPersonalTracking((prev) => ({
-      fitness: {
-        ...prev.fitness,
-        activities: [...prev.fitness.activities, newActivity],
-        todayWorkout: quickActivityForm.type,
-        weeklyProgress: prev.fitness.weeklyProgress + 1,
-      },
-      wellness: prev.wellness,
-    }));
+    const intensityMap: Record<string, string> = {
+      low: 'low',
+      medium: 'moderate',
+      high: 'high',
+      Low: 'low',
+      Medium: 'moderate',
+      High: 'high',
+    };
 
-    closeQuickActivityForm();
-  }, [closeQuickActivityForm, quickActivityForm, setPersonalTracking]);
+    const activityType = typeMap[quickActivityForm.type] || 'other';
+    const intensity = intensityMap[quickActivityForm.intensity] || 'moderate';
+
+    try {
+      const response = await fetch(`/api/families/${familyId}/fitness`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          personId,
+          activityType,
+          durationMinutes: quickActivityForm.duration,
+          intensityLevel: intensity,
+          notes: quickActivityForm.notes || undefined,
+          activityDate: new Date().toISOString(),
+          source: 'manual',
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to save activity (${response.status})`);
+      }
+
+      closeQuickActivityForm();
+      await fetchFitnessData();
+    } catch (error) {
+      console.error('Failed to log quick activity:', error);
+      closeQuickActivityForm();
+    }
+  }, [closeQuickActivityForm, familyId, familyMembers, fetchFitnessData, quickActivityForm.duration, quickActivityForm.intensity, quickActivityForm.notes, quickActivityForm.type, selectedPerson]);
 
   const value = useMemo<GoalsContextValue>(() => ({
     goalsData,

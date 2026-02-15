@@ -24,6 +24,7 @@ type WizardAction =
   | { type: 'ADD_ADDITIONAL_ACTIVITY'; activity: AdditionalActivity }
   | { type: 'REMOVE_ADDITIONAL_ACTIVITY'; index: number }
   | { type: 'SET_NOTES'; notes: string }
+  | { type: 'SET_IMAGE_URLS'; urls: string[] }
   | { type: 'SET_DATE'; date: Date }
   | { type: 'RESET' }
   | { type: 'LOAD_LAST_WORKOUT'; workout: FitnessActivity };
@@ -31,6 +32,7 @@ type WizardAction =
 // Initial state
 const initialState: ActivityWizardState = {
   step: 'activity_type',
+  activityId: null,
   activityType: null,
   duration: 45,
   intensityLevel: 'moderate',
@@ -38,6 +40,7 @@ const initialState: ActivityWizardState = {
   exercises: [],
   additionalActivities: [],
   notes: '',
+  imageUrls: [],
   activityDate: new Date(),
   personId: '',
 };
@@ -50,6 +53,7 @@ const stepOrder: WizardStep[] = [
   'exercise_details',
   'additional_activities',
   'notes',
+  'image_upload',
   'summary',
 ];
 
@@ -113,6 +117,9 @@ function wizardReducer(state: ActivityWizardState, action: WizardAction): Activi
     case 'SET_NOTES':
       return { ...state, notes: action.notes };
 
+    case 'SET_IMAGE_URLS':
+      return { ...state, imageUrls: action.urls };
+
     case 'SET_DATE':
       return { ...state, activityDate: action.date };
 
@@ -123,12 +130,14 @@ function wizardReducer(state: ActivityWizardState, action: WizardAction): Activi
       const workout = action.workout;
       return {
         ...state,
+        activityId: null,
         activityType: workout.activityType,
         duration: workout.durationMinutes,
         intensityLevel: workout.intensityLevel,
         workoutName: workout.workoutName || '',
         exercises: workout.exercises || [],
         notes: '',
+        imageUrls: [],
         step: 'summary',
       };
 
@@ -141,6 +150,7 @@ function wizardReducer(state: ActivityWizardState, action: WizardAction): Activi
 interface WizardContextValue {
   state: ActivityWizardState;
   dispatch: React.Dispatch<WizardAction>;
+  familyId: string;
   goToStep: (step: WizardStep) => void;
   nextStep: () => void;
   prevStep: () => void;
@@ -169,6 +179,7 @@ interface WizardProviderProps {
   familyId: string;
   onComplete: (activity: FitnessActivity) => void;
   lastWorkout?: FitnessActivity;
+  editingActivity?: FitnessActivity;
 }
 
 // Provider component
@@ -178,11 +189,34 @@ export const WizardProvider: React.FC<WizardProviderProps> = ({
   familyId,
   onComplete,
   lastWorkout,
+  editingActivity,
 }) => {
-  const [state, dispatch] = useReducer(wizardReducer, {
-    ...initialState,
-    personId,
-  });
+  // Ensure the initial state is contextually typed as ActivityWizardState, otherwise
+  // literal steps like 'summary' get widened to `string` and React picks the wrong
+  // useReducer overload (DispatchWithoutAction).
+  const initialWizardState: ActivityWizardState = (() => {
+    if (!editingActivity) return { ...initialState, personId };
+
+    const activityDate = new Date(editingActivity.activityDate);
+    const safeDate = Number.isNaN(activityDate.getTime()) ? new Date() : activityDate;
+
+    return {
+      ...initialState,
+      step: 'summary',
+      activityId: editingActivity.id,
+      personId,
+      activityType: editingActivity.activityType,
+      duration: editingActivity.durationMinutes,
+      intensityLevel: editingActivity.intensityLevel,
+      workoutName: editingActivity.workoutName || '',
+      exercises: editingActivity.exercises || [],
+      notes: editingActivity.notes || '',
+      imageUrls: editingActivity.imageUrls || [],
+      activityDate: safeDate,
+    };
+  })();
+
+  const [state, dispatch] = useReducer(wizardReducer, initialWizardState);
   const [isLoading, setIsLoading] = React.useState(false);
 
   // Navigate to specific step
@@ -272,16 +306,21 @@ export const WizardProvider: React.FC<WizardProviderProps> = ({
     try {
       // Calculate total duration including additional activities
       const additionalMinutes = state.additionalActivities.reduce(
-        (sum, activity) => sum + activity.durationMinutes,
+        (sum: number, activity: AdditionalActivity) => sum + activity.durationMinutes,
         0
       );
       const totalDuration = state.duration + additionalMinutes;
 
-      const response = await fetch(`/api/families/${familyId}/fitness`, {
-        method: 'POST',
+      const isEditing = Boolean(state.activityId);
+      const endpoint = isEditing
+        ? `/api/families/${familyId}/fitness/${state.activityId}`
+        : `/api/families/${familyId}/fitness`;
+
+      const response = await fetch(endpoint, {
+        method: isEditing ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          personId: state.personId,
+          ...(isEditing ? {} : { personId: state.personId }),
           activityType: state.activityType,
           durationMinutes: totalDuration,
           intensityLevel: state.intensityLevel,
@@ -289,7 +328,8 @@ export const WizardProvider: React.FC<WizardProviderProps> = ({
           exercises: state.exercises.length > 0 ? state.exercises : undefined,
           notes: buildNotesWithAdditionalActivities(state.notes, state.additionalActivities),
           activityDate: state.activityDate.toISOString(),
-          source: 'manual',
+          imageUrls: state.imageUrls.length > 0 ? state.imageUrls : undefined,
+          ...(isEditing ? {} : { source: 'manual' }),
         }),
       });
 
@@ -327,6 +367,7 @@ export const WizardProvider: React.FC<WizardProviderProps> = ({
   const value: WizardContextValue = {
     state,
     dispatch,
+    familyId,
     goToStep,
     nextStep,
     prevStep,

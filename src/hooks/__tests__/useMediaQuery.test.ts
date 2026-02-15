@@ -16,8 +16,11 @@ describe('useMediaQuery', () => {
 
   it('subscribes to updates when matchMedia exists', () => {
     const listeners: Array<(event: MediaQueryListEvent) => void> = [];
+    let matches = false;
     const mockMediaQueryList = {
-      matches: false,
+      get matches() {
+        return matches;
+      },
       media: '(max-width: 768px)',
       addEventListener: (_: 'change', cb: (event: MediaQueryListEvent) => void) => listeners.push(cb),
       removeEventListener: (_: 'change', cb: (event: MediaQueryListEvent) => void) => {
@@ -36,7 +39,7 @@ describe('useMediaQuery', () => {
     expect(result.current).toBe(false);
 
     act(() => {
-      mockMediaQueryList.matches = true;
+      matches = true;
       listeners.forEach((listener) =>
         listener({ matches: true } as MediaQueryListEvent));
     });
@@ -44,4 +47,3 @@ describe('useMediaQuery', () => {
     expect(result.current).toBe(true);
   });
 });
-

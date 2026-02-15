@@ -8,10 +8,9 @@
  */
 
 import { GarminConnect } from 'garmin-connect';
-import { PrismaClient, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import type { FitnessActivity, ActivityType, IntensityLevel } from '@/types/fitness.types';
-
-const prisma = new PrismaClient();
+import prisma from '@/lib/prisma';
 
 interface GarminCredentials {
   username: string;
@@ -258,7 +257,7 @@ class GarminService {
       const date = new Date();
       date.setDate(date.getDate() - i);
 
-      const sleepData = await getSleepData(date);
+      const sleepData = await this.getSleepData(date);
       if (!sleepData?.dailySleepDTO) continue;
 
       const { dailySleepDTO } = sleepData;
@@ -307,12 +306,6 @@ class GarminService {
 
     return syncedCount;
   }
-}
-
-// Helper function for sleep data
-async function getSleepData(date: Date): Promise<GarminSleepData | null> {
-  // This would need to be called on an authenticated instance
-  return null;
 }
 
 export const garminService = new GarminService();

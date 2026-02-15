@@ -1,17 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
+import { requireFamilyAccess } from '@/lib/auth-utils';
 
 // Initialize Anthropic client
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY || '',
 });
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { familyId: string } }
-) {
+export const POST = requireFamilyAccess(async (request: NextRequest, _context, _authUser) => {
   try {
-    const { familyId } = params;
     const body = await request.json();
     const { image } = body;
 
@@ -143,7 +140,7 @@ Important: Return ONLY the JSON object, no other text.`
       { status: 500 }
     );
   }
-}
+});
 
 // OPTIONS handler for CORS
 export async function OPTIONS(request: NextRequest) {

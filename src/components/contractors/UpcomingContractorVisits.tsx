@@ -129,14 +129,14 @@ export const UpcomingContractorVisits = () => {
                     </a>
                   )}
                   <button
-                    onClick={() => markAppointmentComplete(apt.id)}
+                    onClick={() => void markAppointmentComplete(apt.id)}
                     className="rounded p-1 text-gray-400 hover:bg-green-100 hover:text-green-600 dark:hover:bg-green-900/30"
                     title="Mark complete"
                   >
                     <CheckCircle className="h-4 w-4" />
                   </button>
                   <button
-                    onClick={() => deleteAppointment(apt.id)}
+                    onClick={() => void deleteAppointment(apt.id)}
                     className="rounded p-1 text-gray-400 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/30"
                     title="Cancel"
                   >

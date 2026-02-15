@@ -33,6 +33,8 @@ import StatementImportModal from './modals/StatementImportModal';
 import databaseService from '@/services/databaseService';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { filterExpenses, filterIncome } from '@/utils/budgetFilters';
+import toast from 'react-hot-toast';
+import type { SavingsGoal } from '@/types/budget.types';
 
 interface CategoryData {
   name: string;
@@ -41,6 +43,30 @@ interface CategoryData {
   percentage: number;
   [key: string]: string | number; // Allow additional properties for Recharts
 }
+
+const DEFAULT_INCOME_CATEGORIES = [
+  'Salary',
+  'Freelance',
+  'Investment',
+  'Rental',
+  'Business',
+  'Government Benefits',
+  'Other',
+];
+
+const DEFAULT_EXPENSE_CATEGORIES = [
+  'Housing',
+  'Transportation',
+  'Food & Dining',
+  'Entertainment',
+  'Healthcare',
+  'Childcare',
+  'Education',
+  'Utilities',
+  'Insurance',
+  'Clothing',
+  'Other',
+];
 
 const SimpleBudgetDashboard: React.FC = () => {
   const budgetData = useFamilyStore((state) => state.budgetData);
@@ -73,6 +99,13 @@ const SimpleBudgetDashboard: React.FC = () => {
   // Lists state - derived from budgetData
   const [incomeList, setIncomeList] = useState<any[]>([]);
   const [expenseList, setExpenseList] = useState<any[]>([]);
+
+  const [incomeCategories, setIncomeCategories] = useState<string[]>(DEFAULT_INCOME_CATEGORIES);
+  const [expenseCategories, setExpenseCategories] = useState<string[]>(DEFAULT_EXPENSE_CATEGORIES);
+  const [categoriesLoading, setCategoriesLoading] = useState(false);
+
+  const [savingsGoals, setSavingsGoals] = useState<SavingsGoal[]>([]);
+  const [savingsGoalsLoading, setSavingsGoalsLoading] = useState(false);
 
   // Expand/collapse state for lists
   const [showAllIncome, setShowAllIncome] = useState(false);
@@ -218,31 +251,92 @@ const SimpleBudgetDashboard: React.FC = () => {
     loadBudgetData();
   }, [familyId, budgetData, persistBudgetLists, sanitizeBudgetItems]);
 
-  // Helper function to filter items by selected month/year (must be before useMemo hooks)
-  const filterByMonth = useCallback((item: any) => {
+  const reloadBudgetCategories = useCallback(async () => {
+    if (!familyId) return;
+
+    try {
+      setCategoriesLoading(true);
+      const response = await fetch(`/api/families/${familyId}/budget/categories?includeInactive=true`);
+      if (!response.ok) {
+        throw new Error(`Failed to load budget categories (${response.status})`);
+      }
+      const payload = await response.json();
+      const rows = Array.isArray(payload) ? payload : [];
+
+      if (rows.length === 0) {
+        setIncomeCategories(DEFAULT_INCOME_CATEGORIES);
+        setExpenseCategories(DEFAULT_EXPENSE_CATEGORIES);
+        return;
+      }
+
+      const income = rows
+        .filter((row: any) => row?.categoryType === 'income' && row?.isActive !== false)
+        .map((row: any) => String(row?.categoryName ?? row?.name ?? '').trim())
+        .filter(Boolean);
+      const expenses = rows
+        .filter((row: any) => row?.categoryType === 'expense' && row?.isActive !== false)
+        .map((row: any) => String(row?.categoryName ?? row?.name ?? '').trim())
+        .filter(Boolean);
+
+      setIncomeCategories(income.length ? income : DEFAULT_INCOME_CATEGORIES);
+      setExpenseCategories(expenses.length ? expenses : DEFAULT_EXPENSE_CATEGORIES);
+    } catch (error) {
+      console.warn('Failed to load budget categories:', error);
+      setIncomeCategories(DEFAULT_INCOME_CATEGORIES);
+      setExpenseCategories(DEFAULT_EXPENSE_CATEGORIES);
+    } finally {
+      setCategoriesLoading(false);
+    }
+  }, [familyId]);
+
+  const reloadSavingsGoals = useCallback(async () => {
+    if (!familyId) return;
+
+    try {
+      setSavingsGoalsLoading(true);
+      const response = await fetch(`/api/families/${familyId}/budget/savings-goals?includeInactive=true`);
+      if (!response.ok) {
+        throw new Error(`Failed to load savings goals (${response.status})`);
+      }
+      const payload = await response.json();
+      setSavingsGoals(Array.isArray(payload) ? (payload as SavingsGoal[]) : []);
+    } catch (error) {
+      console.warn('Failed to load savings goals:', error);
+      setSavingsGoals([]);
+    } finally {
+      setSavingsGoalsLoading(false);
+    }
+  }, [familyId]);
+
+  useEffect(() => {
+    void reloadBudgetCategories();
+    void reloadSavingsGoals();
+  }, [reloadBudgetCategories, reloadSavingsGoals]);
+
+  const matchesMonthYear = useCallback((item: any, month: number, year: number) => {
     if (!item || typeof item !== 'object') {
       return false;
     }
 
-    // For recurring items, check if selected month falls within the recurring date range
+    // For recurring items, check if target month falls within the recurring date range
     if ((item as any).isRecurring) {
-      const selectedDate = new Date(selectedYear, selectedMonth - 1, 1); // First day of selected month
-      const selectedDateEnd = new Date(selectedYear, selectedMonth, 0); // Last day of selected month
+      const targetStart = new Date(year, month - 1, 1); // First day of target month
+      const targetEnd = new Date(year, month, 0); // Last day of target month
 
       // Determine the start date for the recurring item
       const startDate = item.recurringStartDate
         ? new Date(item.recurringStartDate)
         : item.createdAt
           ? new Date(item.createdAt)
-          : selectedDate;
+          : targetStart;
 
       if (Number.isNaN(startDate.getTime())) {
         return false;
       }
 
-      // Check if the selected month is before the start date
-      if (selectedDateEnd < startDate) {
-        return false; // Selected month is before the recurring period starts
+      // Check if the target month is before the start date
+      if (targetEnd < startDate) {
+        return false; // Target month is before the recurring period starts
       }
 
       // Determine the end date for the recurring item
@@ -251,9 +345,9 @@ const SimpleBudgetDashboard: React.FC = () => {
         if (Number.isNaN(endDate.getTime())) {
           return false;
         }
-        // Check if the selected month is after the end date
-        if (selectedDate > endDate) {
-          return false; // Selected month is after the recurring period ends
+        // Check if the target month is after the end date
+        if (targetStart > endDate) {
+          return false; // Target month is after the recurring period ends
         }
       }
 
@@ -268,9 +362,8 @@ const SimpleBudgetDashboard: React.FC = () => {
         // For monthly, include if the selected month is within the range
         return true;
       } else if (frequency === 'yearly') {
-        // For yearly, only include if the selected month matches the start month
-        const startMonth = startDate.getMonth();
-        return (selectedMonth - 1) === startMonth;
+        // For yearly, only include if the target month matches the start month
+        return (month - 1) === startDate.getMonth();
       }
 
       return true; // Default: include the item
@@ -280,11 +373,14 @@ const SimpleBudgetDashboard: React.FC = () => {
     if (!item.paymentDate && !item.createdAt) return false;
     const dateToCheck = new Date(item.paymentDate || item.createdAt);
     if (Number.isNaN(dateToCheck.getTime())) return false;
-    return (
-      dateToCheck.getMonth() + 1 === selectedMonth &&
-      dateToCheck.getFullYear() === selectedYear
-    );
-  }, [selectedMonth, selectedYear]);
+    return dateToCheck.getMonth() + 1 === month && dateToCheck.getFullYear() === year;
+  }, []);
+
+  // Helper function to filter items by selected month/year (must be before useMemo hooks)
+  const filterByMonth = useCallback(
+    (item: any) => matchesMonthYear(item, selectedMonth, selectedYear),
+    [matchesMonthYear, selectedMonth, selectedYear]
+  );
 
   // Calculate all dashboard data from real income and expense lists filtered by selected month
   const dashboardData = useMemo(() => {
@@ -366,25 +462,24 @@ const SimpleBudgetDashboard: React.FC = () => {
   // Calculate monthly trends for last 6 months
   const monthlyTrendsData = useMemo(() => {
     const trends = [];
+    const safeIncome = sanitizeBudgetItems(incomeList);
+    const safeExpenses = sanitizeBudgetItems(expenseList);
+
     for (let i = 5; i >= 0; i--) {
       const date = new Date(selectedYear, selectedMonth - 1 - i, 1);
       const month = date.getMonth() + 1;
       const year = date.getFullYear();
 
-      const monthIncome = incomeList.filter(item => {
-        if (!item.paymentDate && !item.createdAt) return false;
-        const itemDate = new Date(item.paymentDate || item.createdAt);
-        return itemDate.getMonth() + 1 === month && itemDate.getFullYear() === year;
-      }).reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+      const monthIncome = safeIncome
+        .filter((item) => matchesMonthYear(item, month, year))
+        .reduce((sum, item) => sum + (parseFloat((item as any).amount) || 0), 0);
 
-      const monthExpenses = expenseList.filter(item => {
-        if (!item.paymentDate && !item.createdAt) return false;
-        const itemDate = new Date(item.paymentDate || item.createdAt);
-        return itemDate.getMonth() + 1 === month && itemDate.getFullYear() === year;
-      }).reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+      const monthExpenses = safeExpenses
+        .filter((item) => matchesMonthYear(item, month, year))
+        .reduce((sum, item) => sum + (parseFloat((item as any).amount) || 0), 0);
 
       trends.push({
-        month: date.toLocaleDateString('en-GB', { month: 'short' }),
+        month: `${date.toLocaleDateString('en-GB', { month: 'short' })} ${String(year).slice(-2)}`,
         income: monthIncome,
         expenses: monthExpenses,
         net: monthIncome - monthExpenses,
@@ -392,7 +487,7 @@ const SimpleBudgetDashboard: React.FC = () => {
       });
     }
     return trends;
-  }, [incomeList, expenseList, selectedMonth, selectedYear]);
+  }, [incomeList, expenseList, matchesMonthYear, sanitizeBudgetItems, selectedMonth, selectedYear]);
 
 
   const formatDate = (dateString: string | null | undefined) => {
@@ -778,6 +873,67 @@ const SimpleBudgetDashboard: React.FC = () => {
         </div>
       </div>
 
+      {/* Savings Goals */}
+      <div className={`surface-card mb-4 md:mb-8 ${
+        isMobile ? 'mx-4 p-4 rounded-xl' : 'p-6'
+      }`}>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className={`font-medium text-gray-900 dark:text-slate-100 ${
+            isMobile ? 'text-base' : 'text-lg'
+          }`}>
+            Savings Goals
+          </h2>
+          <button
+            onClick={() => setShowAddSavingsGoal(true)}
+            className="inline-flex items-center justify-center rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Add goal
+          </button>
+        </div>
+
+        {savingsGoalsLoading ? (
+          <p className="text-sm text-gray-600 dark:text-slate-400">Loading savings goals...</p>
+        ) : savingsGoals.length === 0 ? (
+          <p className="text-sm text-gray-600 dark:text-slate-400">
+            No savings goals yet. Add one to track your progress.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {savingsGoals.slice(0, 4).map((goal) => {
+              const target = Number(goal.targetAmount || 0);
+              const current = Number(goal.currentAmount || 0);
+              const progress = target > 0 ? Math.min((current / target) * 100, 100) : 0;
+              const targetDate = goal.targetDate ? new Date(goal.targetDate as any) : null;
+
+              return (
+                <div key={goal.id} className="rounded-lg border border-gray-200 bg-white/60 p-4 dark:border-slate-800 dark:bg-slate-900/50">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="font-medium text-gray-900 dark:text-slate-100 truncate">{goal.goalName}</p>
+                      <p className="text-xs text-gray-500 dark:text-slate-400">
+                        {goal.category}{goal.priority ? ` • ${goal.priority}` : ''}
+                        {targetDate && !Number.isNaN(targetDate.getTime()) ? ` • target ${targetDate.toLocaleDateString('en-GB')}` : ''}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">
+                        {formatCurrency(current)} / {formatCurrency(target)}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-slate-400">{progress.toFixed(0)}%</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 h-2 w-full rounded-full bg-gray-100 dark:bg-slate-800">
+                    <div className="h-2 rounded-full bg-blue-600" style={{ width: `${progress}%` }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
       {/* 6-Month Trend Chart */}
       <div className={`surface-card mb-4 md:mb-8 ${
         isMobile ? 'mx-4 p-4 rounded-xl' : 'p-6'
@@ -802,7 +958,7 @@ const SimpleBudgetDashboard: React.FC = () => {
           </ResponsiveContainer>
         </div>
         <div className="mt-4 text-sm text-gray-600 dark:text-slate-400">
-          <p>Showing trends from {monthlyTrendsData[0]?.month} to {monthlyTrendsData[5]?.month} {selectedYear}</p>
+          <p>Showing trends from {monthlyTrendsData[0]?.month} to {monthlyTrendsData[5]?.month}</p>
         </div>
       </div>
 
@@ -1251,6 +1407,7 @@ const SimpleBudgetDashboard: React.FC = () => {
           setShowAddIncome(false);
           setEditingIncome(null);
         }}
+        categories={incomeCategories}
         editData={editingIncome}
         onSave={async (data) => {
           try {
@@ -1293,6 +1450,7 @@ const SimpleBudgetDashboard: React.FC = () => {
           setShowAddExpense(false);
           setEditingExpense(null);
         }}
+        categories={expenseCategories}
         editData={editingExpense}
         onSave={async (data) => {
           try {
@@ -1332,9 +1490,32 @@ const SimpleBudgetDashboard: React.FC = () => {
       <AddSavingsGoalModal
         isOpen={showAddSavingsGoal}
         onClose={() => setShowAddSavingsGoal(false)}
-        onSave={(data) => {
-          console.log('Save savings goal:', data);
-          setShowAddSavingsGoal(false);
+        onSave={async (data) => {
+          if (!familyId) {
+            toast.error('Family not loaded yet');
+            return;
+          }
+
+          try {
+            const response = await fetch(`/api/families/${familyId}/budget/savings-goals`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(data),
+            });
+
+            if (!response.ok) {
+              const errorPayload = await response.json().catch(() => ({}));
+              throw new Error(errorPayload?.error || `Failed to create savings goal (${response.status})`);
+            }
+
+            const created = await response.json();
+            setSavingsGoals((prev) => [created as SavingsGoal, ...prev]);
+            toast.success('Savings goal created');
+            setShowAddSavingsGoal(false);
+          } catch (error) {
+            console.error('Failed to create savings goal:', error);
+            toast.error(error instanceof Error ? error.message : 'Failed to create savings goal');
+          }
         }}
       />
 
@@ -1349,9 +1530,14 @@ const SimpleBudgetDashboard: React.FC = () => {
 
       <BudgetSettingsModal
         isOpen={showSettings}
-        onClose={() => setShowSettings(false)}
+        familyId={familyId}
+        onClose={() => {
+          setShowSettings(false);
+          void reloadBudgetCategories();
+        }}
         onSave={() => {
           setShowSettings(false);
+          void reloadBudgetCategories();
         }}
       />
 

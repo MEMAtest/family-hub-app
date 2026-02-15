@@ -52,6 +52,7 @@ export interface FitnessActivity {
   heartRateMax?: number;
   source: DataSource;
   externalId?: string;
+  imageUrls?: string[];
   createdAt: string;
   updatedAt: string;
   // Included relation
@@ -71,11 +72,13 @@ export type WizardStep =
   | 'exercise_details'
   | 'additional_activities'
   | 'notes'
+  | 'image_upload'
   | 'summary';
 
 // Wizard state
 export interface ActivityWizardState {
   step: WizardStep;
+  activityId: string | null;
   activityType: ActivityType | null;
   duration: number;
   intensityLevel: IntensityLevel;
@@ -83,6 +86,7 @@ export interface ActivityWizardState {
   exercises: ExerciseSet[];
   additionalActivities: AdditionalActivity[];
   notes: string;
+  imageUrls: string[];
   activityDate: Date;
   personId: string;
 }
@@ -145,6 +149,7 @@ export interface CreateActivityRequest {
   workoutName?: string;
   heartRateAvg?: number;
   heartRateMax?: number;
+  imageUrls?: string[];
   source?: DataSource;
   externalId?: string;
 }

@@ -1,20 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import type { CreateActivityRequest } from '@/types/fitness.types';
-
-const prisma = new PrismaClient();
+import prisma from '@/lib/prisma';
+import { requireFamilyAccess } from '@/lib/auth-utils';
 
 /**
  * GET /api/families/[familyId]/fitness
  * Fetch fitness activities with optional filters
  * Query params: personId, startDate, endDate, activityType, limit, offset
  */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ familyId: string }> }
-) {
+export const GET = requireFamilyAccess(async (request: NextRequest, context, _authUser) => {
   try {
-    const { familyId } = await params;
+    const { familyId } = await context.params;
     const { searchParams } = new URL(request.url);
 
     const personId = searchParams.get('personId');
@@ -83,18 +80,15 @@ export async function GET(
       { status: 500 }
     );
   }
-}
+});
 
 /**
  * POST /api/families/[familyId]/fitness
  * Create a new fitness activity
  */
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ familyId: string }> }
-) {
+export const POST = requireFamilyAccess(async (request: NextRequest, context, _authUser) => {
   try {
-    const { familyId } = await params;
+    const { familyId } = await context.params;
     const body: CreateActivityRequest = await request.json();
 
     // Validate required fields
@@ -133,6 +127,7 @@ export async function POST(
         heartRateMax: body.heartRateMax,
         source: body.source || 'manual',
         externalId: body.externalId,
+        imageUrls: body.imageUrls ? (body.imageUrls as unknown as Prisma.InputJsonValue) : Prisma.JsonNull,
       },
       include: {
         person: {
@@ -154,4 +149,4 @@ export async function POST(
       { status: 500 }
     );
   }
-}
+});

@@ -1,18 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient, Prisma } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { Prisma } from '@prisma/client';
+import prisma from '@/lib/prisma';
+import { requireFamilyAccess } from '@/lib/auth-utils';
 
 /**
  * GET /api/families/[familyId]/devices
  * Get all connected devices for a person
  */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ familyId: string }> }
-) {
+export const GET = requireFamilyAccess(async (request: NextRequest, context, _authUser) => {
   try {
-    const { familyId } = await params;
+    const { familyId } = await context.params;
     const { searchParams } = new URL(request.url);
     const personId = searchParams.get('personId');
 
@@ -63,18 +60,15 @@ export async function GET(
       { status: 500 }
     );
   }
-}
+});
 
 /**
  * POST /api/families/[familyId]/devices
  * Connect a new device
  */
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ familyId: string }> }
-) {
+export const POST = requireFamilyAccess(async (request: NextRequest, context, _authUser) => {
   try {
-    const { familyId } = await params;
+    const { familyId } = await context.params;
     const body = await request.json();
 
     const { personId, provider, credentials } = body;
@@ -162,18 +156,15 @@ export async function POST(
       { status: 500 }
     );
   }
-}
+});
 
 /**
  * DELETE /api/families/[familyId]/devices
  * Disconnect a device
  */
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ familyId: string }> }
-) {
+export const DELETE = requireFamilyAccess(async (request: NextRequest, context, _authUser) => {
   try {
-    const { familyId } = await params;
+    const { familyId } = await context.params;
     const { searchParams } = new URL(request.url);
     const personId = searchParams.get('personId');
     const provider = searchParams.get('provider');
@@ -214,7 +205,7 @@ export async function DELETE(
       { status: 500 }
     );
   }
-}
+});
 
 // Helper functions
 function getProviderDisplayName(provider: string): string {

@@ -26,6 +26,7 @@ dist/
 .idea/
 *.swp
 *.swo
+.claude/
 
 # OS
 .DS_Store
@@ -59,6 +60,7 @@ prisma/generated/
 
 # Test and utility scripts (root level only)
 /test-*.ts
+/test-*.md
 /add-*.ts
 /check-*.ts
 .jest-temp

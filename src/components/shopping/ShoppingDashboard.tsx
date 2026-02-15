@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   ShoppingCart,
   Plus,
@@ -15,23 +15,18 @@ import {
   AlertCircle,
   Calendar,
   BarChart3,
-  Settings,
   List,
-  Store,
-  Scan,
-  Receipt,
   Bell,
   Menu,
   X,
   RefreshCw
 } from 'lucide-react';
 import ShoppingListManager from './ShoppingListManager';
-import StoreManager from './StoreManager';
-import PriceTracker from './PriceTracker';
 import ShoppingAnalytics from './ShoppingAnalytics';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useFamilyStore } from '@/store/familyStore';
 import { AIShoppingSavings } from '@/types/shopping.types';
+import { useShoppingContext } from '@/contexts/familyHub/ShoppingContext';
 
 interface ShoppingDashboardProps {
   onClose?: () => void;
@@ -42,7 +37,8 @@ interface ShoppingDashboardProps {
 const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose, onSubViewChange, currentSubView }) => {
   const isMobile = useMediaQuery('(max-width: 1023px)');
   const familyId = useFamilyStore((state) => state.databaseStatus.familyId);
-  const [activeView, setActiveView] = useState<'dashboard' | 'lists' | 'stores' | 'prices' | 'analytics'>('dashboard');
+  const { lists } = useShoppingContext();
+  const [activeView, setActiveView] = useState<'dashboard' | 'lists' | 'analytics'>('dashboard');
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [aiSuggestions, setAiSuggestions] = useState<AIShoppingSavings | null>(null);
   const [isGeneratingSuggestions, setIsGeneratingSuggestions] = useState(false);
@@ -52,7 +48,7 @@ const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose, onSubVie
   React.useEffect(() => {
     if (currentSubView === '') {
       setActiveView('dashboard');
-    } else if (currentSubView && ['lists', 'stores', 'prices', 'analytics'].includes(currentSubView)) {
+    } else if (currentSubView && ['lists', 'analytics'].includes(currentSubView)) {
       setActiveView(currentSubView as any);
     }
   }, [currentSubView]);
@@ -64,37 +60,133 @@ const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose, onSubVie
     }
   }, [activeView, onSubViewChange]);
 
-  // These would come from API - placeholders for future implementation
-  const activeLists: Array<{
-    id: string;
-    name: string;
-    store: string;
-    itemCount: number;
-    completedItems: number;
-    estimatedTotal: number;
-    scheduledDate: Date;
-    priority: 'high' | 'medium' | 'low';
-  }> = [];
+  const activeLists = useMemo(() => {
+    const listArray = Array.isArray(lists) ? (lists as any[]) : [];
+    return listArray.map((list) => {
+      const items = Array.isArray(list?.items) ? list.items : [];
+      const completedItems = items.filter((item: any) => Boolean(item?.isCompleted ?? item?.completed)).length;
+      const itemCount = items.length;
+      const estimatedTotal = Number(list?.estimatedTotal ?? 0);
+      const scheduledDate = list?.createdAt ? new Date(list.createdAt) : new Date();
+      const priority: 'high' | 'medium' | 'low' = itemCount >= 20 ? 'high' : itemCount >= 10 ? 'medium' : 'low';
 
-  const weeklyStats = {
-    totalSpent: 0,
-    budgetRemaining: 0,
-    listsCompleted: 0,
-    totalLists: 0,
-    avgSavings: 0,
-    priceAlerts: 0
-  };
+      return {
+        id: String(list?.id ?? ''),
+        name: (list?.listName ?? list?.name ?? 'Shopping List') as string,
+        store: (list?.storeChain ?? list?.customStore ?? list?.category ?? 'General') as string,
+        itemCount,
+        completedItems,
+        estimatedTotal,
+        scheduledDate,
+        priority,
+      };
+    }).filter((list) => Boolean(list.id));
+  }, [lists]);
 
-  const recentActivity: Array<{
-    id: string;
-    type: 'list_completed' | 'price_alert' | 'item_added';
-    message: string;
-    timestamp: Date;
-    amount?: number;
-    savings?: number;
-  }> = [];
+  const weeklyStats = useMemo(() => {
+    const listArray = Array.isArray(lists) ? (lists as any[]) : [];
+    const now = new Date();
+    const weekStart = new Date(now);
+    weekStart.setDate(now.getDate() - 7);
 
-  const priceAlerts: Array<{
+    let totalSpent = 0;
+    let listsCompleted = 0;
+
+    listArray.forEach((list) => {
+      const items = Array.isArray(list?.items) ? list.items : [];
+      const completedItems = items.filter((item: any) => Boolean(item?.isCompleted ?? item?.completed));
+
+      if (items.length > 0 && completedItems.length === items.length) {
+        listsCompleted += 1;
+      }
+
+      completedItems.forEach((item: any) => {
+        const price = Number(item?.estimatedPrice ?? item?.price ?? 0);
+        const completedAt = item?.completedAt ? new Date(item.completedAt) : null;
+        if (completedAt && !Number.isNaN(completedAt.getTime())) {
+          if (completedAt >= weekStart) {
+            totalSpent += price;
+          }
+          return;
+        }
+
+        const listCreatedAt = list?.createdAt ? new Date(list.createdAt) : null;
+        if (listCreatedAt && !Number.isNaN(listCreatedAt.getTime()) && listCreatedAt >= weekStart) {
+          totalSpent += price;
+        }
+      });
+    });
+
+    const totalSavings = listArray.reduce((sum, list) => {
+      const estimated = Number(list?.estimatedTotal ?? 0);
+      const actual = Number(list?.total ?? 0);
+      return sum + (estimated - actual);
+    }, 0);
+
+    const avgSavings = listArray.length ? totalSavings / listArray.length : 0;
+
+    return {
+      totalSpent: Math.round(totalSpent * 100) / 100,
+      budgetRemaining: 0,
+      listsCompleted,
+      totalLists: listArray.length,
+      avgSavings: Math.round(avgSavings * 100) / 100,
+      priceAlerts: 0,
+    };
+  }, [lists]);
+
+  const recentActivity = useMemo(() => {
+    const listArray = Array.isArray(lists) ? (lists as any[]) : [];
+    const activities: Array<{
+      id: string;
+      type: 'list_completed' | 'price_alert' | 'item_added';
+      message: string;
+      timestamp: Date;
+      amount?: number;
+      savings?: number;
+    }> = [];
+
+    listArray.forEach((list) => {
+      const listName = list?.listName ?? list?.name ?? 'Shopping List';
+      const items = Array.isArray(list?.items) ? list.items : [];
+      const completedItems = items.filter((item: any) => Boolean(item?.isCompleted ?? item?.completed));
+
+      if (items.length > 0 && completedItems.length === items.length) {
+        const latestCompleted = completedItems
+          .map((item: any) => (item?.completedAt ? new Date(item.completedAt) : null))
+          .filter((d: any): d is Date => d instanceof Date && !Number.isNaN(d.getTime()))
+          .sort((a: Date, b: Date) => b.getTime() - a.getTime())[0];
+
+        const listCreatedAt = list?.createdAt ? new Date(list.createdAt) : null;
+        const timestamp = latestCompleted ?? (listCreatedAt && !Number.isNaN(listCreatedAt.getTime()) ? listCreatedAt : new Date());
+
+        activities.push({
+          id: `list:${list.id}:completed`,
+          type: 'list_completed',
+          message: `Completed "${listName}"`,
+          timestamp,
+          amount: Number(list?.total ?? 0),
+        });
+      }
+
+      items.forEach((item: any) => {
+        const createdAt = item?.createdAt ? new Date(item.createdAt) : null;
+        if (!createdAt || Number.isNaN(createdAt.getTime())) return;
+        const itemName = item?.itemName ?? item?.name ?? 'Item';
+        activities.push({
+          id: `item:${item.id}:added`,
+          type: 'item_added',
+          message: `Added "${itemName}" to "${listName}"`,
+          timestamp: createdAt,
+        });
+      });
+    });
+
+    activities.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+    return activities.slice(0, 8);
+  }, [lists]);
+
+  const priceAlerts = useMemo(() => [] as Array<{
     id: string;
     item: string;
     currentPrice: number;
@@ -102,7 +194,7 @@ const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose, onSubVie
     store: string;
     savings: number;
     type: 'price_drop';
-  }> = [];
+  }>, []);
 
   const handleGenerateSuggestions = async () => {
     if (!familyId) {
@@ -156,37 +248,11 @@ const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose, onSubVie
       }
     },
     {
-      id: 'scan-receipt',
-      title: 'Scan Receipt',
-      description: 'Add items from receipt',
-      icon: <Scan className="w-6 h-6 text-blue-500" />,
-      onClick: () => {
-        // Simulate receipt scanning functionality
-        console.log('Opening receipt scanner...');
-        alert('Receipt scanner would open here. This feature scans receipts to automatically add items to your shopping list.');
-      }
-    },
-    {
-      id: 'quick-add',
-      title: 'Quick Add Items',
-      description: 'Add items with voice or text',
-      icon: <ShoppingCart className="w-6 h-6 text-purple-500" />,
-      onClick: () => {
-        // Simulate quick add functionality
-        const items = prompt('Enter items separated by commas:');
-        if (items) {
-          const itemList = items.split(',').map(item => item.trim());
-          console.log('Quick adding items:', itemList);
-          alert(`Added ${itemList.length} items to your shopping list: ${itemList.join(', ')}`);
-        }
-      }
-    },
-    {
-      id: 'price-compare',
-      title: 'Compare Prices',
-      description: 'Find best deals nearby',
-      icon: <TrendingDown className="w-6 h-6 text-orange-500" />,
-      onClick: () => setActiveView('prices')
+      id: 'analytics',
+      title: 'View Analytics',
+      description: 'See trends and top items',
+      icon: <BarChart3 className="w-6 h-6 text-blue-500" />,
+      onClick: () => setActiveView('analytics')
     }
   ];
 
@@ -239,8 +305,6 @@ const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose, onSubVie
         <div className="flex space-x-1 bg-gray-100 dark:bg-slate-800 p-1 rounded-lg overflow-x-auto">
           {[
             { id: 'lists', label: 'Lists', icon: List },
-            { id: 'stores', label: 'Stores', icon: Store },
-            { id: 'prices', label: 'Prices', icon: TrendingDown },
             { id: 'analytics', label: 'Analytics', icon: BarChart3 }
           ].map(({ id, label, icon: Icon }) => (
             <button
@@ -304,8 +368,6 @@ const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose, onSubVie
                 {[
                   { id: 'dashboard', label: 'Dashboard Overview', icon: BarChart3 },
                   { id: 'lists', label: 'Shopping Lists', icon: List },
-                  { id: 'stores', label: 'Store Management', icon: Store },
-                  { id: 'prices', label: 'Price Tracking', icon: TrendingDown },
                   { id: 'analytics', label: 'Shopping Analytics', icon: BarChart3 }
                 ].map(({ id, label, icon: Icon }) => (
                   <button
@@ -602,24 +664,13 @@ const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose, onSubVie
         <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg p-3 sm:p-4 md:p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-100">Price Alerts</h2>
-            <button
-              onClick={() => setActiveView('prices')}
-              className="text-sm text-blue-600 hover:text-blue-800 font-medium"
-            >
-              View All →
-            </button>
           </div>
 
           {priceAlerts.length === 0 ? (
             <div className="text-center py-8">
               <Bell className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-              <p className="text-gray-600 mb-3">No price alerts</p>
-              <button
-                onClick={() => setActiveView('prices')}
-                className="text-sm text-blue-600 hover:text-blue-800 font-medium"
-              >
-                Set up price tracking →
-              </button>
+              <p className="text-gray-600 mb-1">No price alerts</p>
+              <p className="text-sm text-gray-500">Price tracking is coming soon.</p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -697,15 +748,11 @@ const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose, onSubVie
               <h1 className="text-2xl md:text-3xl font-light text-gray-900 mb-2">
                 {activeView === 'dashboard' && 'Shopping Management'}
                 {activeView === 'lists' && 'Shopping Lists'}
-                {activeView === 'stores' && 'Store Management'}
-                {activeView === 'prices' && 'Price Tracking'}
                 {activeView === 'analytics' && 'Shopping Analytics'}
               </h1>
               <p className="text-gray-600">
                 {activeView === 'dashboard' && 'Manage your family\'s shopping and save money'}
                 {activeView === 'lists' && 'Create and manage your shopping lists'}
-                {activeView === 'stores' && 'Manage your preferred stores and locations'}
-                {activeView === 'prices' && 'Track prices and find the best deals'}
                 {activeView === 'analytics' && 'Analyze your shopping patterns and savings'}
               </p>
             </div>
@@ -735,20 +782,6 @@ const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose, onSubVie
               <span>Lists</span>
             </button>
             <button
-              onClick={() => setActiveView('stores')}
-              className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-slate-100 hover:bg-white dark:hover:bg-slate-700 rounded-md transition-colors"
-            >
-              <Store className="w-4 h-4" />
-              <span>Stores</span>
-            </button>
-            <button
-              onClick={() => setActiveView('prices')}
-              className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-slate-100 hover:bg-white dark:hover:bg-slate-700 rounded-md transition-colors"
-            >
-              <TrendingDown className="w-4 h-4" />
-              <span>Prices</span>
-            </button>
-            <button
               onClick={() => setActiveView('analytics')}
               className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-white rounded-md transition-colors"
             >
@@ -763,8 +796,6 @@ const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose, onSubVie
       <div className={isMobile ? 'px-4' : ''}>
         {activeView === 'dashboard' && renderDashboard()}
         {activeView === 'lists' && <ShoppingListManager onClose={() => setActiveView('dashboard')} />}
-        {activeView === 'stores' && <StoreManager onClose={() => setActiveView('dashboard')} />}
-        {activeView === 'prices' && <PriceTracker onClose={() => setActiveView('dashboard')} />}
         {activeView === 'analytics' && <ShoppingAnalytics onClose={() => setActiveView('dashboard')} />}
       </div>
 

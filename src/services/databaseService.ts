@@ -279,28 +279,11 @@ class DatabaseService {
     }
 
     try {
-      // Map UI fields to API/Prisma fields
-      const eventData: any = { ...event };
-
-      // Ensure dates are properly formatted
-      if (eventData.date) {
-        eventData.eventDate = eventData.date;
-        delete eventData.date;
-      }
-      if (eventData.time) {
-        eventData.eventTime = eventData.time;
-        delete eventData.time;
-      }
-      if (eventData.person) {
-        eventData.personId = eventData.person;
-        delete eventData.person;
-      }
-
       await this.fetchAPI(`${API_BASE}/${this.familyId}/events`, {
         method: 'PUT',
         body: JSON.stringify({
           id,
-          ...eventData,
+          ...event,
         }),
       });
 

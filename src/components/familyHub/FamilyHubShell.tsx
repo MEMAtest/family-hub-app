@@ -28,6 +28,7 @@ import { FamilyView } from './views/FamilyView';
 import { NewsView } from './views/NewsView';
 import { PropertyView } from './views/PropertyView';
 import { FitnessView } from './views/FitnessView';
+import { ContractorView } from './views/ContractorView';
 import { FamilyHubModals } from './FamilyHubModals';
 import Breadcrumb from '@/components/common/Breadcrumb';
 import SetupWizard from '@/components/common/SetupWizard';
@@ -36,7 +37,6 @@ import { useCalendarContext } from '@/contexts/familyHub/CalendarContext';
 import { useBudgetContext } from '@/contexts/familyHub/BudgetContext';
 import { useShoppingContext } from '@/contexts/familyHub/ShoppingContext';
 import { useContractorContext } from '@/contexts/familyHub/ContractorContext';
-import { useDatabaseSync } from '@/hooks/useDatabaseSync';
 import { useClientTime } from '@/hooks/useClientTime';
 import { formatDateConsistent } from '@/utils/date';
 import { useFamilyStore } from '@/store/familyStore';
@@ -52,6 +52,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'meals', label: 'Meals', icon: UtensilsCrossed },
   { id: 'shopping', label: 'Shopping', icon: ShoppingCart },
   { id: 'fitness', label: 'Fitness', icon: Dumbbell },
+  { id: 'contractors', label: 'Contractors', icon: Wrench },
   { id: 'goals', label: 'Goals', icon: Target },
   { id: 'family', label: 'Family', icon: Users },
   { id: 'news', label: 'News', icon: Newspaper },
@@ -62,8 +63,6 @@ const SHOULD_SKIP_SETUP =
   process.env.NEXT_PUBLIC_E2E === 'true';
 
 export const FamilyHubShell = () => {
-  useDatabaseSync();
-
   const {
     currentView,
     currentSubView,
@@ -216,6 +215,8 @@ export const FamilyHubShell = () => {
         return <ShoppingView />;
       case 'fitness':
         return <FitnessView />;
+      case 'contractors':
+        return <ContractorView />;
       case 'goals':
         return <GoalsView />;
       case 'family':
@@ -237,6 +238,7 @@ export const FamilyHubShell = () => {
       meals: 'Meals',
       shopping: 'Shopping',
       fitness: 'Fitness',
+      contractors: 'Contractors',
       goals: 'Goals',
       family: 'Family',
       news: 'News',

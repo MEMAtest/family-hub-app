@@ -1,15 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import prisma from '@/lib/prisma';
+import { requireFamilyAccess } from '@/lib/auth-utils';
 
 // GET - Fetch all items for a shopping list
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { familyId: string; listId: string } }
-) {
+export const GET = requireFamilyAccess(async (_request: NextRequest, context, _authUser) => {
   try {
-    const { familyId, listId } = params;
+    const { familyId, listId } = await context.params;
 
     // Verify list belongs to family
     const list = await prisma.shoppingList.findFirst({
@@ -43,15 +39,12 @@ export async function GET(
       { status: 500 }
     );
   }
-}
+});
 
 // POST - Add item to shopping list
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { familyId: string; listId: string } }
-) {
+export const POST = requireFamilyAccess(async (request: NextRequest, context, _authUser) => {
   try {
-    const { familyId, listId } = params;
+    const { familyId, listId } = await context.params;
     const body = await request.json();
 
     // Verify list belongs to family
@@ -105,4 +98,4 @@ export async function POST(
       { status: 500 }
     );
   }
-}
+});

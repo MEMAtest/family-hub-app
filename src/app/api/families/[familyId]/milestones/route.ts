@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { requireFamilyAccess } from '@/lib/auth-utils';
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { familyId: string } }
-) {
+export const GET = requireFamilyAccess(async (_request: NextRequest, context, _authUser) => {
   try {
+    const { familyId } = await context.params;
     const milestones = await prisma.familyMilestone.findMany({
-      where: { familyId: params.familyId },
+      where: { familyId },
       orderBy: { date: 'desc' },
     });
 
@@ -16,13 +15,11 @@ export async function GET(
     console.error('Error fetching family milestones:', error);
     return NextResponse.json({ error: 'Failed to fetch family milestones' }, { status: 500 });
   }
-}
+});
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { familyId: string } }
-) {
+export const POST = requireFamilyAccess(async (request: NextRequest, context, _authUser) => {
   try {
+    const { familyId } = await context.params;
     const body = await request.json();
     const parsedDate = body.date ? new Date(body.date) : null;
     const dateValue = parsedDate && !Number.isNaN(parsedDate.getTime()) ? parsedDate : null;
@@ -33,7 +30,7 @@ export async function POST(
 
     const milestone = await prisma.familyMilestone.create({
       data: {
-        familyId: params.familyId,
+        familyId,
         title: body.title,
         description: body.description || null,
         date: dateValue,
@@ -53,4 +50,4 @@ export async function POST(
     console.error('Error creating family milestone:', error);
     return NextResponse.json({ error: 'Failed to create family milestone' }, { status: 500 });
   }
-}
+});

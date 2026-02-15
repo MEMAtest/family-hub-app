@@ -9,6 +9,7 @@ import {
 } from '@/types/notification.types';
 import { CalendarEvent } from '@/types/calendar.types';
 import notificationService from '@/services/notificationService';
+import { useFamilyStore } from '@/store/familyStore';
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
 
@@ -20,6 +21,8 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
   const [notifications, setNotifications] = useState<InAppNotification[]>([]);
   const [permission, setPermission] = useState<NotificationPermission>({ granted: false, denied: false, prompt: true });
   const [settings, setSettings] = useState<NotificationSettings | null>(null);
+  const familyId = useFamilyStore((state) => state.databaseStatus.familyId);
+  const isConnected = useFamilyStore((state) => state.databaseStatus.connected);
 
   // Initialize notification service
   useEffect(() => {
@@ -54,6 +57,14 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
       cleanup?.then(unsubscribe => unsubscribe?.());
     };
   }, []);
+
+  // Bind to current family and sync DB-backed notifications (offline-first)
+  useEffect(() => {
+    notificationService.setFamilyId(familyId);
+    if (isConnected && familyId) {
+      void notificationService.syncFromDatabase();
+    }
+  }, [familyId, isConnected]);
 
   // Request notification permission
   const requestPermission = useCallback(async () => {

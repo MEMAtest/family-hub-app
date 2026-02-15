@@ -15,6 +15,7 @@ class FamilyHubNotificationService implements NotificationService {
   private notifications: InAppNotification[] = [];
   private reminders: NotificationReminder[] = [];
   private settings: NotificationSettings;
+  private familyId: string | null = null;
   private serviceWorkerRegistration?: ServiceWorkerRegistration;
   private conflicts: DetectedConflict[] = [];
   private emailRecipients: { email: string; name: string; }[] = [
@@ -28,6 +29,49 @@ class FamilyHubNotificationService implements NotificationService {
     if (typeof window !== 'undefined') {
       this.initializeServiceWorker();
       this.loadPersistedData();
+    }
+  }
+
+  setFamilyId(familyId: string | null) {
+    this.familyId = familyId;
+  }
+
+  async syncFromDatabase(): Promise<void> {
+    if (!this.familyId) return;
+
+    try {
+      const response = await fetch(`/api/families/${this.familyId}/notifications?limit=100&offset=0`);
+      if (!response.ok) {
+        return;
+      }
+
+      const payload = await response.json();
+      const remote = Array.isArray(payload) ? payload : [];
+
+      const remoteNotifications: InAppNotification[] = remote.map((n: any) => ({
+        ...n,
+        timestamp: new Date(n.timestamp),
+        expiresAt: n.expiresAt ? new Date(n.expiresAt) : undefined,
+        snoozedUntil: n.snoozedUntil ? new Date(n.snoozedUntil) : undefined,
+      }));
+
+      // Merge: remote first, keep any local-only notifications not present remotely.
+      const merged = new Map<string, InAppNotification>();
+      remoteNotifications.forEach((n) => merged.set(n.id, n));
+      this.notifications.forEach((n) => {
+        if (!merged.has(n.id)) {
+          merged.set(n.id, n);
+        }
+      });
+
+      this.notifications = Array.from(merged.values())
+        .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
+        .slice(0, 100);
+
+      this.persistData();
+      this.notifySubscribers();
+    } catch (error) {
+      console.warn('Failed to sync notifications from database:', error);
     }
   }
 
@@ -310,6 +354,22 @@ class FamilyHubNotificationService implements NotificationService {
     this.persistData();
     this.notifySubscribers();
 
+    if (this.familyId) {
+      // Best-effort persistence; localStorage remains the offline cache.
+      fetch(`/api/families/${this.familyId}/notifications`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...notification,
+          timestamp: notification.timestamp.toISOString(),
+          expiresAt: notification.expiresAt?.toISOString(),
+          snoozedUntil: notification.snoozedUntil?.toISOString(),
+        }),
+      }).catch((error) => {
+        console.warn('Failed to persist notification (offline mode):', error);
+      });
+    }
+
     return notification;
   }
 
@@ -369,6 +429,16 @@ class FamilyHubNotificationService implements NotificationService {
       notification.read = true;
       this.persistData();
       this.notifySubscribers();
+
+      if (this.familyId) {
+        fetch(`/api/families/${this.familyId}/notifications/${notificationId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ read: true }),
+        }).catch((error) => {
+          console.warn('Failed to mark notification read (offline mode):', error);
+        });
+      }
     }
   }
 
@@ -379,6 +449,14 @@ class FamilyHubNotificationService implements NotificationService {
     this.notifications.forEach(n => n.read = true);
     this.persistData();
     this.notifySubscribers();
+
+    if (this.familyId) {
+      fetch(`/api/families/${this.familyId}/notifications/read-all`, {
+        method: 'POST',
+      }).catch((error) => {
+        console.warn('Failed to mark all notifications read (offline mode):', error);
+      });
+    }
   }
 
   /**
@@ -393,6 +471,14 @@ class FamilyHubNotificationService implements NotificationService {
     this.notifications = this.notifications.filter(n => n.id !== notificationId);
     this.persistData();
     this.notifySubscribers();
+
+    if (this.familyId) {
+      fetch(`/api/families/${this.familyId}/notifications/${notificationId}`, {
+        method: 'DELETE',
+      }).catch((error) => {
+        console.warn('Failed to delete notification (offline mode):', error);
+      });
+    }
   }
 
   /**
@@ -405,6 +491,16 @@ class FamilyHubNotificationService implements NotificationService {
       this.scheduleSnoozeWakeup(notification);
       this.persistData();
       this.notifySubscribers();
+
+      if (this.familyId) {
+        fetch(`/api/families/${this.familyId}/notifications/${notificationId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ snoozedUntil: until.toISOString() }),
+        }).catch((error) => {
+          console.warn('Failed to snooze notification (offline mode):', error);
+        });
+      }
     }
   }
 

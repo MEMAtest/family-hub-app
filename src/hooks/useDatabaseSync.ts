@@ -336,6 +336,8 @@ export const useDatabaseSync = () => {
   const setMealPlanning = useFamilyStore((state: FamilyState) => state.setMealPlanning);
   const setShoppingLists = useFamilyStore((state: FamilyState) => state.setShoppingLists);
   const setGoalsData = useFamilyStore((state: FamilyState) => state.setGoalsData);
+  const setContractors = useFamilyStore((state: FamilyState) => state.setContractors);
+  const setContractorAppointments = useFamilyStore((state: FamilyState) => state.setContractorAppointments);
   const hasInitialized = useRef(false);
 
   useEffect(() => {
@@ -399,6 +401,24 @@ export const useDatabaseSync = () => {
           return Array.isArray(payload) ? payload : [];
         };
 
+        const fetchContractors = async () => {
+          const response = await fetch(`/api/families/${familyId}/contractors`);
+          if (!response.ok) {
+            throw new Error('Failed to fetch contractors');
+          }
+          const payload = await response.json();
+          return Array.isArray(payload) ? payload : [];
+        };
+
+        const fetchAppointments = async () => {
+          const response = await fetch(`/api/families/${familyId}/contractors/appointments`);
+          if (!response.ok) {
+            throw new Error('Failed to fetch contractor appointments');
+          }
+          const payload = await response.json();
+          return Array.isArray(payload) ? payload : [];
+        };
+
         const results = await Promise.allSettled([
           databaseService.getGoals(),
           databaseService.getAchievements(),
@@ -406,6 +426,8 @@ export const useDatabaseSync = () => {
           databaseService.getShoppingLists(),
           fetchBudget('income'),
           fetchBudget('expenses'),
+          fetchContractors(),
+          fetchAppointments(),
         ]);
 
         const goalsResult = results[0];
@@ -414,6 +436,8 @@ export const useDatabaseSync = () => {
         const listsResult = results[3];
         const incomeResult = results[4];
         const expensesResult = results[5];
+        const contractorsResult = results[6];
+        const appointmentsResult = results[7];
 
         const goals = goalsResult.status === 'fulfilled' && Array.isArray(goalsResult.value)
           ? goalsResult.value
@@ -432,6 +456,12 @@ export const useDatabaseSync = () => {
           : [];
         const expenses = expensesResult.status === 'fulfilled' && Array.isArray(expensesResult.value)
           ? expensesResult.value
+          : [];
+        const contractors = contractorsResult.status === 'fulfilled' && Array.isArray(contractorsResult.value)
+          ? contractorsResult.value
+          : [];
+        const contractorAppointments = appointmentsResult.status === 'fulfilled' && Array.isArray(appointmentsResult.value)
+          ? appointmentsResult.value
           : [];
 
         if (income.length || expenses.length) {
@@ -462,6 +492,62 @@ export const useDatabaseSync = () => {
           localStorage.setItem('goalsData', JSON.stringify(nextGoalsData));
           localStorage.setItem('familyGoals', JSON.stringify(goals));
           localStorage.setItem('familyAchievements', JSON.stringify(achievements));
+        }
+
+        // Contractors + appointments (DB-first, import local once if DB empty)
+        if (contractors.length || contractorAppointments.length) {
+          setContractors(contractors);
+          setContractorAppointments(contractorAppointments);
+        } else {
+          const importKey = `familyHub_contractorsImported_${familyId}`;
+          const alreadyImported = localStorage.getItem(importKey) === 'true';
+          if (!alreadyImported) {
+            const storeState = useFamilyStore.getState();
+            const localContractors = storeState.contractors || [];
+            const localAppointments = storeState.contractorAppointments || [];
+
+            try {
+              for (const contractor of localContractors) {
+                await fetch(`/api/families/${familyId}/contractors`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(contractor),
+                });
+              }
+
+              for (const appointment of localAppointments) {
+                await fetch(`/api/families/${familyId}/contractors/appointments`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    id: appointment.id,
+                    contractorId: appointment.contractorId,
+                    date: appointment.date,
+                    time: appointment.time,
+                    durationMinutes: appointment.duration,
+                    purpose: appointment.purpose,
+                    location: appointment.location ?? null,
+                    notes: appointment.notes ?? null,
+                    cost: appointment.cost ?? null,
+                    status: appointment.status,
+                    calendarEventId: appointment.calendarEventId ?? null,
+                  }),
+                });
+              }
+
+              localStorage.setItem(importKey, 'true');
+
+              // Re-fetch after import
+              const [nextContractors, nextAppointments] = await Promise.all([
+                fetchContractors(),
+                fetchAppointments(),
+              ]);
+              setContractors(nextContractors);
+              setContractorAppointments(nextAppointments);
+            } catch (error) {
+              console.warn('Failed to import contractor data to database:', error);
+            }
+          }
         }
       };
 

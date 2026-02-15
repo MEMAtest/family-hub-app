@@ -1,15 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import prisma from '@/lib/prisma';
+import { requireFamilyAccess } from '@/lib/auth-utils';
 
 // GET - Fetch single achievement by ID
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { familyId: string; achievementId: string } }
-) {
+export const GET = requireFamilyAccess(async (_request: NextRequest, context, _authUser) => {
   try {
-    const { familyId, achievementId } = params;
+    const { familyId, achievementId } = await context.params;
 
     const achievement = await prisma.achievement.findFirst({
       where: {
@@ -33,15 +29,12 @@ export async function GET(
       { status: 500 }
     );
   }
-}
+});
 
 // DELETE - Delete achievement
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { familyId: string; achievementId: string } }
-) {
+export const DELETE = requireFamilyAccess(async (_request: NextRequest, context, _authUser) => {
   try {
-    const { familyId, achievementId } = params;
+    const { familyId, achievementId } = await context.params;
 
     // Check if achievement exists and belongs to family
     const existingAchievement = await prisma.achievement.findFirst({
@@ -73,4 +66,4 @@ export async function DELETE(
       { status: 500 }
     );
   }
-}
+});

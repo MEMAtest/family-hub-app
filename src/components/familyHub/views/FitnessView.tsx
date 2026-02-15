@@ -1,13 +1,14 @@
 'use client';
 
 import React, { useState } from 'react';
-import { FitnessDashboard } from '@/components/fitness';
+import { ActivityHistory, FitnessDashboard } from '@/components/fitness';
 import { useFamilyStore } from '@/store/familyStore';
 
 export const FitnessView: React.FC = () => {
   const familyId = useFamilyStore((state) => state.databaseStatus.familyId);
   const familyMembers = useFamilyStore((state) => state.familyMembers);
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
+  const [tab, setTab] = useState<'dashboard' | 'history'>('dashboard');
 
   // Filter to adult members for fitness tracking
   const adults = familyMembers.filter((m) => m.ageGroup === 'Adult');
@@ -39,6 +40,28 @@ export const FitnessView: React.FC = () => {
 
   return (
     <div className="p-3 sm:p-4 lg:p-8 overflow-x-hidden bg-gray-50 dark:bg-slate-950 min-h-full">
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <button
+          onClick={() => setTab('dashboard')}
+          className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+            tab === 'dashboard'
+              ? 'bg-blue-600 text-white'
+              : 'bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-800'
+          }`}
+        >
+          Dashboard
+        </button>
+        <button
+          onClick={() => setTab('history')}
+          className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+            tab === 'history'
+              ? 'bg-blue-600 text-white'
+              : 'bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-800'
+          }`}
+        >
+          History
+        </button>
+      </div>
       {/* Person selector */}
       {adults.length > 1 && (
         <div className="mb-4 sm:mb-6">
@@ -70,12 +93,17 @@ export const FitnessView: React.FC = () => {
       )}
 
       {currentPerson && currentPersonId && (
-        <FitnessDashboard
-          familyId={familyId}
-          personId={currentPersonId}
-          personName={currentPerson.name}
-          personColor={currentPerson.color}
-        />
+        tab === 'dashboard' ? (
+          <FitnessDashboard
+            familyId={familyId}
+            personId={currentPersonId}
+            personName={currentPerson.name}
+            personColor={currentPerson.color}
+            onViewAll={() => setTab('history')}
+          />
+        ) : (
+          <ActivityHistory familyId={familyId} personId={currentPersonId} />
+        )
       )}
     </div>
   );

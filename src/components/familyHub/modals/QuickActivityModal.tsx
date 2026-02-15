@@ -15,7 +15,7 @@ export const QuickActivityModal = () => {
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
-    logActivity();
+    void logActivity();
   };
 
   return (

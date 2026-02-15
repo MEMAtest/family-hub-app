@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
 import { aiService } from '@/services/aiService';
-
-const prisma = new PrismaClient();
+import prisma from '@/lib/prisma';
+import { requireFamilyAccess } from '@/lib/auth-utils';
 
 interface ParsedMealPlan {
   weekStart: string;
@@ -42,12 +41,9 @@ const getWeekStart = (date: Date, weekStartsOn: number) => {
   return result;
 };
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { familyId: string } }
-) {
+export const POST = requireFamilyAccess(async (request: NextRequest, context, _authUser) => {
   try {
-    const { familyId } = params;
+    const { familyId } = await context.params;
     const body = await request.json().catch(() => ({}));
     const requestedWeekStart = typeof body.weekStart === 'string' ? body.weekStart : null;
 
@@ -157,4 +153,4 @@ export async function POST(
       { status: 500 }
     );
   }
-}
+});

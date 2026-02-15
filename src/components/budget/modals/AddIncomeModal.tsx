@@ -10,9 +10,10 @@ interface AddIncomeModalProps {
   onClose: () => void;
   onSave: (data: IncomeFormData) => void;
   editData?: any;
+  categories?: string[];
 }
 
-const AddIncomeModal: React.FC<AddIncomeModalProps> = ({ isOpen, onClose, onSave, editData }) => {
+const AddIncomeModal: React.FC<AddIncomeModalProps> = ({ isOpen, onClose, onSave, editData, categories }) => {
   const familyMembersFromStore = useFamilyStore((state) => state.familyMembers);
   const peopleFromStore = useFamilyStore((state) => state.people);
   const familyMembers = familyMembersFromStore.length > 0 ? familyMembersFromStore : peopleFromStore;
@@ -61,9 +62,9 @@ const AddIncomeModal: React.FC<AddIncomeModalProps> = ({ isOpen, onClose, onSave
     }
   }, [editData]);
 
-  const incomeCategories = [
-    'Salary', 'Freelance', 'Investment', 'Rental', 'Business', 'Government Benefits', 'Other'
-  ];
+  const incomeCategories = (categories && categories.length > 0)
+    ? categories
+    : ['Salary', 'Freelance', 'Investment', 'Rental', 'Business', 'Government Benefits', 'Other'];
 
   const handleInputChange = (field: keyof IncomeFormData, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));

@@ -86,7 +86,7 @@ async function performEventUpdate(payload: any) {
     body: JSON.stringify(payload),
   });
 
-  const response = await updateEventHandler(request, { params: { familyId: FAMILY_ID } });
+  const response = await updateEventHandler(request, { params: Promise.resolve({ familyId: FAMILY_ID }) });
   const data = await response.json();
 
   return {

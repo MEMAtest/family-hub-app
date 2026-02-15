@@ -25,12 +25,15 @@ import {
   Home,
   RefreshCw
 } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 import MealPlanner from './MealPlanner';
 import RecipeManager from './RecipeManager';
 import NutritionTracker from './NutritionTracker';
 import { useFamilyStore } from '@/store/familyStore';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { AIMealPlan } from '@/types/meals.types';
+import { useMealsContext } from '@/contexts/familyHub/MealsContext';
+import { useAppView } from '@/contexts/familyHub/AppViewContext';
 
 interface MealsDashboardProps {
   onClose?: () => void;
@@ -50,7 +53,10 @@ interface QuickMealLog {
 const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
   const familyId = useFamilyStore((state) => state.databaseStatus.familyId);
   const familyMembers = useFamilyStore((state) => state.people);
+  const mealPlanning = useFamilyStore((state) => state.mealPlanning);
   const isMobile = useMediaQuery('(max-width: 1023px)');
+  const { openMealForm } = useMealsContext();
+  const { setView } = useAppView();
   const [activeView, setActiveView] = useState<'dashboard' | 'planner' | 'recipes' | 'nutrition'>('dashboard');
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showQuickLogModal, setShowQuickLogModal] = useState(false);
@@ -242,42 +248,96 @@ const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
       title: 'Plan Today\'s Meals',
       description: 'Quick meal planning for today',
       icon: <Calendar className="w-6 h-6 text-blue-500" />,
-      onClick: () => setActiveView('planner')
-    },
-    {
-      id: 'add-recipe',
-      title: 'Add New Recipe',
-      description: 'Add recipe to your collection',
-      icon: <Book className="w-6 h-6 text-purple-500" />,
-      onClick: () => setActiveView('recipes')
+      onClick: () => openMealForm(new Date().toISOString().split('T')[0])
     },
     {
       id: 'shopping-list',
       title: 'Generate Shopping List',
       description: 'Create list from meal plan',
       icon: <ShoppingCart className="w-6 h-6 text-purple-500" />,
-      onClick: () => {
-        // Generate shopping list from current week's meal plan
-        const ingredients = [
-          'Flour - 2 cups',
-          'Eggs - 2 large',
-          'Milk - 1.5 cups',
-          'Chicken Breast - 2 large',
-          'Romaine Lettuce - 2 heads',
-          'Ground Beef - 1 lb',
-          'Spaghetti - 1 lb',
-          'Tomato Sauce - 2 cups'
-        ];
-        console.log('Generated shopping list from meal plan:', ingredients);
-        alert(`Shopping list generated with ${ingredients.length} items:\n\n${ingredients.join('\n')}\n\nThis would normally integrate with the Shopping module.`);
+      onClick: async () => {
+        if (!familyId) {
+          toast.error('Family ID not available yet. Please try again.');
+          return;
+        }
+
+        const items = new Set<string>();
+        const addItem = (value: unknown) => {
+          if (typeof value !== 'string') return;
+          const trimmed = value.trim();
+          if (!trimmed) return;
+          items.add(trimmed);
+        };
+
+        if (aiMealPlan?.shoppingList?.length) {
+          aiMealPlan.shoppingList.forEach((entry) => addItem(entry.item));
+        } else {
+          const start = new Date();
+          for (let i = 0; i < 7; i++) {
+            const d = new Date(start);
+            d.setDate(d.getDate() + i);
+            const key = d.toISOString().split('T')[0];
+            const entry: any =
+              (mealPlanning as any)?.planned?.[key] ??
+              (mealPlanning as any)?.eaten?.[key];
+            if (!entry) continue;
+            addItem(entry.protein);
+            addItem(entry.carb);
+            addItem(entry.veg);
+          }
+        }
+
+        if (items.size === 0) {
+          toast.error('No meal plan items found. Plan meals first, then generate a list.');
+          return;
+        }
+
+        try {
+          const startDate = new Date().toISOString().split('T')[0];
+          const endDate = (() => {
+            const d = new Date();
+            d.setDate(d.getDate() + 6);
+            return d.toISOString().split('T')[0];
+          })();
+
+          const listResponse = await fetch(`/api/families/${familyId}/shopping-lists`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              listName: `Meal Plan (${startDate} to ${endDate})`,
+              category: 'Food',
+            }),
+          });
+
+          const listPayload = await listResponse.json().catch(() => null);
+          if (!listResponse.ok) {
+            throw new Error(listPayload?.error || 'Failed to create shopping list');
+          }
+
+          const listId = listPayload?.id as string | undefined;
+          if (!listId) {
+            throw new Error('Shopping list created without an id');
+          }
+
+          const itemArray = Array.from(items).slice(0, 50);
+          await Promise.all(itemArray.map(async (name) => {
+            const response = await fetch(`/api/families/${familyId}/shopping-lists/${listId}/items`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ itemName: name, category: 'Food' }),
+            });
+            if (!response.ok) {
+              throw new Error(`Failed to add item "${name}"`);
+            }
+          }));
+
+          toast.success(`Shopping list created (${Math.min(items.size, 50)} items)`);
+          setView('shopping');
+        } catch (error) {
+          console.error('Failed to generate shopping list:', error);
+          toast.error(error instanceof Error ? error.message : 'Failed to generate shopping list');
+        }
       }
-    },
-    {
-      id: 'nutrition',
-      title: 'View Nutrition',
-      description: 'Track nutritional intake',
-      icon: <Activity className="w-6 h-6 text-red-500" />,
-      onClick: () => setActiveView('nutrition')
     }
   ];
 
@@ -328,24 +388,7 @@ const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
       </div>
 
       {/* View Tabs - Mobile */}
-      {activeView === 'dashboard' && (
-        <div className="flex space-x-1 bg-gray-100 dark:bg-slate-800 p-1 rounded-lg overflow-x-auto">
-          {[
-            { id: 'planner', label: 'Planner', icon: Calendar },
-            { id: 'recipes', label: 'Recipes', icon: Book },
-            { id: 'nutrition', label: 'Nutrition', icon: Activity }
-          ].map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              onClick={() => setActiveView(id as any)}
-              className="flex items-center gap-1 px-3 py-2 text-xs font-medium text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-slate-100 hover:bg-white dark:hover:bg-slate-700 rounded-md transition-colors whitespace-nowrap"
-            >
-              <Icon className="w-3 h-3" />
-              <span>{label}</span>
-            </button>
-          ))}
-        </div>
-      )}
+      {/* Additional views (planner/recipes/nutrition) are intentionally hidden until wired to persistence. */}
     </div>
   );
 
@@ -395,9 +438,6 @@ const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
               <div className="space-y-2">
                 {[
                   { id: 'dashboard', label: 'Dashboard Overview', icon: BarChart3 },
-                  { id: 'planner', label: 'Meal Planner', icon: Calendar },
-                  { id: 'recipes', label: 'Recipe Manager', icon: Book },
-                  { id: 'nutrition', label: 'Nutrition Tracker', icon: Activity }
                 ].map(({ id, label, icon: Icon }) => (
                   <button
                     key={id}
@@ -436,12 +476,12 @@ const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
             isMobile ? 'text-lg' : 'text-xl'
           }`}>Today's Meals</h2>
           <button
-            onClick={() => setActiveView('planner')}
+            onClick={() => openMealForm(new Date().toISOString().split('T')[0])}
             className={`text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium ${
               isMobile ? 'text-xs' : 'text-sm'
             }`}
           >
-            View Full Plan →
+            Plan meal →
           </button>
         </div>
 
@@ -720,7 +760,7 @@ const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-100">Recent Recipes</h2>
             <button
-              onClick={() => setActiveView('recipes')}
+              onClick={() => toast('Recipe manager is not connected yet.')}
               className="text-sm text-blue-600 hover:text-blue-800 font-medium"
             >
               View All →
@@ -732,7 +772,7 @@ const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
               <Book className="w-12 h-12 text-gray-400 mx-auto mb-3" />
               <p className="text-gray-600 mb-3">No recipes yet</p>
               <button
-                onClick={() => setActiveView('recipes')}
+                onClick={() => toast('Recipe manager is not connected yet.')}
                 className="text-sm text-blue-600 hover:text-blue-800 font-medium"
               >
                 Add your first recipe →
@@ -770,7 +810,7 @@ const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-100">Nutrition Highlights</h2>
           <button
-            onClick={() => setActiveView('nutrition')}
+            onClick={() => toast('Nutrition tracking is not connected yet.')}
             className="text-sm text-blue-600 hover:text-blue-800 font-medium"
           >
             View Details →
@@ -782,7 +822,7 @@ const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
             <Activity className="w-12 h-12 text-gray-400 mx-auto mb-3" />
             <p className="text-gray-600 mb-3">No nutrition data yet</p>
             <button
-              onClick={() => setActiveView('nutrition')}
+              onClick={() => toast('Nutrition tracking is not connected yet.')}
               className="text-sm text-blue-600 hover:text-blue-800 font-medium"
             >
               Start tracking nutrition →

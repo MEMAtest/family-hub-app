@@ -11,6 +11,7 @@ import {
   Activity,
   Flame,
   MessageSquare,
+  Image as ImageIcon,
   Loader2,
   RefreshCw
 } from 'lucide-react';
@@ -281,6 +282,32 @@ const SummaryStep: React.FC<SummaryStepProps> = ({ onClose }) => {
           <p className="text-gray-600 dark:text-slate-300 text-sm whitespace-pre-wrap">
             {state.notes}
           </p>
+        </div>
+      )}
+
+      {/* Images */}
+      {(state.imageUrls?.length || 0) > 0 && (
+        <div className="bg-white dark:bg-slate-800/50 rounded-xl border border-gray-200 dark:border-slate-700 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="font-medium text-gray-900 dark:text-slate-100 flex items-center gap-2">
+              <ImageIcon className="w-4 h-4" />
+              Images
+            </h4>
+            <button
+              onClick={() => goToStep('image_upload')}
+              className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+            >
+              Edit
+            </button>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            {state.imageUrls.slice(0, 6).map((url) => (
+              <div key={url} className="overflow-hidden rounded-lg border border-gray-200 dark:border-slate-700">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={url} alt="Workout upload" className="h-20 w-full object-cover" />
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

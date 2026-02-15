@@ -18,7 +18,12 @@ interface CalendarContextValue {
   openCreateForm: (slot?: { start: Date; end: Date }) => void;
   openEditForm: (event: CalendarEvent) => void;
   closeEventForm: () => void;
-  createEvent: (options: Omit<CalendarEvent, 'id' | 'createdAt' | 'updatedAt'>) => Promise<'conflict' | 'created'>;
+  createEvent: (
+    options: Omit<CalendarEvent, 'id' | 'createdAt' | 'updatedAt'>
+  ) => Promise<
+    | { status: 'conflict' }
+    | { status: 'created'; event: CalendarEvent }
+  >;
   updateEvent: (id: string, updates: Partial<CalendarEvent>) => Promise<true | 'conflict'>;
   deleteEvent: (id: string) => Promise<void>;
   showTemplateManager: boolean;
@@ -247,13 +252,16 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
 
   const createEvent = useCallback(async (
     draft: Omit<CalendarEvent, 'id' | 'createdAt' | 'updatedAt'>
-  ): Promise<'conflict' | 'created'> => {
+  ): Promise<
+    | { status: 'conflict' }
+    | { status: 'created'; event: CalendarEvent }
+  > => {
     const eventToSave = buildEvent(draft);
     const conflicts = detectConflicts(eventToSave, events);
 
     if (conflicts.length > 0) {
       openConflictModal(conflicts);
-      return 'conflict';
+      return { status: 'conflict' };
     }
 
     const savedEvent = await databaseService.saveEvent(eventToSave) ?? eventToSave;
@@ -276,7 +284,7 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
     }
 
     closeEventForm();
-    return 'created';
+    return { status: 'created', event: savedEvent };
   }, [
     closeEventForm,
     detectConflicts,

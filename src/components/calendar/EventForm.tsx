@@ -18,13 +18,17 @@ import {
 } from 'lucide-react'
 import { CalendarEvent, Reminder, RecurringPattern, EventTemplate, Person } from '@/types/calendar.types'
 
+type CreateEventResult =
+  | { status: 'conflict' }
+  | { status: 'created'; event: CalendarEvent };
+
 interface EventFormProps {
   event?: CalendarEvent
   isOpen: boolean
   onClose: () => void
-  onSave: (event: Omit<CalendarEvent, 'id' | 'createdAt' | 'updatedAt'>) => void
-  onUpdate: (id: string, updates: Partial<CalendarEvent>) => void
-  onDelete?: (id: string) => void
+  onSave: (event: Omit<CalendarEvent, 'id' | 'createdAt' | 'updatedAt'>) => Promise<CreateEventResult>
+  onUpdate: (id: string, updates: Partial<CalendarEvent>) => Promise<true | 'conflict'>
+  onDelete?: (id: string) => Promise<void>
   people: Person[]
   templates: EventTemplate[]
   defaultSlot?: { start: Date; end: Date }
@@ -149,7 +153,7 @@ const EventForm: React.FC<EventFormProps> = ({
   }
 
   // Handle save
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!validateForm()) return
 
     const eventData = {
@@ -159,19 +163,21 @@ const EventForm: React.FC<EventFormProps> = ({
     } as Omit<CalendarEvent, 'id' | 'createdAt' | 'updatedAt'>
 
     if (event) {
-      onUpdate(event.id, eventData)
+      const result = await onUpdate(event.id, eventData)
+      if (result === 'conflict') return
     } else {
-      onSave(eventData)
+      const result = await onSave(eventData)
+      if (result.status === 'conflict') return
     }
 
     onClose()
   }
 
   // Handle delete
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (event && onDelete) {
       if (confirm('Are you sure you want to delete this event?')) {
-        onDelete(event.id)
+        await onDelete(event.id)
         onClose()
       }
     }
@@ -601,7 +607,7 @@ const EventForm: React.FC<EventFormProps> = ({
               {event && onDelete && (
                 <button
                   type="button"
-                  onClick={handleDelete}
+                  onClick={() => void handleDelete()}
                   className="flex items-center space-x-2 px-4 py-2 text-red-600 hover:bg-red-50 rounded-md transition-colors"
                 >
                   <Trash2 className="w-4 h-4" />
@@ -620,7 +626,7 @@ const EventForm: React.FC<EventFormProps> = ({
               </button>
               <button
                 type="button"
-                onClick={handleSave}
+                onClick={() => void handleSave()}
                 className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
               >
                 <Save className="w-4 h-4" />

@@ -1,15 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import prisma from '@/lib/prisma';
+import { requireFamilyAccess } from '@/lib/auth-utils';
 
 // GET - Fetch single shopping list by ID
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { familyId: string; listId: string } }
-) {
+export const GET = requireFamilyAccess(async (_request: NextRequest, context, _authUser) => {
   try {
-    const { familyId, listId } = params;
+    const { familyId, listId } = await context.params;
 
     const list = await prisma.shoppingList.findFirst({
       where: {
@@ -36,15 +32,12 @@ export async function GET(
       { status: 500 }
     );
   }
-}
+});
 
 // PUT - Update shopping list
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: { familyId: string; listId: string } }
-) {
+export const PUT = requireFamilyAccess(async (request: NextRequest, context, _authUser) => {
   try {
-    const { familyId, listId } = params;
+    const { familyId, listId } = await context.params;
     const body = await request.json();
 
     // Check if list exists and belongs to family
@@ -92,15 +85,12 @@ export async function PUT(
       { status: 500 }
     );
   }
-}
+});
 
 // DELETE - Delete shopping list
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { familyId: string; listId: string } }
-) {
+export const DELETE = requireFamilyAccess(async (_request: NextRequest, context, _authUser) => {
   try {
-    const { familyId, listId } = params;
+    const { familyId, listId } = await context.params;
 
     // Check if list exists and belongs to family
     const existingList = await prisma.shoppingList.findFirst({
@@ -132,4 +122,4 @@ export async function DELETE(
       { status: 500 }
     );
   }
-}
+});

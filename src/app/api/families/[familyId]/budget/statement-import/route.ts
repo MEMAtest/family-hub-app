@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createId } from '@/utils/id';
+import { requireFamilyAccess } from '@/lib/auth-utils';
 
 // Force Node.js runtime for pdf-parse and file processing
 export const runtime = 'nodejs';
@@ -160,10 +161,7 @@ const normalizeDirection = (direction?: string, description?: string): Statement
   return 'debit';
 };
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { familyId: string } }
-) {
+export const POST = requireFamilyAccess(async (request: NextRequest, _context, _authUser) => {
   try {
     const formData = await request.formData();
     const file = formData.get('file');
@@ -268,4 +266,4 @@ export async function POST(
       { status: 500 }
     );
   }
-}
+});

@@ -1,15 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { requireFamilyAccess } from '@/lib/auth-utils';
 
 // GET all family members
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { familyId: string } }
-) {
+export const GET = requireFamilyAccess(async (_request: NextRequest, context, _authUser) => {
   try {
+    const { familyId } = await context.params;
     const members = await prisma.familyMember.findMany({
       where: {
-        familyId: params.familyId,
+        familyId,
       },
     });
 
@@ -18,14 +17,12 @@ export async function GET(
     console.error('Error fetching family members:', error);
     return NextResponse.json({ error: 'Failed to fetch family members' }, { status: 500 });
   }
-}
+});
 
 // POST - Create new family member
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { familyId: string } }
-) {
+export const POST = requireFamilyAccess(async (request: NextRequest, context, _authUser) => {
   try {
+    const { familyId } = await context.params;
     const body = await request.json();
     const { name, role, ageGroup, color, icon, fitnessGoals, dateOfBirth, avatarUrl } = body;
     const parsedDob = dateOfBirth ? new Date(dateOfBirth) : null;
@@ -33,7 +30,7 @@ export async function POST(
 
     const member = await prisma.familyMember.create({
       data: {
-        familyId: params.familyId,
+        familyId,
         name,
         role,
         ageGroup,
@@ -50,4 +47,4 @@ export async function POST(
     console.error('Error creating family member:', error);
     return NextResponse.json({ error: 'Failed to create family member' }, { status: 500 });
   }
-}
+});

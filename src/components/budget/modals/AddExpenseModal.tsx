@@ -10,9 +10,10 @@ interface AddExpenseModalProps {
   onClose: () => void;
   onSave: (data: ExpenseFormData) => void;
   editData?: any;
+  categories?: string[];
 }
 
-const AddExpenseModal: React.FC<AddExpenseModalProps> = ({ isOpen, onClose, onSave, editData }) => {
+const AddExpenseModal: React.FC<AddExpenseModalProps> = ({ isOpen, onClose, onSave, editData, categories }) => {
   const familyMembersFromStore = useFamilyStore((state) => state.familyMembers);
   const peopleFromStore = useFamilyStore((state) => state.people);
   const familyMembers = familyMembersFromStore.length > 0 ? familyMembersFromStore : peopleFromStore;
@@ -66,10 +67,12 @@ const AddExpenseModal: React.FC<AddExpenseModalProps> = ({ isOpen, onClose, onSa
     }
   }, [editData]);
 
-  const expenseCategories = [
-    'Housing', 'Transportation', 'Food & Dining', 'Entertainment', 'Healthcare',
-    'Childcare', 'Education', 'Utilities', 'Insurance', 'Clothing', 'Other'
-  ];
+  const expenseCategories = (categories && categories.length > 0)
+    ? categories
+    : [
+        'Housing', 'Transportation', 'Food & Dining', 'Entertainment', 'Healthcare',
+        'Childcare', 'Education', 'Utilities', 'Insurance', 'Clothing', 'Other'
+      ];
 
   const handleInputChange = (field: keyof ExpenseFormData, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));

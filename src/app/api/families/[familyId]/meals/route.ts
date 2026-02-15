@@ -1,15 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import prisma from '@/lib/prisma';
+import { requireFamilyAccess } from '@/lib/auth-utils';
 
 // GET - Fetch all meals for a family (with optional date filtering)
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { familyId: string } }
-) {
+export const GET = requireFamilyAccess(async (request: NextRequest, context, _authUser) => {
   try {
-    const { familyId } = params;
+    const { familyId } = await context.params;
     const { searchParams } = new URL(request.url);
 
     const startDate = searchParams.get('startDate');
@@ -50,15 +46,12 @@ export async function GET(
       { status: 500 }
     );
   }
-}
+});
 
 // POST - Create new meal plan
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { familyId: string } }
-) {
+export const POST = requireFamilyAccess(async (request: NextRequest, context, _authUser) => {
   try {
-    const { familyId } = params;
+    const { familyId } = await context.params;
     const body = await request.json();
 
     const {
@@ -101,7 +94,7 @@ export async function POST(
       { status: 500 }
     );
   }
-}
+});
 
 // PUT - Update existing meal (handled in [mealId]/route.ts)
 // DELETE - Delete meal (handled in [mealId]/route.ts)

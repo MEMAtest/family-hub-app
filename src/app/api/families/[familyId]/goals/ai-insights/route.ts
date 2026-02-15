@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
 import { aiService } from '@/services/aiService';
-
-const prisma = new PrismaClient();
+import prisma from '@/lib/prisma';
+import { requireFamilyAccess } from '@/lib/auth-utils';
 
 interface ParsedGoalCoachPlan {
   summary: string;
@@ -37,18 +36,9 @@ const parseAiJson = (text: string): ParsedGoalCoachPlan => {
   return JSON.parse(jsonString);
 };
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { familyId: string } }
-) {
+export const POST = requireFamilyAccess(async (_request: NextRequest, context, _authUser) => {
   try {
-    const { familyId } = params;
-    if (!familyId) {
-      return NextResponse.json(
-        { error: 'Family ID is required' },
-        { status: 400 }
-      );
-    }
+    const { familyId } = await context.params;
 
     const family = await prisma.family.findUnique({
       where: { id: familyId },
@@ -121,4 +111,4 @@ export async function POST(
       { status: 500 }
     );
   }
-}
+});

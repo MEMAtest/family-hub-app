@@ -1,18 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import prisma from '@/lib/prisma';
+import { requireAuth } from '@/lib/auth-utils';
 
 // GET - Fetch single shopping item
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { itemId: string } }
-) {
+export const GET = requireAuth(async (_request: NextRequest, context, authUser) => {
   try {
-    const { itemId } = params;
+    const { itemId } = await context.params;
 
-    const item = await prisma.shoppingItem.findUnique({
-      where: { id: itemId }
+    const item = await prisma.shoppingItem.findFirst({
+      where: { id: itemId, list: { familyId: authUser.familyId } },
     });
 
     if (!item) {
@@ -30,19 +26,16 @@ export async function GET(
       { status: 500 }
     );
   }
-}
+});
 
 // PUT - Update shopping item
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: { itemId: string } }
-) {
+export const PUT = requireAuth(async (request: NextRequest, context, authUser) => {
   try {
-    const { itemId } = params;
+    const { itemId } = await context.params;
     const body = await request.json();
 
-    const existingItem = await prisma.shoppingItem.findUnique({
-      where: { id: itemId }
+    const existingItem = await prisma.shoppingItem.findFirst({
+      where: { id: itemId, list: { familyId: authUser.familyId } },
     });
 
     if (!existingItem) {
@@ -81,18 +74,15 @@ export async function PUT(
       { status: 500 }
     );
   }
-}
+});
 
 // DELETE - Delete shopping item
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { itemId: string } }
-) {
+export const DELETE = requireAuth(async (_request: NextRequest, context, authUser) => {
   try {
-    const { itemId } = params;
+    const { itemId } = await context.params;
 
-    const existingItem = await prisma.shoppingItem.findUnique({
-      where: { id: itemId }
+    const existingItem = await prisma.shoppingItem.findFirst({
+      where: { id: itemId, list: { familyId: authUser.familyId } },
     });
 
     if (!existingItem) {
@@ -117,20 +107,17 @@ export async function DELETE(
       { status: 500 }
     );
   }
-}
+});
 
 // PATCH - Toggle item completion
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: { itemId: string } }
-) {
+export const PATCH = requireAuth(async (request: NextRequest, context, authUser) => {
   try {
-    const { itemId } = params;
+    const { itemId } = await context.params;
     const body = await request.json();
     const { action } = body;
 
-    const existingItem = await prisma.shoppingItem.findUnique({
-      where: { id: itemId }
+    const existingItem = await prisma.shoppingItem.findFirst({
+      where: { id: itemId, list: { familyId: authUser.familyId } },
     });
 
     if (!existingItem) {
@@ -183,4 +170,4 @@ export async function PATCH(
       { status: 500 }
     );
   }
-}
+});

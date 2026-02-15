@@ -16,6 +16,8 @@ import {
   RefreshCw,
   Settings,
   Watch,
+  Pencil,
+  Trash2,
 } from 'lucide-react';
 import { ActivityLoggingWizard } from './ActivityLoggingWizard';
 import DeviceConnections from './DeviceConnections';
@@ -27,6 +29,7 @@ interface FitnessDashboardProps {
   personId: string;
   personName: string;
   personColor?: string;
+  onViewAll?: () => void;
 }
 
 const activityTypeIcons: Record<string, React.ComponentType<any>> = {
@@ -46,8 +49,10 @@ const FitnessDashboard: React.FC<FitnessDashboardProps> = ({
   personId,
   personName,
   personColor = '#3B82F6',
+  onViewAll,
 }) => {
   const [showWizard, setShowWizard] = useState(false);
+  const [editingActivity, setEditingActivity] = useState<FitnessActivity | null>(null);
   const [showDeviceSettings, setShowDeviceSettings] = useState(false);
   const [activities, setActivities] = useState<FitnessActivity[]>([]);
   const [stats, setStats] = useState<FitnessStats | null>(null);
@@ -86,10 +91,36 @@ const FitnessDashboard: React.FC<FitnessDashboardProps> = ({
   }, [fetchData]);
 
   const handleActivityComplete = (activity: FitnessActivity) => {
-    setActivities((prev) => [activity, ...prev]);
+    setActivities((prev) => {
+      if (editingActivity) {
+        return prev.map((item) => (item.id === activity.id ? activity : item));
+      }
+      return [activity, ...prev];
+    });
     fetchData(); // Refresh stats
     setShowWizard(false);
+    setEditingActivity(null);
   };
+
+  const handleDeleteActivity = useCallback(async (activityId: string) => {
+    if (!confirm('Delete this activity?')) return;
+
+    try {
+      const response = await fetch(`/api/families/${familyId}/fitness/${activityId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete activity');
+      }
+
+      setActivities((prev) => prev.filter((a) => a.id !== activityId));
+      await fetchData();
+    } catch (err) {
+      console.error('Failed to delete activity:', err);
+      setError('Failed to delete activity');
+    }
+  }, [familyId, fetchData]);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -154,7 +185,10 @@ const FitnessDashboard: React.FC<FitnessDashboardProps> = ({
             <RefreshCw className="w-5 h-5" />
           </button>
           <button
-            onClick={() => setShowWizard(true)}
+            onClick={() => {
+              setEditingActivity(null);
+              setShowWizard(true);
+            }}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
             <Plus className="w-5 h-5" />
@@ -293,7 +327,10 @@ const FitnessDashboard: React.FC<FitnessDashboardProps> = ({
             Recent Activities
           </h3>
           {activities.length > 5 && (
-            <button className="text-sm text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1">
+            <button
+              onClick={onViewAll}
+              className="text-sm text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+            >
               View all
               <ChevronRight className="w-4 h-4" />
             </button>
@@ -309,7 +346,10 @@ const FitnessDashboard: React.FC<FitnessDashboardProps> = ({
               No activities logged yet
             </p>
             <button
-              onClick={() => setShowWizard(true)}
+              onClick={() => {
+                setEditingActivity(null);
+                setShowWizard(true);
+              }}
               className="text-blue-600 dark:text-blue-400 hover:underline"
             >
               Log your first workout
@@ -373,6 +413,26 @@ const FitnessDashboard: React.FC<FitnessDashboardProps> = ({
                         )}
                       </div>
                     </div>
+
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => {
+                          setEditingActivity(activity);
+                          setShowWizard(true);
+                        }}
+                        className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                        title="Edit"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => void handleDeleteActivity(activity.id)}
+                        className="rounded-lg p-2 text-gray-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-300"
+                        title="Delete"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
@@ -384,11 +444,15 @@ const FitnessDashboard: React.FC<FitnessDashboardProps> = ({
       {/* Activity Logging Wizard Modal */}
       <ActivityLoggingWizard
         isOpen={showWizard}
-        onClose={() => setShowWizard(false)}
+        onClose={() => {
+          setShowWizard(false);
+          setEditingActivity(null);
+        }}
         onComplete={handleActivityComplete}
         personId={personId}
         familyId={familyId}
         lastWorkout={activities[0]}
+        editingActivity={editingActivity}
       />
     </div>
   );
