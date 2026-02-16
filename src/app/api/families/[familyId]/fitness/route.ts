@@ -123,50 +123,54 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context, _a
       );
     }
 
-    // Create the activity
-    const activity = await prisma.fitnessTracking.create({
-      data: {
-        personId: body.personId,
-        activityType: body.activityType,
-        durationMinutes: body.durationMinutes,
-        intensityLevel: body.intensityLevel || 'moderate',
-        activityDate: body.activityDate ? new Date(body.activityDate) : new Date(),
-        notes: body.notes,
-        calories: body.calories,
-        exercises: body.exercises ? (body.exercises as unknown as Prisma.InputJsonValue) : Prisma.JsonNull,
-        workoutName: body.workoutName,
-        heartRateAvg: body.heartRateAvg,
-        heartRateMax: body.heartRateMax,
-        source: body.source || 'manual',
-        externalId: body.externalId,
-        imageUrls: body.imageUrls ? (body.imageUrls as unknown as Prisma.InputJsonValue) : Prisma.JsonNull,
-      },
-      include: {
-        person: {
-          select: {
-            id: true,
-            name: true,
-            color: true,
-            icon: true,
-          },
-        },
-      },
-    });
-
-    // Best-effort: link uploaded images to this activity so deletes cascade and cleanup is possible.
     const imageIds = (body.imageUrls || [])
       .map((url) => parseFitnessImageIdFromUrl(familyId, url))
       .filter((id): id is string => Boolean(id));
-    if (imageIds.length) {
-      await prisma.fitnessImage.updateMany({
-        where: {
-          familyId,
-          id: { in: imageIds },
-          OR: [{ fitnessTrackingId: null }, { fitnessTrackingId: activity.id }],
+
+    // Create activity + image associations in a single transaction.
+    const activity = await prisma.$transaction(async (tx) => {
+      const created = await tx.fitnessTracking.create({
+        data: {
+          personId: body.personId,
+          activityType: body.activityType,
+          durationMinutes: body.durationMinutes,
+          intensityLevel: body.intensityLevel || 'moderate',
+          activityDate: body.activityDate ? new Date(body.activityDate) : new Date(),
+          notes: body.notes,
+          calories: body.calories,
+          exercises: body.exercises ? (body.exercises as unknown as Prisma.InputJsonValue) : Prisma.JsonNull,
+          workoutName: body.workoutName,
+          heartRateAvg: body.heartRateAvg,
+          heartRateMax: body.heartRateMax,
+          source: body.source || 'manual',
+          externalId: body.externalId,
+          imageUrls: body.imageUrls ? (body.imageUrls as unknown as Prisma.InputJsonValue) : Prisma.JsonNull,
         },
-        data: { fitnessTrackingId: activity.id },
+        include: {
+          person: {
+            select: {
+              id: true,
+              name: true,
+              color: true,
+              icon: true,
+            },
+          },
+        },
       });
-    }
+
+      if (imageIds.length) {
+        await tx.fitnessImage.updateMany({
+          where: {
+            familyId,
+            id: { in: imageIds },
+            OR: [{ fitnessTrackingId: null }, { fitnessTrackingId: created.id }],
+          },
+          data: { fitnessTrackingId: created.id },
+        });
+      }
+
+      return created;
+    });
 
     return NextResponse.json(activity, { status: 201 });
   } catch (error) {

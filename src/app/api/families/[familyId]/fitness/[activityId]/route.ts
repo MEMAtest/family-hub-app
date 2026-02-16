@@ -45,60 +45,66 @@ export const PUT = requireFamilyAccess(async (request: NextRequest, context, _au
       return NextResponse.json({ error: 'Activity not found' }, { status: 404 });
     }
 
-    const activity = await prisma.fitnessTracking.update({
-      where: { id: activityId },
-      data: {
-        ...updates,
-        activityDate: updates.activityDate ? new Date(updates.activityDate) : undefined,
-        notes: updates.notes === undefined ? undefined : updates.notes,
-        workoutName: updates.workoutName === undefined ? undefined : updates.workoutName,
-        exercises: updates.exercises === undefined
-          ? undefined
-          : updates.exercises === null
-          ? Prisma.JsonNull
-          : (updates.exercises as unknown as Prisma.InputJsonValue),
-        imageUrls: updates.imageUrls === undefined
-          ? undefined
-          : updates.imageUrls === null
-          ? Prisma.JsonNull
-          : (updates.imageUrls as unknown as Prisma.InputJsonValue),
-      },
-      include: {
-        person: {
-          select: {
-            id: true,
-            name: true,
-            color: true,
-            icon: true,
+    const imageIds = updates.imageUrls === undefined
+      ? null
+      : (updates.imageUrls || [])
+          .map((url) => parseFitnessImageIdFromUrl(familyId, url))
+          .filter((id): id is string => Boolean(id));
+
+    const activity = await prisma.$transaction(async (tx) => {
+      const updated = await tx.fitnessTracking.update({
+        where: { id: activityId },
+        data: {
+          ...updates,
+          activityDate: updates.activityDate ? new Date(updates.activityDate) : undefined,
+          notes: updates.notes === undefined ? undefined : updates.notes,
+          workoutName: updates.workoutName === undefined ? undefined : updates.workoutName,
+          exercises: updates.exercises === undefined
+            ? undefined
+            : updates.exercises === null
+            ? Prisma.JsonNull
+            : (updates.exercises as unknown as Prisma.InputJsonValue),
+          imageUrls: updates.imageUrls === undefined
+            ? undefined
+            : updates.imageUrls === null
+            ? Prisma.JsonNull
+            : (updates.imageUrls as unknown as Prisma.InputJsonValue),
+        },
+        include: {
+          person: {
+            select: {
+              id: true,
+              name: true,
+              color: true,
+              icon: true,
+            },
           },
         },
-      },
-    });
+      });
 
-    if (updates.imageUrls !== undefined) {
-      const imageIds = (updates.imageUrls || [])
-        .map((url) => parseFitnessImageIdFromUrl(familyId, url))
-        .filter((id): id is string => Boolean(id));
+      if (imageIds !== null) {
+        if (imageIds.length) {
+          await tx.fitnessImage.updateMany({
+            where: {
+              familyId,
+              id: { in: imageIds },
+              OR: [{ fitnessTrackingId: null }, { fitnessTrackingId: activityId }],
+            },
+            data: { fitnessTrackingId: activityId },
+          });
+        }
 
-      if (imageIds.length) {
-        await prisma.fitnessImage.updateMany({
+        await tx.fitnessImage.deleteMany({
           where: {
             familyId,
-            id: { in: imageIds },
-            OR: [{ fitnessTrackingId: null }, { fitnessTrackingId: activityId }],
+            fitnessTrackingId: activityId,
+            ...(imageIds.length ? { id: { notIn: imageIds } } : {}),
           },
-          data: { fitnessTrackingId: activityId },
         });
       }
 
-      await prisma.fitnessImage.deleteMany({
-        where: {
-          familyId,
-          fitnessTrackingId: activityId,
-          ...(imageIds.length ? { id: { notIn: imageIds } } : {}),
-        },
-      });
-    }
+      return updated;
+    });
 
     return NextResponse.json(activity);
   } catch (error) {

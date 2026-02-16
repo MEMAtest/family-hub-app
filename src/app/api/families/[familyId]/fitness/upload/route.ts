@@ -5,6 +5,7 @@ import prisma from '@/lib/prisma';
 export const runtime = 'nodejs';
 
 const MAX_BYTES = 5 * 1024 * 1024;
+const MAX_FILES = 6;
 
 export const POST = requireFamilyAccess(async (request: NextRequest, context, authUser) => {
   try {
@@ -14,6 +15,9 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context, au
 
     if (!files.length) {
       return NextResponse.json({ error: 'No files provided' }, { status: 400 });
+    }
+    if (files.length > MAX_FILES) {
+      return NextResponse.json({ error: `Too many files (max ${MAX_FILES})` }, { status: 400 });
     }
 
     const urls: string[] = [];
