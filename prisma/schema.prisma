@@ -53,6 +53,7 @@ model Family {
   familyGoals           FamilyGoal[]
   achievements          Achievement[]
   milestones            FamilyMilestone[]
+  fitnessImages         FitnessImage[]
   contractors           Contractor[]
   contractorAppointments ContractorAppointment[]
   notifications         Notification[]
@@ -86,6 +87,7 @@ model FamilyMember {
   achievements     Achievement[]
   fitnessTracking  FitnessTracking[]
   deviceSyncs      DeviceSync[]
+  fitnessImagesUploaded FitnessImage[]
 
   @@map("family_members")
 }
@@ -412,8 +414,29 @@ model FitnessTracking {
 
   // Relations
   person FamilyMember @relation(fields: [personId], references: [id], onDelete: Cascade)
+  images FitnessImage[]
 
   @@map("fitness_tracking")
+}
+
+// Fitness images (uploaded screenshots/photos for workouts)
+model FitnessImage {
+  id               String   @id @default(cuid())
+  familyId          String   @map("family_id")
+  fitnessTrackingId String?  @map("fitness_tracking_id")
+  uploadedById      String?  @map("uploaded_by_id")
+  mimeType          String   @map("mime_type")
+  sizeBytes         Int      @map("size_bytes")
+  data              Bytes
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  family     Family           @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  activity   FitnessTracking? @relation(fields: [fitnessTrackingId], references: [id], onDelete: Cascade)
+  uploadedBy FamilyMember?    @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  @@index([familyId])
+  @@index([fitnessTrackingId])
+  @@map("fitness_images")
 }
 
 // Device sync tracking for Garmin/Ultrahuman integrations (Phase 2)

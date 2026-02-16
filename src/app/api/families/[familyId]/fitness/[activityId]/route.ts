@@ -18,6 +18,18 @@ const updateActivitySchema = z.object({
   imageUrls: z.array(z.string().min(1)).optional().nullable(),
 });
 
+const parseFitnessImageIdFromUrl = (familyId: string, url: string): string | null => {
+  try {
+    const pathname = new URL(url, 'http://localhost').pathname;
+    const prefix = `/api/families/${familyId}/fitness/images/`;
+    if (!pathname.startsWith(prefix)) return null;
+    const id = pathname.slice(prefix.length);
+    return id || null;
+  } catch {
+    return null;
+  }
+};
+
 export const PUT = requireFamilyAccess(async (request: NextRequest, context, _authUser) => {
   try {
     const { familyId, activityId } = await context.params;
@@ -62,6 +74,31 @@ export const PUT = requireFamilyAccess(async (request: NextRequest, context, _au
         },
       },
     });
+
+    if (updates.imageUrls !== undefined) {
+      const imageIds = (updates.imageUrls || [])
+        .map((url) => parseFitnessImageIdFromUrl(familyId, url))
+        .filter((id): id is string => Boolean(id));
+
+      if (imageIds.length) {
+        await prisma.fitnessImage.updateMany({
+          where: {
+            familyId,
+            id: { in: imageIds },
+            OR: [{ fitnessTrackingId: null }, { fitnessTrackingId: activityId }],
+          },
+          data: { fitnessTrackingId: activityId },
+        });
+      }
+
+      await prisma.fitnessImage.deleteMany({
+        where: {
+          familyId,
+          fitnessTrackingId: activityId,
+          ...(imageIds.length ? { id: { notIn: imageIds } } : {}),
+        },
+      });
+    }
 
     return NextResponse.json(activity);
   } catch (error) {

@@ -4,6 +4,18 @@ import type { CreateActivityRequest } from '@/types/fitness.types';
 import prisma from '@/lib/prisma';
 import { requireFamilyAccess } from '@/lib/auth-utils';
 
+const parseFitnessImageIdFromUrl = (familyId: string, url: string): string | null => {
+  try {
+    const pathname = new URL(url, 'http://localhost').pathname;
+    const prefix = `/api/families/${familyId}/fitness/images/`;
+    if (!pathname.startsWith(prefix)) return null;
+    const id = pathname.slice(prefix.length);
+    return id || null;
+  } catch {
+    return null;
+  }
+};
+
 /**
  * GET /api/families/[familyId]/fitness
  * Fetch fitness activities with optional filters
@@ -140,6 +152,21 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context, _a
         },
       },
     });
+
+    // Best-effort: link uploaded images to this activity so deletes cascade and cleanup is possible.
+    const imageIds = (body.imageUrls || [])
+      .map((url) => parseFitnessImageIdFromUrl(familyId, url))
+      .filter((id): id is string => Boolean(id));
+    if (imageIds.length) {
+      await prisma.fitnessImage.updateMany({
+        where: {
+          familyId,
+          id: { in: imageIds },
+          OR: [{ fitnessTrackingId: null }, { fitnessTrackingId: activity.id }],
+        },
+        data: { fitnessTrackingId: activity.id },
+      });
+    }
 
     return NextResponse.json(activity, { status: 201 });
   } catch (error) {

@@ -1,20 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { mkdir, writeFile } from 'fs/promises';
-import path from 'path';
-import crypto from 'crypto';
 import { requireFamilyAccess } from '@/lib/auth-utils';
+import prisma from '@/lib/prisma';
 
 export const runtime = 'nodejs';
 
 const MAX_BYTES = 5 * 1024 * 1024;
 
-const safeExt = (filename: string, fallback: string) => {
-  const ext = path.extname(filename || '').toLowerCase();
-  if (ext && ext.length <= 10) return ext;
-  return fallback;
-};
-
-export const POST = requireFamilyAccess(async (request: NextRequest, context, _authUser) => {
+export const POST = requireFamilyAccess(async (request: NextRequest, context, authUser) => {
   try {
     const { familyId } = await context.params;
     const formData = await request.formData();
@@ -23,9 +15,6 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context, _a
     if (!files.length) {
       return NextResponse.json({ error: 'No files provided' }, { status: 400 });
     }
-
-    const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'fitness', familyId);
-    await mkdir(uploadDir, { recursive: true });
 
     const urls: string[] = [];
 
@@ -43,12 +32,19 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context, _a
       }
 
       const buffer = Buffer.from(await item.arrayBuffer());
-      const ext = safeExt(item.name, item.type === 'image/png' ? '.png' : '.jpg');
-      const filename = `${crypto.randomUUID()}${ext}`;
-      const filepath = path.join(uploadDir, filename);
 
-      await writeFile(filepath, buffer);
-      urls.push(`/uploads/fitness/${familyId}/${filename}`);
+      const image = await prisma.fitnessImage.create({
+        data: {
+          familyId,
+          uploadedById: authUser.familyMemberId,
+          mimeType: item.type,
+          sizeBytes: item.size,
+          data: buffer,
+        },
+        select: { id: true },
+      });
+
+      urls.push(`/api/families/${familyId}/fitness/images/${image.id}`);
     }
 
     return NextResponse.json({ urls }, { status: 201 });
