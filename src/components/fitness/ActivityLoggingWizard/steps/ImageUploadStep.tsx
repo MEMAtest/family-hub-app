@@ -75,9 +75,27 @@ const ImageUploadStep: React.FC = () => {
   }, [uploadFiles]);
 
   const removeImage = useCallback((index: number) => {
-    const next = (state.imageUrls || []).filter((_, idx) => idx !== index);
+    const urls = state.imageUrls || [];
+    const removedUrl = urls[index];
+    const next = urls.filter((_, idx) => idx !== index);
     dispatch({ type: 'SET_IMAGE_URLS', urls: next });
-  }, [dispatch, state.imageUrls]);
+
+    if (!removedUrl || !familyId || typeof window === 'undefined') {
+      return;
+    }
+
+    try {
+      const pathname = new URL(removedUrl, window.location.origin).pathname;
+      const prefix = `/api/families/${familyId}/fitness/images/`;
+      if (pathname.startsWith(prefix)) {
+        void fetch(pathname, { method: 'DELETE' }).catch((err) => {
+          console.error('Failed to delete uploaded image:', err);
+        });
+      }
+    } catch (err) {
+      console.error('Failed to parse image URL for deletion:', err);
+    }
+  }, [dispatch, familyId, state.imageUrls]);
 
   const handleContinue = useCallback(() => {
     nextStep();
@@ -192,4 +210,3 @@ const ImageUploadStep: React.FC = () => {
 };
 
 export default ImageUploadStep;
-
