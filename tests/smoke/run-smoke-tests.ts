@@ -50,6 +50,10 @@ const stubbedResponses = {
     'SMOKE: Expect next month spending to increase by 5% due to upcoming term fees and family events.',
 };
 
+const smokeEnv = process.env as Record<string, string | undefined>;
+smokeEnv.NODE_ENV = 'test';
+smokeEnv.BYPASS_AUTH_FOR_TESTS = 'true';
+
 function recordResult(result: SmokeResult) {
   results.push(result);
   const icon = result.status === 'PASS' ? '✅' : '❌';
@@ -65,6 +69,10 @@ function createRequest(url: string, payload: Record<string, unknown>) {
     body: JSON.stringify(payload),
   });
 }
+
+const emptyRouteContext = {
+  params: Promise.resolve({}),
+};
 
 async function ensureSmokeTestData(familyId: string) {
   const now = new Date();
@@ -128,6 +136,8 @@ async function runSmokeTests() {
 
   const familyId = family.id;
   const familySize = family.members.length || 2;
+  smokeEnv.TEST_AUTH_FAMILY_ID = familyId;
+  smokeEnv.TEST_AUTH_FAMILY_MEMBER_ID = family.members[0]?.id || '';
   console.log(`ℹ️  Running smoke tests using family ${family.familyName} (${familyId})\n`);
 
   await ensureSmokeTestData(familyId);
@@ -181,7 +191,7 @@ async function testBudgetInsights(familyId: string) {
     familyId,
   });
 
-  const response = await insightsHandler(request);
+  const response = await insightsHandler(request, emptyRouteContext);
   const payload = await response.json();
 
   const hasRecommendations =
@@ -214,7 +224,7 @@ async function testBudgetBenchmark(familyId: string, familySize: number) {
     months: 3,
   });
 
-  const response = await benchmarkHandler(request);
+  const response = await benchmarkHandler(request, emptyRouteContext);
   const payload = await response.json();
 
   if (
@@ -244,7 +254,7 @@ async function testBudgetForecast(familyId: string) {
     months: 6,
   });
 
-  const response = await forecastHandler(request);
+  const response = await forecastHandler(request, emptyRouteContext);
   const payload = await response.json();
 
   if (

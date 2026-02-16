@@ -14,12 +14,39 @@ export interface AuthenticatedUser {
   familyMemberId: string;
 }
 
+function getBypassTestUser(): AuthenticatedUser | null {
+  // Allow route-level smoke tests to execute in-process without a Next request scope.
+  // This is only active in NODE_ENV=test and must be explicitly enabled.
+  if (process.env.NODE_ENV !== "test") return null;
+  if (process.env.BYPASS_AUTH_FOR_TESTS !== "true") return null;
+
+  const familyId = process.env.TEST_AUTH_FAMILY_ID;
+  if (!familyId) return null;
+
+  return {
+    neonUserId: process.env.TEST_AUTH_NEON_USER_ID || "test-neon-user",
+    dbUser: {
+      id: process.env.TEST_AUTH_DB_USER_ID || "test-db-user",
+      email: process.env.TEST_AUTH_EMAIL || "test@example.com",
+      neonAuthId: process.env.TEST_AUTH_NEON_USER_ID || "test-neon-user",
+      displayName: "Smoke Test User",
+    },
+    familyId,
+    familyMemberId: process.env.TEST_AUTH_FAMILY_MEMBER_ID || "test-family-member",
+  };
+}
+
 /**
  * Get the authenticated user from Neon Auth and our database
  */
 export async function getAuthenticatedUser(
   request: NextRequest
 ): Promise<AuthenticatedUser | null> {
+  const bypassUser = getBypassTestUser();
+  if (bypassUser) {
+    return bypassUser;
+  }
+
   try {
     const auth = await neonAuth();
 

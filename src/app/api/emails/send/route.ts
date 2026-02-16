@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { emailService } from '@/services/emailService';
+import { requireAuth } from '@/lib/auth-utils';
 
-export async function POST(request: NextRequest) {
+export const runtime = 'nodejs';
+
+export const POST = requireAuth(async (request: NextRequest) => {
   try {
     const body = await request.json();
     const { type, ...data } = body;
@@ -61,4 +64,4 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+});

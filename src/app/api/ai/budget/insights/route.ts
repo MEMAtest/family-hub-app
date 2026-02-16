@@ -1,17 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { aiService } from '@/services/aiService';
 import { prisma } from '@/lib/prisma';
+import { requireAuth } from '@/lib/auth-utils';
 
-export async function POST(req: NextRequest) {
+export const runtime = 'nodejs';
+
+export const POST = requireAuth(async (req: NextRequest, _context, authUser) => {
   try {
-    const { familyId, month, year } = await req.json();
-
-    if (!familyId) {
-      return NextResponse.json(
-        { error: 'Family ID is required' },
-        { status: 400 }
-      );
-    }
+    const { month, year } = await req.json();
+    const familyId = authUser.familyId;
 
     // Get current month/year if not provided
     const now = new Date();
@@ -205,8 +202,8 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     console.error('Budget AI insights error:', error);
     return NextResponse.json(
-      { error: 'Failed to generate insights', details: error instanceof Error ? error.message : 'Unknown error' },
+      { error: 'Failed to generate insights' },
       { status: 500 }
     );
   }
-}
+});

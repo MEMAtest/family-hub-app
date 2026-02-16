@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { aiService } from '@/services/aiService';
+import { requireAuth } from '@/lib/auth-utils';
 import {
   buildExpenseSummaries,
   buildIncomeSummaries,
@@ -22,25 +23,20 @@ type BenchmarkComparison = {
 const DEFAULT_MONTHS = 3;
 const MAX_MONTHS = 6;
 
+export const runtime = 'nodejs';
+
 const clampMonths = (months?: number) => {
   if (!months || Number.isNaN(months)) return DEFAULT_MONTHS;
   return Math.min(Math.max(Math.floor(months), 1), MAX_MONTHS);
 };
 
-export async function POST(req: NextRequest) {
+export const POST = requireAuth(async (req: NextRequest, _context, authUser) => {
   try {
     const body = await req.json().catch(() => ({}));
-    const { familyId, months } = body as {
-      familyId?: string;
+    const { months } = body as {
       months?: number;
     };
-
-    if (!familyId) {
-      return NextResponse.json(
-        { error: 'Family ID is required' },
-        { status: 400 }
-      );
-    }
+    const familyId = authUser.familyId;
 
     const monthsToAnalyse = clampMonths(months);
     const now = new Date();
@@ -251,12 +247,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         error: 'Failed to generate benchmark comparison',
-        details: error instanceof Error ? error.message : 'Unknown error',
       },
       { status: 500 }
     );
   }
-}
+});
 
 function buildFallbackBenchmarkAnalysis({
   comparisons,

@@ -2,10 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { aiService } from '@/services/aiService';
 import { deriveForecastContext } from '@/utils/budgetAnalytics';
+import { requireAuth } from '@/lib/auth-utils';
 
 const DEFAULT_MONTHS = 6;
 const MAX_MONTHS = 12;
 const UPCOMING_EVENT_WINDOW_DAYS = 60;
+
+export const runtime = 'nodejs';
 
 const clampMonths = (months?: number) => {
   if (!months || Number.isNaN(months)) return DEFAULT_MONTHS;
@@ -18,21 +21,14 @@ const addDays = (base: Date, days: number) => {
   return next;
 };
 
-export async function POST(req: NextRequest) {
+export const POST = requireAuth(async (req: NextRequest, _context, authUser) => {
   try {
     const body = await req.json().catch(() => ({}));
-    const { familyId, months, includeUpcomingEvents } = body as {
-      familyId?: string;
+    const { months, includeUpcomingEvents } = body as {
       months?: number;
       includeUpcomingEvents?: boolean;
     };
-
-    if (!familyId) {
-      return NextResponse.json(
-        { error: 'Family ID is required' },
-        { status: 400 }
-      );
-    }
+    const familyId = authUser.familyId;
 
     const monthsToAnalyse = clampMonths(months);
     const now = new Date();
@@ -269,9 +265,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         error: 'Failed to generate budget forecast',
-        details: error instanceof Error ? error.message : 'Unknown error',
       },
       { status: 500 }
     );
   }
-}
+});

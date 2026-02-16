@@ -136,7 +136,7 @@ Important: Return ONLY the JSON object, no other text.`
   } catch (error) {
     console.error('Receipt scanning error:', error);
     return NextResponse.json(
-      { error: 'Failed to scan receipt', details: error instanceof Error ? error.message : 'Unknown error' },
+      { error: 'Failed to scan receipt' },
       { status: 500 }
     );
   }
