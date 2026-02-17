@@ -140,101 +140,101 @@ const ExerciseDetailsStep: React.FC = () => {
       {/* Sets table */}
       <div className="border border-gray-200 dark:border-slate-700 rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
-        <table className="w-full min-w-[620px]">
-          <thead className="bg-gray-50 dark:bg-slate-800">
-            <tr>
-              <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 dark:text-slate-300">
-                Set
-              </th>
-              <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 dark:text-slate-300">
-                Reps
-              </th>
-              <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 dark:text-slate-300">
-                Weight (kg)
-              </th>
-              <th className="px-4 py-2 w-10"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {currentExercise.sets.map((set, idx) => (
-              <tr key={idx} className="border-t border-gray-100 dark:border-slate-700">
-                <td className="px-4 py-3">
-                  <span className="font-medium text-gray-900 dark:text-slate-100">
-                    Set {set.setNumber}
-                  </span>
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() =>
-                        handleUpdateSet(idx, 'reps', Math.max(1, (set.reps || 0) - 1))
-                      }
-                      className="p-1 rounded hover:bg-gray-100 dark:hover:bg-slate-700"
-                    >
-                      <Minus className="w-4 h-4" />
-                    </button>
-                    <input
-                      type="number"
-                      value={set.reps || ''}
-                      onChange={(e) =>
-                        handleUpdateSet(idx, 'reps', parseInt(e.target.value) || 0)
-                      }
-                      className="w-16 px-2 py-1 text-center border border-gray-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-blue-500 dark:bg-slate-800 dark:text-slate-100"
-                      min="0"
-                    />
-                    <button
-                      onClick={() =>
-                        handleUpdateSet(idx, 'reps', (set.reps || 0) + 1)
-                      }
-                      className="p-1 rounded hover:bg-gray-100 dark:hover:bg-slate-700"
-                    >
-                      <Plus className="w-4 h-4" />
-                    </button>
-                  </div>
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() =>
-                        handleUpdateSet(idx, 'weight', Math.max(0, (set.weight || 0) - 2.5))
-                      }
-                      className="p-1 rounded hover:bg-gray-100 dark:hover:bg-slate-700"
-                    >
-                      <Minus className="w-4 h-4" />
-                    </button>
-                    <input
-                      type="number"
-                      value={set.weight || ''}
-                      onChange={(e) =>
-                        handleUpdateSet(idx, 'weight', parseFloat(e.target.value) || 0)
-                      }
-                      className="w-20 px-2 py-1 text-center border border-gray-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-blue-500 dark:bg-slate-800 dark:text-slate-100"
-                      min="0"
-                      step="2.5"
-                    />
-                    <button
-                      onClick={() =>
-                        handleUpdateSet(idx, 'weight', (set.weight || 0) + 2.5)
-                      }
-                      className="p-1 rounded hover:bg-gray-100 dark:hover:bg-slate-700"
-                    >
-                      <Plus className="w-4 h-4" />
-                    </button>
-                  </div>
-                </td>
-                <td className="px-4 py-3">
-                  <button
-                    onClick={() => handleRemoveSet(idx)}
-                    disabled={currentExercise.sets.length <= 1}
-                    className="text-red-500 hover:text-red-700 disabled:opacity-30 disabled:cursor-not-allowed"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </td>
+          <table className="w-full min-w-[620px]">
+            <thead className="bg-gray-50 dark:bg-slate-800">
+              <tr>
+                <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 dark:text-slate-300">
+                  Set
+                </th>
+                <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 dark:text-slate-300">
+                  Reps
+                </th>
+                <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 dark:text-slate-300">
+                  Weight (kg)
+                </th>
+                <th className="px-4 py-2 w-10"></th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {currentExercise.sets.map((set, idx) => (
+                <tr key={idx} className="border-t border-gray-100 dark:border-slate-700">
+                  <td className="px-4 py-3">
+                    <span className="font-medium text-gray-900 dark:text-slate-100">
+                      Set {set.setNumber}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() =>
+                          handleUpdateSet(idx, 'reps', Math.max(1, (set.reps || 0) - 1))
+                        }
+                        className="p-1 rounded hover:bg-gray-100 dark:hover:bg-slate-700"
+                      >
+                        <Minus className="w-4 h-4" />
+                      </button>
+                      <input
+                        type="number"
+                        value={set.reps || ''}
+                        onChange={(e) =>
+                          handleUpdateSet(idx, 'reps', parseInt(e.target.value) || 0)
+                        }
+                        className="w-16 px-2 py-1 text-center border border-gray-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-blue-500 dark:bg-slate-800 dark:text-slate-100"
+                        min="0"
+                      />
+                      <button
+                        onClick={() =>
+                          handleUpdateSet(idx, 'reps', (set.reps || 0) + 1)
+                        }
+                        className="p-1 rounded hover:bg-gray-100 dark:hover:bg-slate-700"
+                      >
+                        <Plus className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() =>
+                          handleUpdateSet(idx, 'weight', Math.max(0, (set.weight || 0) - 2.5))
+                        }
+                        className="p-1 rounded hover:bg-gray-100 dark:hover:bg-slate-700"
+                      >
+                        <Minus className="w-4 h-4" />
+                      </button>
+                      <input
+                        type="number"
+                        value={set.weight || ''}
+                        onChange={(e) =>
+                          handleUpdateSet(idx, 'weight', parseFloat(e.target.value) || 0)
+                        }
+                        className="w-20 px-2 py-1 text-center border border-gray-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-blue-500 dark:bg-slate-800 dark:text-slate-100"
+                        min="0"
+                        step="2.5"
+                      />
+                      <button
+                        onClick={() =>
+                          handleUpdateSet(idx, 'weight', (set.weight || 0) + 2.5)
+                        }
+                        className="p-1 rounded hover:bg-gray-100 dark:hover:bg-slate-700"
+                      >
+                        <Plus className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <button
+                      onClick={() => handleRemoveSet(idx)}
+                      disabled={currentExercise.sets.length <= 1}
+                      className="text-red-500 hover:text-red-700 disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
 
