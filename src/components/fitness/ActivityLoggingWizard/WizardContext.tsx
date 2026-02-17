@@ -334,7 +334,16 @@ export const WizardProvider: React.FC<WizardProviderProps> = ({
       });
 
       if (!response.ok) {
-        throw new Error('Failed to save activity');
+        let message = 'Failed to save activity';
+        try {
+          const payload = await response.json();
+          if (typeof payload?.error === 'string' && payload.error.trim()) {
+            message = payload.error;
+          }
+        } catch {
+          // Keep default message if the error body is not JSON.
+        }
+        throw new Error(message);
       }
 
       const activity = await response.json();
@@ -342,7 +351,7 @@ export const WizardProvider: React.FC<WizardProviderProps> = ({
       return activity;
     } catch (error) {
       console.error('Error saving activity:', error);
-      return null;
+      throw error;
     } finally {
       setIsLoading(false);
     }

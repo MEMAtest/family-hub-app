@@ -97,7 +97,7 @@ const ExerciseDetailsStep: React.FC = () => {
       </div>
 
       {/* Exercise navigation */}
-      <div className="flex items-center justify-between bg-gray-100 dark:bg-slate-800 rounded-lg p-4">
+      <div className="flex items-center justify-between bg-gray-100 dark:bg-slate-800 rounded-lg p-3 sm:p-4 gap-2">
         <button
           onClick={() => navigateExercise('prev')}
           disabled={isFirstExercise}
@@ -106,7 +106,7 @@ const ExerciseDetailsStep: React.FC = () => {
           <ChevronLeft className="w-5 h-5" />
         </button>
         <div className="text-center">
-          <h3 className="font-semibold text-lg text-gray-900 dark:text-slate-100">
+          <h3 className="font-semibold text-base sm:text-lg text-gray-900 dark:text-slate-100">
             {currentExercise.exerciseName}
           </h3>
           <p className="text-sm text-gray-500 dark:text-slate-400 capitalize">
@@ -139,7 +139,8 @@ const ExerciseDetailsStep: React.FC = () => {
 
       {/* Sets table */}
       <div className="border border-gray-200 dark:border-slate-700 rounded-lg overflow-hidden">
-        <table className="w-full">
+        <div className="overflow-x-auto">
+        <table className="w-full min-w-[620px]">
           <thead className="bg-gray-50 dark:bg-slate-800">
             <tr>
               <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 dark:text-slate-300">
@@ -234,6 +235,7 @@ const ExerciseDetailsStep: React.FC = () => {
             ))}
           </tbody>
         </table>
+        </div>
       </div>
 
       {/* Add set button */}
@@ -250,7 +252,7 @@ const ExerciseDetailsStep: React.FC = () => {
         <h4 className="text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
           Volume Summary
         </h4>
-        <div className="flex gap-6 text-sm">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm">
           <div>
             <span className="text-gray-500 dark:text-slate-400">Total sets:</span>
             <span className="ml-2 font-medium text-gray-900 dark:text-slate-100">
@@ -277,10 +279,10 @@ const ExerciseDetailsStep: React.FC = () => {
       </div>
 
       {/* Navigation */}
-      <div className="flex justify-between pt-4">
+      <div className="flex flex-col-reverse sm:flex-row gap-3 sm:justify-between pt-4">
         <button
           onClick={prevStep}
-          className="px-6 py-2 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800"
+          className="w-full sm:w-auto px-6 py-2 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800"
         >
           Back
         </button>
@@ -292,7 +294,7 @@ const ExerciseDetailsStep: React.FC = () => {
               nextStep();
             }
           }}
-          className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          className="w-full sm:w-auto px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
         >
           {isLastExercise ? 'Continue' : 'Next Exercise'}
         </button>

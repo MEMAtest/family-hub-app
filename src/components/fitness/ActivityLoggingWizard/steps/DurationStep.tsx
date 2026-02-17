@@ -43,7 +43,7 @@ const DurationStep: React.FC = () => {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 sm:space-y-8">
       {/* Header */}
       <div className="text-center">
         <h2 className="text-2xl font-light text-gray-900 dark:text-slate-100 mb-2">
@@ -56,10 +56,10 @@ const DurationStep: React.FC = () => {
 
       {/* Duration display */}
       <div className="flex justify-center">
-        <div className="bg-gray-100 dark:bg-slate-800 rounded-2xl px-8 py-6 text-center">
+        <div className="bg-gray-100 dark:bg-slate-800 rounded-2xl px-6 sm:px-8 py-6 text-center w-full max-w-sm">
           <div className="flex items-center justify-center gap-2 mb-2">
             <Clock className="w-6 h-6 text-blue-500" />
-            <span className="text-4xl font-bold text-gray-900 dark:text-slate-100">
+            <span className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-slate-100">
               {formatDuration(state.duration)}
             </span>
           </div>
@@ -126,7 +126,7 @@ const DurationStep: React.FC = () => {
           <Zap className="w-4 h-4" />
           Intensity level
         </label>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {intensityOptions.map((option) => (
             <button
               key={option.value}
@@ -153,16 +153,16 @@ const DurationStep: React.FC = () => {
       </div>
 
       {/* Navigation */}
-      <div className="flex justify-between pt-4">
+      <div className="flex flex-col-reverse sm:flex-row gap-3 sm:justify-between pt-4">
         <button
           onClick={prevStep}
-          className="px-6 py-2 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800"
+          className="w-full sm:w-auto px-6 py-2 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800"
         >
           Back
         </button>
         <button
           onClick={nextStep}
-          className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          className="w-full sm:w-auto px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
         >
           Continue
         </button>

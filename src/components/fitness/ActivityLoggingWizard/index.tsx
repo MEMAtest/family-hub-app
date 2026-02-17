@@ -45,11 +45,11 @@ const WizardProgress: React.FC = () => {
   const currentIndex = steps.findIndex((s) => s.key === state.step);
 
   return (
-    <div className="px-6 py-3 border-b border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50">
-      <div className="flex items-center justify-between">
+    <div className="px-4 sm:px-6 py-3 border-b border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 overflow-x-auto">
+      <div className="flex min-w-max items-center gap-2 pr-2">
         {steps.map((step, index) => (
           <React.Fragment key={step.key}>
-            <div className="flex items-center">
+            <div className="flex items-center shrink-0">
               <div
                 className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${
                   index <= currentIndex
@@ -71,7 +71,7 @@ const WizardProgress: React.FC = () => {
             </div>
             {index < steps.length - 1 && (
               <div
-                className={`flex-1 h-0.5 mx-2 ${
+                className={`h-0.5 w-6 sm:w-8 ${
                   index < currentIndex
                     ? 'bg-blue-600'
                     : 'bg-gray-200 dark:bg-slate-700'
@@ -113,9 +113,9 @@ const WizardContent: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   };
 
   return (
-    <div className="flex flex-col h-full max-h-[90vh]">
+    <div className="flex flex-col h-full sm:max-h-[90vh]">
       {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-slate-700">
+      <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-gray-200 dark:border-slate-700">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-red-100 dark:bg-red-900/20 rounded-lg">
             {state.activityType === 'gym' ? (
@@ -147,7 +147,7 @@ const WizardContent: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       {state.step !== 'activity_type' && <WizardProgress />}
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto p-6">
+      <div className="flex-1 overflow-y-auto p-4 sm:p-6">
         {isLoading ? (
           <div className="flex items-center justify-center h-full">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
@@ -173,8 +173,8 @@ export const ActivityLoggingWizard: React.FC<ActivityLoggingWizardProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-hidden">
+    <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+      <div className="bg-white dark:bg-slate-900 rounded-t-2xl sm:rounded-2xl shadow-xl w-full h-[92vh] sm:h-auto sm:max-w-2xl sm:max-h-[90vh] overflow-hidden">
         <WizardProvider
           personId={personId}
           familyId={familyId}

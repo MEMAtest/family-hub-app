@@ -30,13 +30,20 @@ const SummaryStep: React.FC<SummaryStepProps> = ({ onClose }) => {
   const handleSave = async () => {
     try {
       setError(null);
-      await saveActivity();
+      const saved = await saveActivity();
+      if (!saved) {
+        throw new Error('Failed to save workout. Please try again.');
+      }
       setSaveSuccess(true);
       setTimeout(() => {
         onClose();
       }, 1500);
     } catch (err) {
-      setError('Failed to save workout. Please try again.');
+      const message =
+        err instanceof Error && err.message.trim()
+          ? err.message
+          : 'Failed to save workout. Please try again.';
+      setError(message);
       console.error('Save error:', err);
     }
   };
@@ -137,7 +144,7 @@ const SummaryStep: React.FC<SummaryStepProps> = ({ onClose }) => {
         </div>
 
         {/* Quick stats */}
-        <div className="grid grid-cols-3 gap-4 mt-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
           <div className="text-center">
             <div className="flex items-center justify-center gap-1 mb-1">
               <Clock className="w-4 h-4 text-gray-400" />
@@ -300,7 +307,7 @@ const SummaryStep: React.FC<SummaryStepProps> = ({ onClose }) => {
               Edit
             </button>
           </div>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             {state.imageUrls.slice(0, 6).map((url) => (
               <div key={url} className="overflow-hidden rounded-lg border border-gray-200 dark:border-slate-700">
                 {/* eslint-disable-next-line @next/next/no-img-element */}

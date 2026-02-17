@@ -119,7 +119,7 @@ const NotesStep: React.FC = () => {
         <label className="text-sm font-medium text-gray-700 dark:text-slate-300 block mb-3">
           Energy level during workout
         </label>
-        <div className="flex gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {energyOptions.map((option) => {
             const Icon = option.icon;
             const selected = energy === option.value;
@@ -127,7 +127,7 @@ const NotesStep: React.FC = () => {
               <button
                 key={option.value}
                 onClick={() => setEnergy(selected ? null : option.value)}
-                className={`flex-1 flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${
+                className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${
                   selected
                     ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
                     : 'border-gray-200 dark:border-slate-700 hover:border-gray-300 dark:hover:border-slate-600'
@@ -195,16 +195,16 @@ const NotesStep: React.FC = () => {
       </p>
 
       {/* Navigation */}
-      <div className="flex justify-between pt-4">
+      <div className="flex flex-col-reverse sm:flex-row gap-3 sm:justify-between pt-4">
         <button
           onClick={prevStep}
-          className="px-6 py-2 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800"
+          className="w-full sm:w-auto px-6 py-2 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800"
         >
           Back
         </button>
         <button
           onClick={handleContinue}
-          className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          className="w-full sm:w-auto px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
         >
           Continue
         </button>
