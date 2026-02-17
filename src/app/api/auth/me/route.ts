@@ -1,63 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
-import { neonAuth } from "@neondatabase/neon-js/auth/next/server";
 import prisma from "@/lib/prisma";
 
 export async function GET(request: NextRequest) {
   try {
-    // Get the authenticated user from Neon Auth
-    const auth = await neonAuth();
-
-    if (!auth.session || !auth.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // Find or create user in our database
-    let dbUser = await prisma.user.findUnique({
-      where: { neonAuthId: auth.user.id },
+    void request;
+    const family = await prisma.family.findFirst({
       include: {
-        familyMembers: {
-          include: {
-            family: true,
-          },
-        },
-        ownedFamilies: true,
+        members: true,
       },
     });
-
-    if (!dbUser) {
-      // Create new user record (but they still need to complete onboarding)
-      dbUser = await prisma.user.create({
-        data: {
-          neonAuthId: auth.user.id,
-          email: auth.user.email || "",
-          displayName: auth.user.name || auth.user.email?.split("@")[0],
-          avatarUrl: auth.user.image,
-          authProvider: "neon",
-        },
-        include: {
-          familyMembers: {
-            include: {
-              family: true,
-            },
-          },
-          ownedFamilies: true,
-        },
-      });
-    }
-
-    // Get the user's family (one family per user model)
-    const family = dbUser.ownedFamilies[0] || dbUser.familyMembers[0]?.family;
-    const familyMember = dbUser.familyMembers[0];
+    const familyMember = family?.members[0] || null;
 
     return NextResponse.json({
       user: {
-        id: dbUser.id,
-        neonAuthId: dbUser.neonAuthId,
-        email: dbUser.email,
-        displayName: dbUser.displayName,
-        avatarUrl: dbUser.avatarUrl,
-        createdAt: dbUser.createdAt,
-        updatedAt: dbUser.updatedAt,
+        id: "local-open-user",
+        neonAuthId: null,
+        email: "local@family-hub.app",
+        displayName: "Local Family User",
+        avatarUrl: null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       },
       family: family
         ? {

@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Users, Home, ArrowRight, Loader2 } from "lucide-react";
-import { authClient } from "@/lib/auth/client";
 
 const colorOptions = [
   { color: "#3B82F6", name: "Blue" },
@@ -19,8 +18,6 @@ const colorOptions = [
 const iconOptions = ["👤", "👨", "👩", "👦", "👧", "👴", "👵", "🧑"];
 
 export default function OnboardingPage() {
-  const { data: session, isPending } = authClient.useSession();
-  const user = session?.user;
   const router = useRouter();
   const [step, setStep] = useState(1);
   const [familyName, setFamilyName] = useState("");
@@ -42,10 +39,7 @@ export default function OnboardingPage() {
         body: JSON.stringify({
           familyName,
           memberName,
-          email: user?.email,
-          neonAuthId: user?.id,
-          displayName: user?.name || memberName,
-          avatarUrl: user?.image,
+          displayName: memberName,
           color: selectedColor,
           icon: selectedIcon,
         }),
@@ -63,14 +57,6 @@ export default function OnboardingPage() {
       setLoading(false);
     }
   };
-
-  if (isPending || !user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-slate-900 dark:to-slate-800 p-4">

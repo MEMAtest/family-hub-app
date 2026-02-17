@@ -1,19 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { neonAuth } from "@neondatabase/neon-js/auth/next/server";
 import prisma from "@/lib/prisma";
 import { nanoid } from "nanoid";
 
 export async function POST(request: NextRequest) {
   try {
-    // Get the authenticated user from Neon Auth
-    const auth = await neonAuth();
-
-    if (!auth.session || !auth.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const body = await request.json();
-    const { familyName, memberName, color, icon, displayName, avatarUrl } = body;
+    const { familyName, memberName, color, icon, displayName, avatarUrl, email } = body;
 
     if (!familyName || !memberName) {
       return NextResponse.json(
@@ -22,34 +14,31 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if user already has a family
-    const existingUser = await prisma.user.findUnique({
-      where: { neonAuthId: auth.user.id },
-      include: { ownedFamilies: true, familyMembers: true },
+    // Single-family app setup: avoid creating duplicate root families accidentally.
+    const existingFamily = await prisma.family.findFirst({
+      select: { id: true },
     });
 
-    if (existingUser?.ownedFamilies.length || existingUser?.familyMembers.length) {
+    if (existingFamily) {
       return NextResponse.json(
-        { error: "User already has a family" },
+        { error: "Family already exists. Use the Family section to add members." },
         { status: 400 }
       );
     }
 
-    // Create user, family, and family member in a transaction
+    const safeEmail =
+      typeof email === "string" && email.includes("@")
+        ? email
+        : `owner+${nanoid(8)}@family-hub.local`;
+
+    // Create owner user, family, and first family member in a transaction.
     const result = await prisma.$transaction(async (tx) => {
-      // Create or update user
-      const user = await tx.user.upsert({
-        where: { neonAuthId: auth.user.id },
-        update: {
+      const user = await tx.user.create({
+        data: {
+          email: safeEmail,
           displayName: displayName || memberName,
           avatarUrl: avatarUrl,
-        },
-        create: {
-          neonAuthId: auth.user.id,
-          email: auth.user.email || "",
-          displayName: displayName || memberName,
-          avatarUrl: avatarUrl,
-          authProvider: "neon",
+          authProvider: "local",
         },
       });
 

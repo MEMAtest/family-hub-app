@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server';
 
-// Auth is currently disabled - return a stub response
-export async function GET() {
-  return NextResponse.json({ message: 'Auth is disabled' }, { status: 503 });
-}
+export const runtime = 'nodejs';
 
-export async function POST() {
-  return NextResponse.json({ message: 'Auth is disabled' }, { status: 503 });
-}
+const authDisabled = () =>
+  NextResponse.json({ error: 'Authentication is disabled for this app' }, { status: 404 });
+
+export const GET = authDisabled;
+export const POST = authDisabled;
+export const PUT = authDisabled;
+export const DELETE = authDisabled;
+export const PATCH = authDisabled;

@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { neonAuth } from "@neondatabase/neon-js/auth/next/server";
 import prisma from "@/lib/prisma";
 
 export interface AuthenticatedUser {
@@ -13,6 +12,18 @@ export interface AuthenticatedUser {
   familyId: string;
   familyMemberId: string;
 }
+
+type RouteParams = Record<string, string>;
+type RouteContext = {
+  params?: Promise<RouteParams> | RouteParams;
+} | undefined;
+
+const OPEN_ACCESS_USER = {
+  id: "local-open-user",
+  email: "local@family-hub.app",
+  neonAuthId: "local-open-user",
+  displayName: "Local Family User",
+};
 
 function getBypassTestUser(): AuthenticatedUser | null {
   // Allow route-level smoke tests to execute in-process without a Next request scope.
@@ -36,61 +47,56 @@ function getBypassTestUser(): AuthenticatedUser | null {
   };
 }
 
+async function getOpenAccessUser(
+  params?: RouteParams
+): Promise<AuthenticatedUser> {
+  const requestedFamilyId = params?.familyId;
+  const resolvedFamilyId =
+    requestedFamilyId ||
+    (await prisma.family.findFirst({ select: { id: true } }))?.id ||
+    "";
+
+  const resolvedMemberId =
+    (
+      await prisma.familyMember.findFirst({
+        where: resolvedFamilyId ? { familyId: resolvedFamilyId } : undefined,
+        select: { id: true },
+      })
+    )?.id || "";
+
+  return {
+    neonUserId: OPEN_ACCESS_USER.neonAuthId,
+    dbUser: { ...OPEN_ACCESS_USER },
+    familyId: resolvedFamilyId,
+    familyMemberId: resolvedMemberId,
+  };
+}
+
+async function resolveRouteParams(context: RouteContext): Promise<RouteParams> {
+  if (!context?.params) {
+    return {};
+  }
+
+  const maybePromise = context.params as Promise<RouteParams>;
+  if (typeof (maybePromise as { then?: unknown }).then === "function") {
+    return (await maybePromise) || {};
+  }
+
+  return (context.params as RouteParams) || {};
+}
+
 /**
- * Get the authenticated user from Neon Auth and our database
+ * Auth is intentionally disabled for this app.
+ * Keep the function for compatibility with existing route wrappers.
  */
 export async function getAuthenticatedUser(
-  request: NextRequest
+  _request: NextRequest
 ): Promise<AuthenticatedUser | null> {
   const bypassUser = getBypassTestUser();
   if (bypassUser) {
     return bypassUser;
   }
-
-  try {
-    const auth = await neonAuth();
-
-    if (!auth.session || !auth.user) {
-      return null;
-    }
-
-    const dbUser = await prisma.user.findUnique({
-      where: { neonAuthId: auth.user.id },
-      include: {
-        ownedFamilies: true,
-        familyMembers: {
-          include: { family: true },
-        },
-      },
-    });
-
-    if (!dbUser) {
-      return null;
-    }
-
-    const familyId =
-      dbUser.ownedFamilies[0]?.id || dbUser.familyMembers[0]?.familyId;
-    const familyMemberId = dbUser.familyMembers[0]?.id;
-
-    if (!familyId || !familyMemberId) {
-      return null;
-    }
-
-    return {
-      neonUserId: auth.user.id,
-      dbUser: {
-        id: dbUser.id,
-        email: dbUser.email,
-        neonAuthId: dbUser.neonAuthId!,
-        displayName: dbUser.displayName,
-      },
-      familyId,
-      familyMemberId,
-    };
-  } catch (error) {
-    console.error("Auth error:", error);
-    return null;
-  }
+  return null;
 }
 
 /**
@@ -99,21 +105,19 @@ export async function getAuthenticatedUser(
 export function requireAuth(
   handler: (
     request: NextRequest,
-    context: { params: Promise<Record<string, string>> },
+    context: { params: Promise<RouteParams> },
     authUser: AuthenticatedUser
   ) => Promise<NextResponse>
 ) {
   return async (
     request: NextRequest,
-    context: { params: Promise<Record<string, string>> }
+    context: RouteContext
   ) => {
-    const authUser = await getAuthenticatedUser(request);
+    const params = await resolveRouteParams(context);
+    const authUser =
+      (await getAuthenticatedUser(request)) || (await getOpenAccessUser(params));
 
-    if (!authUser) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    return handler(request, context, authUser);
+    return handler(request, { params: Promise.resolve(params) }, authUser);
   };
 }
 
@@ -124,32 +128,19 @@ export function requireAuth(
 export function requireFamilyAccess(
   handler: (
     request: NextRequest,
-    context: { params: Promise<Record<string, string>> },
+    context: { params: Promise<RouteParams> },
     authUser: AuthenticatedUser
   ) => Promise<NextResponse>
 ) {
   return async (
     request: NextRequest,
-    context: { params: Promise<Record<string, string>> }
+    context: RouteContext
   ) => {
-    const authUser = await getAuthenticatedUser(request);
+    const params = await resolveRouteParams(context);
+    const authUser =
+      (await getAuthenticatedUser(request)) || (await getOpenAccessUser(params));
 
-    if (!authUser) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // Verify user has access to the requested family
-    const params = await context.params;
-    const familyId = params.familyId;
-
-    if (familyId && familyId !== authUser.familyId) {
-      return NextResponse.json(
-        { error: "Access denied to this family" },
-        { status: 403 }
-      );
-    }
-
-    return handler(request, context, authUser);
+    return handler(request, { params: Promise.resolve(params) }, authUser);
   };
 }
 

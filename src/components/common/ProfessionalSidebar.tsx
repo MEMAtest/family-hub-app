@@ -13,7 +13,6 @@ import {
   Users,
   Newspaper,
   Settings,
-  LogOut,
   Bell
 } from 'lucide-react'
 
@@ -258,15 +257,9 @@ export default function ProfessionalSidebar({ isOpen = true, onClose }: Professi
               </div>
             </div>
 
-            <button
-              className="w-full flex items-center px-4 py-2 text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-700/50 rounded-lg transition-colors duration-200 group"
-              title="Sign out"
-            >
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center mr-3 bg-slate-700/50 group-hover:bg-red-500/20 transition-colors duration-200">
-                <LogOut className="w-4 h-4" />
-              </div>
-              Sign Out
-            </button>
+            <p className="text-xs text-slate-300 px-3 py-2 rounded-lg bg-slate-700/40 border border-slate-600/50">
+              Local mode: no login required.
+            </p>
           </div>
         </div>
       </div>

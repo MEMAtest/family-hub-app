@@ -12,8 +12,7 @@ import {
   Target,
   Users,
   Newspaper,
-  Settings,
-  LogOut
+  Settings
 } from 'lucide-react'
 
 interface NavigationItem {
@@ -198,7 +197,7 @@ export default function Sidebar({ isOpen = true, onClose }: SidebarProps) {
             </div>
           </nav>
 
-          {/* User info and logout */}
+          {/* User profile */}
           <div className="px-4 py-4 border-t border-gray-200">
             <div className="flex items-center space-x-3 mb-3">
               <div className="family-avatar bg-primary-600">
@@ -214,13 +213,9 @@ export default function Sidebar({ isOpen = true, onClose }: SidebarProps) {
               </div>
             </div>
 
-            <button
-              className="w-full flex items-center px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-error-600 rounded-lg transition-colors duration-200"
-              title="Sign out"
-            >
-              <LogOut className="mr-3 h-4 w-4" />
-              Sign Out
-            </button>
+            <p className="text-xs text-gray-500 px-3 py-2 rounded-lg bg-gray-50">
+              Local mode: no login required.
+            </p>
           </div>
         </div>
       </div>
