@@ -138,14 +138,6 @@ const ShoppingListManager: React.FC<ShoppingListManagerProps> = ({ onClose }) =>
     const fetchLists = async () => {
       try {
         const existingLists = useFamilyStore.getState().shoppingLists;
-        if (!familyId) {
-          if (!existingLists.length) {
-            setError('No family ID available');
-          }
-          setLoading(false);
-          return;
-        }
-
         setLoading(true);
         const data = await databaseService.getShoppingLists();
         if (data.length > 0 || !existingLists.length) {
@@ -214,14 +206,12 @@ const ShoppingListManager: React.FC<ShoppingListManagerProps> = ({ onClose }) =>
 
       try {
         setSubmitting(true);
-        const savedList = familyId
-          ? await databaseService.createShoppingList({
-              listName: formData.listName,
-              category: formData.category,
-              storeChain: formData.storeChain || undefined,
-              customStore: formData.storeChain === 'Custom' ? formData.customStore : undefined,
-            })
-          : null;
+        const savedList = await databaseService.createShoppingList({
+          listName: formData.listName,
+          category: formData.category,
+          storeChain: formData.storeChain || undefined,
+          customStore: formData.storeChain === 'Custom' ? formData.customStore : undefined,
+        });
 
         const newList = savedList
           ? mapApiList(savedList)

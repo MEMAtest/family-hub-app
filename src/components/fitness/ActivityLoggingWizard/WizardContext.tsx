@@ -311,9 +311,10 @@ export const WizardProvider: React.FC<WizardProviderProps> = ({
       );
       const totalDuration = state.duration + additionalMinutes;
 
-      const isEditing = Boolean(state.activityId);
+      const effectiveActivityId = state.activityId || editingActivity?.id || null;
+      const isEditing = Boolean(effectiveActivityId);
       const endpoint = isEditing
-        ? `/api/families/${familyId}/fitness/${state.activityId}`
+        ? `/api/families/${familyId}/fitness/${effectiveActivityId}`
         : `/api/families/${familyId}/fitness`;
 
       const response = await fetch(endpoint, {
@@ -355,7 +356,7 @@ export const WizardProvider: React.FC<WizardProviderProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [state, familyId, onComplete]);
+  }, [state, familyId, onComplete, editingActivity]);
 
   // Build notes with additional activities info
   const buildNotesWithAdditionalActivities = (

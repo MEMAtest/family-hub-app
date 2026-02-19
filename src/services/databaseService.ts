@@ -7,6 +7,41 @@ class DatabaseService {
   private familyId: string | null = null;
   private syncEnabled = true;
 
+  private sleep(ms: number) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  private async fetchFamiliesWithRetry(maxAttempts: number = 3) {
+    let lastError: unknown = null;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      try {
+        const families = await Promise.race([
+          this.fetchAPI('/api/families'),
+          new Promise((_, reject) =>
+            setTimeout(
+              () => reject(new Error(`Database initialization timeout (attempt ${attempt}/${maxAttempts})`)),
+              15000
+            )
+          ),
+        ]);
+
+        if (Array.isArray(families)) {
+          return families;
+        }
+
+        return [];
+      } catch (error) {
+        lastError = error;
+        if (attempt < maxAttempts) {
+          await this.sleep(1000 * attempt);
+        }
+      }
+    }
+
+    throw lastError ?? new Error('Failed to initialize database families');
+  }
+
   private mergeEvents(primary: CalendarEvent[], secondary: CalendarEvent[]) {
     const merged = new Map<string, CalendarEvent>();
     secondary.forEach((event) => {
@@ -24,13 +59,8 @@ class DatabaseService {
 
   async initialize() {
     try {
-      // Get or create family with timeout (15s to allow for cold start compilation)
-      const families = await Promise.race([
-        this.fetchAPI('/api/families'),
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Database initialization timeout')), 15000)
-        )
-      ]);
+      // Get or create family with retries to tolerate cold-start route compilation.
+      const families = await this.fetchFamiliesWithRetry(3);
       console.log('Fetched families:', families);
 
       if (families && families.length > 0) {
@@ -79,7 +109,7 @@ class DatabaseService {
     try {
       // Add timeout to fetch request
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 20000); // 20 second timeout
 
       const response = await fetch(`${endpoint}`, {
         ...options,

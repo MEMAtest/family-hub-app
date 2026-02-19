@@ -88,7 +88,6 @@ export const ShoppingProvider = ({ children }: PropsWithChildren) => {
   const addListStore = useFamilyStore((state) => state.addShoppingList);
   const updateListStore = useFamilyStore((state) => state.updateShoppingList);
   const deleteListStore = useFamilyStore((state) => state.deleteShoppingList);
-  const familyId = useFamilyStore((state) => state.databaseStatus.familyId);
 
   const [habits, setHabitsState] = useState<ShoppingHabits>(DEFAULT_HABITS);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -118,26 +117,24 @@ export const ShoppingProvider = ({ children }: PropsWithChildren) => {
       price: Number.isNaN(Number(item.price)) ? 0 : Number(item.price),
     };
 
-    if (familyId) {
-      const savedItem = await databaseService.addShoppingItem(listId, {
-        itemName: newItem.name,
-        estimatedPrice: newItem.price,
-        category: newItem.category,
-        frequency: newItem.frequency,
-        personId: newItem.person,
-      });
+    const savedItem = await databaseService.addShoppingItem(listId, {
+      itemName: newItem.name,
+      estimatedPrice: newItem.price,
+      category: newItem.category,
+      frequency: newItem.frequency,
+      personId: newItem.person,
+    });
 
-      if (savedItem?.id) {
-        newItem = {
-          id: savedItem.id,
-          name: savedItem.itemName ?? newItem.name,
-          completed: Boolean(savedItem.isCompleted ?? newItem.completed),
-          price: Number(savedItem.estimatedPrice ?? newItem.price),
-          category: savedItem.category ?? newItem.category,
-          person: savedItem.personId ?? newItem.person,
-          frequency: savedItem.frequency ?? newItem.frequency,
-        };
-      }
+    if (savedItem?.id) {
+      newItem = {
+        id: savedItem.id,
+        name: savedItem.itemName ?? newItem.name,
+        completed: Boolean(savedItem.isCompleted ?? newItem.completed),
+        price: Number(savedItem.estimatedPrice ?? newItem.price),
+        category: savedItem.category ?? newItem.category,
+        person: savedItem.personId ?? newItem.person,
+        frequency: savedItem.frequency ?? newItem.frequency,
+      };
     }
 
     updateListStore(listId, {
@@ -148,15 +145,13 @@ export const ShoppingProvider = ({ children }: PropsWithChildren) => {
 
     setIsFormOpen(false);
     setFormStateInternal(INITIAL_FORM_STATE);
-  }, [familyId, lists, updateListStore]);
+  }, [lists, updateListStore]);
 
   const toggleItem = useCallback(async (listId: string, itemId: string) => {
     const list = lists.find((l) => l.id === listId);
     if (!list) return;
 
-    if (familyId) {
-      await databaseService.toggleShoppingItem(itemId);
-    }
+    await databaseService.toggleShoppingItem(itemId);
 
     const updatedItems = list.items.map((item: any) =>
       item.id === itemId ? { ...item, completed: !item.completed } : item
@@ -171,15 +166,13 @@ export const ShoppingProvider = ({ children }: PropsWithChildren) => {
       estimatedTotal,
       total,
     });
-  }, [familyId, lists, updateListStore]);
+  }, [lists, updateListStore]);
 
   const removeItem = useCallback(async (listId: string, itemId: string) => {
     const list = lists.find((l) => l.id === listId);
     if (!list) return;
 
-    if (familyId) {
-      await databaseService.deleteShoppingItem(itemId);
-    }
+    await databaseService.deleteShoppingItem(itemId);
 
     const updatedItems = list.items.filter((item: any) => item.id !== itemId);
     const estimatedTotal = updatedItems.reduce((sum: number, item: any) => sum + Number(item.price || 0), 0);
@@ -192,7 +185,7 @@ export const ShoppingProvider = ({ children }: PropsWithChildren) => {
       estimatedTotal,
       total,
     });
-  }, [familyId, lists, updateListStore]);
+  }, [lists, updateListStore]);
 
   const openForm = useCallback((listId?: string) => {
     setFormStateInternal((prev) => ({ ...prev, listId: listId ?? '' }));

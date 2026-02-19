@@ -51,7 +51,10 @@ interface QuickMealLog {
 }
 
 const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
-  const familyId = useFamilyStore((state) => state.databaseStatus.familyId);
+  const storeFamilyId = useFamilyStore((state) => state.databaseStatus.familyId);
+  const familyId =
+    storeFamilyId ??
+    (typeof window !== 'undefined' ? localStorage.getItem('familyId') : null);
   const familyMembers = useFamilyStore((state) => state.people);
   const mealPlanning = useFamilyStore((state) => state.mealPlanning);
   const isMobile = useMediaQuery('(max-width: 1023px)');
@@ -104,8 +107,13 @@ const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
   };
 
   const handleQuickLogMeal = async () => {
-    if (!familyId || !formData.mealName) {
+    if (!formData.mealName) {
       alert('Please enter a meal name');
+      return;
+    }
+
+    if (!familyId) {
+      alert('Family ID not available yet. Please try again in a moment.');
       return;
     }
 

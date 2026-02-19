@@ -28,8 +28,13 @@ export default function HomePage() {
     let mounted = true
 
     const bootstrap = async () => {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 8000)
+
       try {
-        const response = await fetch('/api/auth/me')
+        const response = await fetch('/api/auth/me', {
+          signal: controller.signal,
+        })
         if (!mounted) return
 
         if (response.ok) {
@@ -42,6 +47,7 @@ export default function HomePage() {
       } catch {
         // Keep app usable even if this probe fails.
       } finally {
+        clearTimeout(timeoutId)
         if (mounted) {
           setIsBootstrapping(false)
         }
