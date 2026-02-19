@@ -3,6 +3,7 @@ import type { PlaywrightTestConfig } from '@playwright/test';
 const PORT = process.env.PLAYWRIGHT_PORT ? Number(process.env.PLAYWRIGHT_PORT) : 3101;
 const HOST = process.env.PLAYWRIGHT_HOST || '127.0.0.1';
 const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || `http://${HOST}:${PORT}`;
+const WEB_SERVER_COMMAND = `node --require ./tests/e2e/node-runtime-fixes.cjs ./node_modules/next/dist/bin/next dev --hostname ${HOST} --port ${PORT}`;
 
 const config: PlaywrightTestConfig = {
   testDir: 'tests/e2e',
@@ -18,7 +19,7 @@ const config: PlaywrightTestConfig = {
     video: 'retain-on-failure',
   },
   webServer: {
-    command: `npm run dev -- --hostname ${HOST} --port ${PORT}`,
+    command: WEB_SERVER_COMMAND,
     url: BASE_URL,
     reuseExistingServer: false,
     timeout: 120_000,
