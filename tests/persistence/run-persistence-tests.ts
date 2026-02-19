@@ -206,6 +206,22 @@ const ensure = (condition: unknown, message: string) => {
   }
 };
 
+const isObjectPayload = (value: AnyJson): value is Record<string, any> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const getField = (payload: AnyJson, field: string) => {
+  if (!isObjectPayload(payload)) {
+    return undefined;
+  }
+  return (payload as Record<string, any>)[field];
+};
+
+const getId = (payload: AnyJson, label: string): string => {
+  const id = getField(payload, 'id');
+  ensure(typeof id === 'string' && id.length > 0, `${label} returned no id`);
+  return id;
+};
+
 const call = async (
   handler: Handler,
   request: NextRequest,
@@ -362,8 +378,7 @@ const runPersistenceChecks = async () => {
       'Create event'
     );
 
-    const eventId = created?.id as string;
-    ensure(eventId, 'Event creation returned no id');
+    const eventId = getId(created, 'Event creation');
     createdIds.calendarEvents.push(eventId);
 
     const list = await call(
@@ -387,7 +402,7 @@ const runPersistenceChecks = async () => {
       familyContext(),
       'Update event'
     );
-    ensure(updated?.title === `${runTag} Event Updated`, 'Event update did not persist');
+    ensure(getField(updated, 'title') === `${runTag} Event Updated`, 'Event update did not persist');
 
     await call(
       eventsDelete as Handler,
@@ -411,8 +426,7 @@ const runPersistenceChecks = async () => {
       familyContext(),
       'Create expense'
     );
-    const expenseId = created?.id as string;
-    ensure(expenseId, 'Expense creation returned no id');
+    const expenseId = getId(created, 'Expense creation');
     createdIds.budgetExpenses.push(expenseId);
 
     const list = await call(
@@ -433,7 +447,7 @@ const runPersistenceChecks = async () => {
       familyContext(),
       'Update expense'
     );
-    ensure(updated?.expenseName === `${runTag} Expense Updated`, 'Expense update did not persist');
+    ensure(getField(updated, 'expenseName') === `${runTag} Expense Updated`, 'Expense update did not persist');
 
     await call(
       expensesDelete as Handler,
@@ -457,8 +471,7 @@ const runPersistenceChecks = async () => {
       familyContext(),
       'Create income'
     );
-    const incomeId = created?.id as string;
-    ensure(incomeId, 'Income creation returned no id');
+    const incomeId = getId(created, 'Income creation');
     createdIds.budgetIncome.push(incomeId);
 
     const list = await call(
@@ -479,7 +492,7 @@ const runPersistenceChecks = async () => {
       familyContext(),
       'Update income'
     );
-    ensure(updated?.incomeName === `${runTag} Income Updated`, 'Income update did not persist');
+    ensure(getField(updated, 'incomeName') === `${runTag} Income Updated`, 'Income update did not persist');
 
     await call(
       incomeDelete as Handler,
@@ -502,8 +515,7 @@ const runPersistenceChecks = async () => {
       familyContext(),
       'Create category'
     );
-    const categoryId = created?.id as string;
-    ensure(categoryId, 'Category creation returned no id');
+    const categoryId = getId(created, 'Category creation');
     createdIds.budgetCategories.push(categoryId);
 
     const list = await call(
@@ -523,7 +535,7 @@ const runPersistenceChecks = async () => {
       familyContext({ categoryId }),
       'Update category'
     );
-    ensure(Number(updated?.budgetLimit) === 650, 'Category update did not persist');
+    ensure(Number(getField(updated, 'budgetLimit')) === 650, 'Category update did not persist');
 
     await call(
       categoryDelete as Handler,
@@ -545,8 +557,7 @@ const runPersistenceChecks = async () => {
       familyContext(),
       'Create savings goal'
     );
-    const goalId = created?.id as string;
-    ensure(goalId, 'Savings goal creation returned no id');
+    const goalId = getId(created, 'Savings goal creation');
     createdIds.savingsGoals.push(goalId);
 
     const list = await call(
@@ -565,7 +576,7 @@ const runPersistenceChecks = async () => {
       familyContext({ goalId }),
       'Update savings goal'
     );
-    ensure(Number(updated?.currentAmount) === 150, 'Savings goal update did not persist');
+    ensure(Number(getField(updated, 'currentAmount')) === 150, 'Savings goal update did not persist');
 
     await call(
       savingsDelete as Handler,
@@ -587,8 +598,7 @@ const runPersistenceChecks = async () => {
       familyContext(),
       'Create meal'
     );
-    const mealId = created?.id as string;
-    ensure(mealId, 'Meal creation returned no id');
+    const mealId = getId(created, 'Meal creation');
     createdIds.mealPlans.push(mealId);
 
     const list = await call(
@@ -607,7 +617,7 @@ const runPersistenceChecks = async () => {
       familyContext({ mealId }),
       'Update meal'
     );
-    ensure(updated?.mealName === `${runTag} Meal Updated`, 'Meal update did not persist');
+    ensure(getField(updated, 'mealName') === `${runTag} Meal Updated`, 'Meal update did not persist');
 
     await call(
       mealDelete as Handler,
@@ -628,8 +638,7 @@ const runPersistenceChecks = async () => {
       familyContext(),
       'Create shopping list'
     );
-    const listId = createdList?.id as string;
-    ensure(listId, 'Shopping list creation returned no id');
+    const listId = getId(createdList, 'Shopping list creation');
     createdIds.shoppingLists.push(listId);
 
     const listCollection = await call(
@@ -648,7 +657,7 @@ const runPersistenceChecks = async () => {
       familyContext({ listId }),
       'Update shopping list'
     );
-    ensure(updatedList?.category === 'Groceries', 'Shopping list update did not persist');
+    ensure(getField(updatedList, 'category') === 'Groceries', 'Shopping list update did not persist');
 
     const createdItem = await call(
       shoppingItemsPost as Handler,
@@ -659,8 +668,7 @@ const runPersistenceChecks = async () => {
       familyContext({ listId }),
       'Create shopping item'
     );
-    const itemId = createdItem?.id as string;
-    ensure(itemId, 'Shopping item creation returned no id');
+    const itemId = getId(createdItem, 'Shopping item creation');
     createdIds.shoppingItems.push(itemId);
 
     const itemCollection = await call(
@@ -680,7 +688,7 @@ const runPersistenceChecks = async () => {
       authContext({ itemId }),
       'Update shopping item'
     );
-    ensure(updatedItem?.itemName === `${runTag} Shopping Item Updated`, 'Shopping item update did not persist');
+    ensure(getField(updatedItem, 'itemName') === `${runTag} Shopping Item Updated`, 'Shopping item update did not persist');
 
     await call(
       shoppingItemDelete as Handler,
@@ -712,8 +720,7 @@ const runPersistenceChecks = async () => {
       familyContext(),
       'Create goal'
     );
-    const goalId = created?.id as string;
-    ensure(goalId, 'Goal creation returned no id');
+    const goalId = getId(created, 'Goal creation');
     createdIds.familyGoals.push(goalId);
 
     const list = await call(
@@ -733,7 +740,7 @@ const runPersistenceChecks = async () => {
       familyContext({ goalId }),
       'Update goal'
     );
-    ensure(updated?.goalTitle === `${runTag} Goal Updated`, 'Goal update did not persist');
+    ensure(getField(updated, 'goalTitle') === `${runTag} Goal Updated`, 'Goal update did not persist');
 
     await call(
       goalDelete as Handler,
@@ -756,8 +763,7 @@ const runPersistenceChecks = async () => {
       familyContext(),
       'Create achievement'
     );
-    const achievementId = created?.id as string;
-    ensure(achievementId, 'Achievement creation returned no id');
+    const achievementId = getId(created, 'Achievement creation');
     createdIds.achievements.push(achievementId);
 
     const list = await call(
@@ -792,8 +798,7 @@ const runPersistenceChecks = async () => {
       familyContext(),
       'Create fitness activity'
     );
-    const activityId = created?.id as string;
-    ensure(activityId, 'Fitness creation returned no id');
+    const activityId = getId(created, 'Fitness creation');
     createdIds.fitnessTracking.push(activityId);
 
     const listPayload = await call(
@@ -814,7 +819,7 @@ const runPersistenceChecks = async () => {
       familyContext({ activityId }),
       'Update fitness activity'
     );
-    ensure(updated?.workoutName === `${runTag} Workout Updated`, 'Fitness update did not persist');
+    ensure(getField(updated, 'workoutName') === `${runTag} Workout Updated`, 'Fitness update did not persist');
 
     await call(
       fitnessDelete as Handler,
@@ -836,8 +841,7 @@ const runPersistenceChecks = async () => {
       familyContext(),
       'Create contractor'
     );
-    const contractorId = createdContractor?.id as string;
-    ensure(contractorId, 'Contractor creation returned no id');
+    const contractorId = getId(createdContractor, 'Contractor creation');
     createdIds.contractors.push(contractorId);
 
     const contractorList = await call(
@@ -856,7 +860,7 @@ const runPersistenceChecks = async () => {
       familyContext({ contractorId }),
       'Update contractor'
     );
-    ensure(updatedContractor?.phone === '08001234567', 'Contractor update did not persist');
+    ensure(getField(updatedContractor, 'phone') === '08001234567', 'Contractor update did not persist');
 
     const createdAppointment = await call(
       appointmentsPost as Handler,
@@ -870,8 +874,7 @@ const runPersistenceChecks = async () => {
       familyContext(),
       'Create appointment'
     );
-    const appointmentId = createdAppointment?.id as string;
-    ensure(appointmentId, 'Appointment creation returned no id');
+    const appointmentId = getId(createdAppointment, 'Appointment creation');
     createdIds.contractorAppointments.push(appointmentId);
 
     const appointmentsList = await call(
@@ -891,7 +894,7 @@ const runPersistenceChecks = async () => {
       familyContext({ appointmentId }),
       'Update appointment'
     );
-    ensure(updatedAppointment?.status === 'completed', 'Appointment update did not persist');
+    ensure(getField(updatedAppointment, 'status') === 'completed', 'Appointment update did not persist');
 
     await call(
       appointmentDelete as Handler,
@@ -925,8 +928,7 @@ const runPersistenceChecks = async () => {
       familyContext(),
       'Create notification'
     );
-    const notificationId = created?.id as string;
-    ensure(notificationId, 'Notification creation returned no id');
+    const notificationId = getId(created, 'Notification creation');
     createdIds.notifications.push(notificationId);
 
     const list = await call(
@@ -945,7 +947,7 @@ const runPersistenceChecks = async () => {
       familyContext({ notificationId }),
       'Patch notification'
     );
-    ensure(updated?.read === true, 'Notification read state did not persist');
+    ensure(getField(updated, 'read') === true, 'Notification read state did not persist');
 
     await call(
       notificationsReadAllPost as Handler,
@@ -977,8 +979,7 @@ const runPersistenceChecks = async () => {
       familyContext(),
       'Create family member'
     );
-    const memberId = created?.id as string;
-    ensure(memberId, 'Family member creation returned no id');
+    const memberId = getId(created, 'Family member creation');
     createdIds.familyMembers.push(memberId);
 
     const list = await call(
@@ -997,7 +998,7 @@ const runPersistenceChecks = async () => {
       familyContext({ memberId }),
       'Patch family member'
     );
-    ensure(updated?.role === 'Teen', 'Family member update did not persist');
+    ensure(getField(updated, 'role') === 'Teen', 'Family member update did not persist');
 
     await call(
       memberDelete as Handler,
@@ -1020,8 +1021,7 @@ const runPersistenceChecks = async () => {
       familyContext(),
       'Create milestone'
     );
-    const milestoneId = created?.id as string;
-    ensure(milestoneId, 'Milestone creation returned no id');
+    const milestoneId = getId(created, 'Milestone creation');
     createdIds.familyMilestones.push(milestoneId);
 
     const list = await call(
@@ -1040,7 +1040,7 @@ const runPersistenceChecks = async () => {
       familyContext({ milestoneId }),
       'Patch milestone'
     );
-    ensure(updated?.title === `${runTag} Milestone Updated`, 'Milestone update did not persist');
+    ensure(getField(updated, 'title') === `${runTag} Milestone Updated`, 'Milestone update did not persist');
 
     await call(
       milestoneDelete as Handler,
