@@ -57,6 +57,7 @@ model Family {
   contractors           Contractor[]
   contractorAppointments ContractorAppointment[]
   notifications         Notification[]
+  brainProjects         BrainProject[]
 
   @@map("families")
 }
@@ -536,4 +537,74 @@ model Notification {
   @@index([familyId, read])
   @@index([familyId, timestamp])
   @@map("notifications")
+}
+
+// Brain mind-map projects
+model BrainProject {
+  id          String   @id @default(cuid())
+  familyId    String   @map("family_id")
+  name        String
+  description String?
+  color       String   @default("#6366F1") // Hex color
+  icon        String   @default("brain")   // Lucide icon name
+  status      String   @default("active")  // active, archived, completed
+  sortOrder   Int      @default(0) @map("sort_order")
+  goalId      String?  @map("goal_id")     // Optional link to FamilyGoal
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  family Family      @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  nodes  BrainNode[]
+  edges  BrainEdge[]
+
+  @@index([familyId])
+  @@index([familyId, status])
+  @@map("brain_projects")
+}
+
+// Brain mind-map nodes
+model BrainNode {
+  id             String    @id @default(cuid())
+  projectId      String    @map("project_id")
+  title          String
+  content        String?   // Markdown
+  status         String    @default("todo")       // todo, in_progress, done, blocked, idea
+  priority       String    @default("medium")      // low, medium, high, urgent
+  dueDate        DateTime? @map("due_date")
+  nodeType       String    @default("thought") @map("node_type") // thought, task, idea, note, milestone
+  positionX      Float     @default(0) @map("position_x")
+  positionY      Float     @default(0) @map("position_y")
+  tags           Json      @default("[]")
+  showOnCalendar Boolean   @default(false) @map("show_on_calendar")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  project     BrainProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sourceEdges BrainEdge[]  @relation("SourceNode")
+  targetEdges BrainEdge[]  @relation("TargetNode")
+
+  @@index([projectId])
+  @@index([projectId, status])
+  @@index([projectId, dueDate])
+  @@map("brain_nodes")
+}
+
+// Brain mind-map edges (connections between nodes)
+model BrainEdge {
+  id           String   @id @default(cuid())
+  projectId    String   @map("project_id")
+  sourceNodeId String   @map("source_node_id")
+  targetNodeId String   @map("target_node_id")
+  label        String?
+  edgeType     String   @default("default") @map("edge_type") // default, dependency, related, sequence
+  animated     Boolean  @default(false)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  project    BrainProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sourceNode BrainNode    @relation("SourceNode", fields: [sourceNodeId], references: [id], onDelete: Cascade)
+  targetNode BrainNode    @relation("TargetNode", fields: [targetNodeId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceNodeId, targetNodeId])
+  @@index([projectId])
+  @@map("brain_edges")
 }

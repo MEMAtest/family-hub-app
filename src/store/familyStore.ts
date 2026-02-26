@@ -20,6 +20,7 @@ import {
   ProjectMilestone,
 } from '@/types/property.types';
 import { Contractor, ContractorAppointment } from '@/types/contractor.types';
+import { BrainProject, BrainNode, BrainEdge } from '@/types/brain.types';
 import {
   tremaineRoadAreaWatch,
   tremaineRoadBaseline,
@@ -249,8 +250,28 @@ interface ContractorSlice {
   deleteContractorAppointment: (id: string) => void;
 }
 
+interface BrainSlice {
+  brainProjects: BrainProject[];
+  activeBrainProjectId: string | null;
+  brainNodes: BrainNode[];
+  brainEdges: BrainEdge[];
+  setBrainProjects: (projects: BrainProject[]) => void;
+  addBrainProject: (project: BrainProject) => void;
+  updateBrainProject: (id: string, updates: Partial<BrainProject>) => void;
+  deleteBrainProject: (id: string) => void;
+  setActiveBrainProject: (id: string | null) => void;
+  setBrainNodes: (nodes: BrainNode[]) => void;
+  addBrainNode: (node: BrainNode) => void;
+  updateBrainNode: (id: string, updates: Partial<BrainNode>) => void;
+  deleteBrainNode: (id: string) => void;
+  updateBrainNodePositions: (positions: Array<{ id: string; positionX: number; positionY: number }>) => void;
+  setBrainEdges: (edges: BrainEdge[]) => void;
+  addBrainEdge: (edge: BrainEdge) => void;
+  deleteBrainEdge: (id: string) => void;
+}
+
 // Combined state
-export type FamilyState = PeopleSlice & CalendarSlice & ViewSlice & BudgetSlice & MealPlanningSlice & ShoppingSlice & GoalsSlice & TimelineSlice & PropertySlice & DatabaseSlice & ContractorSlice;
+export type FamilyState = PeopleSlice & CalendarSlice & ViewSlice & BudgetSlice & MealPlanningSlice & ShoppingSlice & GoalsSlice & TimelineSlice & PropertySlice & DatabaseSlice & ContractorSlice & BrainSlice;
 
 // =================================================================
 // SLICE CREATORS
@@ -872,6 +893,59 @@ const createContractorSlice: StateCreator<FamilyState, [], [], ContractorSlice> 
     })),
 });
 
+const createBrainSlice: StateCreator<FamilyState, [], [], BrainSlice> = (set) => ({
+  brainProjects: [],
+  activeBrainProjectId: null,
+  brainNodes: [],
+  brainEdges: [],
+  setBrainProjects: (projects) => set({ brainProjects: projects }),
+  addBrainProject: (project) =>
+    set((state) => ({ brainProjects: [...state.brainProjects, project] })),
+  updateBrainProject: (id, updates) =>
+    set((state) => ({
+      brainProjects: state.brainProjects.map((p) =>
+        p.id === id ? { ...p, ...updates } : p
+      ),
+    })),
+  deleteBrainProject: (id) =>
+    set((state) => ({
+      brainProjects: state.brainProjects.filter((p) => p.id !== id),
+      activeBrainProjectId: state.activeBrainProjectId === id ? null : state.activeBrainProjectId,
+    })),
+  setActiveBrainProject: (id) => set({ activeBrainProjectId: id }),
+  setBrainNodes: (nodes) => set({ brainNodes: nodes }),
+  addBrainNode: (node) =>
+    set((state) => ({ brainNodes: [...state.brainNodes, node] })),
+  updateBrainNode: (id, updates) =>
+    set((state) => ({
+      brainNodes: state.brainNodes.map((n) =>
+        n.id === id ? { ...n, ...updates } : n
+      ),
+    })),
+  deleteBrainNode: (id) =>
+    set((state) => ({
+      brainNodes: state.brainNodes.filter((n) => n.id !== id),
+      brainEdges: state.brainEdges.filter((e) => e.sourceNodeId !== id && e.targetNodeId !== id),
+    })),
+  updateBrainNodePositions: (positions) =>
+    set((state) => {
+      const posMap = new Map(positions.map((p) => [p.id, p]));
+      return {
+        brainNodes: state.brainNodes.map((n) => {
+          const pos = posMap.get(n.id);
+          return pos ? { ...n, positionX: pos.positionX, positionY: pos.positionY } : n;
+        }),
+      };
+    }),
+  setBrainEdges: (edges) => set({ brainEdges: edges }),
+  addBrainEdge: (edge) =>
+    set((state) => ({ brainEdges: [...state.brainEdges, edge] })),
+  deleteBrainEdge: (id) =>
+    set((state) => ({
+      brainEdges: state.brainEdges.filter((e) => e.id !== id),
+    })),
+});
+
 // =================================================================
 // STORE CREATION
 // =================================================================
@@ -890,10 +964,11 @@ export const useFamilyStore = create<FamilyState>()(
       ...createPropertySlice(...a),
       ...createDatabaseSlice(...a),
       ...createContractorSlice(...a),
+      ...createBrainSlice(...a),
     }),
     {
       name: 'family-storage',
-      version: 6, // Bumped to sync property baseline updates
+      version: 7, // Bumped for brain feature
       partialize: (state) => ({
         // Only persist UI preferences, NOT dynamic data
         // Dynamic data (people, events, budgetData, mealPlanning, shoppingLists, goalsData)
@@ -916,6 +991,8 @@ export const useFamilyStore = create<FamilyState>()(
         // Contractors (persisted locally for now)
         contractors: state.contractors,
         contractorAppointments: state.contractorAppointments,
+        // Brain (only persist active project selection)
+        activeBrainProjectId: state.activeBrainProjectId,
       }),
       migrate: (persistedState: any, version: number) => {
         // Clear old cache to force fresh load from database

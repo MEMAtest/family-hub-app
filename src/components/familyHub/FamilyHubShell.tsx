@@ -15,6 +15,7 @@ import {
   ShoppingBag,
   Dumbbell,
   Wrench,
+  Brain,
 } from 'lucide-react';
 import { FamilyHubNavigation, NavItem } from './FamilyHubNavigation';
 import { FamilyHubHeader } from './FamilyHubHeader';
@@ -29,6 +30,7 @@ import { NewsView } from './views/NewsView';
 import { PropertyView } from './views/PropertyView';
 import { FitnessView } from './views/FitnessView';
 import { ContractorView } from './views/ContractorView';
+import { ProjectBrainView } from './views/ProjectBrainView';
 import { FamilyHubModals } from './FamilyHubModals';
 import Breadcrumb from '@/components/common/Breadcrumb';
 import SetupWizard from '@/components/common/SetupWizard';
@@ -54,6 +56,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'fitness', label: 'Fitness', icon: Dumbbell },
   { id: 'contractors', label: 'Contractors', icon: Wrench },
   { id: 'goals', label: 'Goals', icon: Target },
+  { id: 'brain', label: 'Project Brain', icon: Brain },
   { id: 'family', label: 'Family', icon: Users },
   { id: 'news', label: 'News', icon: Newspaper },
 ];
@@ -219,6 +222,8 @@ export const FamilyHubShell = () => {
         return <ContractorView />;
       case 'goals':
         return <GoalsView />;
+      case 'brain':
+        return <ProjectBrainView />;
       case 'family':
         return <FamilyView />;
       case 'news':
@@ -240,6 +245,7 @@ export const FamilyHubShell = () => {
       fitness: 'Fitness',
       contractors: 'Contractors',
       goals: 'Goals',
+      brain: 'Project Brain',
       family: 'Family',
       news: 'News',
       property: '21 Tremaine Road',

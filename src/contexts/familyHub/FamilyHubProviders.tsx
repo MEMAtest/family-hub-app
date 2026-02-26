@@ -9,6 +9,7 @@ import { MealsProvider } from './MealsContext';
 import { ShoppingProvider } from './ShoppingContext';
 import { GoalsProvider } from './GoalsContext';
 import { ContractorProvider } from './ContractorContext';
+import { BrainProvider } from './BrainContext';
 
 export const FamilyHubProviders = ({ children }: PropsWithChildren) => (
   <FamilyProvider>
@@ -19,7 +20,9 @@ export const FamilyHubProviders = ({ children }: PropsWithChildren) => (
             <MealsProvider>
               <ShoppingProvider>
                 <GoalsProvider>
-                  {children}
+                  <BrainProvider>
+                    {children}
+                  </BrainProvider>
                 </GoalsProvider>
               </ShoppingProvider>
             </MealsProvider>

@@ -42,6 +42,7 @@ import { useContractorContext } from '@/contexts/familyHub/ContractorContext';
 import { stewartFleming2025To2026, stewartFleming2026To2027 } from '@/data/schoolTerms';
 import { extractBudgetRecords, summariseBudgetForMonth } from '@/utils/budgetAnalytics';
 import { UpcomingContractorVisits } from '@/components/contractors';
+import BrainFocusWidget from '@/components/dashboard/BrainFocusWidget';
 import { useFamilyStore } from '@/store/familyStore';
 
 type FeedItem = {
@@ -875,6 +876,10 @@ export const DashboardView = () => {
         </div>
 
         <UpcomingContractorVisits />
+      </section>
+
+      <section className="grid gap-6 lg:grid-cols-2">
+        <BrainFocusWidget />
       </section>
     </div>
   );
