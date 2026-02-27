@@ -911,6 +911,8 @@ const createBrainSlice: StateCreator<FamilyState, [], [], BrainSlice> = (set) =>
     set((state) => ({
       brainProjects: state.brainProjects.filter((p) => p.id !== id),
       activeBrainProjectId: state.activeBrainProjectId === id ? null : state.activeBrainProjectId,
+      brainNodes: state.brainNodes.filter((n) => n.projectId !== id),
+      brainEdges: state.brainEdges.filter((e) => e.projectId !== id),
     })),
   setActiveBrainProject: (id) => set({ activeBrainProjectId: id }),
   setBrainNodes: (nodes) => set({ brainNodes: nodes }),

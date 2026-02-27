@@ -116,10 +116,12 @@ export const BrainProvider = ({ children }: PropsWithChildren) => {
 
   const positionSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasFetchedProjects = useRef(false);
+  const isMountedRef = useRef(true);
 
   // Clean up position save timer on unmount
   useEffect(() => {
     return () => {
+      isMountedRef.current = false;
       if (positionSaveTimer.current) {
         clearTimeout(positionSaveTimer.current);
       }
@@ -432,7 +434,7 @@ export const BrainProvider = ({ children }: PropsWithChildren) => {
 
       if (positionSaveTimer.current) clearTimeout(positionSaveTimer.current);
       positionSaveTimer.current = setTimeout(async () => {
-        if (!familyId) return;
+        if (!familyId || !isMountedRef.current) return;
         try {
           await fetch(`/api/families/${familyId}/brain/nodes/positions`, {
             method: 'PUT',
