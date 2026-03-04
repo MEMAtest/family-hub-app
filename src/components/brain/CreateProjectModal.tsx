@@ -3,18 +3,26 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
 import { useBrainContext } from '@/contexts/familyHub/BrainContext';
+import { useFamilyStore } from '@/store/familyStore';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { PROJECT_COLORS, PROJECT_ICONS } from '@/types/brain.types';
 
 const CreateProjectModal = () => {
   const { isCreateProjectOpen, setIsCreateProjectOpen, createProject } = useBrainContext();
+  const goalsData = useFamilyStore((s) => s.goalsData);
   const isDesktop = useMediaQuery('(min-width: 768px)');
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [color, setColor] = useState(PROJECT_COLORS[0]);
   const [icon, setIcon] = useState(PROJECT_ICONS[0]);
+  const [goalId, setGoalId] = useState<string | undefined>();
   const [saving, setSaving] = useState(false);
+
+  const allGoals = [
+    ...(goalsData?.familyGoals || []),
+    ...(goalsData?.individualGoals || []),
+  ];
 
   if (!isCreateProjectOpen) return null;
 
@@ -28,11 +36,13 @@ const CreateProjectModal = () => {
         description: description.trim() || undefined,
         color,
         icon,
+        goalId,
       });
       setName('');
       setDescription('');
       setColor(PROJECT_COLORS[0]);
       setIcon(PROJECT_ICONS[0]);
+      setGoalId(undefined);
       setIsCreateProjectOpen(false);
     } finally {
       setSaving(false);
@@ -74,6 +84,23 @@ const CreateProjectModal = () => {
             className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
           />
         </div>
+
+        {/* Goal link */}
+        {allGoals.length > 0 && (
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-slate-400">Link to Goal (optional)</label>
+            <select
+              value={goalId || ''}
+              onChange={(e) => setGoalId(e.target.value || undefined)}
+              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+            >
+              <option value="">-- None --</option>
+              {allGoals.map((g: any) => (
+                <option key={g.id} value={g.id}>{g.title || g.goalTitle || 'Goal'}</option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* Color picker */}
         <div>

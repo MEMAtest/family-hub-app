@@ -11,6 +11,7 @@ import {
   useState,
 } from 'react';
 import { useFamilyStore } from '@/store/familyStore';
+import { useNotifications } from '@/contexts/NotificationContext';
 import { createId } from '@/utils/id';
 import type {
   BrainProject,
@@ -114,9 +115,12 @@ export const BrainProvider = ({ children }: PropsWithChildren) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [todayData, setTodayData] = useState<TodayData | null>(null);
 
+  const { showNotification } = useNotifications();
+
   const positionSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasFetchedProjects = useRef(false);
   const isMountedRef = useRef(true);
+  const notifiedNodeIds = useRef<Set<string>>(new Set());
 
   // Clean up position save timer on unmount
   useEffect(() => {
@@ -127,6 +131,35 @@ export const BrainProvider = ({ children }: PropsWithChildren) => {
       }
     };
   }, []);
+
+  // ─── Overdue node notifications ─────────────────────────────────
+  const checkOverdueNotifications = useCallback(async (loadedNodes: BrainNode[]) => {
+    const today = new Date().toISOString().split('T')[0];
+    const overdueNodes = loadedNodes.filter(
+      (n) => n.dueDate && n.dueDate.split('T')[0] <= today && n.status !== 'done'
+    );
+
+    for (const node of overdueNodes) {
+      if (notifiedNodeIds.current.has(node.id)) continue;
+      notifiedNodeIds.current.add(node.id);
+
+      await showNotification({
+        type: 'reminder',
+        title: 'Brain task overdue',
+        message: `"${node.title}" is past due`,
+        icon: '🧠',
+        priority: node.priority === 'urgent' ? 'urgent' : 'high',
+        category: 'event',
+        read: false,
+        actionRequired: true,
+        actions: [
+          { id: 'view', label: 'View', type: 'primary', action: 'view_brain_node', data: { nodeId: node.id, projectId: node.projectId } },
+          { id: 'dismiss', label: 'Dismiss', type: 'secondary', action: 'dismiss' },
+        ],
+        metadata: { type: 'brain_overdue', nodeId: node.id, projectId: node.projectId },
+      });
+    }
+  }, [showNotification]);
 
   // ─── Fetch projects on mount ─────────────────────────────────────
   const refreshProjects = useCallback(async () => {
@@ -169,7 +202,10 @@ export const BrainProvider = ({ children }: PropsWithChildren) => {
 
         if (nodesRes.ok) {
           const data = await nodesRes.json();
-          if (Array.isArray(data)) setBrainNodes(data);
+          if (Array.isArray(data)) {
+            setBrainNodes(data);
+            checkOverdueNotifications(data);
+          }
         }
         if (edgesRes.ok) {
           const data = await edgesRes.json();
@@ -183,7 +219,7 @@ export const BrainProvider = ({ children }: PropsWithChildren) => {
     };
 
     void load();
-  }, [familyId, activeProjectId, setBrainNodes, setBrainEdges]);
+  }, [familyId, activeProjectId, setBrainNodes, setBrainEdges, checkOverdueNotifications]);
 
   // ─── Today data ───────────────────────────────────────────────────
   const refreshTodayData = useCallback(async () => {

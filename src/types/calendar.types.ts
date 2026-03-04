@@ -10,7 +10,7 @@ export interface CalendarEvent {
   location?: string;
   recurring: 'weekly' | 'monthly' | 'yearly' | 'none';
   cost: number;
-  type: 'sport' | 'meeting' | 'fitness' | 'social' | 'education' | 'family' | 'other' | 'appointment' | 'work' | 'personal';
+  type: 'sport' | 'meeting' | 'fitness' | 'social' | 'education' | 'family' | 'other' | 'appointment' | 'work' | 'personal' | 'brain';
   notes?: string;
   isRecurring: boolean;
   recurringPattern?: RecurringPattern;

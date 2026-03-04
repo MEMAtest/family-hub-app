@@ -20,6 +20,8 @@ import {
   VolumeX
 } from 'lucide-react';
 import { useNotifications } from '@/contexts/NotificationContext';
+import { useFamilyStore } from '@/store/familyStore';
+import { useAppView } from '@/contexts/familyHub/AppViewContext';
 import { InAppNotification } from '@/types/notification.types';
 
 interface NotificationCenterProps {
@@ -44,6 +46,9 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
     settings,
     updateSettings
   } = useNotifications();
+
+  const setActiveBrainProject = useFamilyStore((s) => s.setActiveBrainProject);
+  const { setView } = useAppView();
 
   const [filter, setFilter] = useState<'all' | 'unread' | 'today'>('all');
   const [searchTerm, setSearchTerm] = useState('');
@@ -150,6 +155,16 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
         // Navigate to event view
         console.log('Navigate to event:', notification.relatedEventId);
         break;
+      case 'view_brain_node': {
+        const { projectId } = action.data || {};
+        if (projectId) {
+          setActiveBrainProject(projectId);
+          setView('brain');
+        }
+        await markAsRead(notification.id);
+        onClose();
+        break;
+      }
       case 'request_permission':
         await requestPermission();
         await markAsRead(notification.id);

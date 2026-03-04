@@ -39,6 +39,8 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { PieChart, Pie, Cell, BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, RadialBarChart, RadialBar, Legend } from 'recharts';
+import { useAppView } from '@/contexts/familyHub/AppViewContext';
+import { Brain } from 'lucide-react';
 import GoalForm from './GoalForm';
 import AchievementTracker from './AchievementTracker';
 import GoalAnalytics from './GoalAnalytics';
@@ -203,6 +205,9 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
   const familyId = useFamilyStore((state) => state.databaseStatus.familyId) || 'cmg741w2h0000ljcb3f6fo19g';
   const goalsData = useFamilyStore((state) => state.goalsData);
   const setGoalsData = useFamilyStore((state) => state.setGoalsData);
+  const brainProjects = useFamilyStore((state) => state.brainProjects);
+  const setActiveBrainProject = useFamilyStore((state) => state.setActiveBrainProject);
+  const { setView } = useAppView();
 
   const persistGoalsData = useCallback((data: GoalsData) => {
     setGoalsData(data);
@@ -1412,6 +1417,24 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
                   ))}
                 </div>
               )}
+
+              {/* Brain Map link */}
+              {(() => {
+                const linkedProject = brainProjects.find((p) => p.goalId === goal.id);
+                if (!linkedProject) return null;
+                return (
+                  <button
+                    onClick={() => {
+                      setActiveBrainProject(linkedProject.id);
+                      setView('brain');
+                    }}
+                    className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-purple-200 bg-purple-50 px-2.5 py-1.5 text-xs font-medium text-purple-700 hover:bg-purple-100 transition-colors dark:border-purple-800 dark:bg-purple-900/30 dark:text-purple-300 dark:hover:bg-purple-900/50"
+                  >
+                    <Brain className="w-3.5 h-3.5" />
+                    View Brain Map
+                  </button>
+                );
+              })()}
             </div>
           );
         })}

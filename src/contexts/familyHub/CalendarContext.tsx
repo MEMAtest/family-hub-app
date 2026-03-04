@@ -2,6 +2,7 @@
 
 import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { CalendarEvent, EventTemplate, Person } from '@/types/calendar.types';
+import type { BrainNode, BrainProject } from '@/types/brain.types';
 import { ConflictResolution, DetectedConflict } from '@/services/conflictDetectionService';
 import conflictDetectionService from '@/services/conflictDetectionService';
 import databaseService from '@/services/databaseService';
@@ -207,6 +208,63 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
 
     loadEvents();
   }, [events.length, setEvents]);
+
+  // ─── Brain nodes → calendar events ─────────────────────────────────
+  useEffect(() => {
+    const familyId = typeof window !== 'undefined' ? localStorage.getItem('familyId') : null;
+    if (!familyId) return;
+
+    const loadBrainEvents = async () => {
+      try {
+        const [nodesRes, projectsRes] = await Promise.all([
+          fetch(`/api/families/${familyId}/brain/nodes?showOnCalendar=true`),
+          fetch(`/api/families/${familyId}/brain/projects`),
+        ]);
+        if (!nodesRes.ok || !projectsRes.ok) return;
+
+        const nodes: BrainNode[] = await nodesRes.json();
+        const projects: BrainProject[] = await projectsRes.json();
+        if (!Array.isArray(nodes) || nodes.length === 0) return;
+
+        const projectMap = new Map(projects.map((p) => [p.id, p]));
+
+        const brainEvents: CalendarEvent[] = nodes
+          .filter((n): n is BrainNode & { dueDate: string } => !!n.dueDate)
+          .map((node) => {
+            const project = projectMap.get(node.projectId);
+            return {
+              id: `brain-${node.id}`,
+              title: `🧠 ${node.title}`,
+              person: '',
+              date: node.dueDate.split('T')[0],
+              time: '09:00',
+              duration: 30,
+              recurring: 'none' as const,
+              cost: 0,
+              type: 'brain' as const,
+              notes: `Brain: ${project?.name ?? 'Project'}`,
+              isRecurring: false,
+              priority: (node.priority === 'urgent' ? 'high' : node.priority) as 'low' | 'medium' | 'high',
+              status: 'confirmed' as const,
+              color: project?.color,
+              createdAt: new Date(node.createdAt),
+              updatedAt: new Date(node.updatedAt),
+            };
+          });
+
+        if (brainEvents.length > 0) {
+          const currentEvents = useFamilyStore.getState().events;
+          // Remove old brain events, then merge new ones
+          const nonBrainEvents = currentEvents.filter((e) => !e.id.startsWith('brain-'));
+          setEvents(mergeEvents(brainEvents, nonBrainEvents));
+        }
+      } catch (err) {
+        console.warn('📆 CalendarContext: Failed to load brain events:', err);
+      }
+    };
+
+    loadBrainEvents();
+  }, [setEvents]);
 
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [defaultSlot, setDefaultSlot] = useState<{ start: Date; end: Date } | null>(null);
