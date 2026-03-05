@@ -142,7 +142,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
     }
   }, [people]);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([
-    'sport', 'meeting', 'fitness', 'social', 'education', 'family', 'other', 'appointment', 'work', 'personal'
+    'sport', 'meeting', 'fitness', 'social', 'education', 'family', 'other', 'appointment', 'work', 'personal', 'brain'
   ])
   const [hoveredEvent, setHoveredEvent] = useState<CalendarEvent | null>(null)
   const [tooltipPosition, setTooltipPosition] = useState<{ x: number; y: number } | null>(null)
@@ -395,7 +395,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
     }
 
     const filtered = events.filter(event => {
-      const personMatch = selectedPeople.includes(event.person);
+      const personMatch = event.person === '' || selectedPeople.includes(event.person);
       const categoryMatch = selectedCategories.includes(event.type);
 
       // Debug logging for events not matching

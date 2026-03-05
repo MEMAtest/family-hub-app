@@ -179,10 +179,10 @@ export const BrainProvider = ({ children }: PropsWithChildren) => {
   }, [familyId, setBrainProjects]);
 
   useEffect(() => {
-    if (hasFetchedProjects.current) return;
+    if (!familyId || hasFetchedProjects.current) return;
     hasFetchedProjects.current = true;
     void refreshProjects();
-  }, [refreshProjects]);
+  }, [familyId, refreshProjects]);
 
   // ─── Fetch nodes + edges when active project changes ──────────────
   useEffect(() => {
