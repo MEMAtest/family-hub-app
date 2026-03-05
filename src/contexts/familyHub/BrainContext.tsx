@@ -136,7 +136,7 @@ export const BrainProvider = ({ children }: PropsWithChildren) => {
   const checkOverdueNotifications = useCallback(async (loadedNodes: BrainNode[]) => {
     const today = new Date().toISOString().split('T')[0];
     const overdueNodes = loadedNodes.filter(
-      (n) => n.dueDate && n.dueDate.split('T')[0] <= today && n.status !== 'done'
+      (n) => n.dueDate && n.dueDate.split('T')[0] < today && n.status !== 'done'
     );
 
     for (const node of overdueNodes) {
@@ -146,7 +146,7 @@ export const BrainProvider = ({ children }: PropsWithChildren) => {
       await showNotification({
         type: 'reminder',
         title: 'Brain task overdue',
-        message: `"${node.title}" is past due`,
+        message: `"${node.title}" is past its due date`,
         icon: '🧠',
         priority: node.priority === 'urgent' ? 'urgent' : 'high',
         category: 'event',
