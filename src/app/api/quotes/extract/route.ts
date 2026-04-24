@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pdfParse from 'pdf-parse';
+
+export const runtime = 'nodejs';
 
 // Security constants
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB limit
@@ -20,6 +21,7 @@ function isPDFFile(buffer: Buffer): boolean {
  * Wrap pdf-parse with timeout to prevent hanging on large/complex PDFs
  */
 async function parseWithTimeout(buffer: Buffer, timeoutMs: number) {
+  const pdfParse = (await import('pdf-parse/lib/pdf-parse.js')).default;
   const timeoutPromise = new Promise<never>((_, reject) =>
     setTimeout(() => reject(new Error('PDF parsing timeout - file may be too large or complex')), timeoutMs)
   );
