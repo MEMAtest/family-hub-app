@@ -44,17 +44,51 @@ class DatabaseService {
 
   private mergeEvents(primary: CalendarEvent[], secondary: CalendarEvent[]) {
     const merged = new Map<string, CalendarEvent>();
-    secondary.forEach((event) => {
-      if (event?.id) {
+    const upsertLatest = (event: CalendarEvent) => {
+      if (!event?.id) return;
+      const existing = merged.get(event.id);
+      if (!existing) {
+        merged.set(event.id, event);
+        return;
+      }
+      const existingTime = new Date(existing.updatedAt || existing.createdAt).getTime();
+      const eventTime = new Date(event.updatedAt || event.createdAt).getTime();
+      if (Number.isNaN(existingTime) || eventTime >= existingTime) {
         merged.set(event.id, event);
       }
-    });
-    primary.forEach((event) => {
-      if (event?.id) {
-        merged.set(event.id, event);
-      }
-    });
+    };
+
+    secondary.forEach(upsertLatest);
+    primary.forEach(upsertLatest);
     return Array.from(merged.values());
+  }
+
+  private readLocalEvents(): CalendarEvent[] {
+    if (typeof window === 'undefined') return [];
+    try {
+      const parsed = JSON.parse(localStorage.getItem('calendarEvents') || '[]');
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (error) {
+      console.warn('Failed to read local calendar events:', error);
+      return [];
+    }
+  }
+
+  private writeLocalEvents(events: CalendarEvent[]) {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem('calendarEvents', JSON.stringify(events));
+  }
+
+  private upsertLocalEvent(event: CalendarEvent) {
+    const events = this.readLocalEvents();
+    const index = events.findIndex((item) => item.id === event.id);
+    if (index === -1) {
+      this.writeLocalEvents([...events, event]);
+      return;
+    }
+    const nextEvents = events.slice();
+    nextEvents[index] = { ...nextEvents[index], ...event };
+    this.writeLocalEvents(nextEvents);
   }
 
   async initialize() {
@@ -225,11 +259,7 @@ class DatabaseService {
       console.log('❌ NO DATABASE CONNECTION - saving to localStorage only');
       console.log('   familyId:', this.familyId, 'syncEnabled:', this.syncEnabled);
       // Just save to localStorage
-      if (typeof window !== 'undefined') {
-        const events = JSON.parse(localStorage.getItem('calendarEvents') || '[]');
-        events.push(event);
-        localStorage.setItem('calendarEvents', JSON.stringify(events));
-      }
+      this.upsertLocalEvent(event);
       return event;
     }
 
@@ -245,6 +275,8 @@ class DatabaseService {
           title: event.title,
           description: '',
           eventDateTime: eventDateTime,
+          date: event.date,
+          time: event.time,
           durationMinutes: event.duration || 60,
           location: event.location || '',
           cost: event.cost || 0,
@@ -266,30 +298,17 @@ class DatabaseService {
           updatedAt: dbEvent.updatedAt,
         };
 
-        // Update localStorage as well
-        if (typeof window !== 'undefined') {
-          const events = JSON.parse(localStorage.getItem('calendarEvents') || '[]');
-          events.push(savedEvent);
-          localStorage.setItem('calendarEvents', JSON.stringify(events));
-        }
+        this.upsertLocalEvent(savedEvent);
         return savedEvent;
       } else {
         console.warn('Database returned no event, falling back to localStorage');
-        if (typeof window !== 'undefined') {
-          const events = JSON.parse(localStorage.getItem('calendarEvents') || '[]');
-          events.push(event);
-          localStorage.setItem('calendarEvents', JSON.stringify(events));
-        }
+        this.upsertLocalEvent(event);
         return event;
       }
     } catch (error) {
       console.error('Failed to save event to database:', error);
       // Fall back to localStorage
-      if (typeof window !== 'undefined') {
-        const events = JSON.parse(localStorage.getItem('calendarEvents') || '[]');
-        events.push(event);
-        localStorage.setItem('calendarEvents', JSON.stringify(events));
-      }
+      this.upsertLocalEvent(event);
       return event;
     }
   }
@@ -298,11 +317,11 @@ class DatabaseService {
   async updateEvent(id: string, event: Partial<CalendarEvent>): Promise<boolean> {
     if (!this.familyId || !this.syncEnabled) {
       // Just update localStorage
-      const events = JSON.parse(localStorage.getItem('calendarEvents') || '[]');
+      const events = this.readLocalEvents();
       const index = events.findIndex((e: any) => e.id === id);
       if (index !== -1) {
         events[index] = { ...events[index], ...event };
-        localStorage.setItem('calendarEvents', JSON.stringify(events));
+        this.writeLocalEvents(events);
         return true;
       }
       return false;
@@ -318,15 +337,22 @@ class DatabaseService {
       });
 
       // Update localStorage as well
-      const events = JSON.parse(localStorage.getItem('calendarEvents') || '[]');
+      const events = this.readLocalEvents();
       const index = events.findIndex((e: any) => e.id === id);
       if (index !== -1) {
         events[index] = { ...events[index], ...event };
-        localStorage.setItem('calendarEvents', JSON.stringify(events));
+        this.writeLocalEvents(events);
       }
       return true;
     } catch (error) {
       console.error('Failed to update event in database:', error);
+      const events = this.readLocalEvents();
+      const index = events.findIndex((e: any) => e.id === id);
+      if (index !== -1) {
+        events[index] = { ...events[index], ...event };
+        this.writeLocalEvents(events);
+        return true;
+      }
       return false;
     }
   }
@@ -335,9 +361,9 @@ class DatabaseService {
   async deleteEvent(id: string): Promise<boolean> {
     if (!this.familyId || !this.syncEnabled) {
       // Just delete from localStorage
-      const events = JSON.parse(localStorage.getItem('calendarEvents') || '[]');
+      const events = this.readLocalEvents();
       const filtered = events.filter((e: any) => e.id !== id);
-      localStorage.setItem('calendarEvents', JSON.stringify(filtered));
+      this.writeLocalEvents(filtered);
       return true;
     }
 
@@ -347,13 +373,15 @@ class DatabaseService {
       });
 
       // Update localStorage as well
-      const events = JSON.parse(localStorage.getItem('calendarEvents') || '[]');
+      const events = this.readLocalEvents();
       const filtered = events.filter((e: any) => e.id !== id);
-      localStorage.setItem('calendarEvents', JSON.stringify(filtered));
+      this.writeLocalEvents(filtered);
       return true;
     } catch (error) {
       console.error('Failed to delete event from database:', error);
-      return false;
+      const events = this.readLocalEvents();
+      this.writeLocalEvents(events.filter((e: any) => e.id !== id));
+      return true;
     }
   }
 

@@ -2,6 +2,38 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireFamilyAccess } from '@/lib/auth-utils';
 
+const buildUtcDateTime = (dateValue?: string | null, timeValue?: string | null, fallback?: Date | string | null) => {
+  if (dateValue) {
+    const [year, month, day] = dateValue.split('-').map(Number);
+    const [hours, minutes] = (timeValue || '00:00').split(':').map(Number);
+    return new Date(Date.UTC(year, month - 1, day, hours || 0, minutes || 0, 0, 0));
+  }
+
+  if (fallback) {
+    return new Date(fallback);
+  }
+
+  return new Date();
+};
+
+const toDateKey = (value: Date) => value.toISOString().split('T')[0];
+
+const toTimeKey = (value: Date) => {
+  const hours = value.getUTCHours().toString().padStart(2, '0');
+  const minutes = value.getUTCMinutes().toString().padStart(2, '0');
+  return `${hours}:${minutes}`;
+};
+
+const toCalendarEventResponse = (event: any) => ({
+  ...event,
+  date: toDateKey(event.eventDate),
+  time: toTimeKey(event.eventTime),
+  person: event.personId,
+  duration: event.durationMinutes,
+  type: event.eventType,
+  recurring: event.recurringPattern,
+});
+
 // GET all calendar events for a family
 export const GET = requireFamilyAccess(async (_request: NextRequest, context, _authUser) => {
   try {
@@ -43,10 +75,11 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context, _a
       recurringPattern,
       isRecurring,
       notes,
+      date,
+      time,
     } = body;
 
-    // Parse the combined eventDateTime ISO string
-    const dateTime = new Date(eventDateTime);
+    const dateTime = buildUtcDateTime(date, time, eventDateTime);
 
     const event = await prisma.calendarEvent.create({
       data: {
@@ -69,7 +102,7 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context, _a
       },
     });
 
-    return NextResponse.json(event);
+    return NextResponse.json(toCalendarEventResponse(event));
   } catch (error) {
     console.error('Error creating event:', error);
     return NextResponse.json({ error: 'Failed to create event' }, { status: 500 });
@@ -89,7 +122,7 @@ export const PUT = requireFamilyAccess(async (request: NextRequest, context, _au
 
     const existing = await prisma.calendarEvent.findFirst({
       where: { id, familyId },
-      select: { id: true },
+      select: { id: true, eventDate: true, eventTime: true },
     });
 
     if (!existing) {
@@ -100,23 +133,21 @@ export const PUT = requireFamilyAccess(async (request: NextRequest, context, _au
     const updateData: any = {};
 
     // Map date/time fields
-    if (date) {
-      const eventDate = new Date(date);
-      if (time) {
-        const [hours, minutes] = time.split(':');
-        eventDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
-      }
+    if (date || time) {
+      const existingDate = toDateKey(existing.eventDate);
+      const existingTime = toTimeKey(existing.eventTime);
+      const eventDate = buildUtcDateTime(date || existingDate, time || existingTime);
       updateData.eventDate = eventDate;
       updateData.eventTime = eventDate;
     }
 
     // Map person to personId
-    if (person) {
+    if (person !== undefined) {
       updateData.personId = person;
     }
 
     // Map type to eventType
-    if (type) {
+    if (type !== undefined) {
       updateData.eventType = type;
     }
 
@@ -126,7 +157,7 @@ export const PUT = requireFamilyAccess(async (request: NextRequest, context, _au
     }
 
     // Map recurring to recurringPattern
-    if (recurring) {
+    if (recurring !== undefined) {
       updateData.recurringPattern = recurring;
       updateData.isRecurring = recurring !== 'none';
     }
@@ -148,7 +179,7 @@ export const PUT = requireFamilyAccess(async (request: NextRequest, context, _au
       },
     });
 
-    return NextResponse.json(event);
+    return NextResponse.json(toCalendarEventResponse(event));
   } catch (error) {
     console.error('Error updating event:', error);
     return NextResponse.json({ error: 'Failed to update event' }, { status: 500 });

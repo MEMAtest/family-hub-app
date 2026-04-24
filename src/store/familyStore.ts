@@ -113,13 +113,28 @@ interface ViewSlice {
   currentDate: Date | null;
   isHydrated: boolean;
   selectedPerson: string;
+  dashboardPreferences: DashboardPreferences;
   setCurrentView: (view: string) => void;
   setCurrentSubView: (subView: string) => void;
   setCalendarView: (view: 'month' | 'week' | 'day') => void;
   setCurrentDate: (date: Date) => void;
   setSelectedPerson: (personId: string) => void;
+  setDashboardPreferences: (preferences: DashboardPreferences) => void;
+  updateDashboardPreferences: (updates: Partial<DashboardPreferences>) => void;
   hydrate: () => void;
 }
+
+export interface DashboardPreferences {
+  hiddenWidgetIds: string[];
+  collapsedWidgetIds: string[];
+  showFinancials: boolean;
+}
+
+export const DEFAULT_DASHBOARD_PREFERENCES: DashboardPreferences = {
+  hiddenWidgetIds: [],
+  collapsedWidgetIds: [],
+  showFinancials: true,
+};
 
 interface BudgetSlice {
   budgetData: BudgetData | null;
@@ -333,11 +348,21 @@ const createViewSlice: StateCreator<FamilyState, [], [], ViewSlice> = (set) => (
   currentDate: null, // Initialize as null to prevent hydration mismatch
   isHydrated: false,
   selectedPerson: 'all',
+  dashboardPreferences: DEFAULT_DASHBOARD_PREFERENCES,
   setCurrentView: (view) => set({ currentView: view, currentSubView: '' }),
   setCurrentSubView: (subView) => set({ currentSubView: subView }),
   setCalendarView: (view) => set({ calendarView: view }),
   setCurrentDate: (date) => set({ currentDate: date }),
   setSelectedPerson: (personId) => set({ selectedPerson: personId }),
+  setDashboardPreferences: (preferences) => set({ dashboardPreferences: preferences }),
+  updateDashboardPreferences: (updates) =>
+    set((state) => ({
+      dashboardPreferences: {
+        ...DEFAULT_DASHBOARD_PREFERENCES,
+        ...state.dashboardPreferences,
+        ...updates,
+      },
+    })),
   hydrate: () => set({ currentDate: new Date(), isHydrated: true }),
 });
 
@@ -970,7 +995,7 @@ export const useFamilyStore = create<FamilyState>()(
     }),
     {
       name: 'family-storage',
-      version: 7, // Bumped for brain feature
+      version: 8, // Bumped for dashboard preferences
       partialize: (state) => ({
         // Only persist UI preferences, NOT dynamic data
         // Dynamic data (people, events, budgetData, mealPlanning, shoppingLists, goalsData)
@@ -979,6 +1004,7 @@ export const useFamilyStore = create<FamilyState>()(
         currentSubView: state.currentSubView,
         calendarView: state.calendarView,
         selectedPerson: state.selectedPerson,
+        dashboardPreferences: state.dashboardPreferences,
         eventTemplates: state.eventTemplates,
         // Property data (loaded from static files for now)
         propertyProfile: state.propertyProfile,
@@ -1018,6 +1044,10 @@ export const useFamilyStore = create<FamilyState>()(
           }
           persistedState.propertyProfile = updatedProfile;
         }
+        persistedState.dashboardPreferences = {
+          ...DEFAULT_DASHBOARD_PREFERENCES,
+          ...(persistedState.dashboardPreferences || {}),
+        };
         return persistedState;
       },
     }

@@ -1,10 +1,91 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Family Hub">
   <defs>
-    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#3B82F6;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#8B5CF6;stop-opacity:1" />
+    <radialGradient id="app-bg" cx="50%" cy="45%" r="70%">
+      <stop offset="0%" stop-color="#172554"/>
+      <stop offset="58%" stop-color="#080f2d"/>
+      <stop offset="100%" stop-color="#030712"/>
+    </radialGradient>
+    <linearGradient id="neon-stroke" x1="72" y1="146" x2="438" y2="402" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#22d3ee"/>
+      <stop offset="0.42" stop-color="#3b82f6"/>
+      <stop offset="0.72" stop-color="#8b5cf6"/>
+      <stop offset="1" stop-color="#f472b6"/>
     </linearGradient>
+    <linearGradient id="warm-edge" x1="210" y1="250" x2="412" y2="390" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#3b82f6"/>
+      <stop offset="1" stop-color="#f59e0b"/>
+    </linearGradient>
+    <filter id="soft-glow" x="-35%" y="-35%" width="170%" height="170%">
+      <feGaussianBlur stdDeviation="7" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0.16 0 0 0 0 0.62 0 0 0 0 1 0 0 0 0.82 0"/>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="pink-glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="5" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0.88 0 0 0 0 0.25 0 0 0 0 1 0 0 0 0.72 0"/>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <clipPath id="safe-round">
+      <rect x="24" y="24" width="464" height="464" rx="96"/>
+    </clipPath>
   </defs>
-  <rect width="512" height="512" rx="64" fill="url(#bg)"/>
-  <text x="256" y="256" font-family="Arial, sans-serif" font-size="200" font-weight="bold" fill="white" text-anchor="middle" dominant-baseline="central">FH</text>
+
+  <g clip-path="url(#safe-round)">
+    <rect width="512" height="512" fill="url(#app-bg)"/>
+    <rect x="30" y="30" width="452" height="452" rx="88" fill="none" stroke="#5b7cfa" stroke-opacity=".34" stroke-width="6"/>
+    <rect x="42" y="42" width="428" height="428" rx="80" fill="none" stroke="#c7d2fe" stroke-opacity=".16" stroke-width="2"/>
+
+    <path d="M89 312c31 79 96 121 169 121 75 0 139-44 168-111" fill="none" stroke="url(#neon-stroke)" stroke-width="15" stroke-linecap="round" filter="url(#soft-glow)"/>
+    <circle cx="83" cy="305" r="17" fill="#10265c" stroke="#38bdf8" stroke-width="8" filter="url(#soft-glow)"/>
+    <circle cx="256" cy="432" r="20" fill="#172554" stroke="#60a5fa" stroke-width="9" filter="url(#soft-glow)"/>
+    <circle cx="428" cy="310" r="17" fill="#2e1065" stroke="#c084fc" stroke-width="8" filter="url(#pink-glow)"/>
+
+    <path d="M109 244 256 103l148 141" fill="none" stroke="url(#neon-stroke)" stroke-width="24" stroke-linecap="round" stroke-linejoin="round" filter="url(#soft-glow)"/>
+    <path d="M128 244v142h256V244" fill="none" stroke="url(#neon-stroke)" stroke-width="18" stroke-linecap="round" stroke-linejoin="round" filter="url(#soft-glow)"/>
+    <path d="M368 147h45v86" fill="none" stroke="#a5b4fc" stroke-width="17" stroke-linecap="round" stroke-linejoin="round" filter="url(#soft-glow)"/>
+
+    <g opacity=".42" fill="#3b82f6">
+      <circle cx="238" cy="152" r="3"/>
+      <circle cx="256" cy="152" r="3"/>
+      <circle cx="274" cy="152" r="3"/>
+      <circle cx="238" cy="170" r="3"/>
+      <circle cx="256" cy="170" r="3"/>
+      <circle cx="274" cy="170" r="3"/>
+      <circle cx="238" cy="188" r="3"/>
+      <circle cx="256" cy="188" r="3"/>
+      <circle cx="274" cy="188" r="3"/>
+    </g>
+
+    <g filter="url(#soft-glow)">
+      <path d="M154 357c0-49 31-83 70-83s70 34 70 83" fill="#111827" stroke="#38bdf8" stroke-width="9" stroke-linecap="round"/>
+      <circle cx="224" cy="227" r="47" fill="#7c3aed" opacity=".22"/>
+      <circle cx="224" cy="227" r="39" fill="#111827" stroke="#60a5fa" stroke-width="8"/>
+      <path d="M180 218c8-35 35-53 70-42 21 7 34 23 39 44-18-21-42-30-70-27-18 2-31 10-39 25z" fill="#0f172a" stroke="#a78bfa" stroke-width="6" stroke-linejoin="round"/>
+    </g>
+
+    <g filter="url(#pink-glow)">
+      <path d="M260 362c0-55 35-94 80-94s80 39 80 94" fill="#111827" stroke="url(#warm-edge)" stroke-width="10" stroke-linecap="round"/>
+      <circle cx="340" cy="220" r="42" fill="#111827" stroke="#818cf8" stroke-width="8"/>
+      <path d="M303 207c9-27 32-43 63-34 17 5 29 18 34 34-28-19-63-19-97 0z" fill="#0f172a" stroke="#38bdf8" stroke-width="6" stroke-linejoin="round"/>
+    </g>
+
+    <g filter="url(#soft-glow)">
+      <path d="M152 410c0-38 25-66 57-66s57 28 57 66" fill="#111827" stroke="#38bdf8" stroke-width="8" stroke-linecap="round"/>
+      <circle cx="209" cy="319" r="33" fill="#111827" stroke="#60a5fa" stroke-width="7"/>
+      <circle cx="181" cy="290" r="15" fill="#111827" stroke="#38bdf8" stroke-width="6"/>
+      <circle cx="237" cy="290" r="15" fill="#111827" stroke="#8b5cf6" stroke-width="6"/>
+    </g>
+
+    <g filter="url(#pink-glow)">
+      <path d="M271 410c0-38 25-66 57-66s57 28 57 66" fill="#111827" stroke="url(#warm-edge)" stroke-width="8" stroke-linecap="round"/>
+      <circle cx="328" cy="319" r="33" fill="#111827" stroke="#818cf8" stroke-width="7"/>
+      <path d="M299 304c6-21 24-32 48-25 13 4 22 13 26 25-23-14-48-14-74 0z" fill="#0f172a" stroke="#60a5fa" stroke-width="5" stroke-linejoin="round"/>
+    </g>
+  </g>
 </svg>

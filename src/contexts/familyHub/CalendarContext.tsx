@@ -90,16 +90,22 @@ const buildEvent = (draft: CalendarDraft, id?: string): CalendarEvent => ({
 
 const mergeEvents = (primary: CalendarEvent[], secondary: CalendarEvent[]) => {
   const merged = new Map<string, CalendarEvent>();
-  secondary.forEach((event) => {
-    if (event?.id) {
+  const upsertLatest = (event: CalendarEvent) => {
+    if (!event?.id) return;
+    const existing = merged.get(event.id);
+    if (!existing) {
+      merged.set(event.id, event);
+      return;
+    }
+    const existingTime = new Date(existing.updatedAt || existing.createdAt).getTime();
+    const eventTime = new Date(event.updatedAt || event.createdAt).getTime();
+    if (Number.isNaN(existingTime) || eventTime >= existingTime) {
       merged.set(event.id, event);
     }
-  });
-  primary.forEach((event) => {
-    if (event?.id) {
-      merged.set(event.id, event);
-    }
-  });
+  };
+
+  secondary.forEach(upsertLatest);
+  primary.forEach(upsertLatest);
   return Array.from(merged.values());
 };
 
@@ -374,8 +380,13 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
     }
 
     const success = await databaseService.updateEvent(id, updatedEvent);
-    if (success) {
-      setEvents(events.map((event) => (event.id === id ? updatedEvent : event)));
+    const nextEvents = events.map((event) => (event.id === id ? updatedEvent : event));
+    setEvents(nextEvents);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('calendarEvents', JSON.stringify(nextEvents));
+    }
+    if (!success) {
+      console.warn('📆 CalendarContext: Updated event in local state after database update failed:', id);
     }
 
     if (updates.date || updates.time) {

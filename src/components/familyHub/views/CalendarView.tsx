@@ -1,17 +1,19 @@
 'use client'
 
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { Settings, LayoutGrid } from 'lucide-react';
 import CalendarMain from '@/components/calendar/CalendarMain';
 import { useCalendarContext } from '@/contexts/familyHub/CalendarContext';
 import { useFamilyContext } from '@/contexts/familyHub/FamilyContext';
 import { useAppView } from '@/contexts/familyHub/AppViewContext';
+import type { CalendarEvent } from '@/types/calendar.types';
 
 export const CalendarView = () => {
   const {
     events,
     openEditForm,
     openCreateForm,
+    createEvent,
     updateEvent,
     deleteEvent,
     openTemplateManager,
@@ -27,6 +29,13 @@ export const CalendarView = () => {
     color: member.color,
     role: member.role,
   })), [members]);
+
+  const handleEventsSync = useCallback(async (importedEvents: CalendarEvent[]) => {
+    for (const importedEvent of importedEvents) {
+      const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, ...draft } = importedEvent;
+      await createEvent(draft);
+    }
+  }, [createEvent]);
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -81,6 +90,7 @@ export const CalendarView = () => {
           onDateChange={setCurrentDate}
           onTemplateManage={openTemplateManager}
           onConflictSettings={openConflictSettings}
+          onEventsSync={handleEventsSync}
         />
       </div>
     </div>

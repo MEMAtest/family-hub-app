@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { formatDateLong } from '@/utils/formatDate';
 import {
   Activity,
@@ -10,16 +10,20 @@ import {
   Users,
   Target,
   BarChart3,
-  TrendingUp,
   Clock,
   Utensils,
   GraduationCap,
   BookOpen,
   UtensilsCrossed,
-  Zap,
   ShoppingCart,
-  PieChart,
   Wrench,
+  SlidersHorizontal,
+  Eye,
+  EyeOff,
+  Minimize2,
+  Maximize2,
+  RotateCcw,
+  X,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -41,9 +45,10 @@ import { useMealsContext } from '@/contexts/familyHub/MealsContext';
 import { useContractorContext } from '@/contexts/familyHub/ContractorContext';
 import { stewartFleming2025To2026, stewartFleming2026To2027 } from '@/data/schoolTerms';
 import { extractBudgetRecords, summariseBudgetForMonth } from '@/utils/budgetAnalytics';
+import { getNextSchoolBreak } from '@/utils/schoolBreaks';
 import { UpcomingContractorVisits } from '@/components/contractors';
 import BrainFocusWidget from '@/components/dashboard/BrainFocusWidget';
-import { useFamilyStore } from '@/store/familyStore';
+import { DEFAULT_DASHBOARD_PREFERENCES, useFamilyStore } from '@/store/familyStore';
 
 type FeedItem = {
   id: string;
@@ -54,6 +59,35 @@ type FeedItem = {
   severity: 'info' | 'attention' | 'urgent';
   cta?: { label: string; view: string; params?: Record<string, string> };
 };
+
+const DASHBOARD_WIDGETS = [
+  { id: 'snapshot', label: "Today's Snapshot" },
+  { id: 'familyFeed', label: 'Family Feed' },
+  { id: 'schedule', label: 'Upcoming Schedule' },
+  { id: 'activity', label: 'Family Activity' },
+  { id: 'schoolTerms', label: 'School Breaks' },
+  { id: 'quickActions', label: 'Quick Actions' },
+  { id: 'budgetOverview', label: 'Budget Overview' },
+  { id: 'recentActivity', label: 'Recent Activity' },
+  { id: 'household', label: 'Household Members' },
+  { id: 'meals', label: 'Meal Plan Highlights' },
+  { id: 'shopping', label: 'Shopping Lists' },
+  { id: 'contractors', label: 'Contractor Visits' },
+  { id: 'brainFocus', label: 'Brain Focus' },
+] as const;
+
+type DashboardWidgetId = (typeof DASHBOARD_WIDGETS)[number]['id'];
+
+const validDashboardWidgetIds = new Set<string>(DASHBOARD_WIDGETS.map((widget) => widget.id));
+
+const normalizeDashboardPreferences = (
+  preferences: Partial<typeof DEFAULT_DASHBOARD_PREFERENCES> | null | undefined
+) => ({
+  ...DEFAULT_DASHBOARD_PREFERENCES,
+  ...preferences,
+  hiddenWidgetIds: (preferences?.hiddenWidgetIds ?? []).filter((id) => validDashboardWidgetIds.has(id)),
+  collapsedWidgetIds: (preferences?.collapsedWidgetIds ?? []).filter((id) => validDashboardWidgetIds.has(id)),
+});
 
 const currencyFormatter = new Intl.NumberFormat('en-GB', {
   style: 'currency',
@@ -78,13 +112,6 @@ const formatNiceDate = (dateStr: string) => {
   const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   return `${days[date.getDay()]} ${date.getDate()} ${months[date.getMonth()]}`;
-};
-
-// Calculate days between two dates
-const daysBetween = (date1: string, date2: string) => {
-  const d1 = new Date(date1);
-  const d2 = new Date(date2);
-  return Math.ceil((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24));
 };
 
 const StatCard = ({
@@ -121,6 +148,57 @@ const StatCard = ({
   </button>
 );
 
+const WidgetControls = ({
+  isCollapsed,
+  onToggleCollapse,
+  onHide,
+}: {
+  isCollapsed: boolean;
+  onToggleCollapse: () => void;
+  onHide: () => void;
+}) => (
+  <div className="flex items-center gap-1">
+    <button
+      type="button"
+      onClick={onToggleCollapse}
+      className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
+      title={isCollapsed ? 'Expand widget' : 'Minimise widget'}
+      aria-label={isCollapsed ? 'Expand widget' : 'Minimise widget'}
+    >
+      {isCollapsed ? <Maximize2 className="h-4 w-4" /> : <Minimize2 className="h-4 w-4" />}
+    </button>
+    <button
+      type="button"
+      onClick={onHide}
+      className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
+      title="Hide widget"
+      aria-label="Hide widget"
+    >
+      <X className="h-4 w-4" />
+    </button>
+  </div>
+);
+
+const CollapsedWidget = ({
+  title,
+  controls,
+  className = '',
+}: {
+  title: string;
+  controls: ReactNode;
+  className?: string;
+}) => (
+  <div className={`rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900 ${className}`}>
+    <div className="flex items-center justify-between gap-3">
+      <div>
+        <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">{title}</p>
+        <p className="text-xs text-gray-500 dark:text-slate-400">Minimised</p>
+      </div>
+      {controls}
+    </div>
+  </div>
+);
+
 export const DashboardView = () => {
   const { setView } = useAppView();
   const { events, openCreateForm } = useCalendarContext();
@@ -130,13 +208,16 @@ export const DashboardView = () => {
   const { lists, openForm: openShoppingForm } = useShoppingContext();
   const { members, openForm: openFamilyForm } = useFamilyContext();
   const { goalsData, openQuickActivityForm, personalTracking } = useGoalsContext();
-  const { openQuickAppointment, upcomingAppointments } = useContractorContext();
+  const { openQuickAppointment } = useContractorContext();
   const mealPlanning = mealsContext.mealPlanning;
   const familyId = useFamilyStore((state) => state.databaseStatus.familyId);
+  const storedDashboardPreferences = useFamilyStore((state) => state.dashboardPreferences);
+  const setDashboardPreferences = useFamilyStore((state) => state.setDashboardPreferences);
 
   const [feedItems, setFeedItems] = useState<FeedItem[]>([]);
   const [feedLoading, setFeedLoading] = useState(false);
   const [feedError, setFeedError] = useState<string | null>(null);
+  const [showDashboardSettings, setShowDashboardSettings] = useState(false);
 
   const reloadFeed = useCallback(async () => {
     if (!familyId) return;
@@ -162,6 +243,76 @@ export const DashboardView = () => {
     void reloadFeed();
   }, [reloadFeed]);
 
+  const dashboardPreferences = useMemo(
+    () => normalizeDashboardPreferences(storedDashboardPreferences),
+    [storedDashboardPreferences]
+  );
+
+  const hiddenWidgets = useMemo(
+    () => new Set<DashboardWidgetId>(dashboardPreferences.hiddenWidgetIds as DashboardWidgetId[]),
+    [dashboardPreferences.hiddenWidgetIds]
+  );
+
+  const collapsedWidgets = useMemo(
+    () => new Set<DashboardWidgetId>(dashboardPreferences.collapsedWidgetIds as DashboardWidgetId[]),
+    [dashboardPreferences.collapsedWidgetIds]
+  );
+
+  const isWidgetVisible = useCallback(
+    (id: DashboardWidgetId) => !hiddenWidgets.has(id),
+    [hiddenWidgets]
+  );
+
+  const isWidgetCollapsed = useCallback(
+    (id: DashboardWidgetId) => collapsedWidgets.has(id),
+    [collapsedWidgets]
+  );
+
+  const updateDashboardSettings = useCallback((updates: Partial<typeof dashboardPreferences>) => {
+    setDashboardPreferences({
+      ...dashboardPreferences,
+      ...updates,
+    });
+  }, [dashboardPreferences, setDashboardPreferences]);
+
+  const toggleWidgetVisibility = useCallback((id: DashboardWidgetId) => {
+    const nextHidden = new Set(hiddenWidgets);
+    nextHidden.has(id) ? nextHidden.delete(id) : nextHidden.add(id);
+    const nextCollapsed = dashboardPreferences.collapsedWidgetIds.filter((widgetId) => widgetId !== id);
+    updateDashboardSettings({
+      hiddenWidgetIds: Array.from(nextHidden),
+      collapsedWidgetIds: nextCollapsed,
+    });
+  }, [dashboardPreferences.collapsedWidgetIds, hiddenWidgets, updateDashboardSettings]);
+
+  const toggleWidgetCollapsed = useCallback((id: DashboardWidgetId) => {
+    const nextCollapsed = new Set(collapsedWidgets);
+    nextCollapsed.has(id) ? nextCollapsed.delete(id) : nextCollapsed.add(id);
+    updateDashboardSettings({ collapsedWidgetIds: Array.from(nextCollapsed) });
+  }, [collapsedWidgets, updateDashboardSettings]);
+
+  const resetDashboardLayout = useCallback(() => {
+    setDashboardPreferences(DEFAULT_DASHBOARD_PREFERENCES);
+  }, [setDashboardPreferences]);
+
+  const widgetControls = useCallback((id: DashboardWidgetId) => (
+    <WidgetControls
+      isCollapsed={isWidgetCollapsed(id)}
+      onToggleCollapse={() => toggleWidgetCollapsed(id)}
+      onHide={() => toggleWidgetVisibility(id)}
+    />
+  ), [isWidgetCollapsed, toggleWidgetCollapsed, toggleWidgetVisibility]);
+
+  const collapsedWidget = useCallback((id: DashboardWidgetId, className = '') => {
+    const title = DASHBOARD_WIDGETS.find((widget) => widget.id === id)?.label ?? 'Widget';
+    return <CollapsedWidget title={title} controls={widgetControls(id)} className={className} />;
+  }, [widgetControls]);
+
+  const formatPrivateCurrency = useCallback(
+    (value: number) => (dashboardPreferences.showFinancials ? formatCurrency(value) : '••••'),
+    [dashboardPreferences.showFinancials]
+  );
+
   // School year selector state - calculate dynamically based on current date
   // Academic year starts in September
   const currentYear = new Date().getFullYear();
@@ -183,35 +334,10 @@ export const DashboardView = () => {
   const schoolTerms = useMemo(() => {
     // Use selected school year data - map dynamic years to available data
     // For now, use 2025-2026 data for current year, 2026-2027 for next
-    const baseTerms = selectedSchoolYear === currentAcademicYear
+    return selectedSchoolYear === currentAcademicYear
       ? stewartFleming2025To2026
       : stewartFleming2026To2027;
-
-    if (events.length === 0) {
-      return baseTerms;
-    }
-
-    const calendarDerived = events
-      .filter((event) => event.title.toLowerCase().includes('fleming') || event.id?.startsWith('school-'))
-      .map((event) => {
-        const lowerTitle = event.title.toLowerCase();
-        let type: 'term' | 'half-term' | 'break' | 'inset' = 'term';
-        if (lowerTitle.includes('half')) type = 'half-term';
-        if (lowerTitle.includes('break') || lowerTitle.includes('holiday')) type = 'break';
-        if (lowerTitle.includes('inset')) type = 'inset';
-
-        return {
-          id: event.id ?? `school-${event.title.toLowerCase().replace(/\s+/g, '-')}`,
-          name: event.title,
-          start: event.date,
-          end: undefined,
-          type,
-          description: event.notes,
-        };
-      });
-
-    return calendarDerived.length > 0 ? calendarDerived : baseTerms;
-  }, [events, selectedSchoolYear, currentAcademicYear]);
+  }, [selectedSchoolYear, currentAcademicYear]);
 
   const { expenseRecords } = useMemo(() => extractBudgetRecords(budgetData), [budgetData]);
 
@@ -268,101 +394,7 @@ export const DashboardView = () => {
       .slice(0, 3);
   }, [schoolTerms]);
 
-  // Find the next school break with clear break-up and return dates
-  const nextSchoolBreak = useMemo(() => {
-    const today = new Date();
-    const todayStr = today.toISOString().split('T')[0];
-
-    // Get all breaks (both full breaks and half-terms)
-    const allBreaks = schoolTerms
-      .filter((term) => term.type === 'break' || term.type === 'half-term')
-      .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
-
-    // Check if we're currently IN a break
-    const currentBreak = allBreaks.find((brk) => {
-      const startDate = brk.start;
-      const endDate = brk.end || brk.start;
-      return todayStr >= startDate && todayStr <= endDate;
-    });
-
-    if (currentBreak) {
-      // We're currently on a break - find when school returns
-      const nextTermStart = schoolTerms
-        .filter((term) => term.type === 'term' && term.name.toLowerCase().includes('start'))
-        .filter((term) => term.start > (currentBreak.end || currentBreak.start))
-        .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime())[0];
-
-      const breakEnd = currentBreak.end || currentBreak.start;
-      const daysRemaining = daysBetween(todayStr, breakEnd);
-
-      return {
-        isCurrentlyOnBreak: true,
-        breakName: currentBreak.name,
-        breakEndDate: breakEnd,
-        returnDate: nextTermStart?.start,
-        daysRemaining,
-        breakUpDate: currentBreak.start,
-        breakUpName: currentBreak.name,
-        daysUntilBreak: 0,
-        breakDuration: currentBreak.end ? daysBetween(currentBreak.start, currentBreak.end) + 1 : 1,
-      };
-    }
-
-    // Find the next upcoming break (not currently in one)
-    const nextBreak = allBreaks.find((brk) => brk.start > todayStr);
-
-    if (!nextBreak) return null;
-
-    // Find when school breaks up for this break
-    // For half-terms, we need to find the day before the break starts
-    // For full breaks (Easter, Christmas, Summer), find the term end before it
-    let breakUpDate = nextBreak.start;
-    let breakUpName = nextBreak.name;
-
-    // Look for a term end that happens just before this break
-    const termEndBefore = schoolTerms
-      .filter((term) => term.type === 'term' && term.name.toLowerCase().includes('end'))
-      .filter((term) => {
-        const termEndDate = new Date(term.start);
-        const breakStartDate = new Date(nextBreak.start);
-        const daysDiff = (breakStartDate.getTime() - termEndDate.getTime()) / (1000 * 60 * 60 * 24);
-        return daysDiff >= 0 && daysDiff <= 7; // Within a week before break
-      })
-      .sort((a, b) => new Date(b.start).getTime() - new Date(a.start).getTime())[0];
-
-    if (termEndBefore) {
-      breakUpDate = termEndBefore.start;
-      breakUpName = termEndBefore.name.replace(' Ends', '');
-    } else {
-      // For half-terms, the break-up day is the Friday before (day before break starts)
-      const breakStart = new Date(nextBreak.start);
-      breakStart.setDate(breakStart.getDate() - 3); // Typically Friday before Monday half-term
-      // But we'll just use the break start minus 1 day as "last day of school"
-      const lastSchoolDay = new Date(nextBreak.start);
-      lastSchoolDay.setDate(lastSchoolDay.getDate() - 1);
-      breakUpDate = lastSchoolDay.toISOString().split('T')[0];
-      breakUpName = nextBreak.name.replace(' Break', '');
-    }
-
-    // Find when school returns after this break
-    const nextTermStart = schoolTerms
-      .filter((term) => term.type === 'term' && term.name.toLowerCase().includes('start'))
-      .filter((term) => term.start > (nextBreak.end || nextBreak.start))
-      .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime())[0];
-
-    const daysUntilBreak = daysBetween(todayStr, breakUpDate);
-    const breakDuration = nextBreak.end ? daysBetween(nextBreak.start, nextBreak.end) + 1 : 1;
-
-    return {
-      isCurrentlyOnBreak: false,
-      breakUpDate,
-      breakUpName,
-      returnDate: nextTermStart?.start,
-      breakName: nextBreak.name,
-      daysUntilBreak,
-      breakDuration,
-    };
-  }, [schoolTerms]);
+  const nextSchoolBreak = useMemo(() => getNextSchoolBreak(schoolTerms), [schoolTerms]);
 
   const snapshotCards = useMemo(() => ([
     {
@@ -376,8 +408,10 @@ export const DashboardView = () => {
     {
       key: 'budget',
       label: 'Net Income',
-      value: formatCurrency(budgetCardTotals.net),
-      subtext: `Income ${formatCurrency(budgetCardTotals.income)}`,
+      value: formatPrivateCurrency(budgetCardTotals.net),
+      subtext: dashboardPreferences.showFinancials
+        ? `Income ${formatPrivateCurrency(budgetCardTotals.income)}`
+        : 'Income hidden',
       icon: DollarSign,
       onClick: () => setView('budget' as const),
     },
@@ -397,16 +431,86 @@ export const DashboardView = () => {
       icon: Target,
       onClick: () => setView('goals' as const),
     },
-  ]), [avgGoalProgress, budgetCardTotals, lists, setView, totalGoals, upcomingEvents]);
+  ]), [avgGoalProgress, budgetCardTotals, dashboardPreferences.showFinancials, formatPrivateCurrency, lists, setView, totalGoals, upcomingEvents]);
 
   return (
     <div className="space-y-4 sm:space-y-6 p-3 sm:p-4 lg:p-8 overflow-x-hidden">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Dashboard</h2>
+          <p className="text-sm text-gray-500 dark:text-slate-400">Choose what appears here and keep sensitive numbers private.</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setShowDashboardSettings((value) => !value)}
+          className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+        >
+          <SlidersHorizontal className="h-4 w-4" />
+          Customise
+        </button>
+      </div>
+
+      {showDashboardSettings && (
+        <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 className="text-base font-semibold text-gray-900 dark:text-slate-100">Dashboard controls</h3>
+              <p className="text-sm text-gray-500 dark:text-slate-400">Hidden widgets stay available here so you can add them back.</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => updateDashboardSettings({ showFinancials: !dashboardPreferences.showFinancials })}
+                className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+              >
+                {dashboardPreferences.showFinancials ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                {dashboardPreferences.showFinancials ? 'Hide income' : 'Show income'}
+              </button>
+              <button
+                type="button"
+                onClick={resetDashboardLayout}
+                className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+              >
+                <RotateCcw className="h-4 w-4" />
+                Reset
+              </button>
+            </div>
+          </div>
+          <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {DASHBOARD_WIDGETS.map((widget) => {
+              const isVisible = isWidgetVisible(widget.id);
+              return (
+                <button
+                  key={widget.id}
+                  type="button"
+                  onClick={() => toggleWidgetVisibility(widget.id)}
+                  className={`flex items-center justify-between rounded-lg border px-3 py-2 text-left text-sm transition ${
+                    isVisible
+                      ? 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-500/40 dark:bg-blue-500/10 dark:text-blue-200'
+                      : 'border-gray-200 bg-gray-50 text-gray-500 hover:bg-gray-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400'
+                  }`}
+                >
+                  <span className="font-medium">{widget.label}</span>
+                  <span className="text-xs">{isVisible ? 'Shown' : 'Hidden'}</span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {isWidgetVisible('snapshot') && (isWidgetCollapsed('snapshot') ? (
+        collapsedWidget('snapshot')
+      ) : (
       <section>
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <h2 className="text-lg font-semibold text-gray-900">Today&apos;s Snapshot</h2>
-          <p className="text-sm text-gray-500 dark:text-slate-400">
-            {formatDateLong(new Date())}
-          </p>
+          <div className="flex items-center gap-2">
+            <p className="text-sm text-gray-500 dark:text-slate-400">
+              {formatDateLong(new Date())}
+            </p>
+            {widgetControls('snapshot')}
+          </div>
         </div>
         <div className="-mx-3 mt-4 flex snap-x gap-2 sm:gap-3 overflow-x-auto px-3 pb-2 sm:hidden scrollbar-hide">
           {snapshotCards.map((card) => (
@@ -434,16 +538,23 @@ export const DashboardView = () => {
           ))}
         </div>
       </section>
+      ))}
 
+      {isWidgetVisible('familyFeed') && (isWidgetCollapsed('familyFeed') ? (
+        collapsedWidget('familyFeed')
+      ) : (
       <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
         <div className="flex items-center justify-between">
           <h3 className="text-base font-semibold text-gray-900 dark:text-slate-100">Family Feed</h3>
-          <button
-            onClick={() => void reloadFeed()}
-            className="rounded-md border border-gray-200 px-3 py-1 text-sm text-gray-600 hover:bg-gray-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-          >
-            Refresh
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => void reloadFeed()}
+              className="rounded-md border border-gray-200 px-3 py-1 text-sm text-gray-600 hover:bg-gray-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+            >
+              Refresh
+            </button>
+            {widgetControls('familyFeed')}
+          </div>
         </div>
 
         {feedLoading ? (
@@ -491,17 +602,25 @@ export const DashboardView = () => {
           </div>
         )}
       </section>
+      ))}
 
+      {(isWidgetVisible('schedule') || isWidgetVisible('activity')) && (
       <section className="grid gap-6 lg:grid-cols-3">
+        {isWidgetVisible('schedule') && (isWidgetCollapsed('schedule') ? (
+          collapsedWidget('schedule', 'lg:col-span-2')
+        ) : (
         <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm lg:col-span-2 dark:border-slate-700 dark:bg-slate-900">
           <div className="flex items-center justify-between">
             <h3 className="text-base font-semibold text-gray-900 dark:text-slate-100">Upcoming Schedule</h3>
-            <button
-              onClick={() => openCreateForm()}
-              className="rounded-md border border-gray-200 px-3 py-1 text-sm text-gray-600 hover:bg-gray-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-            >
-              Add Event
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => openCreateForm()}
+                className="rounded-md border border-gray-200 px-3 py-1 text-sm text-gray-600 hover:bg-gray-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+              >
+                Add Event
+              </button>
+              {widgetControls('schedule')}
+            </div>
           </div>
           <div className="mt-4 space-y-3">
             {upcomingEvents.length === 0 && (
@@ -523,9 +642,16 @@ export const DashboardView = () => {
             })}
           </div>
         </div>
+        ))}
 
+        {isWidgetVisible('activity') && (isWidgetCollapsed('activity') ? (
+          collapsedWidget('activity')
+        ) : (
         <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-          <h3 className="text-base font-semibold text-gray-900 dark:text-slate-100">Family Activity</h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-base font-semibold text-gray-900 dark:text-slate-100">Family Activity</h3>
+            {widgetControls('activity')}
+          </div>
           <div className="mt-4 space-y-4 text-sm">
             <div className="flex items-center justify-between">
               <span className="text-gray-500">Today&apos;s steps</span>
@@ -549,9 +675,15 @@ export const DashboardView = () => {
             </button>
           </div>
         </div>
+        ))}
       </section>
+      )}
 
+      {(isWidgetVisible('schoolTerms') || isWidgetVisible('quickActions')) && (
       <section className="grid gap-6 lg:grid-cols-3">
+        {isWidgetVisible('schoolTerms') && (isWidgetCollapsed('schoolTerms') ? (
+          collapsedWidget('schoolTerms', 'lg:col-span-2')
+        ) : (
         <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm lg:col-span-2 dark:border-slate-700 dark:bg-slate-900">
           <div className="flex items-center justify-between mb-4">
             <h3 className="flex items-center gap-2 text-base font-semibold text-gray-900 dark:text-slate-100">
@@ -578,6 +710,7 @@ export const DashboardView = () => {
               >
                 {academicYear + 1}/{(academicYear + 2).toString().slice(-2)}
               </button>
+              {widgetControls('schoolTerms')}
             </div>
           </div>
           {/* Next Break Summary - Clear at-a-glance view */}
@@ -681,10 +814,15 @@ export const DashboardView = () => {
             )}
           </div>
         </div>
+        ))}
 
+        {isWidgetVisible('quickActions') && (isWidgetCollapsed('quickActions') ? (
+          collapsedWidget('quickActions')
+        ) : (
         <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
           <div className="flex items-center justify-between">
             <h3 className="text-base font-semibold text-gray-900 dark:text-slate-100">Quick Actions</h3>
+            {widgetControls('quickActions')}
           </div>
           <div className="mt-4 space-y-3">
             <button
@@ -762,51 +900,75 @@ export const DashboardView = () => {
             </button>
           </div>
         </div>
+        ))}
       </section>
+      )}
 
+      {(isWidgetVisible('budgetOverview') || isWidgetVisible('recentActivity')) && (
       <section className="grid gap-6 xl:grid-cols-3">
+        {isWidgetVisible('budgetOverview') && (isWidgetCollapsed('budgetOverview') ? (
+          collapsedWidget('budgetOverview', 'xl:col-span-2')
+        ) : (
         <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm xl:col-span-2 dark:border-slate-700 dark:bg-slate-900">
-          <h3 className="flex items-center gap-2 text-base font-semibold text-gray-900 dark:text-slate-100">
-            <BarChart3 className="h-5 w-5 text-blue-500" /> Budget Overview
-          </h3>
-          <div className="mt-4 h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={[
-                { name: 'Income', amount: budgetCardTotals.income, fill: '#10B981' },
-                { name: 'Expenses', amount: budgetCardTotals.expenses, fill: '#EF4444' },
-                { name: 'Net', amount: budgetCardTotals.net, fill: budgetCardTotals.net >= 0 ? '#3B82F6' : '#F59E0B' }
-              ]}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-                <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-                <YAxis tickFormatter={(value) => `£${value.toLocaleString()}`} width={80} />
-                <Tooltip formatter={(value: number) => `£${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} />
-                <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Bar dataKey="amount" radius={[6, 6, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="flex items-center gap-2 text-base font-semibold text-gray-900 dark:text-slate-100">
+              <BarChart3 className="h-5 w-5 text-blue-500" /> Budget Overview
+            </h3>
+            {widgetControls('budgetOverview')}
           </div>
+          {dashboardPreferences.showFinancials ? (
+            <div className="mt-4 h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={[
+                  { name: 'Income', amount: budgetCardTotals.income, fill: '#10B981' },
+                  { name: 'Expenses', amount: budgetCardTotals.expenses, fill: '#EF4444' },
+                  { name: 'Net', amount: budgetCardTotals.net, fill: budgetCardTotals.net >= 0 ? '#3B82F6' : '#F59E0B' }
+                ]}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                  <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                  <YAxis tickFormatter={(value) => `£${value.toLocaleString()}`} width={80} />
+                  <Tooltip formatter={(value: number) => `£${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  <Bar dataKey="amount" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="mt-4 flex h-64 flex-col items-center justify-center rounded-lg border border-dashed border-gray-200 bg-gray-50 text-center dark:border-slate-700 dark:bg-slate-800">
+              <EyeOff className="h-8 w-8 text-gray-400 dark:text-slate-500" />
+              <p className="mt-2 text-sm font-medium text-gray-700 dark:text-slate-200">Financial values hidden</p>
+              <p className="text-xs text-gray-500 dark:text-slate-400">Use Customise to show income again.</p>
+            </div>
+          )}
           <div className="mt-4 grid grid-cols-3 gap-4 text-sm">
             <div className="rounded-lg bg-green-50 p-3 border border-green-200 dark:border-green-500/40 dark:bg-green-500/10">
               <p className="text-xs text-green-700 font-medium dark:text-green-300">Total Income</p>
-              <p className="text-lg font-semibold text-green-900 dark:text-green-200">£{budgetCardTotals.income.toLocaleString()}</p>
+              <p className="text-lg font-semibold text-green-900 dark:text-green-200">{formatPrivateCurrency(budgetCardTotals.income)}</p>
             </div>
             <div className="rounded-lg bg-red-50 p-3 border border-red-200 dark:border-red-500/40 dark:bg-red-500/10">
               <p className="text-xs text-red-700 font-medium dark:text-red-300">Total Expenses</p>
-              <p className="text-lg font-semibold text-red-900 dark:text-red-200">£{budgetCardTotals.expenses.toLocaleString()}</p>
+              <p className="text-lg font-semibold text-red-900 dark:text-red-200">{formatPrivateCurrency(budgetCardTotals.expenses)}</p>
             </div>
             <div className={`rounded-lg p-3 border ${budgetCardTotals.net >= 0 ? 'bg-blue-50 border-blue-200 dark:border-blue-500/40 dark:bg-blue-500/10' : 'bg-amber-50 border-amber-200 dark:border-amber-500/40 dark:bg-amber-500/10'}`}>
               <p className={`text-xs font-medium ${budgetCardTotals.net >= 0 ? 'text-blue-700 dark:text-blue-200' : 'text-amber-700 dark:text-amber-200'}`}>Net Income</p>
               <p className={`text-lg font-semibold ${budgetCardTotals.net >= 0 ? 'text-blue-900 dark:text-blue-200' : 'text-amber-900 dark:text-amber-200'}`}>
-                £{budgetCardTotals.net.toLocaleString()}
+                {formatPrivateCurrency(budgetCardTotals.net)}
               </p>
             </div>
           </div>
         </div>
+        ))}
 
+        {isWidgetVisible('recentActivity') && (isWidgetCollapsed('recentActivity') ? (
+          collapsedWidget('recentActivity')
+        ) : (
         <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-          <h3 className="flex items-center gap-2 text-base font-semibold text-gray-900 dark:text-slate-100">
-            <Activity className="h-5 w-5 text-rose-500" /> Recent Activity
-          </h3>
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="flex items-center gap-2 text-base font-semibold text-gray-900 dark:text-slate-100">
+              <Activity className="h-5 w-5 text-rose-500" /> Recent Activity
+            </h3>
+            {widgetControls('recentActivity')}
+          </div>
           <div className="mt-4 space-y-3 text-sm">
             {personalTracking.fitness.activities.slice(0, 4).map((activity) => (
               <div key={activity.id} className="rounded-lg border border-gray-100 px-3 py-2">
@@ -825,13 +987,22 @@ export const DashboardView = () => {
             </button>
           </div>
         </div>
+        ))}
       </section>
+      )}
 
+      {(isWidgetVisible('household') || isWidgetVisible('meals') || isWidgetVisible('shopping') || isWidgetVisible('contractors')) && (
       <section className="grid gap-6 lg:grid-cols-4">
+        {isWidgetVisible('household') && (isWidgetCollapsed('household') ? (
+          collapsedWidget('household')
+        ) : (
         <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-          <h3 className="flex items-center gap-2 text-base font-semibold text-gray-900 dark:text-slate-100">
-            <Users className="h-5 w-5 text-indigo-500" /> Household members
-          </h3>
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="flex items-center gap-2 text-base font-semibold text-gray-900 dark:text-slate-100">
+              <Users className="h-5 w-5 text-indigo-500" /> Household members
+            </h3>
+            {widgetControls('household')}
+          </div>
           <ul className="mt-4 space-y-3 text-sm">
             {members.map((member) => (
               <li key={member.id} className="flex items-center justify-between rounded-md border border-gray-100 p-3">
@@ -841,11 +1012,18 @@ export const DashboardView = () => {
             ))}
           </ul>
         </div>
+        ))}
 
+        {isWidgetVisible('meals') && (isWidgetCollapsed('meals') ? (
+          collapsedWidget('meals')
+        ) : (
         <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-          <h3 className="flex items-center gap-2 text-base font-semibold text-gray-900 dark:text-slate-100">
-            <Utensils className="h-5 w-5 text-green-500" /> Meal plan highlights
-          </h3>
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="flex items-center gap-2 text-base font-semibold text-gray-900 dark:text-slate-100">
+              <Utensils className="h-5 w-5 text-green-500" /> Meal plan highlights
+            </h3>
+            {widgetControls('meals')}
+          </div>
           <ul className="mt-4 space-y-3 text-sm">
             {upcomingMeals.map((meal) => (
               <li key={meal.date} className="rounded-lg border border-gray-100 px-3 py-2 dark:border-slate-700 dark:bg-slate-800">
@@ -858,11 +1036,18 @@ export const DashboardView = () => {
             )}
           </ul>
         </div>
+        ))}
 
+        {isWidgetVisible('shopping') && (isWidgetCollapsed('shopping') ? (
+          collapsedWidget('shopping')
+        ) : (
         <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-          <h3 className="flex items-center gap-2 text-base font-semibold text-gray-900 dark:text-slate-100">
-            <ShoppingBag className="h-5 w-5 text-orange-500 dark:text-orange-300" /> Shopping lists
-          </h3>
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="flex items-center gap-2 text-base font-semibold text-gray-900 dark:text-slate-100">
+              <ShoppingBag className="h-5 w-5 text-orange-500 dark:text-orange-300" /> Shopping lists
+            </h3>
+            {widgetControls('shopping')}
+          </div>
           <ul className="mt-4 space-y-3 text-sm">
             {lists.map((list) => (
               <li key={list.id} className="rounded-lg border border-gray-100 px-3 py-2 dark:border-slate-700 dark:bg-slate-800">
@@ -874,13 +1059,35 @@ export const DashboardView = () => {
             ))}
           </ul>
         </div>
+        ))}
 
-        <UpcomingContractorVisits />
+        {isWidgetVisible('contractors') && (isWidgetCollapsed('contractors') ? (
+          collapsedWidget('contractors')
+        ) : (
+          <div className="relative">
+            <div className="absolute right-3 top-3 z-10 rounded-md bg-white/90 dark:bg-slate-900/90">
+              {widgetControls('contractors')}
+            </div>
+            <UpcomingContractorVisits />
+          </div>
+        ))}
       </section>
+      )}
 
+      {isWidgetVisible('brainFocus') && (
       <section className="grid gap-6 lg:grid-cols-2">
-        <BrainFocusWidget />
+        {isWidgetCollapsed('brainFocus') ? (
+          collapsedWidget('brainFocus')
+        ) : (
+          <div className="relative">
+            <div className="absolute right-3 top-3 z-10 rounded-md bg-white/90 dark:bg-slate-900/90">
+              {widgetControls('brainFocus')}
+            </div>
+            <BrainFocusWidget />
+          </div>
+        )}
       </section>
+      )}
     </div>
   );
 };

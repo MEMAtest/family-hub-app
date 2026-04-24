@@ -175,6 +175,8 @@ const formatEstimateSources = (sources: Array<{ label: string }>) => {
 };
 
 const insightIconMap: Record<string, typeof Home> = {
+  'property-profile': Home,
+  'valuation-inputs': PoundSterling,
   'council-tax': Landmark,
   'planning-history': ClipboardCheck,
   schools: GraduationCap,
@@ -385,7 +387,7 @@ const InsightCard = ({
           {label}
         </p>
         <p className="mt-1 text-lg font-semibold text-gray-900 dark:text-slate-100">
-          {value || 'Check online'}
+          {value || 'Not stored yet'}
         </p>
         <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">{summary}</p>
       </div>

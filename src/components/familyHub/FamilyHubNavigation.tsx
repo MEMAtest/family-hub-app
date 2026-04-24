@@ -83,9 +83,12 @@ export const FamilyHubNavigation = ({
       {/* Desktop */}
       <aside className="hidden lg:flex w-64 flex-shrink-0 flex-col border-r border-gray-200 bg-white p-4 sticky top-0 h-screen overflow-y-auto overflow-x-hidden dark:border-slate-800 dark:bg-slate-900">
         <div className="flex items-center justify-between mb-6">
-          <div>
+          <div className="flex min-w-0 items-center gap-3">
+            <img src="/icon.svg" alt="" className="h-11 w-11 flex-shrink-0 rounded-xl shadow-sm" />
+            <div className="min-w-0">
             <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-500">Omosanya Hub</p>
             <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Navigation</h2>
+            </div>
           </div>
           <Menu className="h-5 w-5 text-gray-400 dark:text-slate-500" />
         </div>
@@ -119,9 +122,12 @@ export const FamilyHubNavigation = ({
             >
               <Dialog.Panel className="relative flex w-[85vw] max-w-[280px] sm:max-w-xs flex-col bg-white p-4 shadow-lg dark:bg-slate-900 pwa-safe-top">
                 <div className="flex items-center justify-between mb-4">
-                  <div>
+                  <div className="flex min-w-0 items-center gap-3">
+                    <img src="/icon.svg" alt="" className="h-10 w-10 flex-shrink-0 rounded-xl shadow-sm" />
+                    <div className="min-w-0">
                     <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-500">Omosanya Hub</p>
                     <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Navigate</h2>
+                    </div>
                   </div>
                   <button onClick={onCloseMobile} className="rounded-md p-2 text-gray-500 hover:bg-gray-100 dark:text-slate-300 dark:hover:bg-slate-800">
                     <X className="h-5 w-5" />

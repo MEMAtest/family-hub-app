@@ -18,6 +18,7 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const postcode = searchParams.get('postcode');
+    const address = searchParams.get('address');
 
     if (!postcode) {
       return NextResponse.json({ error: 'Postcode is required' }, { status: 400 });
@@ -30,28 +31,48 @@ export async function GET(request: NextRequest) {
 
     const normalizedPostcode = postcode.toUpperCase().trim();
     const encodedPostcode = encodeURIComponent(normalizedPostcode);
+    const postcodeArea = normalizedPostcode.replace(/\s+/g, '').slice(0, -3);
+    const addressLine = address?.split(',')[0]?.trim() || null;
 
     const insights: PropertyInsight[] = [
       {
+        id: 'property-profile',
+        label: 'Saved property profile',
+        value: addressLine || normalizedPostcode,
+        status: 'available',
+        summary: address
+          ? `Using ${address} as the in-app lookup basis for valuation, bins, and local context.`
+          : 'Using the saved postcode as the in-app lookup basis.',
+        links: [],
+      },
+      {
+        id: 'valuation-inputs',
+        label: 'Valuation inputs',
+        value: 'Address + purchase data',
+        status: 'available',
+        summary: 'The valuation panel can use your saved address, purchase price, and purchase date without re-entering them.',
+        links: [],
+      },
+      {
         id: 'council-tax',
         label: 'Council tax band',
-        value: null,
+        value: 'Bromley lookup ready',
         status: 'external',
-        summary: 'Band data must be confirmed via the council register.',
+        summary: `The app has the property address and ${postcodeArea} area. Band data still needs a source check before showing a fixed band.`,
         links: [
-          { label: 'Bromley council tax', url: 'https://www.bromley.gov.uk/council-tax' },
-          { label: 'GOV.UK band guide', url: 'https://www.gov.uk/council-tax-bands' },
+          { label: 'Verify Bromley council tax', url: 'https://www.bromley.gov.uk/council-tax' },
+          { label: 'Verify GOV.UK band guide', url: 'https://www.gov.uk/council-tax-bands' },
         ],
       },
       {
         id: 'planning-history',
         label: 'Planning history',
-        value: null,
+        value: normalizedPostcode,
         status: 'external',
-        summary: 'Search planning applications and decisions near this postcode.',
+        summary: 'Local council updates are shown in-app; use source verification only when you need the official planning record.',
         links: [
           {
-            label: 'Bromley planning portal',
+            label: 'Verify Bromley planning',
             url: `https://pa.bromley.gov.uk/online-applications/search.do?action=simple&searchType=Application&postcode=${encodedPostcode}`,
           },
         ],
@@ -59,12 +80,12 @@ export async function GET(request: NextRequest) {
       {
         id: 'schools',
         label: 'Schools nearby',
-        value: null,
+        value: `${postcodeArea} area`,
         status: 'external',
-        summary: 'Check nearby schools, Ofsted reports, and performance data.',
+        summary: 'The family dashboard keeps school dates in-app. Official school records can be checked only when needed.',
         links: [
           {
-            label: 'DfE school search',
+            label: 'Verify DfE school search',
             url: `https://www.get-information-schools.service.gov.uk/Establishments/EstablishmentSearch?SearchType=Postcode&SearchString=${encodedPostcode}`,
           },
         ],
@@ -72,20 +93,20 @@ export async function GET(request: NextRequest) {
       {
         id: 'insurance-risk',
         label: 'Insurance risk',
-        value: null,
+        value: normalizedPostcode,
         status: 'external',
-        summary: 'Review flood and crime exposure before renewals.',
+        summary: 'Risk checks are prepared from the saved postcode; verify live flood/crime sources before renewals.',
         links: [
           {
-            label: 'Flood risk check',
+            label: 'Verify flood risk',
             url: `https://check-for-flooding.service.gov.uk/postcode?postcode=${encodedPostcode}`,
           },
           {
-            label: 'Police crime map',
+            label: 'Verify police crime map',
             url: `https://www.police.uk/pu/your-area/?postcode=${encodedPostcode}`,
           },
           {
-            label: 'Insurance guidance',
+            label: 'Verify insurance guidance',
             url: 'https://www.gov.uk/browse/housing-local-services/insurance',
           },
         ],
