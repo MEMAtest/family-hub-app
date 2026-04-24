@@ -1,0 +1,47 @@
+# Dependencies and generated build output
+node_modules/
+.next/
+out/
+build/
+dist/
+
+# Local data/model artifacts
+data/postcodes/
+data/property-model/ppd/
+data/property-model/ukhpi/
+data/property-model/planning/
+data/property-model/epc/
+data/property-model/training/
+data/property-model/*.json
+
+# Local coverage/test artifacts
+coverage/
+test-results/
+.jest-temp/
+playwright-report/
+
+# Local env and tool state
+.env
+.env.local
+.env.*.local
+env.local
+.tmp/
+.vercel/
+.claude/
+.DS_Store
+*.log
+*.tsbuildinfo
+
+# Repo-local verification scripts and docs not needed for deployment
+test-*.ts
+test-*.js
+test-*.html
+verify-*.ts
+check-*.ts
+debug-*.ts
+add-*.ts
+smoke-test-*.ts
+comprehensive-*.ts
+final-integration-tests.ts
+tests/
+test/
