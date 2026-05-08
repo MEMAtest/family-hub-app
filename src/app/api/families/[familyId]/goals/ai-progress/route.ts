@@ -89,6 +89,21 @@ export const POST = requireFamilyAccess(async (_request: NextRequest, context, _
       })),
     };
 
+    if (!process.env.ANTHROPIC_API_KEY) {
+      return NextResponse.json(
+        {
+          summary: buildFallbackGoalSummary({
+            familyName: family.familyName,
+            goals,
+            achievements,
+          }),
+          raw: null,
+          fallback: true,
+        },
+        { status: 200 }
+      );
+    }
+
     try {
       const aiResponse = await aiService.summariseGoalProgress(aiInput);
       const summary = parseAiJson(aiResponse);

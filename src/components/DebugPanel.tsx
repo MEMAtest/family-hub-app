@@ -7,12 +7,11 @@ import { ChevronDown, ChevronUp, Bug } from 'lucide-react';
 export const DebugPanel = () => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isVisible, setIsVisible] = useState(() => {
-    // Only show in development by default
     if (typeof window !== 'undefined') {
       const savedState = localStorage.getItem('debugPanelVisible');
-      return savedState === 'true' || (savedState === null && process.env.NODE_ENV === 'development');
+      return savedState === 'true';
     }
-    return process.env.NODE_ENV === 'development';
+    return false;
   });
 
   const events = useFamilyStore((state) => state.events);
@@ -27,6 +26,8 @@ export const DebugPanel = () => {
     (Object.keys(budgetData.expenses?.recurringMonthly || {}).length + (budgetData.expenses?.oneTimeSpends?.length || 0)) : 0;
 
   useEffect(() => {
+    if (!isVisible) return;
+
     console.log('🐛 DEBUG PANEL - Store state:', {
       events: events.length,
       people: people.length,
@@ -39,7 +40,7 @@ export const DebugPanel = () => {
     if (budgetData) {
       console.log('🐛 Budget data:', budgetData);
     }
-  }, [events, people, budgetData, databaseStatus, incomeCount, expensesCount]);
+  }, [events, people, budgetData, databaseStatus, incomeCount, expensesCount, isVisible]);
 
   const toggleVisibility = () => {
     const newState = !isVisible;
@@ -48,16 +49,7 @@ export const DebugPanel = () => {
   };
 
   if (!isVisible) {
-    // Show minimal toggle button when hidden
-    return (
-      <button
-        onClick={toggleVisibility}
-        className="fixed bottom-4 right-4 z-[9999] bg-black text-lime-500 rounded-full p-2 shadow-lg hover:bg-gray-900 transition-colors"
-        title="Show debug panel"
-      >
-        <Bug className="w-4 h-4" />
-      </button>
-    );
+    return null;
   }
 
   return (

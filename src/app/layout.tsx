@@ -1,17 +1,25 @@
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
+import { Instrument_Serif, Plus_Jakarta_Sans } from 'next/font/google'
 import './globals.css'
 import { AppProviders } from '@/components/common/AppProviders'
 
-const inter = Inter({
+const plusJakarta = Plus_Jakarta_Sans({
   subsets: ['latin'],
-  weight: ['300', '400', '500', '600', '700'],
-  variable: '--font-inter'
+  weight: ['400', '500', '600', '700', '800'],
+  variable: '--font-sans',
+  preload: false
+})
+
+const instrumentSerif = Instrument_Serif({
+  subsets: ['latin'],
+  weight: ['400'],
+  variable: '--font-serif',
+  preload: false
 })
 
 export const metadata: Metadata = {
-  title: 'Omosanya Family Hub – Manage Your Family Life',
-  description: 'A comprehensive family management application with calendar, budget tracking, meal planning, shopping lists, goals tracking, and family member management for the Omosanya household.',
+  title: 'Omosanya Home',
+  description: 'A family command centre for plans, money, meals, shopping, goals, and household moments.',
   keywords: ['family', 'management', 'calendar', 'budget', 'meals', 'shopping', 'goals', 'PWA', 'mobile'],
   authors: [{ name: 'Omosanya Family Hub Team' }],
   manifest: '/manifest.json',
@@ -83,7 +91,7 @@ export const metadata: Metadata = {
   openGraph: {
     type: 'website',
     siteName: 'Omosanya Family Hub',
-    title: 'Omosanya Family Hub – Manage Your Family Life',
+    title: 'Omosanya Home',
     description: 'A comprehensive family management application with calendar, budget, meals, and more',
     images: [
       {
@@ -96,7 +104,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Omosanya Family Hub',
+    title: 'Omosanya Home',
     description: 'A comprehensive family management application for the Omosanya family',
     images: ['/og-image.png']
   },
@@ -113,8 +121,8 @@ export const viewport = {
   userScalable: false,
   viewportFit: 'cover',
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#3B82F6' },
-    { media: '(prefers-color-scheme: dark)', color: '#1E40AF' }
+    { media: '(prefers-color-scheme: light)', color: '#147C72' },
+    { media: '(prefers-color-scheme: dark)', color: '#0D1215' }
   ]
 }
 
@@ -124,8 +132,8 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className={`${inter.variable} bg-slate-50 dark:bg-slate-950`}>
-      <body className={`${inter.className} antialiased bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors`}>
+    <html lang="en" className={`${plusJakarta.variable} ${instrumentSerif.variable} bg-[#f5f7f1] dark:bg-[#0d1215]`}>
+      <body className={`${plusJakarta.className} antialiased bg-[#f5f7f1] dark:bg-[#0d1215] text-[#18221f] dark:text-slate-100 transition-colors`}>
         <AppProviders>
           {children}
         </AppProviders>

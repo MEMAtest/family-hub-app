@@ -11,32 +11,67 @@
 /* Global base styles */
 @layer base {
   html {
-    font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-family: var(--font-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     -webkit-tap-highlight-color: transparent;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
 
   :root {
+    --kinboard-bg: #f5f7f1;
+    --kinboard-surface: #ffffff;
+    --kinboard-cream: #eaf1e7;
+    --kinboard-ink: #18221f;
+    --kinboard-ink-soft: #5f6a64;
+    --kinboard-ink-faint: #9aa5a0;
+    --kinboard-line: #dde5e0;
+    --kinboard-primary: #147c72;
+    --kinboard-primary-dim: #0f625a;
+    --kinboard-gold: #f3b33d;
+    --kinboard-forest: #2f7d5b;
+    --kinboard-berry: #d8527d;
+    --kinboard-sky: #447cbf;
     --tooltip-bg: #ffffff;
     --tooltip-border: #e5e7eb;
     --tooltip-text: #0f172a;
   }
 
   html.dark {
+    --kinboard-bg: #0d1215;
+    --kinboard-surface: #141b20;
+    --kinboard-cream: #172520;
+    --kinboard-ink: #edf5f1;
+    --kinboard-ink-soft: #a8b6af;
+    --kinboard-ink-faint: #71827b;
+    --kinboard-line: #26343a;
+    --kinboard-primary: #56c6b8;
+    --kinboard-primary-dim: #2f8f83;
     --tooltip-bg: #0f172a;
     --tooltip-border: #334155;
     --tooltip-text: #e2e8f0;
   }
 
   body {
-    @apply bg-gray-50 text-gray-900 antialiased;
+    @apply antialiased;
+    background:
+      radial-gradient(900px 520px at 12% 0%, rgba(86,151,191,.22) 0%, transparent 62%),
+      radial-gradient(780px 520px at 92% 16%, rgba(243,179,61,.18) 0%, transparent 60%),
+      linear-gradient(180deg, #f3f7f4 0%, #dce8ea 100%);
+    color: var(--kinboard-ink);
     overscroll-behavior: none;
     -webkit-overscroll-behavior: none;
     -webkit-user-select: none;
     -moz-user-select: none;
     -ms-user-select: none;
     user-select: none;
+  }
+
+  html.dark body {
+    background:
+      radial-gradient(900px 520px at 12% 0%, rgba(68,124,191,.16) 0%, transparent 62%),
+      radial-gradient(780px 520px at 92% 16%, rgba(86,198,184,.10) 0%, transparent 60%),
+      linear-gradient(180deg, #0d1215 0%, #10181b 100%);
+    color: var(--kinboard-ink);
   }
 
   /* PWA safe area support */
@@ -54,6 +89,25 @@
     -moz-user-select: auto;
     -ms-user-select: auto;
     user-select: auto;
+  }
+
+  html.dark input:not([type="checkbox"]):not([type="radio"]),
+  html.dark select,
+  html.dark textarea {
+    background-color: #0f172a;
+    border-color: #334155;
+    color: #f8fafc;
+    color-scheme: dark;
+  }
+
+  html.dark input::placeholder,
+  html.dark textarea::placeholder {
+    color: #64748b;
+  }
+
+  html.dark option {
+    background-color: #0f172a;
+    color: #f8fafc;
   }
 
   /* iOS bounce effect prevention - use a safer approach */
@@ -92,7 +146,10 @@
 @layer components {
   /* Dashboard widget base styles */
   .dashboard-widget {
-    @apply bg-white rounded-lg shadow-md border border-gray-200 p-6 hover:shadow-card-hover transition-shadow duration-200 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100;
+    @apply rounded-lg p-6 transition-shadow duration-200 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100;
+    background: var(--kinboard-surface);
+    border: 1px solid var(--kinboard-line);
+    box-shadow: 0 1px 0 rgba(255,255,255,.85) inset, 0 1px 2px rgba(23,34,31,.05), 0 12px 28px rgba(35,61,55,.08);
     -webkit-transition: box-shadow 0.2s ease;
     -moz-transition: box-shadow 0.2s ease;
     -o-transition: box-shadow 0.2s ease;
@@ -101,11 +158,54 @@
 
 
   .surface-card {
-    @apply bg-white border border-gray-200 dark:bg-slate-900 dark:border-slate-700 text-gray-900 dark:text-slate-100 shadow-sm;
+    @apply dark:bg-slate-900 dark:border-slate-700 dark:text-slate-100;
+    background: var(--kinboard-surface);
+    border: 1px solid var(--kinboard-line);
+    color: var(--kinboard-ink);
+    box-shadow: 0 1px 2px rgba(23,34,31,.05), 0 12px 28px rgba(35,61,55,.08);
   }
 
   .surface-card-muted {
-    @apply bg-gray-50 border border-gray-200 dark:bg-slate-800 dark:border-slate-700;
+    @apply dark:bg-slate-800 dark:border-slate-700;
+    background: var(--kinboard-cream);
+    border: 1px solid var(--kinboard-line);
+  }
+
+  .kinboard-card {
+    background: var(--kinboard-surface);
+    border: 1px solid var(--kinboard-line);
+    border-radius: 0.5rem;
+    box-shadow: 0 1px 0 rgba(255,255,255,.85) inset, 0 1px 2px rgba(23,34,31,.05), 0 12px 28px rgba(35,61,55,.08);
+  }
+
+  html.dark .kinboard-card {
+    box-shadow: 0 1px 0 rgba(255,255,255,.05) inset, 0 12px 28px rgba(0,0,0,.22);
+  }
+
+  .kinboard-soft-card {
+    background: linear-gradient(135deg, #ffffff 0%, #eaf1e7 100%);
+    border: 1px solid var(--kinboard-line);
+    border-radius: 0.5rem;
+    box-shadow: 0 1px 0 rgba(255,255,255,.85) inset, 0 12px 28px rgba(35,61,55,.08);
+  }
+
+  html.dark .kinboard-soft-card {
+    background: linear-gradient(135deg, #182126 0%, #14231f 100%);
+    box-shadow: 0 1px 0 rgba(255,255,255,.06) inset, 0 18px 34px rgba(0,0,0,.24);
+  }
+
+  .kinboard-label {
+    color: var(--kinboard-ink-soft);
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+
+  .kinboard-serif {
+    font-family: var(--font-serif), Georgia, serif;
+    font-weight: 400;
+    letter-spacing: 0;
   }
   /* Button variants */
   .btn-primary {
@@ -497,7 +597,7 @@
 
 /* Custom React Big Calendar Styling */
 .family-hub-calendar {
-  @apply h-full;
+  @apply h-full min-h-[620px];
 }
 
 .family-hub-calendar .rbc-calendar {
@@ -533,7 +633,7 @@
 }
 
 .family-hub-calendar .rbc-month-view {
-  @apply border border-gray-200 rounded-lg overflow-hidden;
+  @apply min-h-[520px] border border-gray-200 rounded-lg overflow-hidden;
 }
 
 .family-hub-calendar .rbc-agenda-view {
@@ -590,6 +690,29 @@
 
 .family-hub-calendar .rbc-time-content {
   @apply border-gray-200;
+}
+
+html.dark .family-hub-calendar .rbc-header {
+  background: #111827;
+  color: #e5e7eb;
+  border-color: #1f2937;
+}
+
+html.dark .family-hub-calendar .rbc-today {
+  background: rgba(20, 124, 114, 0.16);
+}
+
+html.dark .family-hub-calendar .rbc-off-range-bg {
+  background: #0f172a;
+}
+
+html.dark .family-hub-calendar .rbc-month-view,
+html.dark .family-hub-calendar .rbc-agenda-view,
+html.dark .family-hub-calendar .rbc-time-view,
+html.dark .family-hub-calendar .rbc-time-header-content,
+html.dark .family-hub-calendar .rbc-time-content,
+html.dark .family-hub-calendar .rbc-timeslot-group {
+  border-color: #1f2937;
 }
 
 /* Enhanced Touch Interactions & Mobile Optimizations */

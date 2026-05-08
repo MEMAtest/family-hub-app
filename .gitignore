@@ -65,3 +65,4 @@ prisma/generated/
 /check-*.ts
 .jest-temp
 coverage/
+.playwright-cli/

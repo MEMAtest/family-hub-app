@@ -38,7 +38,7 @@ export const CalendarView = () => {
   }, [createEvent]);
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
       <div className="hidden md:block border-b border-gray-200 bg-white px-3 sm:px-4 py-2.5 sm:py-3 dark:border-slate-800 dark:bg-slate-900">
         <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3">
           <div className="min-w-0 flex-1">
@@ -78,7 +78,7 @@ export const CalendarView = () => {
         </div>
       </div>
 
-      <div className="flex-1 overflow-hidden">
+      <div className="min-h-[560px] flex-1 overflow-hidden">
         <CalendarMain
           events={events}
           people={people}

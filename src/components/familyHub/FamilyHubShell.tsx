@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, useEffect, useRef } from 'react';
+import { useCallback, useMemo, useState, useEffect, useRef } from 'react';
 import {
   Calendar as CalendarIcon,
   DollarSign,
@@ -16,6 +16,7 @@ import {
   Dumbbell,
   Wrench,
   Brain,
+  ArrowUp,
 } from 'lucide-react';
 import { FamilyHubNavigation, NavItem } from './FamilyHubNavigation';
 import { FamilyHubHeader } from './FamilyHubHeader';
@@ -47,17 +48,17 @@ import { PWAInstallPrompt } from '@/components/pwa/PWAInstallPrompt';
 import { useSearchParams } from 'next/navigation';
 
 const NAV_ITEMS: NavItem[] = [
-  { id: 'dashboard', label: 'Dashboard', icon: Home },
-  { id: 'property', label: 'Tremaine Improvements', icon: Building2 },
+  { id: 'dashboard', label: 'Today', icon: Home },
   { id: 'calendar', label: 'Calendar', icon: CalendarIcon },
-  { id: 'budget', label: 'Budget', icon: DollarSign },
+  { id: 'budget', label: 'Money', icon: DollarSign },
   { id: 'meals', label: 'Meals', icon: UtensilsCrossed },
-  { id: 'shopping', label: 'Shopping', icon: ShoppingCart },
-  { id: 'fitness', label: 'Fitness', icon: Dumbbell },
-  { id: 'contractors', label: 'Contractors', icon: Wrench },
-  { id: 'goals', label: 'Goals', icon: Target },
-  { id: 'brain', label: 'Project Brain', icon: Brain },
+  { id: 'shopping', label: 'Basket', icon: ShoppingCart },
+  { id: 'goals', label: 'Quests', icon: Target },
   { id: 'family', label: 'Family', icon: Users },
+  { id: 'property', label: 'Home', icon: Building2 },
+  { id: 'fitness', label: 'Move', icon: Dumbbell },
+  { id: 'contractors', label: 'Repairs', icon: Wrench },
+  { id: 'brain', label: 'Project Brain', icon: Brain },
   { id: 'news', label: 'News', icon: Newspaper },
 ];
 
@@ -80,6 +81,8 @@ export const FamilyHubShell = () => {
   const [familyName, setFamilyName] = useState('Family');
   const searchParams = useSearchParams();
   const appliedViewParam = useRef(false);
+  const mainRef = useRef<HTMLElement | null>(null);
+  const [showBackToTop, setShowBackToTop] = useState(false);
 
   const { openCreateForm } = useCalendarContext();
   const { openForm: openBudgetForm } = useBudgetContext();
@@ -148,6 +151,45 @@ export const FamilyHubShell = () => {
     appliedViewParam.current = true;
   }, [currentView, searchParams, setView]);
 
+  useEffect(() => {
+    mainRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [currentView]);
+
+  useEffect(() => {
+    const main = mainRef.current;
+    if (!main) return;
+
+    const handleScroll = () => {
+      const nestedScrolled = Array.from(main.querySelectorAll<HTMLElement>('*')).some((element) =>
+        element.scrollTop > 360 && element.scrollHeight > element.clientHeight
+      );
+      setShowBackToTop(main.scrollTop > 360 || nestedScrolled);
+    };
+
+    handleScroll();
+    main.addEventListener('scroll', handleScroll, { passive: true, capture: true });
+    return () => main.removeEventListener('scroll', handleScroll, { capture: true });
+  }, []);
+
+  const scrollMainToTop = useCallback(() => {
+    const main = mainRef.current;
+    if (!main) return;
+
+    main.scrollTo({ top: 0, behavior: 'smooth' });
+    main.querySelectorAll<HTMLElement>('*').forEach((element) => {
+      if (element.scrollTop > 0 && element.scrollHeight > element.clientHeight) {
+        element.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    });
+  }, []);
+
+  const handleSelectView = useCallback((view: string) => {
+    setSubView('');
+    setView(view);
+    closeMobileMenu();
+    window.requestAnimationFrame(scrollMainToTop);
+  }, [closeMobileMenu, scrollMainToTop, setSubView, setView]);
+
   // Check if setup wizard should be shown on mount (client-side only)
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -167,25 +209,25 @@ export const FamilyHubShell = () => {
     <div className="hidden items-center gap-2 lg:flex">
       <button
         onClick={() => openCreateForm()}
-        className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 dark:bg-blue-500 dark:hover:bg-blue-400"
+        className="inline-flex items-center gap-2 rounded-lg bg-[#147c72] px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#0f625a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#147c72]/30"
       >
         <Plus className="h-4 w-4" /> Event
       </button>
       <button
         onClick={openQuickAppointment}
-        className="inline-flex items-center gap-2 rounded-md bg-amber-500 px-3 py-2 text-sm font-medium text-white hover:bg-amber-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 dark:bg-amber-600 dark:hover:bg-amber-500"
+        className="inline-flex items-center gap-2 rounded-lg bg-[#f3b33d] px-3 py-2 text-sm font-semibold text-[#263730] shadow-sm hover:bg-[#e59a23] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f3b33d]/40"
       >
         <Wrench className="h-4 w-4" /> Contractor
       </button>
       <button
         onClick={() => openBudgetForm()}
-        className="inline-flex items-center gap-2 rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+        className="inline-flex items-center gap-2 rounded-lg border border-[#dde5e0] bg-white/80 px-3 py-2 text-sm font-semibold text-[#18221f] hover:bg-[#eaf1e7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#147c72]/30 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
       >
         <DollarSign className="h-4 w-4" /> Expense
       </button>
       <button
         onClick={() => openShoppingForm(lists[0]?.id)}
-        className="inline-flex items-center gap-2 rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+        className="inline-flex items-center gap-2 rounded-lg border border-[#dde5e0] bg-white/80 px-3 py-2 text-sm font-semibold text-[#18221f] hover:bg-[#eaf1e7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#147c72]/30 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
       >
         <ShoppingBag className="h-4 w-4" /> Item
       </button>
@@ -198,11 +240,8 @@ export const FamilyHubShell = () => {
   }, [clientTime, isClient]);
 
   const headerTitle = useMemo(() => {
-    const trimmed = familyName.trim();
-    const baseName = trimmed.length > 0 ? trimmed : 'Family';
-    const normalized = baseName.toLowerCase().includes('family') ? baseName : `${baseName} Family`;
-    return `${normalized} Hub`;
-  }, [familyName]);
+    return 'Omosanya Home';
+  }, []);
 
   const content = useMemo(() => {
     switch (currentView) {
@@ -244,7 +283,7 @@ export const FamilyHubShell = () => {
       shopping: 'Shopping',
       fitness: 'Fitness',
       contractors: 'Contractors',
-      goals: 'Goals',
+      goals: 'Quests',
       brain: 'Project Brain',
       family: 'Family',
       news: 'News',
@@ -263,16 +302,16 @@ export const FamilyHubShell = () => {
   }, [currentSubView, currentView, setSubView]);
 
   return (
-    <div className="flex min-h-screen overflow-x-hidden bg-gray-50 dark:bg-slate-950">
+    <div className="flex h-screen min-h-0 overflow-x-hidden bg-[#f5f7f1] text-[#18221f] dark:bg-[#0d1215] dark:text-slate-100">
       <FamilyHubNavigation
         items={NAV_ITEMS}
         activeId={currentView}
-        onSelect={setView}
+        onSelect={handleSelectView}
         isMobileOpen={isMobileMenuOpen}
         onCloseMobile={closeMobileMenu}
       />
 
-      <div className="flex flex-1 flex-col min-w-0 bg-white dark:bg-slate-900">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-transparent">
         <FamilyHubHeader
           title={headerTitle}
           subtitle={subtitle}
@@ -280,12 +319,12 @@ export const FamilyHubShell = () => {
           rightContent={rightContent}
           databaseStatus={databaseStatus}
         />
-        <main className="flex-1 overflow-y-auto overflow-x-hidden pb-20 sm:pb-24 lg:pb-0">
+        <main ref={mainRef} className="kinboard-main min-h-0 flex-1 overflow-y-auto overflow-x-hidden pb-20 sm:pb-24 lg:pb-0">
           {currentView !== 'dashboard' && breadcrumbItems.length > 0 && (
             <div className="px-3 pt-3 sm:px-4 sm:pt-4 lg:px-8">
               <Breadcrumb
                 items={breadcrumbItems}
-                onHomeClick={() => setView('dashboard')}
+                onHomeClick={() => handleSelectView('dashboard')}
               />
             </div>
           )}
@@ -293,8 +332,20 @@ export const FamilyHubShell = () => {
         </main>
       </div>
 
+      {showBackToTop && (
+        <button
+          type="button"
+          onClick={scrollMainToTop}
+          className="fixed bottom-24 right-4 z-40 inline-flex h-11 w-11 items-center justify-center rounded-full border border-[#dde5e0] bg-white/95 text-[#147c72] shadow-lg backdrop-blur transition hover:bg-[#eaf1e7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#147c72]/30 dark:border-slate-700 dark:bg-slate-900/95 dark:text-[#56c6b8] dark:hover:bg-slate-800 lg:bottom-6"
+          aria-label="Back to top"
+          title="Back to top"
+        >
+          <ArrowUp className="h-5 w-5" />
+        </button>
+      )}
+
       <FamilyHubModals />
-      <DebugPanel />
+      {process.env.NEXT_PUBLIC_SHOW_DEBUG_PANEL === 'true' && <DebugPanel />}
       <PWAInstallPrompt />
 
       {/* Setup Wizard */}

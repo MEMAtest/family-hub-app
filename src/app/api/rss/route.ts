@@ -80,10 +80,12 @@ const TRUSTED_RSS_SOURCES = [
   'https://feeds.webmd.com/rss/rss.aspx?RSSSource=RSS_PUBLIC',
   'https://www.edweek.org/rss/blogs.xml',
   'https://www.scholastic.com/teachers/rss.xml',
+  'https://www.commonsensemedia.org/rss.xml',
   'https://feeds.weather.com/weather/rss/news',
   'https://www.ajc.com/rss/',
   'https://www.11alive.com/rss',
   'https://www.espn.com/espn/rss/news',
+  'https://www.nickjr.com/rss.xml',
   'https://www.pbs.org/newshour/feeds/rss/homepage'
 ];
 
@@ -107,18 +109,32 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+
     // Fetch the RSS feed
     const response = await fetch(feedUrl, {
       headers: {
         'User-Agent': 'Family-Hub-App/1.0',
         'Accept': 'application/rss+xml, application/xml, text/xml'
       },
+      signal: controller.signal,
       // Cache for 30 minutes
       next: { revalidate: 1800 }
     });
+    clearTimeout(timeout);
 
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      return NextResponse.json(
+        {
+          success: false,
+          items: [],
+          source: feedUrl,
+          error: 'RSS source temporarily unavailable',
+          fetchedAt: new Date().toISOString()
+        },
+        { status: 200 }
+      );
     }
 
     const xmlText = await response.text();
@@ -133,14 +149,16 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('RSS fetch error:', error);
+    console.warn('RSS fetch degraded:', error);
 
     return NextResponse.json(
       {
-        error: 'Failed to fetch RSS feed',
-        details: error instanceof Error ? error.message : 'Unknown error'
+        success: false,
+        items: [],
+        error: 'RSS source temporarily unavailable',
+        fetchedAt: new Date().toISOString()
       },
-      { status: 500 }
+      { status: 200 }
     );
   }
 }

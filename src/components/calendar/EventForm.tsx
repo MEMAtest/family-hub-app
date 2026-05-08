@@ -222,19 +222,19 @@ const EventForm: React.FC<EventFormProps> = ({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto text-gray-900 dark:bg-slate-900 dark:text-slate-100">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-slate-800">
           <div className="flex items-center space-x-3">
-            <Calendar className="w-6 h-6 text-blue-600" />
-            <h2 className="text-xl font-semibold text-gray-900">
+            <Calendar className="w-6 h-6 text-[#147c72] dark:text-[#56c6b8]" />
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-100">
               {event ? 'Edit Event' : 'New Event'}
             </h2>
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-md transition-colors"
+            className="p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-800 rounded-md transition-colors dark:text-slate-500 dark:hover:bg-slate-800 dark:hover:text-slate-100"
           >
             <X className="w-5 h-5" />
           </button>
@@ -244,7 +244,7 @@ const EventForm: React.FC<EventFormProps> = ({
           {/* Template Selection */}
           {!event && templates.length > 0 && (
             <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2 dark:text-slate-300">
                 Start from template (optional)
               </label>
               <select
@@ -270,7 +270,7 @@ const EventForm: React.FC<EventFormProps> = ({
             <div className="space-y-4">
               {/* Title */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-slate-300">
                   Event Title *
                 </label>
                 <input
@@ -289,7 +289,7 @@ const EventForm: React.FC<EventFormProps> = ({
 
               {/* Person */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-slate-300">
                   Assigned to *
                 </label>
                 {people.length === 0 ? (
@@ -322,7 +322,7 @@ const EventForm: React.FC<EventFormProps> = ({
               {/* Date and Time */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-slate-300">
                     Date *
                   </label>
                   <input
@@ -339,7 +339,7 @@ const EventForm: React.FC<EventFormProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-slate-300">
                     Time *
                   </label>
                   <input
@@ -359,7 +359,7 @@ const EventForm: React.FC<EventFormProps> = ({
               {/* Duration and Type */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-slate-300">
                     Duration (minutes)
                   </label>
                   <input
@@ -373,7 +373,7 @@ const EventForm: React.FC<EventFormProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-slate-300">
                     Category
                   </label>
                   <select
@@ -397,7 +397,7 @@ const EventForm: React.FC<EventFormProps> = ({
 
               {/* Location */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-slate-300">
                   <MapPin className="w-4 h-4 inline mr-1" />
                   Location
                 </label>
@@ -422,11 +422,11 @@ const EventForm: React.FC<EventFormProps> = ({
 
             {/* Advanced Options */}
             {showAdvanced && (
-              <div className="space-y-4 pt-4 border-t border-gray-200">
+              <div className="space-y-4 pt-4 border-t border-gray-200 dark:border-slate-800">
                 {/* Priority and Status */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-slate-300">
                       Priority
                     </label>
                     <select
@@ -441,7 +441,7 @@ const EventForm: React.FC<EventFormProps> = ({
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-slate-300">
                       Status
                     </label>
                     <select
@@ -458,7 +458,7 @@ const EventForm: React.FC<EventFormProps> = ({
 
                 {/* Cost */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-slate-300">
                     <DollarSign className="w-4 h-4 inline mr-1" />
                     Cost (£)
                   </label>
@@ -474,7 +474,7 @@ const EventForm: React.FC<EventFormProps> = ({
 
                 {/* Attendees */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2 dark:text-slate-300">
                     <Users className="w-4 h-4 inline mr-1" />
                     Additional Attendees
                   </label>
@@ -503,7 +503,7 @@ const EventForm: React.FC<EventFormProps> = ({
 
                 {/* Reminders */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2 dark:text-slate-300">
                     <Bell className="w-4 h-4 inline mr-1" />
                     Reminders
                   </label>
@@ -562,7 +562,7 @@ const EventForm: React.FC<EventFormProps> = ({
                       }}
                       className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                     />
-                    <span className="text-sm font-medium text-gray-700">
+                    <span className="text-sm font-medium text-gray-700 dark:text-slate-300">
                       <Repeat className="w-4 h-4 inline mr-1" />
                       Recurring event
                     </span>
@@ -585,7 +585,7 @@ const EventForm: React.FC<EventFormProps> = ({
 
                 {/* Notes */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-slate-300">
                     <FileText className="w-4 h-4 inline mr-1" />
                     Notes
                   </label>
@@ -602,7 +602,7 @@ const EventForm: React.FC<EventFormProps> = ({
           </div>
 
           {/* Action Buttons */}
-          <div className="flex items-center justify-between pt-6 border-t border-gray-200 mt-6">
+          <div className="flex items-center justify-between pt-6 border-t border-gray-200 mt-6 dark:border-slate-800">
             <div>
               {event && onDelete && (
                 <button
@@ -620,7 +620,7 @@ const EventForm: React.FC<EventFormProps> = ({
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
+                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md transition-colors dark:text-slate-300 dark:hover:bg-slate-800"
               >
                 Cancel
               </button>

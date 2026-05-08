@@ -131,20 +131,20 @@ const StatCard = ({
 }) => (
   <button
     onClick={onClick}
-    className={`flex flex-col gap-2 rounded-lg border border-gray-200 bg-white p-4 text-left transition hover:border-blue-300 hover:shadow ${
+    className={`kinboard-card flex flex-col gap-2 p-4 text-left transition hover:-translate-y-0.5 hover:border-[#147c72]/40 hover:shadow-lg ${
       onClick ? 'cursor-pointer' : 'cursor-default'
     } ${className ?? ''} dark:border-slate-700 dark:bg-slate-800`}
   >
     <div className="flex items-center justify-between">
       <div>
-        <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">{label}</p>
-        <p className="mt-1 text-2xl font-semibold text-gray-900 dark:text-slate-100">{value}</p>
+        <p className="kinboard-label">{label}</p>
+        <p className="kinboard-serif mt-1 text-3xl leading-none text-[#18221f] dark:text-slate-100">{value}</p>
       </div>
-      <div className="rounded-full bg-blue-50 p-2 text-blue-600 dark:bg-blue-500/20 dark:text-blue-200">
+      <div className="rounded-lg bg-[#eaf1e7] p-2 text-[#147c72] dark:bg-[#147c72]/20 dark:text-[#56c6b8]">
         <Icon className="h-5 w-5" />
       </div>
     </div>
-    {subtext && <p className="text-xs text-gray-500 dark:text-slate-400">{subtext}</p>}
+    {subtext && <p className="text-xs text-[#5f6a64] dark:text-slate-400">{subtext}</p>}
   </button>
 );
 
@@ -188,11 +188,11 @@ const CollapsedWidget = ({
   controls: ReactNode;
   className?: string;
 }) => (
-  <div className={`rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900 ${className}`}>
+  <div className={`kinboard-card p-4 dark:border-slate-700 dark:bg-slate-900 ${className}`}>
     <div className="flex items-center justify-between gap-3">
       <div>
-        <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">{title}</p>
-        <p className="text-xs text-gray-500 dark:text-slate-400">Minimised</p>
+        <p className="text-sm font-semibold text-[#18221f] dark:text-slate-100">{title}</p>
+        <p className="text-xs text-[#5f6a64] dark:text-slate-400">Minimised</p>
       </div>
       {controls}
     </div>
@@ -433,17 +433,52 @@ export const DashboardView = () => {
     },
   ]), [avgGoalProgress, budgetCardTotals, dashboardPreferences.showFinancials, formatPrivateCurrency, lists, setView, totalGoals, upcomingEvents]);
 
+  const nextEvent = upcomingEvents[0];
+  const totalShoppingEstimate = lists.reduce((sum, list) => sum + (list.estimatedTotal || 0), 0);
+
   return (
-    <div className="space-y-4 sm:space-y-6 p-3 sm:p-4 lg:p-8 overflow-x-hidden">
+    <div className="space-y-4 overflow-x-hidden p-3 sm:space-y-6 sm:p-4 lg:p-8">
+      <div className="kinboard-soft-card overflow-hidden p-5 sm:p-6 lg:p-8">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-3xl">
+            <p className="kinboard-label">Today · family board</p>
+            <h2 className="kinboard-serif mt-2 text-4xl leading-[0.95] text-[#18221f] dark:text-slate-100 sm:text-5xl">
+              The omosanyas<br />
+              <span className="italic text-[#147c72]">are in sync.</span>
+            </h2>
+            <p className="mt-4 max-w-2xl text-sm leading-6 text-[#5f6a64] dark:text-slate-400">
+              Plans, spending, meals, shopping and family goals are pulled into one calm command centre.
+            </p>
+          </div>
+          <div className="grid min-w-[220px] gap-2 text-sm text-[#18221f] sm:grid-cols-3 lg:grid-cols-1">
+            <div className="rounded-lg border border-[#dde5e0] bg-white/75 p-3">
+              <p className="kinboard-label">Next</p>
+              <p className="mt-1 font-semibold">{nextEvent?.title ?? 'No events queued'}</p>
+              {nextEvent && <p className="text-xs text-[#5f6a64]">{nextEvent.time} · {nextEvent.location || 'TBC'}</p>}
+            </div>
+            <div className="rounded-lg border border-[#dde5e0] bg-white/75 p-3">
+              <p className="kinboard-label">Basket</p>
+              <p className="mt-1 font-semibold">{lists.length} lists · £{totalShoppingEstimate.toFixed(0)}</p>
+              <p className="text-xs text-[#5f6a64]">Estimated shopping total</p>
+            </div>
+            <div className="rounded-lg border border-[#dde5e0] bg-white/75 p-3">
+              <p className="kinboard-label">Quests</p>
+              <p className="mt-1 font-semibold">{totalGoals} active · {avgGoalProgress}%</p>
+              <p className="text-xs text-[#5f6a64]">Average progress</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Dashboard</h2>
-          <p className="text-sm text-gray-500 dark:text-slate-400">Choose what appears here and keep sensitive numbers private.</p>
+          <h2 className="kinboard-serif text-2xl text-[#18221f] dark:text-slate-100">Today</h2>
+          <p className="text-sm text-[#5f6a64] dark:text-slate-400">Choose what appears here and keep sensitive numbers private.</p>
         </div>
         <button
           type="button"
           onClick={() => setShowDashboardSettings((value) => !value)}
-          className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+          className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#dde5e0] bg-white/85 px-3 py-2 text-sm font-semibold text-[#18221f] hover:bg-[#eaf1e7] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
         >
           <SlidersHorizontal className="h-4 w-4" />
           Customise
@@ -451,7 +486,7 @@ export const DashboardView = () => {
       </div>
 
       {showDashboardSettings && (
-        <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+        <section className="kinboard-card p-4 dark:border-slate-700 dark:bg-slate-900">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h3 className="text-base font-semibold text-gray-900 dark:text-slate-100">Dashboard controls</h3>
@@ -486,7 +521,7 @@ export const DashboardView = () => {
                   onClick={() => toggleWidgetVisibility(widget.id)}
                   className={`flex items-center justify-between rounded-lg border px-3 py-2 text-left text-sm transition ${
                     isVisible
-                      ? 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-500/40 dark:bg-blue-500/10 dark:text-blue-200'
+                      ? 'border-[#147c72]/30 bg-[#eaf1e7] text-[#147c72] dark:border-[#147c72]/40 dark:bg-[#147c72]/10 dark:text-[#56c6b8]'
                       : 'border-gray-200 bg-gray-50 text-gray-500 hover:bg-gray-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400'
                   }`}
                 >
@@ -543,7 +578,7 @@ export const DashboardView = () => {
       {isWidgetVisible('familyFeed') && (isWidgetCollapsed('familyFeed') ? (
         collapsedWidget('familyFeed')
       ) : (
-      <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+      <section className="kinboard-card p-5 dark:border-slate-700 dark:bg-slate-900">
         <div className="flex items-center justify-between">
           <h3 className="text-base font-semibold text-gray-900 dark:text-slate-100">Family Feed</h3>
           <div className="flex items-center gap-2">
@@ -568,7 +603,7 @@ export const DashboardView = () => {
             {feedItems.slice(0, 8).map((item) => (
               <div
                 key={item.id}
-                className="flex flex-col gap-2 rounded-lg border border-gray-100 bg-gray-50 p-3 dark:border-slate-700 dark:bg-slate-800 sm:flex-row sm:items-center sm:justify-between"
+                className="flex flex-col gap-2 rounded-lg border border-[#dde5e0] bg-[#f7fbf8] p-3 dark:border-slate-700 dark:bg-slate-800 sm:flex-row sm:items-center sm:justify-between"
               >
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
@@ -578,7 +613,7 @@ export const DashboardView = () => {
                           ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-200'
                           : item.severity === 'attention'
                           ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-200'
-                          : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200'
+                          : 'bg-[#eaf1e7] text-[#147c72] dark:bg-blue-900/30 dark:text-[#56c6b8]'
                       }`}
                     >
                       {item.type}
@@ -609,7 +644,7 @@ export const DashboardView = () => {
         {isWidgetVisible('schedule') && (isWidgetCollapsed('schedule') ? (
           collapsedWidget('schedule', 'lg:col-span-2')
         ) : (
-        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm lg:col-span-2 dark:border-slate-700 dark:bg-slate-900">
+        <div className="kinboard-card p-5 lg:col-span-2 dark:border-slate-700 dark:bg-slate-900">
           <div className="flex items-center justify-between">
             <h3 className="text-base font-semibold text-gray-900 dark:text-slate-100">Upcoming Schedule</h3>
             <div className="flex items-center gap-2">
@@ -629,7 +664,7 @@ export const DashboardView = () => {
             {upcomingEvents.map((event) => {
               const person = members.find((m) => m.id === event.person);
               return (
-              <div key={event.id} className="flex items-center justify-between rounded-md border border-gray-100 bg-gray-50 p-3 dark:border-slate-700 dark:bg-slate-800">
+              <div key={event.id} className="flex items-center justify-between rounded-lg border border-[#dde5e0] bg-[#f7fbf8] p-3 dark:border-slate-700 dark:bg-slate-800">
                   <div>
                     <p className="text-sm font-medium text-gray-900">{event.title}</p>
                     <p className="text-xs text-gray-500">
@@ -647,7 +682,7 @@ export const DashboardView = () => {
         {isWidgetVisible('activity') && (isWidgetCollapsed('activity') ? (
           collapsedWidget('activity')
         ) : (
-        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+        <div className="kinboard-card p-5 dark:border-slate-700 dark:bg-slate-900">
           <div className="flex items-center justify-between">
             <h3 className="text-base font-semibold text-gray-900 dark:text-slate-100">Family Activity</h3>
             {widgetControls('activity')}
@@ -661,7 +696,7 @@ export const DashboardView = () => {
               <span className="text-gray-500">Weekly goal progress</span>
               <div className="h-2 rounded-full bg-gray-100">
                 <div
-                  className="h-2 rounded-full bg-blue-500"
+                  className="h-2 rounded-full bg-[#147c72]"
                   style={{ width: `${Math.min((personalTracking.fitness.weeklyProgress / personalTracking.fitness.weeklyGoal) * 100, 100)}%` }}
                 />
               </div>
@@ -669,7 +704,7 @@ export const DashboardView = () => {
             </div>
             <button
               onClick={openQuickActivityForm}
-              className="mt-2 inline-flex items-center justify-center rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
+              className="mt-2 inline-flex items-center justify-center rounded-md bg-[#147c72] px-3 py-2 text-sm font-medium text-white hover:bg-[#0f625a]"
             >
               <Activity className="mr-2 h-4 w-4" /> Log Activity
             </button>
@@ -684,7 +719,7 @@ export const DashboardView = () => {
         {isWidgetVisible('schoolTerms') && (isWidgetCollapsed('schoolTerms') ? (
           collapsedWidget('schoolTerms', 'lg:col-span-2')
         ) : (
-        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm lg:col-span-2 dark:border-slate-700 dark:bg-slate-900">
+        <div className="kinboard-card p-5 lg:col-span-2 dark:border-slate-700 dark:bg-slate-900">
           <div className="flex items-center justify-between mb-4">
             <h3 className="flex items-center gap-2 text-base font-semibold text-gray-900 dark:text-slate-100">
               <GraduationCap className="h-5 w-5 text-purple-500" /> Stewart Fleming Term Dates
@@ -819,7 +854,7 @@ export const DashboardView = () => {
         {isWidgetVisible('quickActions') && (isWidgetCollapsed('quickActions') ? (
           collapsedWidget('quickActions')
         ) : (
-        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+        <div className="kinboard-card p-5 dark:border-slate-700 dark:bg-slate-900">
           <div className="flex items-center justify-between">
             <h3 className="text-base font-semibold text-gray-900 dark:text-slate-100">Quick Actions</h3>
             {widgetControls('quickActions')}
@@ -827,10 +862,10 @@ export const DashboardView = () => {
           <div className="mt-4 space-y-3">
             <button
               onClick={() => openMealForm(new Date().toISOString().split('T')[0])}
-              className="flex items-center justify-between rounded-lg border border-gray-200 px-4 py-3 text-left text-sm hover:border-blue-300 hover:shadow dark:border-slate-700 dark:bg-slate-800"
+              className="flex items-center justify-between rounded-lg border border-gray-200 px-4 py-3 text-left text-sm hover:border-[#147c72]/40 hover:shadow dark:border-slate-700 dark:bg-slate-800"
             >
               <div className="flex items-center gap-3">
-                <UtensilsCrossed className="h-5 w-5 text-blue-500 dark:text-blue-300" />
+                <UtensilsCrossed className="h-5 w-5 text-[#147c72] dark:text-blue-300" />
                 <div>
                   <p className="font-medium text-gray-900 dark:text-slate-100">Plan this week&apos;s meals</p>
                   <p className="text-xs text-gray-500 dark:text-slate-400">Keep the meal planner up to date</p>
@@ -909,10 +944,10 @@ export const DashboardView = () => {
         {isWidgetVisible('budgetOverview') && (isWidgetCollapsed('budgetOverview') ? (
           collapsedWidget('budgetOverview', 'xl:col-span-2')
         ) : (
-        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm xl:col-span-2 dark:border-slate-700 dark:bg-slate-900">
+        <div className="kinboard-card p-5 xl:col-span-2 dark:border-slate-700 dark:bg-slate-900">
           <div className="flex items-center justify-between gap-3">
             <h3 className="flex items-center gap-2 text-base font-semibold text-gray-900 dark:text-slate-100">
-              <BarChart3 className="h-5 w-5 text-blue-500" /> Budget Overview
+              <BarChart3 className="h-5 w-5 text-[#147c72]" /> Budget Overview
             </h3>
             {widgetControls('budgetOverview')}
           </div>
@@ -949,9 +984,9 @@ export const DashboardView = () => {
               <p className="text-xs text-red-700 font-medium dark:text-red-300">Total Expenses</p>
               <p className="text-lg font-semibold text-red-900 dark:text-red-200">{formatPrivateCurrency(budgetCardTotals.expenses)}</p>
             </div>
-            <div className={`rounded-lg p-3 border ${budgetCardTotals.net >= 0 ? 'bg-blue-50 border-blue-200 dark:border-blue-500/40 dark:bg-blue-500/10' : 'bg-amber-50 border-amber-200 dark:border-amber-500/40 dark:bg-amber-500/10'}`}>
-              <p className={`text-xs font-medium ${budgetCardTotals.net >= 0 ? 'text-blue-700 dark:text-blue-200' : 'text-amber-700 dark:text-amber-200'}`}>Net Income</p>
-              <p className={`text-lg font-semibold ${budgetCardTotals.net >= 0 ? 'text-blue-900 dark:text-blue-200' : 'text-amber-900 dark:text-amber-200'}`}>
+            <div className={`rounded-lg p-3 border ${budgetCardTotals.net >= 0 ? 'bg-[#eaf1e7] border-[#147c72]/30 dark:border-[#147c72]/40 dark:bg-[#147c72]/10' : 'bg-amber-50 border-amber-200 dark:border-amber-500/40 dark:bg-amber-500/10'}`}>
+              <p className={`text-xs font-medium ${budgetCardTotals.net >= 0 ? 'text-[#147c72] dark:text-[#56c6b8]' : 'text-amber-700 dark:text-amber-200'}`}>Net Income</p>
+              <p className={`text-lg font-semibold ${budgetCardTotals.net >= 0 ? 'text-[#0f625a] dark:text-[#56c6b8]' : 'text-amber-900 dark:text-amber-200'}`}>
                 {formatPrivateCurrency(budgetCardTotals.net)}
               </p>
             </div>
@@ -962,7 +997,7 @@ export const DashboardView = () => {
         {isWidgetVisible('recentActivity') && (isWidgetCollapsed('recentActivity') ? (
           collapsedWidget('recentActivity')
         ) : (
-        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+        <div className="kinboard-card p-5 dark:border-slate-700 dark:bg-slate-900">
           <div className="flex items-center justify-between gap-3">
             <h3 className="flex items-center gap-2 text-base font-semibold text-gray-900 dark:text-slate-100">
               <Activity className="h-5 w-5 text-rose-500" /> Recent Activity
@@ -981,7 +1016,7 @@ export const DashboardView = () => {
             ))}
             <button
               onClick={openQuickActivityForm}
-              className="mt-4 flex w-full items-center justify-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
+              className="mt-4 flex w-full items-center justify-center gap-2 rounded-md bg-[#147c72] px-3 py-2 text-sm font-medium text-white hover:bg-[#0f625a]"
             >
               <Activity className="h-4 w-4" /> Log new activity
             </button>
@@ -996,7 +1031,7 @@ export const DashboardView = () => {
         {isWidgetVisible('household') && (isWidgetCollapsed('household') ? (
           collapsedWidget('household')
         ) : (
-        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+        <div className="kinboard-card p-5 dark:border-slate-700 dark:bg-slate-900">
           <div className="flex items-center justify-between gap-3">
             <h3 className="flex items-center gap-2 text-base font-semibold text-gray-900 dark:text-slate-100">
               <Users className="h-5 w-5 text-indigo-500" /> Household members
@@ -1017,7 +1052,7 @@ export const DashboardView = () => {
         {isWidgetVisible('meals') && (isWidgetCollapsed('meals') ? (
           collapsedWidget('meals')
         ) : (
-        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+        <div className="kinboard-card p-5 dark:border-slate-700 dark:bg-slate-900">
           <div className="flex items-center justify-between gap-3">
             <h3 className="flex items-center gap-2 text-base font-semibold text-gray-900 dark:text-slate-100">
               <Utensils className="h-5 w-5 text-green-500" /> Meal plan highlights
@@ -1041,7 +1076,7 @@ export const DashboardView = () => {
         {isWidgetVisible('shopping') && (isWidgetCollapsed('shopping') ? (
           collapsedWidget('shopping')
         ) : (
-        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+        <div className="kinboard-card p-5 dark:border-slate-700 dark:bg-slate-900">
           <div className="flex items-center justify-between gap-3">
             <h3 className="flex items-center gap-2 text-base font-semibold text-gray-900 dark:text-slate-100">
               <ShoppingBag className="h-5 w-5 text-orange-500 dark:text-orange-300" /> Shopping lists
