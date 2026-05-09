@@ -173,7 +173,7 @@ export const POST = requireFamilyAccess(async (_request: NextRequest, context, _
       budgetNotes: [],
     };
 
-    if (!process.env.ANTHROPIC_API_KEY) {
+    if (!process.env.ANTHROPIC_API_KEY && !process.env.OPENROUTER_API_KEY) {
       return NextResponse.json(
         {
           optimisation: buildFallbackOptimisation(aiInput),
@@ -186,7 +186,7 @@ export const POST = requireFamilyAccess(async (_request: NextRequest, context, _
 
     let aiResponse = '';
     try {
-      aiResponse = await withFallbackTimeout(aiService.optimiseShoppingLists(aiInput), 6500);
+      aiResponse = await withFallbackTimeout(aiService.optimiseShoppingLists(aiInput), 15000);
       const optimisation = parseAiJson(aiResponse);
 
       return NextResponse.json(

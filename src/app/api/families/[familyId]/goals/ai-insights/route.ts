@@ -174,7 +174,7 @@ export const POST = requireFamilyAccess(async (_request: NextRequest, context, _
       })),
     };
 
-    if (!process.env.ANTHROPIC_API_KEY) {
+    if (!process.env.ANTHROPIC_API_KEY && !process.env.OPENROUTER_API_KEY) {
       return NextResponse.json(
         {
           plan: buildFallbackGoalCoachPlan({ familyName: family.familyName, goals, achievements }),
@@ -187,7 +187,7 @@ export const POST = requireFamilyAccess(async (_request: NextRequest, context, _
 
     let aiResponse = '';
     try {
-      aiResponse = await withFallbackTimeout(aiService.coachGoals(aiInput), 6500);
+      aiResponse = await withFallbackTimeout(aiService.coachGoals(aiInput), 15000);
       const plan = parseAiJson(aiResponse);
 
       return NextResponse.json(

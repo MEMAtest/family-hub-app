@@ -89,7 +89,7 @@ export const POST = requireFamilyAccess(async (_request: NextRequest, context, _
       })),
     };
 
-    if (!process.env.ANTHROPIC_API_KEY) {
+    if (!process.env.ANTHROPIC_API_KEY && !process.env.OPENROUTER_API_KEY) {
       return NextResponse.json(
         {
           summary: buildFallbackGoalSummary({

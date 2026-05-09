@@ -1,5 +1,5 @@
 /**
- * AI Service - Anthropic Claude Integration
+ * AI Service - Anthropic/OpenRouter Integration
  * Provides intelligent insights for Family Hub features
  */
 
@@ -9,22 +9,32 @@ import { logAIUsage } from '@/utils/aiTelemetry';
 import { redactSensitiveData } from '@/utils/privacy';
 
 export class AIService {
-  private anthropic: Anthropic;
+  private anthropic: Anthropic | null;
+  private readonly anthropicApiKey: string;
+  private readonly openRouterApiKey: string;
+  private readonly anthropicModel: string;
+  private readonly openRouterModel: string;
   private readonly maxPromptChars = 12000;
   private readonly maxRetries = 2;
   private readonly baseRetryDelayMs = 750;
   private readonly requestTimeoutMs = 20000;
 
   constructor() {
-    const apiKey = process.env.ANTHROPIC_API_KEY || '';
-    if (!apiKey) {
-      console.warn('ANTHROPIC_API_KEY not found in environment variables');
+    this.anthropicApiKey = process.env.ANTHROPIC_API_KEY || '';
+    this.openRouterApiKey = process.env.OPENROUTER_API_KEY || '';
+    this.anthropicModel = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-20250514';
+    this.openRouterModel = process.env.OPENROUTER_MODEL || 'openai/gpt-4o-mini';
+
+    if (!this.anthropicApiKey && !this.openRouterApiKey) {
+      console.warn('No AI provider key found in environment variables');
     }
-    this.anthropic = new Anthropic({ apiKey });
+    this.anthropic = this.anthropicApiKey
+      ? new Anthropic({ apiKey: this.anthropicApiKey })
+      : null;
   }
 
   /**
-   * Generic chat completion method using Claude
+   * Generic chat completion method using Anthropic with OpenRouter fallback
    */
   private async chat(
     systemPrompt: string,
@@ -33,6 +43,34 @@ export class AIService {
   ): Promise<string> {
     const safeSystemPrompt = this.sanitisePrompt(systemPrompt);
     const safeUserPrompt = this.sanitisePrompt(userPrompt);
+    const feature = systemPrompt.split('\n')[0]?.slice(0, 60) || 'ai.chat';
+
+    if (this.anthropic) {
+      try {
+        return await this.chatWithAnthropic(feature, safeSystemPrompt, safeUserPrompt, maxTokens);
+      } catch (error) {
+        if (!this.openRouterApiKey) {
+          throw error;
+        }
+
+        console.warn('Anthropic AI call failed; using OpenRouter fallback:', error instanceof Error ? error.message : 'Unknown error');
+        return await this.chatWithOpenRouter(feature, safeSystemPrompt, safeUserPrompt, maxTokens);
+      }
+    }
+
+    if (this.openRouterApiKey) {
+      return await this.chatWithOpenRouter(feature, safeSystemPrompt, safeUserPrompt, maxTokens);
+    }
+
+    throw new Error('No AI provider key configured');
+  }
+
+  private async chatWithAnthropic(
+    feature: string,
+    safeSystemPrompt: string,
+    safeUserPrompt: string,
+    maxTokens: number
+  ): Promise<string> {
 
     let attempt = 0;
     let lastError: unknown = null;
@@ -42,8 +80,8 @@ export class AIService {
 
       try {
         const message = await Promise.race([
-          this.anthropic.messages.create({
-            model: 'claude-sonnet-4-20250514',
+          this.anthropic!.messages.create({
+            model: this.anthropicModel,
             max_tokens: maxTokens,
             system: safeSystemPrompt,
             messages: [
@@ -62,7 +100,7 @@ export class AIService {
         }
 
         logAIUsage({
-          feature: systemPrompt.split('\n')[0]?.slice(0, 60) || 'ai.chat',
+          feature,
           tokensRequested: maxTokens,
           tokensGenerated: message.usage?.output_tokens,
           durationMs: Date.now() - startedAt,
@@ -75,13 +113,13 @@ export class AIService {
         lastError = error;
         attempt += 1;
 
-        if (attempt > this.maxRetries) {
+        if (attempt > this.maxRetries || !this.shouldRetryAnthropic(error)) {
           break;
         }
 
         const delay = this.baseRetryDelayMs * Math.pow(2, attempt - 1);
         logAIUsage({
-          feature: systemPrompt.split('\n')[0]?.slice(0, 60) || 'ai.chat',
+          feature,
           tokensRequested: maxTokens,
           durationMs: Date.now() - startedAt,
           success: false,
@@ -97,6 +135,75 @@ export class AIService {
       : new Error('Unknown error calling AI service');
   }
 
+  private async chatWithOpenRouter(
+    feature: string,
+    safeSystemPrompt: string,
+    safeUserPrompt: string,
+    maxTokens: number
+  ): Promise<string> {
+    const startedAt = Date.now();
+
+    const response = await Promise.race([
+      fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this.openRouterApiKey}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': process.env.NEXT_PUBLIC_APP_URL || 'https://family-hub-app.vercel.app',
+          'X-Title': 'Omosanya Home',
+        },
+        body: JSON.stringify({
+          model: this.openRouterModel,
+          messages: [
+            { role: 'system', content: safeSystemPrompt },
+            { role: 'user', content: safeUserPrompt },
+          ],
+          max_tokens: maxTokens,
+          temperature: 0.2,
+        }),
+      }),
+      this.timeoutPromise(),
+    ]);
+
+    const responseText = await response.text();
+    let payload: any = null;
+
+    try {
+      payload = JSON.parse(responseText);
+    } catch {
+      // Keep the raw text for the error below.
+    }
+
+    if (!response.ok) {
+      const errorMessage = payload?.error?.message || responseText || `OpenRouter returned ${response.status}`;
+      logAIUsage({
+        feature,
+        tokensRequested: maxTokens,
+        durationMs: Date.now() - startedAt,
+        success: false,
+        errorMessage,
+        timestamp: new Date().toISOString(),
+      });
+      throw new Error(errorMessage);
+    }
+
+    const content = payload?.choices?.[0]?.message?.content;
+    if (typeof content !== 'string' || !content.trim()) {
+      throw new Error('Unexpected response from OpenRouter');
+    }
+
+    logAIUsage({
+      feature,
+      tokensRequested: maxTokens,
+      tokensGenerated: payload?.usage?.completion_tokens,
+      durationMs: Date.now() - startedAt,
+      success: true,
+      timestamp: new Date().toISOString(),
+    });
+
+    return content;
+  }
+
   private sanitisePrompt(prompt: string): string {
     if (!prompt) return '';
     const trimmed = redactSensitiveData(prompt).trim();
@@ -109,6 +216,11 @@ export class AIService {
 
   private sleep(durationMs: number) {
     return new Promise((resolve) => setTimeout(resolve, durationMs));
+  }
+
+  private shouldRetryAnthropic(error: unknown): boolean {
+    const status = (error as { status?: number } | null)?.status;
+    return !status || status === 429 || status >= 500;
   }
 
   private timeoutPromise() {
@@ -411,8 +523,10 @@ Only output the JSON object.`;
     }>;
   }): Promise<string> {
     const systemPrompt = `You are a warm, practical UK family goal coach. Celebrate wins, highlight the most important goal to focus on, and recommend specific next steps that can be completed this week. Always return valid JSON in the requested structure.`;
+    const today = new Date().toISOString().split('T')[0];
 
-    const userPrompt = `Family: ${data.familyName}
+    const userPrompt = `Current date: ${today}
+Family: ${data.familyName}
 Goals (${data.goals.length}):
 ${data.goals.map(goal => `- ${goal.title} [${goal.type}] progress ${goal.progress}% target ${goal.targetValue}${goal.deadline ? ` deadline ${goal.deadline}` : ''}`).join('\n')}
 
@@ -432,13 +546,13 @@ Return JSON:
   },
   "blockers": ["Obstacle 1"],
   "weeklyActions": [
-    { "title": "", "owner": "", "dueDate": "YYYY-MM-DD" | null, "motivation": "" }
+    { "title": "", "owner": "", "dueDate": "YYYY-MM-DD future date or null", "motivation": "" }
   ],
   "checkInQuestions": ["Question 1", "Question 2"],
   "encouragement": "Short supportive message"
 }
 
-Only output the JSON object.`;
+Only output the JSON object. Do not invent past dates; any weeklyActions.dueDate must be on or after ${today}, or null.`;
 
     return await this.chat(systemPrompt, userPrompt, 2048);
   }
