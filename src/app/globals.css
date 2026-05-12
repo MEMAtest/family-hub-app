@@ -935,7 +935,7 @@ html.dark .family-hub-calendar .rbc-timeslot-group {
 /* Mobile Calendar Specific Styles */
 @media (max-width: 768px) {
   .mobile-calendar-container {
-    @apply overflow-hidden;
+    @apply overflow-visible;
   }
 
   .mobile-calendar .rbc-calendar {

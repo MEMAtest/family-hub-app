@@ -1293,7 +1293,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
   )
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-white dark:bg-slate-900">
+    <div className="flex min-h-full flex-col bg-white dark:bg-slate-900">
       {/* Mobile Header */}
       {isMobile && renderMobileHeader()}
 
@@ -1583,8 +1583,8 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
       )}
 
       {/* Calendar Component */}
-      <div className={`min-h-0 flex-1 ${isMobile ? 'p-2 pwa-safe-bottom' : 'p-6'}`}>
-        <div className={`relative h-full min-h-[520px] ${isMobile ? 'mobile-calendar-container' : ''}`}>
+      <div className={`flex-1 ${isMobile ? 'p-2 pb-28 pwa-safe-bottom' : 'p-6'}`}>
+        <div className={`relative min-h-[640px] ${isMobile ? 'mobile-calendar-container' : ''}`}>
           {view === 'YEAR' ? (
             <YearView
               events={events}
