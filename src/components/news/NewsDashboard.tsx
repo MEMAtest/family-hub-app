@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { NewsArticle, NewsCategory, NewsPreferences, NewsDigest, NewsAlert } from '@/types/news.types';
 import { rssNewsService } from '@/services/rssNewsService';
 import { NewsSettings } from './NewsSettings';
+import { KidsEventsSection } from './KidsEventsSection';
 import {
   Newspaper,
   Clock,
@@ -30,7 +31,8 @@ import {
   RefreshCw,
   ChevronRight,
   BookOpen,
-  Star
+  Star,
+  Baby
 } from 'lucide-react';
 
 interface NewsDashboardProps {
@@ -205,6 +207,7 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({
   const [viewMode, setViewMode] = useState<'cards' | 'list' | 'digest'>('cards');
   const [showSettings, setShowSettings] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [activeTab, setActiveTab] = useState<'news' | 'kids-events'>('news');
 
   const categoryConfig = {
     general: { icon: Globe, color: 'blue', label: 'General News' },
@@ -446,85 +449,126 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({
               <Newspaper className="w-6 h-6 text-blue-600 dark:text-blue-400" />
             </div>
             <div>
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-100">Family News</h2>
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-100">Family News & Events</h2>
               <p className="text-sm text-gray-600 dark:text-slate-400">
-                {stats.unreadArticles} unread • {stats.familyRelevant} family relevant
+                {activeTab === 'news'
+                  ? `${stats.unreadArticles} unread • ${stats.familyRelevant} family relevant`
+                  : 'Summer activities for kids in London & SE20'
+                }
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              onClick={handleRefresh}
-              disabled={refreshing}
-              className="flex items-center gap-2 px-3 py-2 text-gray-700 dark:text-slate-300 bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50"
-            >
-              <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-              Refresh
-            </button>
-            <button
-              onClick={() => setShowSettings(true)}
-              className="flex items-center gap-2 px-3 py-2 text-gray-700 dark:text-slate-300 bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 rounded-lg transition-colors"
-            >
-              <Settings className="w-4 h-4" />
-              Settings
-            </button>
+            {activeTab === 'news' && (
+              <>
+                <button
+                  onClick={handleRefresh}
+                  disabled={refreshing}
+                  className="flex items-center gap-2 px-3 py-2 text-gray-700 dark:text-slate-300 bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+                  Refresh
+                </button>
+                <button
+                  onClick={() => setShowSettings(true)}
+                  className="flex items-center gap-2 px-3 py-2 text-gray-700 dark:text-slate-300 bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                >
+                  <Settings className="w-4 h-4" />
+                  Settings
+                </button>
+              </>
+            )}
           </div>
         </div>
 
-        <div className="mt-4 flex flex-wrap items-center gap-4">
-          <div className="flex items-center gap-2">
-            <Search className="w-4 h-4 text-gray-400 dark:text-slate-500" />
-            <input
-              type="text"
-              placeholder="Search news..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="px-3 py-2 border border-gray-300 dark:border-slate-700 rounded-lg text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
+        <div className="mt-4 flex items-center gap-2 border-b border-gray-200 dark:border-slate-700 -mx-6 px-6">
+          <button
+            onClick={() => setActiveTab('news')}
+            className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === 'news'
+                ? 'border-blue-600 text-blue-600 dark:text-blue-400'
+                : 'border-transparent text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-300'
+            }`}
+          >
+            <Newspaper className="w-4 h-4" />
+            Family News
+          </button>
+          <button
+            onClick={() => setActiveTab('kids-events')}
+            className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === 'kids-events'
+                ? 'border-purple-600 text-purple-600 dark:text-purple-400'
+                : 'border-transparent text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-300'
+            }`}
+          >
+            <Baby className="w-4 h-4" />
+            Kids Events
+            <span className="px-1.5 py-0.5 text-xs bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-full">
+              Summer
+            </span>
+          </button>
+        </div>
 
-          <div className="flex items-center gap-2">
-            <Filter className="w-4 h-4 text-gray-400 dark:text-slate-500" />
-            <select
-              value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value as any)}
-              className="px-3 py-2 border border-gray-300 dark:border-slate-700 rounded-lg text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="all">All Categories</option>
-              {Object.entries(categoryConfig).map(([category, config]) => (
-                <option key={category} value={category}>
-                  {config.label}
-                </option>
-              ))}
-            </select>
-          </div>
+        {activeTab === 'news' && (
+          <div className="mt-4 flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Search className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+              <input
+                type="text"
+                placeholder="Search news..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="px-3 py-2 border border-gray-300 dark:border-slate-700 rounded-lg text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
 
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-600 dark:text-slate-400">View:</span>
-            <div className="flex items-center border border-gray-300 dark:border-slate-700 rounded-lg">
-              <button
-                onClick={() => setViewMode('cards')}
-                className={`px-3 py-1 text-sm transition-colors ${
-                  viewMode === 'cards' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400' : 'text-gray-600 dark:text-slate-400'
-                }`}
+            <div className="flex items-center gap-2">
+              <Filter className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+              <select
+                value={selectedCategory}
+                onChange={(e) => setSelectedCategory(e.target.value as any)}
+                className="px-3 py-2 border border-gray-300 dark:border-slate-700 rounded-lg text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               >
-                Cards
-              </button>
-              <button
-                onClick={() => setViewMode('list')}
-                className={`px-3 py-1 text-sm transition-colors ${
-                  viewMode === 'list' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400' : 'text-gray-600 dark:text-slate-400'
-                }`}
-              >
-                List
-              </button>
+                <option value="all">All Categories</option>
+                {Object.entries(categoryConfig).map(([category, config]) => (
+                  <option key={category} value={category}>
+                    {config.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600 dark:text-slate-400">View:</span>
+              <div className="flex items-center border border-gray-300 dark:border-slate-700 rounded-lg">
+                <button
+                  onClick={() => setViewMode('cards')}
+                  className={`px-3 py-1 text-sm transition-colors ${
+                    viewMode === 'cards' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400' : 'text-gray-600 dark:text-slate-400'
+                  }`}
+                >
+                  Cards
+                </button>
+                <button
+                  onClick={() => setViewMode('list')}
+                  className={`px-3 py-1 text-sm transition-colors ${
+                    viewMode === 'list' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400' : 'text-gray-600 dark:text-slate-400'
+                  }`}
+                >
+                  List
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
 
       <div className="p-6">
+        {activeTab === 'kids-events' ? (
+          <KidsEventsSection />
+        ) : (
+          <>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
           <div className="bg-blue-50 dark:bg-blue-900/30 p-4 rounded-lg">
             <div className="flex items-center gap-2">
@@ -575,6 +619,8 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({
                 : 'Check back later for the latest family-relevant news.'}
             </p>
           </div>
+        )}
+        </>
         )}
       </div>
 
