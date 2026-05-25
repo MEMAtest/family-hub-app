@@ -69,24 +69,24 @@ const getCategoryIcon = (category: EventCategory) => {
   return icons[category] || Calendar;
 };
 
-const getCategoryColor = (category: EventCategory): string => {
-  const colors: Record<EventCategory, string> = {
-    'free': 'emerald',
-    'museum': 'amber',
-    'theatre': 'purple',
-    'sports': 'blue',
-    'arts': 'pink',
-    'swimming': 'cyan',
-    'nature': 'green',
-    'science': 'indigo',
-    'music': 'rose',
-    'festival': 'orange',
-    'workshop': 'violet',
-    'outdoor': 'lime',
-    'indoor': 'slate',
-    'other': 'gray'
+const getCategoryStyles = (category: EventCategory): { bg: string; text: string; darkBg: string; darkText: string } => {
+  const styles: Record<EventCategory, { bg: string; text: string; darkBg: string; darkText: string }> = {
+    'free': { bg: 'bg-emerald-100', text: 'text-emerald-700', darkBg: 'dark:bg-emerald-900/50', darkText: 'dark:text-emerald-300' },
+    'museum': { bg: 'bg-amber-100', text: 'text-amber-700', darkBg: 'dark:bg-amber-900/50', darkText: 'dark:text-amber-300' },
+    'theatre': { bg: 'bg-purple-100', text: 'text-purple-700', darkBg: 'dark:bg-purple-900/50', darkText: 'dark:text-purple-300' },
+    'sports': { bg: 'bg-blue-100', text: 'text-blue-700', darkBg: 'dark:bg-blue-900/50', darkText: 'dark:text-blue-300' },
+    'arts': { bg: 'bg-pink-100', text: 'text-pink-700', darkBg: 'dark:bg-pink-900/50', darkText: 'dark:text-pink-300' },
+    'swimming': { bg: 'bg-cyan-100', text: 'text-cyan-700', darkBg: 'dark:bg-cyan-900/50', darkText: 'dark:text-cyan-300' },
+    'nature': { bg: 'bg-green-100', text: 'text-green-700', darkBg: 'dark:bg-green-900/50', darkText: 'dark:text-green-300' },
+    'science': { bg: 'bg-indigo-100', text: 'text-indigo-700', darkBg: 'dark:bg-indigo-900/50', darkText: 'dark:text-indigo-300' },
+    'music': { bg: 'bg-rose-100', text: 'text-rose-700', darkBg: 'dark:bg-rose-900/50', darkText: 'dark:text-rose-300' },
+    'festival': { bg: 'bg-orange-100', text: 'text-orange-700', darkBg: 'dark:bg-orange-900/50', darkText: 'dark:text-orange-300' },
+    'workshop': { bg: 'bg-violet-100', text: 'text-violet-700', darkBg: 'dark:bg-violet-900/50', darkText: 'dark:text-violet-300' },
+    'outdoor': { bg: 'bg-lime-100', text: 'text-lime-700', darkBg: 'dark:bg-lime-900/50', darkText: 'dark:text-lime-300' },
+    'indoor': { bg: 'bg-slate-100', text: 'text-slate-700', darkBg: 'dark:bg-slate-900/50', darkText: 'dark:text-slate-300' },
+    'other': { bg: 'bg-gray-100', text: 'text-gray-700', darkBg: 'dark:bg-gray-900/50', darkText: 'dark:text-gray-300' }
   };
-  return colors[category] || 'gray';
+  return styles[category] || styles['other'];
 };
 
 export const KidsEventsSection: React.FC<KidsEventsSectionProps> = ({
@@ -103,10 +103,19 @@ export const KidsEventsSection: React.FC<KidsEventsSectionProps> = ({
   const [savedEvents, setSavedEvents] = useState<Set<string>>(new Set());
   const [subscribedEvents, setSubscribedEvents] = useState<Set<string>>(new Set());
   const [showDigestSettings, setShowDigestSettings] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [digestEmails, setDigestEmails] = useState('ademola@memaconsultants.com');
+  const [digestDay, setDigestDay] = useState('saturday');
+  const [digestTime, setDigestTime] = useState('08:00');
+  const [digestIncludeLocal, setDigestIncludeLocal] = useState(true);
+  const [digestIncludeLondon, setDigestIncludeLondon] = useState(true);
+  const [digestOnlyFree, setDigestOnlyFree] = useState(false);
 
   useEffect(() => {
     fetchEvents();
     loadSavedState();
+    loadDigestSettings();
   }, []);
 
   const loadSavedState = () => {
@@ -131,23 +140,62 @@ export const KidsEventsSection: React.FC<KidsEventsSectionProps> = ({
     }
   };
 
+  const loadDigestSettings = () => {
+    if (typeof window === 'undefined') return;
+    try {
+      const settings = localStorage.getItem('kidsEvents_digestSettings');
+      if (settings) {
+        const parsed = JSON.parse(settings);
+        setDigestEmails(parsed.emails || 'ademola@memaconsultants.com');
+        setDigestDay(parsed.day || 'saturday');
+        setDigestTime(parsed.time || '08:00');
+        setDigestIncludeLocal(parsed.includeLocal ?? true);
+        setDigestIncludeLondon(parsed.includeLondon ?? true);
+        setDigestOnlyFree(parsed.onlyFree ?? false);
+      }
+    } catch (e) {
+      console.warn('Failed to load digest settings:', e);
+    }
+  };
+
+  const saveDigestSettings = () => {
+    if (typeof window === 'undefined') return;
+    try {
+      localStorage.setItem('kidsEvents_digestSettings', JSON.stringify({
+        emails: digestEmails,
+        day: digestDay,
+        time: digestTime,
+        includeLocal: digestIncludeLocal,
+        includeLondon: digestIncludeLondon,
+        onlyFree: digestOnlyFree
+      }));
+    } catch (e) {
+      console.warn('Failed to save digest settings:', e);
+    }
+  };
+
   const fetchEvents = async () => {
     setLoading(true);
+    setError(null);
     try {
       const params = new URLSearchParams();
       if (selectedCategory !== 'all') params.set('categories', selectedCategory);
       if (selectedAgeRange !== 'all') params.set('ageRange', selectedAgeRange);
       if (showLocalOnly) params.set('isLocal', 'true');
       if (showFreeOnly) params.set('isFree', 'true');
+      if (searchTerm.trim()) params.set('search', searchTerm.trim());
 
       const response = await fetch(`/api/events/kids?${params.toString()}`);
       const data = await response.json();
 
       if (data.success) {
         setEvents(data.events);
+      } else {
+        setError(data.error || 'Failed to load events');
       }
-    } catch (error) {
-      console.error('Failed to fetch events:', error);
+    } catch (err) {
+      console.error('Failed to fetch events:', err);
+      setError('Failed to load events. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -197,8 +245,11 @@ export const KidsEventsSection: React.FC<KidsEventsSectionProps> = ({
   };
 
   useEffect(() => {
-    fetchEvents();
-  }, [selectedCategory, selectedAgeRange, showLocalOnly, showFreeOnly]);
+    const debounceTimer = setTimeout(() => {
+      fetchEvents();
+    }, searchTerm ? 300 : 0);
+    return () => clearTimeout(debounceTimer);
+  }, [selectedCategory, selectedAgeRange, showLocalOnly, showFreeOnly, searchTerm]);
 
   const filteredEvents = events;
 
@@ -222,7 +273,7 @@ export const KidsEventsSection: React.FC<KidsEventsSectionProps> = ({
 
   const EventCard: React.FC<{ event: KidsEvent; featured?: boolean }> = ({ event, featured }) => {
     const CategoryIcon = getCategoryIcon(event.category);
-    const categoryColor = getCategoryColor(event.category);
+    const catStyles = getCategoryStyles(event.category);
     const isSaved = savedEvents.has(event.id);
     const isSubscribed = subscribedEvents.has(event.id);
 
@@ -236,9 +287,12 @@ export const KidsEventsSection: React.FC<KidsEventsSectionProps> = ({
               src={event.imageUrl}
               alt={event.title}
               className={`w-full object-cover ${featured ? 'h-64' : 'h-48'}`}
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1503454537195-1dcabb73ffb9?w=800';
+              }}
             />
-            <div className="absolute top-3 left-3 flex gap-2">
-              <span className={`px-2 py-1 rounded-full text-xs font-medium bg-${categoryColor}-100 dark:bg-${categoryColor}-900/50 text-${categoryColor}-700 dark:text-${categoryColor}-300 flex items-center gap-1`}>
+            <div className="absolute top-3 left-3 flex flex-wrap gap-2">
+              <span className={`px-2 py-1 rounded-full text-xs font-medium ${catStyles.bg} ${catStyles.darkBg} ${catStyles.text} ${catStyles.darkText} flex items-center gap-1`}>
                 <CategoryIcon className="w-3 h-3" />
                 {CATEGORY_LABELS[event.category]}
               </span>
@@ -248,14 +302,26 @@ export const KidsEventsSection: React.FC<KidsEventsSectionProps> = ({
                 </span>
               )}
             </div>
-            {event.isLocal && (
-              <div className="absolute top-3 right-3">
+            <div className="absolute top-3 right-3 flex flex-col gap-1">
+              {event.isLocal && (
                 <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 flex items-center gap-1">
                   <MapPin className="w-3 h-3" />
                   Local
                 </span>
-              </div>
-            )}
+              )}
+            </div>
+            <div className="absolute bottom-3 left-3 flex gap-1">
+              {event.suitableForToddlers && (
+                <span className="px-2 py-1 rounded-full text-xs font-medium bg-pink-100 dark:bg-pink-900/50 text-pink-700 dark:text-pink-300">
+                  2.5yo+
+                </span>
+              )}
+              {event.suitableForPreschool && !event.suitableForToddlers && (
+                <span className="px-2 py-1 rounded-full text-xs font-medium bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300">
+                  5.5yo+
+                </span>
+              )}
+            </div>
           </div>
         )}
 
@@ -396,16 +462,21 @@ export const KidsEventsSection: React.FC<KidsEventsSectionProps> = ({
     );
   };
 
+  const handleSaveDigestSettings = () => {
+    saveDigestSettings();
+    setShowDigestSettings(false);
+  };
+
   const DigestSettingsModal = () => (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-slate-800 rounded-xl max-w-md w-full p-6">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowDigestSettings(false)}>
+      <div className="bg-white dark:bg-slate-800 rounded-xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">
             Weekly Digest Settings
           </h3>
           <button
             onClick={() => setShowDigestSettings(false)}
-            className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg"
+            className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg text-gray-500"
           >
             ×
           </button>
@@ -418,12 +489,13 @@ export const KidsEventsSection: React.FC<KidsEventsSectionProps> = ({
             </label>
             <input
               type="text"
-              defaultValue="ademola@memaconsultants.com"
+              value={digestEmails}
+              onChange={(e) => setDigestEmails(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
               placeholder="Enter email addresses (comma separated)"
             />
             <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">
-              Separate multiple emails with commas
+              Separate multiple emails with commas (e.g., you@email.com, wife@email.com)
             </p>
           </div>
 
@@ -432,13 +504,17 @@ export const KidsEventsSection: React.FC<KidsEventsSectionProps> = ({
               <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
                 Send Day
               </label>
-              <select className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100">
+              <select
+                value={digestDay}
+                onChange={(e) => setDigestDay(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
+              >
                 <option value="monday">Monday</option>
                 <option value="tuesday">Tuesday</option>
                 <option value="wednesday">Wednesday</option>
                 <option value="thursday">Thursday</option>
                 <option value="friday">Friday</option>
-                <option value="saturday" selected>Saturday</option>
+                <option value="saturday">Saturday</option>
                 <option value="sunday">Sunday</option>
               </select>
             </div>
@@ -446,9 +522,13 @@ export const KidsEventsSection: React.FC<KidsEventsSectionProps> = ({
               <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
                 Send Time
               </label>
-              <select className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100">
+              <select
+                value={digestTime}
+                onChange={(e) => setDigestTime(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
+              >
                 <option value="07:00">7:00 AM</option>
-                <option value="08:00" selected>8:00 AM</option>
+                <option value="08:00">8:00 AM</option>
                 <option value="09:00">9:00 AM</option>
                 <option value="10:00">10:00 AM</option>
               </select>
@@ -456,16 +536,31 @@ export const KidsEventsSection: React.FC<KidsEventsSectionProps> = ({
           </div>
 
           <div className="space-y-2">
-            <label className="flex items-center gap-2">
-              <input type="checkbox" defaultChecked className="rounded" />
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={digestIncludeLocal}
+                onChange={(e) => setDigestIncludeLocal(e.target.checked)}
+                className="rounded text-blue-600"
+              />
               <span className="text-sm text-gray-700 dark:text-slate-300">Include local events (SE20 area)</span>
             </label>
-            <label className="flex items-center gap-2">
-              <input type="checkbox" defaultChecked className="rounded" />
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={digestIncludeLondon}
+                onChange={(e) => setDigestIncludeLondon(e.target.checked)}
+                className="rounded text-blue-600"
+              />
               <span className="text-sm text-gray-700 dark:text-slate-300">Include wider London events</span>
             </label>
-            <label className="flex items-center gap-2">
-              <input type="checkbox" className="rounded" />
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={digestOnlyFree}
+                onChange={(e) => setDigestOnlyFree(e.target.checked)}
+                className="rounded text-emerald-600"
+              />
               <span className="text-sm text-gray-700 dark:text-slate-300">Only show free events</span>
             </label>
           </div>
@@ -473,13 +568,13 @@ export const KidsEventsSection: React.FC<KidsEventsSectionProps> = ({
           <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200 dark:border-slate-700">
             <button
               onClick={() => setShowDigestSettings(false)}
-              className="px-4 py-2 text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg"
+              className="px-4 py-2 text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
             >
               Cancel
             </button>
             <button
-              onClick={() => setShowDigestSettings(false)}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2"
+              onClick={handleSaveDigestSettings}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 transition-colors"
             >
               <CheckCircle2 className="w-4 h-4" />
               Save Settings
@@ -530,9 +625,18 @@ export const KidsEventsSection: React.FC<KidsEventsSectionProps> = ({
 
       <div className="bg-white dark:bg-slate-800 rounded-xl p-4 border border-gray-200 dark:border-slate-700">
         <div className="flex flex-wrap items-center gap-4">
-          <div className="flex items-center gap-2">
-            <Filter className="w-4 h-4 text-gray-400" />
-            <select
+          <div className="relative flex-1 min-w-[200px] max-w-xs">
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search events..."
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 placeholder-gray-400"
+            />
+            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          </div>
+
+          <select
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value as any)}
               className="px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
@@ -587,6 +691,23 @@ export const KidsEventsSection: React.FC<KidsEventsSectionProps> = ({
           </div>
         </div>
       </div>
+
+      {error && (
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4 flex items-center gap-3">
+          <div className="p-2 bg-red-100 dark:bg-red-900/50 rounded-full">
+            <Calendar className="w-5 h-5 text-red-600 dark:text-red-400" />
+          </div>
+          <div>
+            <p className="text-red-800 dark:text-red-200 font-medium">{error}</p>
+            <button
+              onClick={fetchEvents}
+              className="text-sm text-red-600 dark:text-red-400 hover:underline mt-1"
+            >
+              Try again
+            </button>
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
