@@ -4,6 +4,7 @@ export interface NotificationSettings {
   enabled: boolean;
   channels: {
     browser: boolean;
+    push: boolean;
     email: boolean;
     inApp: boolean;
   };
@@ -84,7 +85,7 @@ export interface NotificationPreferences {
     [key: string]: {
       enabled: boolean;
       reminders: number[]; // minutes before
-      channels: ('browser' | 'email' | 'inApp')[];
+      channels: ('browser' | 'push' | 'email' | 'inApp')[];
       priority: 'low' | 'medium' | 'high';
     };
   };
@@ -108,6 +109,7 @@ export interface NotificationService {
   // Permission management
   requestPermission(): Promise<NotificationPermission>;
   checkPermission(): NotificationPermission;
+  syncPushSubscription(): Promise<void>;
 
   // Reminder scheduling
   scheduleReminder(eventId: string, reminder: Omit<NotificationReminder, 'id'>): Promise<NotificationReminder>;

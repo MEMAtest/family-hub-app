@@ -91,6 +91,15 @@ const normaliseGoalForStore = (goal: any) => {
   };
 };
 
+const getGoalCreatedTime = (goal: any) => {
+  const value = goal?.createdAt instanceof Date ? goal.createdAt : new Date(goal?.createdAt ?? 0);
+  const time = value.getTime();
+  return Number.isFinite(time) ? time : 0;
+};
+
+const sortGoalsNewestFirst = (goals: any[]) =>
+  [...goals].sort((a, b) => getGoalCreatedTime(b) - getGoalCreatedTime(a));
+
 const buildGoalsData = (goals: any[]): GoalsData => {
   const familyGoals: any[] = [];
   const individualGoals: any[] = [];
@@ -224,7 +233,7 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
   const upsertGoalInStore = useCallback((goal: any) => {
     const current = useFamilyStore.getState().goalsData;
     const existingGoals = current ? [...(current.familyGoals || []), ...(current.individualGoals || [])] : [];
-    const nextGoals = [...existingGoals.filter((g) => g.id !== goal.id), normaliseGoalForStore(goal)];
+    const nextGoals = [normaliseGoalForStore(goal), ...existingGoals.filter((g) => g.id !== goal.id)];
     const nextData = buildGoalsData(nextGoals);
     nextData.achievements = current?.achievements ?? [];
     nextData.rewardSystem = current?.rewardSystem ?? { points: {}, badges: {} };
@@ -300,7 +309,7 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
     if (!goalsData) return;
     const merged = [...(goalsData.familyGoals || []), ...(goalsData.individualGoals || [])];
     if (!merged.length) return;
-    setGoals(merged.map(toUiGoal));
+    setGoals(sortGoalsNewestFirst(merged.map(toUiGoal)));
   }, [goalsData]);
 
   // Fetch goals from API
@@ -324,7 +333,7 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
         // Transform API data to match component's expected format
         const transformedGoals = data.map(toUiGoal);
 
-        setGoals(transformedGoals);
+        setGoals(sortGoalsNewestFirst(transformedGoals));
         const currentGoalsData = useFamilyStore.getState().goalsData;
         const nextGoalsData = buildGoalsData(data);
         nextGoalsData.achievements = currentGoalsData?.achievements ?? [];
@@ -636,6 +645,9 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
   const averageProgress = totalGoals > 0 ? goals.reduce((sum, g) => sum + g.progress, 0) / totalGoals : 0;
   const totalAchievements = achievements.length;
   const totalPoints = achievements.reduce((sum, a) => sum + a.points, 0);
+  const activeGoalPreview = sortGoalsNewestFirst(goals)
+    .filter(goal => goal.status === 'active')
+    .slice(0, 3);
 
   // Chart data
   const progressChartData = goals.map(goal => ({
@@ -1087,7 +1099,7 @@ const GoalsDashboard: React.FC<GoalsDashboardProps> = ({ onClose }) => {
             </div>
           ) : (
             <div className="space-y-3">
-              {goals.slice(0, 3).map((goal) => {
+              {activeGoalPreview.map((goal) => {
                 const category = goalCategories.find(c => c.id === goal.category);
                 return (
                   <div key={goal.id} className="p-4 border border-gray-200 rounded-lg hover:shadow-sm transition-shadow">

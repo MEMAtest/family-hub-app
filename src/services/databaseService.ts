@@ -3,6 +3,15 @@ import { CalendarEvent, Person } from '@/types/calendar.types';
 
 const API_BASE = '/api/families';
 
+const inferEndDate = (date: string, time: string, durationMinutes?: number | null) => {
+  if (!durationMinutes || durationMinutes <= 0) return undefined;
+  const start = new Date(`${date}T${time}:00Z`);
+  if (Number.isNaN(start.getTime())) return undefined;
+  const end = new Date(start.getTime() + durationMinutes * 60 * 1000);
+  const endDate = end.toISOString().split('T')[0];
+  return endDate > date ? endDate : undefined;
+};
+
 class DatabaseService {
   private familyId: string | null = null;
   private syncEnabled = true;
@@ -89,6 +98,41 @@ class DatabaseService {
     const nextEvents = events.slice();
     nextEvents[index] = { ...nextEvents[index], ...event };
     this.writeLocalEvents(nextEvents);
+  }
+
+  private readLocalMembers(): any[] {
+    if (typeof window === 'undefined') return [];
+    try {
+      const parsed = JSON.parse(localStorage.getItem('familyMembers') || '[]');
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (error) {
+      console.warn('Failed to read local family members:', error);
+      return [];
+    }
+  }
+
+  private writeLocalMembers(members: any[]) {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem('familyMembers', JSON.stringify(members));
+  }
+
+  private upsertLocalMember(member: any) {
+    const members = this.readLocalMembers();
+    const memberName = String(member?.name || '').trim().toLowerCase();
+    const index = members.findIndex((item) => {
+      if (member?.id && item?.id === member.id) return true;
+      return memberName.length > 0 && String(item?.name || '').trim().toLowerCase() === memberName;
+    });
+
+    if (index === -1) {
+      this.writeLocalMembers([...members, member]);
+      return member;
+    }
+
+    const nextMembers = members.slice();
+    nextMembers[index] = { ...nextMembers[index], ...member };
+    this.writeLocalMembers(nextMembers);
+    return nextMembers[index];
   }
 
   async initialize() {
@@ -207,6 +251,11 @@ class DatabaseService {
             title: e.title,
             person: e.personId,
             date: e.eventDate ? e.eventDate.split('T')[0] : new Date().toISOString().split('T')[0],
+            endDate: inferEndDate(
+              e.eventDate ? e.eventDate.split('T')[0] : new Date().toISOString().split('T')[0],
+              `${hours}:${minutes}`,
+              e.durationMinutes
+            ),
             time: `${hours}:${minutes}`,
             duration: e.durationMinutes,
             location: e.location,
@@ -389,14 +438,12 @@ class DatabaseService {
   async saveMember(member: Person): Promise<Person | null> {
     if (!this.familyId || !this.syncEnabled) {
       // Just save to localStorage
-      const members = JSON.parse(localStorage.getItem('familyMembers') || '[]');
-      members.push({
+      this.upsertLocalMember({
         ...member,
         ageGroup: (member as any).ageGroup || (member as any).age || 'Adult',
         dateOfBirth: (member as any).dateOfBirth || null,
         avatarUrl: (member as any).avatarUrl || null,
       });
-      localStorage.setItem('familyMembers', JSON.stringify(members));
       return member;
     }
 
@@ -419,28 +466,24 @@ class DatabaseService {
 
       if (dbMember) {
         // Update localStorage as well
-        const members = JSON.parse(localStorage.getItem('familyMembers') || '[]');
-        members.push({
+        this.upsertLocalMember({
           ...member,
           id: dbMember.id,
           ageGroup,
           dateOfBirth: memberData.dateOfBirth || null,
           avatarUrl: memberData.avatarUrl || null,
         });
-        localStorage.setItem('familyMembers', JSON.stringify(members));
         return { ...member, id: dbMember.id };
       }
     } catch (error) {
       console.error('Failed to save member to database:', error);
       // Fall back to localStorage
-      const members = JSON.parse(localStorage.getItem('familyMembers') || '[]');
-      members.push({
+      this.upsertLocalMember({
         ...member,
         ageGroup: (member as any).ageGroup || (member as any).age || 'Adult',
         dateOfBirth: (member as any).dateOfBirth || null,
         avatarUrl: (member as any).avatarUrl || null,
       });
-      localStorage.setItem('familyMembers', JSON.stringify(members));
       return member;
     }
 
@@ -450,11 +493,11 @@ class DatabaseService {
   // Update family member in database
   async updateMember(id: string, updates: Partial<Person>): Promise<Person | null> {
     if (!this.familyId || !this.syncEnabled) {
-      const members = JSON.parse(localStorage.getItem('familyMembers') || '[]');
+      const members = this.readLocalMembers();
       const index = members.findIndex((m: any) => m.id === id);
       if (index !== -1) {
         members[index] = { ...members[index], ...updates };
-        localStorage.setItem('familyMembers', JSON.stringify(members));
+        this.writeLocalMembers(members);
         return members[index];
       }
       return null;
@@ -476,23 +519,23 @@ class DatabaseService {
       });
 
       if (dbMember) {
-        const members = JSON.parse(localStorage.getItem('familyMembers') || '[]');
+        const members = this.readLocalMembers();
         const index = members.findIndex((m: any) => m.id === id);
         if (index !== -1) {
           members[index] = { ...members[index], ...dbMember };
         } else {
           members.push(dbMember);
         }
-        localStorage.setItem('familyMembers', JSON.stringify(members));
+        this.writeLocalMembers(members);
         return dbMember;
       }
     } catch (error) {
       console.error('Failed to update member in database:', error);
-      const members = JSON.parse(localStorage.getItem('familyMembers') || '[]');
+      const members = this.readLocalMembers();
       const index = members.findIndex((m: any) => m.id === id);
       if (index !== -1) {
         members[index] = { ...members[index], ...updates };
-        localStorage.setItem('familyMembers', JSON.stringify(members));
+        this.writeLocalMembers(members);
         return members[index];
       }
     }
@@ -503,9 +546,9 @@ class DatabaseService {
   // Delete family member from database
   async deleteMember(id: string): Promise<boolean> {
     if (!this.familyId || !this.syncEnabled) {
-      const members = JSON.parse(localStorage.getItem('familyMembers') || '[]');
+      const members = this.readLocalMembers();
       const filtered = members.filter((m: any) => m.id !== id);
-      localStorage.setItem('familyMembers', JSON.stringify(filtered));
+      this.writeLocalMembers(filtered);
       return true;
     }
 
@@ -514,9 +557,9 @@ class DatabaseService {
         method: 'DELETE',
       });
 
-      const members = JSON.parse(localStorage.getItem('familyMembers') || '[]');
+      const members = this.readLocalMembers();
       const filtered = members.filter((m: any) => m.id !== id);
-      localStorage.setItem('familyMembers', JSON.stringify(filtered));
+      this.writeLocalMembers(filtered);
       return true;
     } catch (error) {
       console.error('Failed to delete member from database:', error);

@@ -156,7 +156,12 @@ export const BrainProvider = ({ children }: PropsWithChildren) => {
           { id: 'view', label: 'View', type: 'primary', action: 'view_brain_node', data: { nodeId: node.id, projectId: node.projectId } },
           { id: 'dismiss', label: 'Dismiss', type: 'secondary', action: 'dismiss' },
         ],
-        metadata: { type: 'brain_overdue', nodeId: node.id, projectId: node.projectId },
+        metadata: {
+          type: 'brain_overdue',
+          nodeId: node.id,
+          projectId: node.projectId,
+          dedupeKey: `brain-overdue-${node.id}`,
+        },
       });
     }
   }, [showNotification]);
@@ -384,7 +389,7 @@ export const BrainProvider = ({ children }: PropsWithChildren) => {
         id: createId('bn'),
         projectId: activeProjectId,
         title: data.title,
-        content: null,
+        content: data.content || null,
         status: data.status,
         priority: data.priority,
         dueDate: data.dueDate || null,

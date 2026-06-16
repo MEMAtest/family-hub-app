@@ -83,6 +83,7 @@ export interface CreateProjectFormData {
 
 export interface CreateNodeFormData {
   title: string;
+  content?: string;
   nodeType: BrainNodeType;
   status: BrainNodeStatus;
   priority: BrainNodePriority;

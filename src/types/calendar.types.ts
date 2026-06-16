@@ -5,6 +5,7 @@ export interface CalendarEvent {
   title: string;
   person: string;
   date: string; // YYYY-MM-DD
+  endDate?: string; // YYYY-MM-DD, for multi-day events
   time: string; // HH:MM
   duration: number; // minutes
   location?: string;

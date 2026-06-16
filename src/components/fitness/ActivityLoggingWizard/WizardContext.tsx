@@ -180,6 +180,7 @@ interface WizardProviderProps {
   onComplete: (activity: FitnessActivity) => void;
   lastWorkout?: FitnessActivity;
   editingActivity?: FitnessActivity;
+  startFromLastWorkout?: boolean;
 }
 
 // Provider component
@@ -190,11 +191,33 @@ export const WizardProvider: React.FC<WizardProviderProps> = ({
   onComplete,
   lastWorkout,
   editingActivity,
+  startFromLastWorkout = false,
 }) => {
   // Ensure the initial state is contextually typed as ActivityWizardState, otherwise
   // literal steps like 'summary' get widened to `string` and React picks the wrong
   // useReducer overload (DispatchWithoutAction).
   const initialWizardState: ActivityWizardState = (() => {
+    if (!editingActivity && startFromLastWorkout && lastWorkout) {
+      return {
+        ...initialState,
+        step: 'summary',
+        activityId: null,
+        personId,
+        activityType: lastWorkout.activityType,
+        duration: lastWorkout.durationMinutes,
+        intensityLevel: lastWorkout.intensityLevel,
+        workoutName: lastWorkout.workoutName || '',
+        exercises: (lastWorkout.exercises || []).map((exercise, index) => ({
+          ...exercise,
+          id: `copy_${Date.now()}_${index}`,
+          sets: exercise.sets.map((set) => ({ ...set })),
+        })),
+        notes: '',
+        imageUrls: [],
+        activityDate: new Date(),
+      };
+    }
+
     if (!editingActivity) return { ...initialState, personId };
 
     const activityDate = new Date(editingActivity.activityDate);

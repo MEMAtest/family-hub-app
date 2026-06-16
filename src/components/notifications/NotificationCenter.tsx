@@ -13,11 +13,9 @@ import {
   Calendar,
   Settings,
   Trash2,
-  Filter,
   Search,
-  ChevronDown,
-  Volume2,
-  VolumeX
+  Send,
+  Smartphone
 } from 'lucide-react';
 import { useNotifications } from '@/contexts/NotificationContext';
 import { useFamilyStore } from '@/store/familyStore';
@@ -48,12 +46,15 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
   } = useNotifications();
 
   const setActiveBrainProject = useFamilyStore((s) => s.setActiveBrainProject);
+  const familyId = useFamilyStore((s) => s.databaseStatus.familyId);
   const { setView } = useAppView();
 
   const [filter, setFilter] = useState<'all' | 'unread' | 'today'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [showSettings, setShowSettings] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [pushStatus, setPushStatus] = useState<string | null>(null);
+  const [sendingPushTest, setSendingPushTest] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -196,6 +197,57 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
     await snoozeNotification(notification.id, snoozeUntil);
   };
 
+  const handlePushToggle = async (enabled: boolean) => {
+    setPushStatus(null);
+
+    if (!enabled) {
+      await updateSettings({
+        channels: { ...settings.channels, push: false }
+      });
+      setPushStatus('Push notifications are off for this browser.');
+      return;
+    }
+
+    await updateSettings({
+      channels: { ...settings.channels, push: true, browser: true }
+    });
+    await requestPermission();
+    setPushStatus('This device is ready for Family Hub push notifications.');
+  };
+
+  const handleSendPushTest = async () => {
+    if (!familyId) {
+      setPushStatus('Family database is still connecting. Try again in a moment.');
+      return;
+    }
+
+    setSendingPushTest(true);
+    setPushStatus(null);
+
+    try {
+      const response = await fetch(`/api/families/${familyId}/push-test`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(payload.error || 'Unable to send test notification');
+      }
+
+      if (payload.sent > 0) {
+        setPushStatus(`Sent ${payload.sent} test notification${payload.sent === 1 ? '' : 's'} to subscribed devices.`);
+      } else {
+        setPushStatus('No device subscriptions yet. Enable push on your Android phone first.');
+      }
+    } catch (error) {
+      setPushStatus(error instanceof Error ? error.message : 'Unable to send test notification');
+    } finally {
+      setSendingPushTest(false);
+    }
+  };
+
   if (!isOpen || !mounted) return null;
 
   const content = (
@@ -288,8 +340,8 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
 
           {/* Settings Panel */}
           {showSettings && (
-            <div className="border-b border-gray-200 p-4 bg-gray-50">
-              <h3 className="text-sm font-medium text-gray-900 mb-3">Quick Settings</h3>
+            <div className="border-b border-gray-200 bg-gray-50 p-4 dark:border-slate-800 dark:bg-slate-950">
+              <h3 className="mb-3 text-sm font-medium text-gray-900 dark:text-slate-100">Quick Settings</h3>
               <div className="space-y-2">
                 <label className="flex items-center">
                   <input
@@ -300,7 +352,19 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
                     })}
                     className="mr-2"
                   />
-                  <span className="text-sm text-gray-700">Browser notifications</span>
+                  <span className="text-sm text-gray-700 dark:text-slate-300">Browser notifications</span>
+                </label>
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={settings.channels.push}
+                    onChange={(e) => handlePushToggle(e.target.checked)}
+                    className="mr-2"
+                  />
+                  <span className="flex items-center gap-2 text-sm text-gray-700 dark:text-slate-300">
+                    <Smartphone className="h-4 w-4" />
+                    Push notifications to this device
+                  </span>
                 </label>
                 <label className="flex items-center">
                   <input
@@ -311,8 +375,20 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
                     })}
                     className="mr-2"
                   />
-                  <span className="text-sm text-gray-700">Quiet hours</span>
+                  <span className="text-sm text-gray-700 dark:text-slate-300">Quiet hours</span>
                 </label>
+                <button
+                  type="button"
+                  onClick={handleSendPushTest}
+                  disabled={sendingPushTest}
+                  className="mt-2 inline-flex items-center gap-2 rounded-md bg-[#4c8177] px-3 py-2 text-sm font-medium text-white transition hover:bg-[#3d6f66] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <Send className="h-4 w-4" />
+                  {sendingPushTest ? 'Sending...' : 'Send test notification'}
+                </button>
+                {pushStatus && (
+                  <p className="text-xs text-gray-600 dark:text-slate-400">{pushStatus}</p>
+                )}
               </div>
             </div>
           )}

@@ -17,6 +17,7 @@ class FamilyHubNotificationService implements NotificationService {
   private settings: NotificationSettings;
   private familyId: string | null = null;
   private serviceWorkerRegistration?: ServiceWorkerRegistration;
+  private pushSubscriptionInFlight: Promise<void> | null = null;
   private conflicts: DetectedConflict[] = [];
   private emailRecipients: { email: string; name: string; }[] = [
     { email: 'admin@familyhub.app', name: 'Family Hub Admin' } // Default for testing
@@ -34,6 +35,9 @@ class FamilyHubNotificationService implements NotificationService {
 
   setFamilyId(familyId: string | null) {
     this.familyId = familyId;
+    if (typeof window !== 'undefined' && familyId && this.checkPermission().granted) {
+      void this.syncPushSubscription();
+    }
   }
 
   async syncFromDatabase(): Promise<void> {
@@ -64,7 +68,7 @@ class FamilyHubNotificationService implements NotificationService {
         }
       });
 
-      this.notifications = Array.from(merged.values())
+      this.notifications = this.dedupeNotifications(Array.from(merged.values()))
         .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
         .slice(0, 100);
 
@@ -79,6 +83,16 @@ class FamilyHubNotificationService implements NotificationService {
    * Initialize service worker for push notifications
    */
   private async initializeServiceWorker() {
+    if (process.env.NODE_ENV !== 'production') {
+      try {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(registrations.map((registration) => registration.unregister()));
+      } catch (error) {
+        console.warn('Failed to clear development service worker:', error);
+      }
+      return;
+    }
+
     if ('serviceWorker' in navigator && 'PushManager' in window) {
       try {
         this.serviceWorkerRegistration = await navigator.serviceWorker.register('/sw.js');
@@ -96,17 +110,33 @@ class FamilyHubNotificationService implements NotificationService {
     try {
       const storedNotifications = localStorage.getItem('family-hub-notifications');
       if (storedNotifications) {
-        this.notifications = JSON.parse(storedNotifications).map((n: any) => ({
+        const parsedNotifications = JSON.parse(storedNotifications).map((n: any) => ({
           ...n,
           timestamp: new Date(n.timestamp),
           expiresAt: n.expiresAt ? new Date(n.expiresAt) : undefined,
           snoozedUntil: n.snoozedUntil ? new Date(n.snoozedUntil) : undefined
         }));
+        this.notifications = this.dedupeNotifications(parsedNotifications);
+        if (this.notifications.length !== parsedNotifications.length) {
+          this.persistData();
+        }
       }
 
       const storedSettings = localStorage.getItem('family-hub-notification-settings');
       if (storedSettings) {
-        this.settings = { ...this.settings, ...JSON.parse(storedSettings) };
+        const parsedSettings = JSON.parse(storedSettings);
+        this.settings = {
+          ...this.settings,
+          ...parsedSettings,
+          channels: {
+            ...this.settings.channels,
+            ...(parsedSettings.channels ?? {}),
+          },
+          quietHours: {
+            ...this.settings.quietHours,
+            ...(parsedSettings.quietHours ?? {}),
+          },
+        };
       }
 
       const storedReminders = localStorage.getItem('family-hub-reminders');
@@ -146,6 +176,7 @@ class FamilyHubNotificationService implements NotificationService {
       enabled: true,
       channels: {
         browser: true,
+        push: true,
         email: false,
         inApp: true
       },
@@ -194,9 +225,96 @@ class FamilyHubNotificationService implements NotificationService {
 
     if (permission === 'granted') {
       result.grantedAt = new Date();
+      await this.syncPushSubscription();
     }
 
     return result;
+  }
+
+  async syncPushSubscription(): Promise<void> {
+    if (process.env.NODE_ENV !== 'production') return;
+    if (!this.familyId || typeof window === 'undefined') return;
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+    if (!this.checkPermission().granted) return;
+
+    if (this.pushSubscriptionInFlight) {
+      return this.pushSubscriptionInFlight;
+    }
+
+    this.pushSubscriptionInFlight = this.registerPushSubscription()
+      .finally(() => {
+        this.pushSubscriptionInFlight = null;
+      });
+
+    return this.pushSubscriptionInFlight;
+  }
+
+  private async registerPushSubscription(): Promise<void> {
+    const registration = await this.getReadyServiceWorkerRegistration();
+    this.serviceWorkerRegistration = registration;
+
+    const keyResponse = await fetch('/api/push/vapid-public-key');
+    if (!keyResponse.ok) {
+      throw new Error('Unable to fetch push notification key');
+    }
+
+    const keyPayload = await keyResponse.json();
+    if (!keyPayload.configured || !keyPayload.publicKey) {
+      throw new Error('Push notifications are not configured on the server');
+    }
+
+    const applicationServerKey = this.urlBase64ToArrayBuffer(keyPayload.publicKey);
+    const existingSubscription = await registration.pushManager.getSubscription();
+    const subscription = existingSubscription ?? await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey,
+    });
+
+    const response = await fetch(`/api/families/${this.familyId}/push-subscriptions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        subscription: subscription.toJSON(),
+        userAgent: navigator.userAgent,
+        deviceLabel: this.getDeviceLabel(),
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error('Unable to save push notification subscription');
+    }
+  }
+
+  private async getReadyServiceWorkerRegistration(): Promise<ServiceWorkerRegistration> {
+    if (this.serviceWorkerRegistration) {
+      return this.serviceWorkerRegistration;
+    }
+
+    await navigator.serviceWorker.register('/sw.js');
+    const registration = await navigator.serviceWorker.ready;
+    this.serviceWorkerRegistration = registration;
+    return registration;
+  }
+
+  private urlBase64ToArrayBuffer(base64String: string): ArrayBuffer {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+
+    for (let i = 0; i < rawData.length; i += 1) {
+      outputArray[i] = rawData.charCodeAt(i);
+    }
+
+    return outputArray.buffer as ArrayBuffer;
+  }
+
+  private getDeviceLabel(): string {
+    const userAgent = navigator.userAgent;
+    if (/Android/i.test(userAgent)) return 'Android phone';
+    if (/iPhone/i.test(userAgent)) return 'iPhone';
+    if (/iPad/i.test(userAgent)) return 'iPad';
+    return 'Web browser';
   }
 
   /**
@@ -337,6 +455,31 @@ class FamilyHubNotificationService implements NotificationService {
    * Show immediate in-app notification
    */
   async showNotification(notificationData: Omit<InAppNotification, 'id' | 'timestamp'>): Promise<InAppNotification> {
+    const metadata = notificationData.metadata;
+    const dedupeKey = metadata?.dedupeKey;
+    const metadataType = metadata?.type;
+    const metadataNodeId = metadata?.nodeId;
+
+    const titleDedupeKey =
+      notificationData.type === 'system' && notificationData.title === 'Enable Notifications?'
+        ? 'system-enable-browser-notifications'
+        : null;
+
+    if (dedupeKey || titleDedupeKey || (metadataType && metadataNodeId)) {
+      const existing = this.getActiveNotifications().find(
+        (notification) =>
+          (dedupeKey && notification.metadata?.dedupeKey === dedupeKey) ||
+          (titleDedupeKey && notification.type === 'system' && notification.title === notificationData.title) ||
+          (
+            metadataType &&
+            metadataNodeId &&
+            notification.metadata?.type === metadataType &&
+            notification.metadata?.nodeId === metadataNodeId
+          )
+      );
+      if (existing) return existing;
+    }
+
     const notification: InAppNotification = {
       id: this.generateId('notification'),
       timestamp: new Date(),
@@ -689,6 +832,29 @@ class FamilyHubNotificationService implements NotificationService {
     if (hasChanges) {
       this.persistData();
     }
+  }
+
+  private dedupeNotifications(notifications: InAppNotification[]): InAppNotification[] {
+    const seen = new Set<string>();
+    return notifications.filter((notification) => {
+      const key =
+        notification.metadata?.dedupeKey ||
+        (
+          notification.metadata?.type && notification.metadata?.nodeId
+            ? `${notification.metadata.type}:${notification.metadata.nodeId}`
+            : null
+        ) ||
+        (
+          notification.type === 'system' && notification.title === 'Enable Notifications?'
+            ? 'system-enable-browser-notifications'
+            : null
+        ) ||
+        notification.id;
+
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
   }
 
   private getActiveNotifications(): InAppNotification[] {

@@ -21,6 +21,7 @@ interface ActivityLoggingWizardProps {
   familyId: string;
   lastWorkout?: FitnessActivity;
   editingActivity?: FitnessActivity | null;
+  startFromLastWorkout?: boolean;
 }
 
 // Progress indicator
@@ -169,6 +170,7 @@ export const ActivityLoggingWizard: React.FC<ActivityLoggingWizardProps> = ({
   familyId,
   lastWorkout,
   editingActivity,
+  startFromLastWorkout = false,
 }) => {
   if (!isOpen) return null;
 
@@ -176,12 +178,13 @@ export const ActivityLoggingWizard: React.FC<ActivityLoggingWizardProps> = ({
     <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
       <div className="bg-white dark:bg-slate-900 rounded-t-2xl sm:rounded-2xl shadow-xl w-full h-[92vh] sm:h-auto sm:max-w-2xl sm:max-h-[90vh] overflow-hidden">
         <WizardProvider
-          key={editingActivity?.id ?? `new-${personId}`}
+          key={editingActivity?.id ?? (startFromLastWorkout && lastWorkout ? `copy-${lastWorkout.id}-${personId}` : `new-${personId}`)}
           personId={personId}
           familyId={familyId}
           onComplete={onComplete}
           lastWorkout={lastWorkout}
           editingActivity={editingActivity ?? undefined}
+          startFromLastWorkout={startFromLastWorkout}
         >
           <WizardContent onClose={onClose} />
         </WizardProvider>

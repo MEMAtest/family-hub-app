@@ -48,18 +48,18 @@ import { PWAInstallPrompt } from '@/components/pwa/PWAInstallPrompt';
 import { useSearchParams } from 'next/navigation';
 
 const NAV_ITEMS: NavItem[] = [
-  { id: 'dashboard', label: 'Today', icon: Home },
-  { id: 'calendar', label: 'Calendar', icon: CalendarIcon },
-  { id: 'budget', label: 'Money', icon: DollarSign },
-  { id: 'meals', label: 'Meals', icon: UtensilsCrossed },
-  { id: 'shopping', label: 'Basket', icon: ShoppingCart },
-  { id: 'goals', label: 'Quests', icon: Target },
-  { id: 'family', label: 'Family', icon: Users },
-  { id: 'property', label: 'Home', icon: Building2 },
-  { id: 'fitness', label: 'Move', icon: Dumbbell },
-  { id: 'contractors', label: 'Repairs', icon: Wrench },
-  { id: 'brain', label: 'Project Brain', icon: Brain },
-  { id: 'news', label: 'News', icon: Newspaper },
+  { id: 'dashboard', label: 'Dashboard', mobileLabel: 'Today', icon: Home, section: 'Home' },
+  { id: 'calendar', label: 'Calendar', mobileLabel: 'Cal', icon: CalendarIcon, section: 'Home' },
+  { id: 'family', label: 'Family', mobileLabel: 'People', icon: Users, section: 'Home' },
+  { id: 'budget', label: 'Budget', mobileLabel: 'Money', icon: DollarSign, section: 'Plan' },
+  { id: 'meals', label: 'Meals', mobileLabel: 'Meals', icon: UtensilsCrossed, section: 'Plan' },
+  { id: 'shopping', label: 'Shopping', mobileLabel: 'Basket', icon: ShoppingCart, section: 'Plan' },
+  { id: 'goals', label: 'Goals', mobileLabel: 'Quests', icon: Target, section: 'Plan' },
+  { id: 'property', label: 'Property', icon: Building2, section: 'Household' },
+  { id: 'fitness', label: 'Fitness', icon: Dumbbell, section: 'Household' },
+  { id: 'contractors', label: 'Contractors', icon: Wrench, section: 'Household' },
+  { id: 'brain', label: 'Brain', icon: Brain, section: 'Household' },
+  { id: 'news', label: 'News', icon: Newspaper, section: 'More' },
 ];
 
 const SHOULD_SKIP_SETUP =
@@ -95,6 +95,16 @@ export const FamilyHubShell = () => {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if ('serviceWorker' in navigator) {
+      if (process.env.NODE_ENV !== 'production') {
+        navigator.serviceWorker
+          .getRegistrations()
+          .then((registrations) => Promise.all(registrations.map((registration) => registration.unregister())))
+          .catch((error) => {
+            console.warn('Failed to clear development service worker:', error);
+          });
+        return;
+      }
+
       navigator.serviceWorker.register('/sw.js')
         .then((registration) => {
           if (registration.waiting) {
@@ -240,8 +250,8 @@ export const FamilyHubShell = () => {
   }, [clientTime, isClient]);
 
   const headerTitle = useMemo(() => {
-    return 'Omosanya Home';
-  }, []);
+    return familyName || 'Omosanya Home';
+  }, [familyName]);
 
   const content = useMemo(() => {
     switch (currentView) {
@@ -308,6 +318,7 @@ export const FamilyHubShell = () => {
         activeId={currentView}
         onSelect={handleSelectView}
         isMobileOpen={isMobileMenuOpen}
+        onOpenMobile={openMobileMenu}
         onCloseMobile={closeMobileMenu}
       />
 

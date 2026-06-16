@@ -60,6 +60,23 @@ type FeedItem = {
   cta?: { label: string; view: string; params?: Record<string, string> };
 };
 
+const feedDedupeKey = (item: FeedItem) => [
+  item.type,
+  item.title.trim().toLowerCase(),
+  item.summary.trim().toLowerCase(),
+  item.timestamp,
+].join(':');
+
+const normalizeFeedItems = (items: FeedItem[]) => {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const key = feedDedupeKey(item);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
+
 const DASHBOARD_WIDGETS = [
   { id: 'snapshot', label: "Today's Snapshot" },
   { id: 'familyFeed', label: 'Family Feed' },
@@ -224,13 +241,19 @@ export const DashboardView = () => {
     try {
       setFeedLoading(true);
       setFeedError(null);
-      const response = await fetch(`/api/families/${familyId}/feed?limit=12`);
+      const params = new URLSearchParams({
+        limit: '12',
+        refresh: Date.now().toString(),
+      });
+      const response = await fetch(`/api/families/${familyId}/feed?${params.toString()}`, {
+        cache: 'no-store',
+      });
       if (!response.ok) {
         throw new Error(`Feed request failed (${response.status})`);
       }
       const payload = await response.json();
       const items = Array.isArray(payload) ? payload : [];
-      setFeedItems(items as FeedItem[]);
+      setFeedItems(normalizeFeedItems(items as FeedItem[]));
     } catch (error) {
       console.warn('Failed to load feed:', error);
       setFeedError('Failed to load feed');

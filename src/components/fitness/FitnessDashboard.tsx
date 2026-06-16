@@ -18,6 +18,7 @@ import {
   Watch,
   Pencil,
   Trash2,
+  Copy,
 } from 'lucide-react';
 import { ActivityLoggingWizard } from './ActivityLoggingWizard';
 import DeviceConnections from './DeviceConnections';
@@ -53,6 +54,7 @@ const FitnessDashboard: React.FC<FitnessDashboardProps> = ({
 }) => {
   const [showWizard, setShowWizard] = useState(false);
   const [editingActivity, setEditingActivity] = useState<FitnessActivity | null>(null);
+  const [copySourceActivity, setCopySourceActivity] = useState<FitnessActivity | null>(null);
   const [showDeviceSettings, setShowDeviceSettings] = useState(false);
   const [activities, setActivities] = useState<FitnessActivity[]>([]);
   const [stats, setStats] = useState<FitnessStats | null>(null);
@@ -100,6 +102,7 @@ const FitnessDashboard: React.FC<FitnessDashboardProps> = ({
     fetchData(); // Refresh stats
     setShowWizard(false);
     setEditingActivity(null);
+    setCopySourceActivity(null);
   };
 
   const handleDeleteActivity = useCallback(async (activityId: string) => {
@@ -187,6 +190,7 @@ const FitnessDashboard: React.FC<FitnessDashboardProps> = ({
           <button
             onClick={() => {
               setEditingActivity(null);
+              setCopySourceActivity(null);
               setShowWizard(true);
             }}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
@@ -195,6 +199,20 @@ const FitnessDashboard: React.FC<FitnessDashboardProps> = ({
             <span className="hidden sm:inline">Log Activity</span>
             <span className="sm:hidden">Log</span>
           </button>
+          {activities[0] && (
+            <button
+              onClick={() => {
+                setEditingActivity(null);
+                setCopySourceActivity(activities[0]);
+                setShowWizard(true);
+              }}
+              className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-gray-700 transition-colors hover:bg-gray-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+            >
+              <Copy className="w-4 h-4" />
+              <span className="hidden sm:inline">Copy Last</span>
+              <span className="sm:hidden">Copy</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -349,6 +367,7 @@ const FitnessDashboard: React.FC<FitnessDashboardProps> = ({
             <button
               onClick={() => {
                 setEditingActivity(null);
+                setCopySourceActivity(null);
                 setShowWizard(true);
               }}
               className="text-blue-600 dark:text-blue-400 hover:underline"
@@ -419,12 +438,24 @@ const FitnessDashboard: React.FC<FitnessDashboardProps> = ({
                       <button
                         onClick={() => {
                           setEditingActivity(activity);
+                          setCopySourceActivity(null);
                           setShowWizard(true);
                         }}
                         className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
                         title="Edit"
                       >
                         <Pencil className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          setEditingActivity(null);
+                          setCopySourceActivity(activity);
+                          setShowWizard(true);
+                        }}
+                        className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                        title="Copy"
+                      >
+                        <Copy className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => void handleDeleteActivity(activity.id)}
@@ -448,12 +479,14 @@ const FitnessDashboard: React.FC<FitnessDashboardProps> = ({
         onClose={() => {
           setShowWizard(false);
           setEditingActivity(null);
+          setCopySourceActivity(null);
         }}
         onComplete={handleActivityComplete}
         personId={personId}
         familyId={familyId}
-        lastWorkout={activities[0]}
+        lastWorkout={copySourceActivity ?? activities[0]}
         editingActivity={editingActivity}
+        startFromLastWorkout={Boolean(copySourceActivity)}
       />
     </div>
   );

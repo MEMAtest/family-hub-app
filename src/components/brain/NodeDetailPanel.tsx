@@ -11,6 +11,7 @@ import {
   type BrainNodePriority,
   type BrainNodeType,
 } from '@/types/brain.types';
+import AIEnhancedField from '@/components/common/AIEnhancedField';
 
 const NODE_TYPES: { value: BrainNodeType; label: string }[] = [
   { value: 'thought', label: 'Thought' },
@@ -245,10 +246,11 @@ const NodeDetailPanel = () => {
         {/* Content (markdown) */}
         <div>
           <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-slate-400">Notes</label>
-          <textarea
+          <AIEnhancedField
             value={content}
-            onChange={(e) => handleContentChange(e.target.value)}
+            onChange={handleContentChange}
             rows={6}
+            context="Project Brain node notes"
             placeholder="Add notes (markdown supported)..."
             className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-gray-900 font-mono focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
           />

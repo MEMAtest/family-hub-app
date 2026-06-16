@@ -23,6 +23,9 @@ export const FamilyHubHeader = ({
   rightContent,
   databaseStatus,
 }: FamilyHubHeaderProps) => {
+  const statusLabel = databaseStatus.connected ? 'Synced' : 'Saved on this device';
+  const statusDetail = databaseStatus.connected ? 'Family profiles and calendar' : 'No login required';
+
   return (
     <header className="sticky top-0 z-30 border-b border-[#dde5e0] bg-white/78 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/80 pwa-safe-top">
       <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3 px-3 sm:px-4 py-2 sm:py-3 lg:flex-nowrap lg:px-8">
@@ -40,7 +43,7 @@ export const FamilyHubHeader = ({
             {subtitle && <p className="hidden truncate text-xs text-[#5f6a64] dark:text-slate-400 xs:block sm:text-sm">{subtitle}</p>}
             <div className="mt-0.5 flex items-center gap-1.5 text-[10px] text-[#9aa5a0] dark:text-slate-500 sm:mt-1 sm:gap-2 sm:text-xs">
               <span className={`inline-flex h-2 w-2 items-center justify-center rounded-full flex-shrink-0 ${databaseStatus.connected ? 'bg-green-500' : 'bg-yellow-400'}`} />
-              <span className="truncate">{databaseStatus.connected ? 'Database Connected' : `Offline • ${databaseStatus.mode}`}</span>
+              <span className="truncate">{statusLabel} • {statusDetail}</span>
             </div>
           </div>
         </div>

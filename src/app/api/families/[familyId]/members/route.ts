@@ -1,15 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireFamilyAccess } from '@/lib/auth-utils';
+import { getOrCreateOpenFamily } from '@/lib/defaultFamilyPersistence';
 
 // GET all family members
 export const GET = requireFamilyAccess(async (_request: NextRequest, context, _authUser) => {
   try {
     const { familyId } = await context.params;
+    const family = await getOrCreateOpenFamily(familyId);
+    const resolvedFamilyId = family?.id ?? familyId;
     const members = await prisma.familyMember.findMany({
       where: {
-        familyId,
+        familyId: resolvedFamilyId,
       },
+      orderBy: { createdAt: 'asc' },
     });
 
     return NextResponse.json(members);
@@ -23,6 +27,8 @@ export const GET = requireFamilyAccess(async (_request: NextRequest, context, _a
 export const POST = requireFamilyAccess(async (request: NextRequest, context, _authUser) => {
   try {
     const { familyId } = await context.params;
+    const family = await getOrCreateOpenFamily(familyId);
+    const resolvedFamilyId = family?.id ?? familyId;
     const body = await request.json();
     const { name, role, ageGroup, color, icon, fitnessGoals, dateOfBirth, avatarUrl } = body;
     const parsedDob = dateOfBirth ? new Date(dateOfBirth) : null;
@@ -30,7 +36,7 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context, _a
 
     const member = await prisma.familyMember.create({
       data: {
-        familyId,
+        familyId: resolvedFamilyId,
         name,
         role,
         ageGroup,

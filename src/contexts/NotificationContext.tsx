@@ -7,7 +7,6 @@ import {
   NotificationSettings,
   NotificationPermission
 } from '@/types/notification.types';
-import { CalendarEvent } from '@/types/calendar.types';
 import notificationService from '@/services/notificationService';
 import { useFamilyStore } from '@/store/familyStore';
 
@@ -172,27 +171,6 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
     }
   }, []);
 
-  // Auto-request permission on first event creation
-  useEffect(() => {
-    const hasEvents = notifications.some(n => n.type === 'reminder');
-    if (hasEvents && permission.prompt && !permission.granted && !permission.denied) {
-      // Show a subtle prompt to enable notifications
-      showNotification({
-        type: 'system',
-        title: 'Enable Notifications?',
-        message: 'Get reminders for your calendar events',
-        priority: 'medium',
-        category: 'system',
-        read: false,
-        actionRequired: true,
-        actions: [
-          { id: 'enable', label: 'Enable', type: 'primary', action: 'request_permission' },
-          { id: 'later', label: 'Maybe Later', type: 'secondary', action: 'dismiss' }
-        ]
-      });
-    }
-  }, [notifications, permission, showNotification]);
-
   const unreadCount = notifications.filter(n => !n.read).length;
 
   const value: NotificationContextType = {
@@ -201,7 +179,7 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
     permission,
     settings: settings || {
       enabled: true,
-      channels: { browser: true, email: false, inApp: true },
+      channels: { browser: true, push: true, email: false, inApp: true },
       defaultReminders: {
         school: [1440, 60],
         medical: [10080, 1440, 60],

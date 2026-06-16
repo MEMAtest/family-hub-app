@@ -24,9 +24,20 @@ const toTimeKey = (value: Date) => {
   return `${hours}:${minutes}`;
 };
 
+const inferEndDate = (eventDate: Date, eventTime: Date, durationMinutes?: number | null) => {
+  if (!durationMinutes || durationMinutes <= 0) return undefined;
+  const date = toDateKey(eventDate);
+  const time = toTimeKey(eventTime);
+  const start = buildUtcDateTime(date, time);
+  const end = new Date(start.getTime() + durationMinutes * 60 * 1000);
+  const endDate = toDateKey(end);
+  return endDate > date ? endDate : undefined;
+};
+
 const toCalendarEventResponse = (event: any) => ({
   ...event,
   date: toDateKey(event.eventDate),
+  endDate: inferEndDate(event.eventDate, event.eventTime, event.durationMinutes),
   time: toTimeKey(event.eventTime),
   person: event.personId,
   duration: event.durationMinutes,

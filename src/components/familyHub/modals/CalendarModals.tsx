@@ -1,5 +1,6 @@
 'use client'
 
+import { useMemo } from 'react';
 import EventForm from '@/components/calendar/EventForm';
 import EventTemplates from '@/components/calendar/EventTemplates';
 import ConflictDetectionModal from '@/components/calendar/ConflictDetectionModal';
@@ -36,13 +37,13 @@ export const CalendarModals = () => {
   } = useCalendarContext();
   const { members } = useFamilyContext();
 
-  const people = members.map((member) => ({
+  const people = useMemo(() => members.map((member) => ({
     id: member.id,
     name: member.name,
     icon: member.icon,
     color: member.color,
     role: member.role,
-  }));
+  })), [members]);
 
   return (
     <>

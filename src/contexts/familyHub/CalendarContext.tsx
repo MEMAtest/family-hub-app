@@ -9,6 +9,7 @@ import databaseService from '@/services/databaseService';
 import { useFamilyStore } from '@/store/familyStore';
 import { createId } from '@/utils/id';
 import { useNotifications } from '@/contexts/NotificationContext';
+import { DEFAULT_FAMILY_ID } from '@/lib/defaultFamilyProfile';
 
 interface CalendarContextValue {
   events: CalendarEvent[];
@@ -88,6 +89,15 @@ const buildEvent = (draft: CalendarDraft, id?: string): CalendarEvent => ({
   status: draft.status ?? 'confirmed',
 });
 
+const inferEndDate = (date: string, time: string, durationMinutes?: number | null) => {
+  if (!durationMinutes || durationMinutes <= 0) return undefined;
+  const start = new Date(`${date}T${time}:00Z`);
+  if (Number.isNaN(start.getTime())) return undefined;
+  const end = new Date(start.getTime() + durationMinutes * 60 * 1000);
+  const endDate = end.toISOString().split('T')[0];
+  return endDate > date ? endDate : undefined;
+};
+
 const mergeEvents = (primary: CalendarEvent[], secondary: CalendarEvent[]) => {
   const merged = new Map<string, CalendarEvent>();
   const upsertLatest = (event: CalendarEvent) => {
@@ -117,6 +127,7 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
   const updateEventTemplateStore = useFamilyStore((state) => state.updateEventTemplate);
   const deleteEventTemplateStore = useFamilyStore((state) => state.deleteEventTemplate);
   const members = useFamilyStore((state) => state.people);
+  const databaseStatus = useFamilyStore((state) => state.databaseStatus);
 
   // Debug logging
   console.log('📆 CalendarContext: events from store:', events.length);
@@ -172,22 +183,22 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
     }
   }, [setEvents]);
 
-  // Track if we've already hydrated to prevent duplicate loads
-  const hasHydrated = useRef(false);
+  const lastHydrationKey = useRef<string | null>(null);
 
   // Hydrate events from database/localStorage on mount
   useEffect(() => {
-    if (hasHydrated.current) return;
-    if (events.length > 0) {
-      hasHydrated.current = true;
-      // Still need to load brain events even when regular events already exist
-      const fid = typeof window !== 'undefined' ? localStorage.getItem('familyId') : null;
-      if (fid) loadBrainEvents(fid);
-      return;
-    }
-
     const loadEvents = async () => {
-      hasHydrated.current = true;
+      const familyId =
+        databaseStatus.familyId ||
+        (typeof window !== 'undefined' ? localStorage.getItem('familyId') : null) ||
+        DEFAULT_FAMILY_ID;
+      const hydrationKey = `${familyId}:${databaseStatus.connected ? 'database' : databaseStatus.mode}`;
+
+      if (lastHydrationKey.current === hydrationKey) {
+        return;
+      }
+
+      lastHydrationKey.current = hydrationKey;
       console.log('📆 CalendarContext: Hydrating events...');
 
       const storedEvents = (() => {
@@ -201,10 +212,10 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
           return [];
         }
       })();
+      const currentEvents = useFamilyStore.getState().events;
 
       // Try database first
-      const familyId = typeof window !== 'undefined' ? localStorage.getItem('familyId') : null;
-      if (familyId) {
+      if (familyId && databaseStatus.connected) {
         try {
           const response = await fetch(`/api/families/${familyId}/events`);
           if (response.ok) {
@@ -221,6 +232,11 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
                   title: e.title,
                   person: e.personId,
                   date: e.eventDate ? e.eventDate.split('T')[0] : new Date().toISOString().split('T')[0],
+                  endDate: inferEndDate(
+                    e.eventDate ? e.eventDate.split('T')[0] : new Date().toISOString().split('T')[0],
+                    `${hours}:${minutes}`,
+                    e.durationMinutes
+                  ),
                   time: `${hours}:${minutes}`,
                   duration: e.durationMinutes,
                   location: e.location,
@@ -237,11 +253,12 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
                   attendees: [],
                 };
               });
-              const mergedEvents = mergeEvents(formattedEvents, storedEvents);
+              const mergedEvents = mergeEvents(
+                formattedEvents,
+                mergeEvents(storedEvents, currentEvents)
+              );
               console.log('📆 CalendarContext: Loaded', mergedEvents.length, 'events from database/local cache');
-              if (mergedEvents.length > 0) {
-                setEvents(mergedEvents);
-              }
+              setEvents(mergedEvents);
               if (typeof window !== 'undefined') {
                 localStorage.setItem('calendarEvents', JSON.stringify(mergedEvents));
               }
@@ -257,22 +274,26 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
 
       // Fallback to localStorage
       try {
-        if (storedEvents.length > 0) {
-          console.log('📆 CalendarContext: Loaded', storedEvents.length, 'events from localStorage');
-          setEvents(storedEvents);
+        const mergedLocalEvents = mergeEvents(currentEvents, storedEvents);
+        if (mergedLocalEvents.length > 0) {
+          console.log('📆 CalendarContext: Loaded', mergedLocalEvents.length, 'events from local cache');
+          setEvents(mergedLocalEvents);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('calendarEvents', JSON.stringify(mergedLocalEvents));
+          }
         }
       } catch (error) {
         console.error('📆 CalendarContext: Failed to load events from localStorage:', error);
       }
 
       // Load brain events after localStorage fallback too
-      if (familyId) {
+      if (familyId && databaseStatus.connected) {
         await loadBrainEvents(familyId);
       }
     };
 
     loadEvents();
-  }, [events.length, loadBrainEvents, setEvents]);
+  }, [databaseStatus.connected, databaseStatus.familyId, databaseStatus.mode, loadBrainEvents, setEvents]);
 
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [defaultSlot, setDefaultSlot] = useState<{ start: Date; end: Date } | null>(null);

@@ -5,6 +5,7 @@ import { X } from 'lucide-react';
 import { useBrainContext } from '@/contexts/familyHub/BrainContext';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { NODE_STATUS_CONFIG, NODE_PRIORITY_CONFIG, type BrainNodeStatus, type BrainNodePriority, type BrainNodeType } from '@/types/brain.types';
+import AIEnhancedField from '@/components/common/AIEnhancedField';
 
 const NODE_TYPES: { value: BrainNodeType; label: string }[] = [
   { value: 'thought', label: 'Thought' },
@@ -19,6 +20,7 @@ const CreateNodeModal = () => {
   const isDesktop = useMediaQuery('(min-width: 768px)');
 
   const [title, setTitle] = useState('');
+  const [content, setContent] = useState('');
   const [nodeType, setNodeType] = useState<BrainNodeType>('thought');
   const [status, setStatus] = useState<BrainNodeStatus>('todo');
   const [priority, setPriority] = useState<BrainNodePriority>('medium');
@@ -29,17 +31,25 @@ const CreateNodeModal = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim()) return;
+    const trimmedContent = content.trim();
+    const derivedTitle =
+      title.trim() ||
+      (nodeType === 'note' && trimmedContent
+        ? trimmedContent.split('\n')[0].slice(0, 90)
+        : '');
+    if (!derivedTitle) return;
     setSaving(true);
     try {
       await createNode({
-        title: title.trim(),
+        title: derivedTitle,
+        content: trimmedContent || undefined,
         nodeType,
         status,
         priority,
         dueDate: dueDate || undefined,
       });
       setTitle('');
+      setContent('');
       setNodeType('thought');
       setStatus('todo');
       setPriority('medium');
@@ -69,7 +79,9 @@ const CreateNodeModal = () => {
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="What's on your mind?"
+            placeholder={nodeType === 'note' ? 'Note title' : "What's on your mind?"}
+            spellCheck
+            lang="en-GB"
             autoFocus
             className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
           />
@@ -104,6 +116,20 @@ const CreateNodeModal = () => {
           </div>
         </div>
 
+        {nodeType === 'note' && (
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-slate-400">Note</label>
+            <AIEnhancedField
+              value={content}
+              onChange={setContent}
+              context="Project Brain note"
+              rows={7}
+              placeholder="Write the note..."
+              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+            />
+          </div>
+        )}
+
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-slate-400">Priority</label>
@@ -134,7 +160,7 @@ const CreateNodeModal = () => {
       <div className="border-t border-gray-200 px-4 py-3 dark:border-slate-700" style={{ paddingBottom: isDesktop ? undefined : 'calc(env(safe-area-inset-bottom) + 12px)' }}>
         <button
           type="submit"
-          disabled={!title.trim() || saving}
+          disabled={!(title.trim() || (nodeType === 'note' && content.trim())) || saving}
           className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
         >
           {saving ? 'Creating...' : 'Create Node'}

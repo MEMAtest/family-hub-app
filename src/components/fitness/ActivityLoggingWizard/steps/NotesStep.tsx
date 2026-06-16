@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { MessageSquare, Smile, Frown, Meh, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { useWizard } from '../WizardContext';
+import AIEnhancedField from '@/components/common/AIEnhancedField';
 
 type Feeling = 'great' | 'good' | 'okay' | 'tired' | 'struggled';
 type EnergyLevel = 'high' | 'normal' | 'low';
@@ -177,11 +178,12 @@ const NotesStep: React.FC = () => {
           <MessageSquare className="w-4 h-4" />
           Additional notes
         </label>
-        <textarea
+        <AIEnhancedField
           value={notes}
-          onChange={(e) => handleNotesChange(e.target.value)}
+          onChange={handleNotesChange}
           placeholder="Any other thoughts about your workout..."
           rows={4}
+          context="Fitness workout notes"
           className="w-full px-4 py-3 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-slate-800 dark:text-slate-100 resize-none"
         />
         <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">

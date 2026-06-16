@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react';
 import { useBrainContext } from '@/contexts/familyHub/BrainContext';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import ProjectSidebar from './ProjectSidebar';
@@ -10,7 +11,8 @@ import NodeDetailPanel from './NodeDetailPanel';
 import CreateNodeModal from './CreateNodeModal';
 import CreateProjectModal from './CreateProjectModal';
 import BrainFloatingActions from './BrainFloatingActions';
-import { Plus } from 'lucide-react';
+import BrainTaskList from './BrainTaskList';
+import { GitBranch, ListChecks, Plus } from 'lucide-react';
 
 const MobileProjectSelector = () => {
   const { projects, activeProjectId, setActiveProject, setIsCreateProjectOpen } = useBrainContext();
@@ -55,6 +57,7 @@ const MobileProjectSelector = () => {
 const ProjectBrainDashboard = () => {
   const { activeProjectId, isLoading } = useBrainContext();
   const isDesktop = useMediaQuery('(min-width: 768px)');
+  const [mode, setMode] = useState<'map' | 'tasks'>('map');
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -69,6 +72,34 @@ const ProjectBrainDashboard = () => {
         <div className="flex flex-1 flex-col overflow-hidden">
           {activeProjectId ? (
             <>
+              <div className="flex items-center justify-between border-b border-gray-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900">
+                <div className="flex rounded-lg bg-gray-100 p-1 dark:bg-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => setMode('map')}
+                    className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                      mode === 'map'
+                        ? 'bg-white text-gray-900 shadow-sm dark:bg-slate-950 dark:text-slate-100'
+                        : 'text-gray-600 hover:text-gray-900 dark:text-slate-300 dark:hover:text-slate-100'
+                    }`}
+                  >
+                    <GitBranch className="h-3.5 w-3.5" />
+                    Map
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMode('tasks')}
+                    className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                      mode === 'tasks'
+                        ? 'bg-white text-gray-900 shadow-sm dark:bg-slate-950 dark:text-slate-100'
+                        : 'text-gray-600 hover:text-gray-900 dark:text-slate-300 dark:hover:text-slate-100'
+                    }`}
+                  >
+                    <ListChecks className="h-3.5 w-3.5" />
+                    Tasks
+                  </button>
+                </div>
+              </div>
               <BrainFilterBar />
               <div className="flex flex-1 overflow-hidden">
                 <div className="flex-1">
@@ -76,6 +107,8 @@ const ProjectBrainDashboard = () => {
                     <div className="flex h-full items-center justify-center">
                       <div className="h-8 w-8 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
                     </div>
+                  ) : mode === 'tasks' ? (
+                    <BrainTaskList />
                   ) : (
                     <MindMapCanvas />
                   )}

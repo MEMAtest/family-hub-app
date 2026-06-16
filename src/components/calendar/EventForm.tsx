@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import {
   X,
   Calendar,
@@ -14,13 +14,55 @@ import {
   Star,
   AlertTriangle,
   Save,
-  Trash2
+  Trash2,
+  Sparkles,
+  Loader2
 } from 'lucide-react'
 import { CalendarEvent, Reminder, RecurringPattern, EventTemplate, Person } from '@/types/calendar.types'
+import AIEnhancedField from '@/components/common/AIEnhancedField'
 
 type CreateEventResult =
   | { status: 'conflict' }
   | { status: 'created'; event: CalendarEvent };
+
+const toDateInputValue = (date: Date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
+const toTimeInputValue = (date: Date) =>
+  `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+
+const buildEmptyFormData = (defaultPersonId = ''): Partial<CalendarEvent> => ({
+  title: '',
+  person: defaultPersonId,
+  date: '',
+  endDate: undefined,
+  time: '',
+  duration: 60,
+  location: '',
+  type: 'other',
+  notes: '',
+  cost: 0,
+  recurring: 'none',
+  isRecurring: false,
+  priority: 'medium',
+  status: 'confirmed',
+  reminders: [
+    { id: '1', type: 'notification', time: 15, enabled: true }
+  ],
+  attendees: []
+});
+
+const isAfterDate = (endDate?: string, startDate?: string) =>
+  Boolean(endDate && startDate && endDate > startDate);
+
+const calculateMultiDayDuration = (date?: string, time?: string, endDate?: string, fallbackDuration = 60) => {
+  if (!isAfterDate(endDate, date)) return fallbackDuration;
+
+  const start = new Date(`${date}T${time || '00:00'}:00`);
+  const end = new Date(`${endDate}T23:59:59`);
+  const minutes = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60));
+  return Number.isFinite(minutes) ? Math.max(5, minutes) : fallbackDuration;
+};
 
 interface EventFormProps {
   event?: CalendarEvent
@@ -45,68 +87,79 @@ const EventForm: React.FC<EventFormProps> = ({
   templates,
   defaultSlot
 }) => {
-  const [formData, setFormData] = useState<Partial<CalendarEvent>>({
-    title: '',
-    person: people[0]?.id || '',
-    date: '',
-    time: '',
-    duration: 60,
-    location: '',
-    type: 'other',
-    notes: '',
-    cost: 0,
-    recurring: 'none',
-    isRecurring: false,
-    priority: 'medium',
-    status: 'confirmed',
-    reminders: [
-      { id: '1', type: 'notification', time: 15, enabled: true }
-    ],
-    attendees: []
-  })
+  const defaultPersonId = people[0]?.id || ''
+  const initializedFormKeyRef = useRef<string | null>(null)
+  const [formData, setFormData] = useState<Partial<CalendarEvent>>(() => buildEmptyFormData(defaultPersonId))
 
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [showRecurring, setShowRecurring] = useState(false)
+  const [isMultiDay, setIsMultiDay] = useState(false)
   const [selectedTemplate, setSelectedTemplate] = useState<string>('')
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [enhancingTitle, setEnhancingTitle] = useState(false)
 
   // Initialize form data
   useEffect(() => {
+    if (!isOpen) {
+      initializedFormKeyRef.current = null
+      return
+    }
+
+    const defaultSlotKey = defaultSlot
+      ? `${defaultSlot.start.toISOString()}-${defaultSlot.end.toISOString()}`
+      : 'none'
+    const formKey = event ? `event:${event.id}` : `new:${defaultSlotKey}`
+
+    if (initializedFormKeyRef.current === formKey) return
+    initializedFormKeyRef.current = formKey
+
+    setErrors({})
+    setSelectedTemplate('')
+
     if (event) {
       // Edit mode
+      const multiDay = Boolean(event.endDate && event.endDate !== event.date)
       setFormData({
+        ...buildEmptyFormData(defaultPersonId),
         ...event,
         attendees: event.attendees || []
       })
       setShowRecurring(event.isRecurring)
+      setIsMultiDay(multiDay)
     } else if (defaultSlot) {
       // New event from slot selection
       const startDate = new Date(defaultSlot.start)
       const duration = Math.round((defaultSlot.end.getTime() - defaultSlot.start.getTime()) / (1000 * 60))
 
-      setFormData(prev => ({
-        ...prev,
-        date: `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, '0')}-${String(startDate.getDate()).padStart(2, '0')}`,
-        time: `${String(startDate.getHours()).padStart(2, '0')}:${String(startDate.getMinutes()).padStart(2, '0')}`,
+      setFormData({
+        ...buildEmptyFormData(defaultPersonId),
+        date: toDateInputValue(startDate),
+        endDate: undefined,
+        time: toTimeInputValue(startDate),
         duration: Math.max(15, duration)
-      }))
+      })
+      setShowRecurring(false)
+      setIsMultiDay(false)
     } else {
       // New event
       const now = new Date()
-      setFormData(prev => ({
-        ...prev,
-        date: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`,
-        time: `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
-      }))
+      setFormData({
+        ...buildEmptyFormData(defaultPersonId),
+        date: toDateInputValue(now),
+        endDate: undefined,
+        time: toTimeInputValue(now)
+      })
+      setShowRecurring(false)
+      setIsMultiDay(false)
     }
-  }, [event, defaultSlot, isOpen])
+  }, [event, defaultSlot, isOpen, defaultPersonId])
 
   // Auto-select first person when people become available
   useEffect(() => {
-    if (people.length > 0 && !formData.person && !event) {
-      setFormData(prev => ({ ...prev, person: people[0].id }))
-    }
-  }, [people, formData.person, event])
+    if (!isOpen || event || !defaultPersonId) return
+
+    setFormData(prev => (prev.person ? prev : { ...prev, person: defaultPersonId }))
+  }, [defaultPersonId, event, isOpen])
 
   // Apply template
   const applyTemplate = (templateId: string) => {
@@ -124,6 +177,32 @@ const EventForm: React.FC<EventFormProps> = ({
     }
   }
 
+  const enhanceTitle = async () => {
+    const text = formData.title?.trim()
+    if (!text || enhancingTitle) return
+
+    setEnhancingTitle(true)
+    try {
+      const response = await fetch('/api/ai/text-enhance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text,
+          context: 'Calendar event title',
+          mode: 'polish',
+        }),
+      })
+      const payload = await response.json()
+      if (response.ok && typeof payload?.enhanced === 'string') {
+        setFormData(prev => ({ ...prev, title: payload.enhanced }))
+      }
+    } catch (error) {
+      console.warn('Failed to enhance event title:', error)
+    } finally {
+      setEnhancingTitle(false)
+    }
+  }
+
   // Validation
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {}
@@ -134,6 +213,14 @@ const EventForm: React.FC<EventFormProps> = ({
 
     if (!formData.date) {
       newErrors.date = 'Date is required'
+    }
+
+    if (isMultiDay && !formData.endDate) {
+      newErrors.endDate = 'End date is required'
+    }
+
+    if (isMultiDay && formData.endDate && formData.date && formData.endDate < formData.date) {
+      newErrors.endDate = 'End date must be on or after the start date'
     }
 
     if (!formData.time) {
@@ -156,8 +243,14 @@ const EventForm: React.FC<EventFormProps> = ({
   const handleSave = async () => {
     if (!validateForm()) return
 
+    const duration = isMultiDay
+      ? calculateMultiDayDuration(formData.date, formData.time, formData.endDate, formData.duration || 60)
+      : formData.duration || 60
+
     const eventData = {
       ...formData,
+      endDate: isMultiDay ? (formData.endDate || formData.date) : undefined,
+      duration,
       isRecurring: formData.recurring !== 'none',
       attendees: formData.attendees || []
     } as Omit<CalendarEvent, 'id' | 'createdAt' | 'updatedAt'>
@@ -273,15 +366,29 @@ const EventForm: React.FC<EventFormProps> = ({
               <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-slate-300">
                   Event Title *
                 </label>
-                <input
-                  type="text"
-                  value={formData.title || ''}
-                  onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
-                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                    errors.title ? 'border-red-300' : 'border-gray-300'
-                  }`}
-                  placeholder="Enter event title"
-                />
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={formData.title || ''}
+                    onChange={(event) => setFormData(prev => ({ ...prev, title: event.target.value }))}
+                    placeholder="Enter event title"
+                    spellCheck
+                    lang="en-GB"
+                    className={`w-full px-3 py-2 pr-12 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      errors.title ? 'border-red-300' : 'border-gray-300'
+                    }`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void enhanceTitle()}
+                    disabled={!formData.title?.trim() || enhancingTitle}
+                    className="absolute right-2 top-2 inline-flex h-8 w-8 items-center justify-center rounded-md text-[#147c72] transition hover:bg-[#eaf1e7] disabled:cursor-not-allowed disabled:opacity-40 dark:text-[#56c6b8] dark:hover:bg-slate-800"
+                    title="AI enhance"
+                    aria-label="AI enhance"
+                  >
+                    {enhancingTitle ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                  </button>
+                </div>
                 {errors.title && (
                   <p className="mt-1 text-sm text-red-600">{errors.title}</p>
                 )}
@@ -328,7 +435,11 @@ const EventForm: React.FC<EventFormProps> = ({
                   <input
                     type="date"
                     value={formData.date || ''}
-                    onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
+                    onChange={(e) => setFormData(prev => ({
+                      ...prev,
+                      date: e.target.value,
+                      endDate: prev.endDate && prev.endDate < e.target.value ? e.target.value : prev.endDate
+                    }))}
                     className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                       errors.date ? 'border-red-300' : 'border-gray-300'
                     }`}
@@ -356,21 +467,64 @@ const EventForm: React.FC<EventFormProps> = ({
                 </div>
               </div>
 
-              {/* Duration and Type */}
-              <div className="grid grid-cols-2 gap-4">
+              <label className="inline-flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-slate-300">
+                <input
+                  type="checkbox"
+                  checked={isMultiDay}
+                  onChange={(e) => {
+                    const checked = e.target.checked
+                    setIsMultiDay(checked)
+                    setFormData(prev => ({
+                      ...prev,
+                      endDate: checked ? (prev.endDate || prev.date) : undefined
+                    }))
+                  }}
+                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                Multi-day event
+              </label>
+
+              {isMultiDay && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-slate-300">
-                    Duration (minutes)
+                    End Date *
                   </label>
                   <input
-                    type="number"
-                    min="5"
-                    step="5"
-                    value={formData.duration || 60}
-                    onChange={(e) => setFormData(prev => ({ ...prev, duration: parseInt(e.target.value) }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    type="date"
+                    value={formData.endDate || formData.date || ''}
+                    min={formData.date || undefined}
+                    onChange={(e) => setFormData(prev => ({ ...prev, endDate: e.target.value }))}
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      errors.endDate ? 'border-red-300' : 'border-gray-300'
+                    }`}
                   />
+                  {errors.endDate && (
+                    <p className="mt-1 text-sm text-red-600">{errors.endDate}</p>
+                  )}
                 </div>
+              )}
+
+              {/* Duration and Type */}
+              <div className="grid grid-cols-2 gap-4">
+                {!isMultiDay ? (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-slate-300">
+                      Duration (minutes)
+                    </label>
+                    <input
+                      type="number"
+                      min="5"
+                      step="5"
+                      value={formData.duration || 60}
+                      onChange={(e) => setFormData(prev => ({ ...prev, duration: parseInt(e.target.value) }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                ) : (
+                  <div className="rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 dark:border-blue-900/40 dark:bg-blue-900/20 dark:text-blue-200">
+                    Ends {formData.endDate || formData.date || 'after start date'}
+                  </div>
+                )}
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-slate-300">
@@ -401,10 +555,11 @@ const EventForm: React.FC<EventFormProps> = ({
                   <MapPin className="w-4 h-4 inline mr-1" />
                   Location
                 </label>
-                <input
-                  type="text"
+                <AIEnhancedField
                   value={formData.location || ''}
-                  onChange={(e) => setFormData(prev => ({ ...prev, location: e.target.value }))}
+                  onChange={(value) => setFormData(prev => ({ ...prev, location: value }))}
+                  multiline={false}
+                  context="Calendar event location"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Enter location"
                 />
@@ -589,10 +744,11 @@ const EventForm: React.FC<EventFormProps> = ({
                     <FileText className="w-4 h-4 inline mr-1" />
                     Notes
                   </label>
-                  <textarea
+                  <AIEnhancedField
                     value={formData.notes || ''}
-                    onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                    onChange={(value) => setFormData(prev => ({ ...prev, notes: value }))}
                     rows={3}
+                    context="Calendar event notes"
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder="Add any additional notes..."
                   />

@@ -52,6 +52,14 @@ import { useFamilyStore } from '@/store/familyStore'
 const localizer = momentLocalizer(moment)
 const DnDCalendar = withDragAndDrop(Calendar)
 
+const getEventEnd = (event: CalendarEvent) => {
+  const eventStart = moment(`${event.date} ${event.time}`, 'YYYY-MM-DD HH:mm')
+  if (event.endDate && event.endDate > event.date) {
+    return moment(`${event.endDate} 23:59`, 'YYYY-MM-DD HH:mm').toDate()
+  }
+  return eventStart.clone().add(event.duration, 'minutes').toDate()
+}
+
 /**
  * Drag and Drop Features:
  *
@@ -417,7 +425,8 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
 
     return filtered.map(event => {
       const eventStart = moment(`${event.date} ${event.time}`, 'YYYY-MM-DD HH:mm').toDate()
-      const eventEnd = moment(eventStart).add(event.duration, 'minutes').toDate()
+      const eventEnd = getEventEnd(event)
+      const isMultiDay = Boolean(event.endDate && event.endDate > event.date)
 
       return {
         id: event.id,
@@ -425,7 +434,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
         start: eventStart,
         end: eventEnd,
         resource: event,
-        allDay: false
+        allDay: isMultiDay
       }
     });
   }, [events, selectedPeople, selectedCategories])
@@ -476,6 +485,12 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
     const newDate = moment(start).format('YYYY-MM-DD')
     const newTime = moment(start).format('HH:mm')
     const duration = moment(end).diff(moment(start), 'minutes')
+    const multiDaySpan = originalEvent.endDate && originalEvent.endDate > originalEvent.date
+      ? moment(originalEvent.endDate, 'YYYY-MM-DD').diff(moment(originalEvent.date, 'YYYY-MM-DD'), 'days')
+      : 0
+    const newEndDate = multiDaySpan > 0
+      ? moment(newDate, 'YYYY-MM-DD').add(multiDaySpan, 'days').format('YYYY-MM-DD')
+      : undefined
 
     // Show feedback
     const oldDateTime = moment(`${originalEvent.date} ${originalEvent.time}`, 'YYYY-MM-DD HH:mm')
@@ -508,7 +523,8 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
     onEventUpdate(originalEvent.id, {
       date: newDate,
       time: newTime,
-      duration: duration
+      duration: multiDaySpan > 0 ? originalEvent.duration : duration,
+      endDate: newEndDate
     })
   }, [onEventUpdate])
 
@@ -517,6 +533,8 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
     const { event, start, end } = args
     const originalEvent = event.resource!
     const duration = moment(end).diff(moment(start), 'minutes')
+    const resizedEndDate = moment(end).format('YYYY-MM-DD')
+    const startDate = moment(start).format('YYYY-MM-DD')
 
     // Show feedback
     const durationChanged = duration !== originalEvent.duration
@@ -533,7 +551,8 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
 
     // Call the parent's update function with the correct signature
     onEventUpdate(originalEvent.id, {
-      duration: duration
+      duration: duration,
+      endDate: resizedEndDate > startDate ? resizedEndDate : undefined
     })
   }, [onEventUpdate])
 
@@ -570,7 +589,8 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
     other: 'bg-gray-100 text-gray-800 dark:bg-slate-700 dark:text-slate-200',
     appointment: 'bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-200',
     work: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-500/20 dark:text-indigo-200',
-    personal: 'bg-teal-100 text-teal-800 dark:bg-teal-500/20 dark:text-teal-200'
+    personal: 'bg-teal-100 text-teal-800 dark:bg-teal-500/20 dark:text-teal-200',
+    brain: 'bg-violet-100 text-violet-800 dark:bg-violet-500/20 dark:text-violet-200'
   }
 
   // Month analytics calculations
@@ -584,8 +604,9 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
     // Filter events for current month and selected filters
     const monthEvents = events.filter(event => {
       const eventDate = moment(event.date);
+      const personMatch = event.person === '' || selectedPeople.includes(event.person);
       return eventDate.isBetween(monthStart, monthEnd, 'day', '[]') &&
-             selectedPeople.includes(event.person) &&
+             personMatch &&
              selectedCategories.includes(event.type);
     });
 
@@ -735,15 +756,15 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
 
   // Desktop Calendar Header Component
   const renderDesktopHeader = () => (
-    <div className="hidden lg:flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 sm:p-4 md:p-6 border-b border-gray-200 dark:border-slate-800 gap-3">
-        <div className="flex items-center space-x-4">
-          <div className="flex items-center space-x-2">
-            <CalendarDays className="w-6 h-6 text-blue-600" />
+    <div className="hidden flex-col gap-4 border-b border-gray-200 p-3 dark:border-slate-800 sm:p-4 md:p-6 lg:flex xl:flex-row xl:items-center xl:justify-between">
+        <div className="flex min-w-0 flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2">
+            <CalendarDays className="w-6 h-6 text-[#147c72] dark:text-[#56c6b8]" />
             <h1 className="text-xl sm:text-2xl font-semibold text-gray-900 dark:text-slate-100">Calendar</h1>
           </div>
 
           {/* Date Navigation */}
-          <div className="flex items-center space-x-2 ml-8">
+          <div className="flex min-w-0 items-center gap-2">
             <button
               onClick={() => {
                 const unit = view === 'YEAR' ? 'year' : view.toLowerCase() as any;
@@ -754,7 +775,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
               <ChevronLeft className="w-4 h-4" />
             </button>
 
-            <div className="px-4 py-2 bg-gray-50 dark:bg-slate-800 rounded-md min-w-[200px] text-center">
+            <div className="min-w-[180px] max-w-full rounded-md bg-gray-50 px-4 py-2 text-center dark:bg-slate-800">
               <span className="text-lg font-medium text-gray-900 dark:text-slate-100">
                 {view === Views.MONTH && moment(currentDate).format('MMMM YYYY')}
                 {view === Views.WEEK && `Week of ${moment(currentDate).startOf('week').format('MMM D, YYYY')}`}
@@ -776,7 +797,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
 
             <button
               onClick={() => handleNavigate(new Date())}
-              className="px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+              className="rounded-md bg-[#147c72] px-3 py-2 text-sm text-white transition-colors hover:bg-[#0f625a]"
             >
               Today
             </button>
@@ -1123,7 +1144,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
           </div>
         </div>
       )}
-        <div className="flex items-center space-x-2">
+        <div className="flex flex-wrap items-center justify-start gap-2 xl:justify-end">
           {/* Notification Bell */}
           <NotificationBell />
 
@@ -1155,7 +1176,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
             onClick={() => setShowFilters(!showFilters)}
             className={`p-2 rounded-md transition-colors ${
               showFilters
-                ? 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-200'
+                ? 'bg-[#eaf1e7] text-[#147c72] dark:bg-[#147c72]/20 dark:text-[#56c6b8]'
                 : 'hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-600 dark:text-slate-300'
             }`}
           >
@@ -1201,7 +1222,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
 
           <button
             onClick={() => onEventCreate({ start: new Date(), end: moment().add(1, 'hour').toDate() })}
-            className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+            className="flex shrink-0 items-center gap-2 rounded-md bg-[#147c72] px-4 py-2 text-white transition-colors hover:bg-[#0f625a]"
           >
             <Plus className="w-4 h-4" />
             <span>New Event</span>
@@ -1702,7 +1723,11 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
 
                 <div className="flex items-center space-x-2 text-sm text-gray-600 dark:text-slate-300">
                   <Clock className="w-4 h-4" />
-                  <span>{hoveredEvent.time} ({hoveredEvent.duration} min)</span>
+                  <span>
+                    {hoveredEvent.endDate && hoveredEvent.endDate > hoveredEvent.date
+                      ? `${hoveredEvent.date} - ${hoveredEvent.endDate}`
+                      : `${hoveredEvent.time} (${hoveredEvent.duration} min)`}
+                  </span>
                 </div>
 
                 {hoveredEvent.location && (

@@ -57,6 +57,7 @@ model Family {
   contractors           Contractor[]
   contractorAppointments ContractorAppointment[]
   notifications         Notification[]
+  pushSubscriptions     PushSubscription[]
   brainProjects         BrainProject[]
 
   @@map("families")
@@ -537,6 +538,25 @@ model Notification {
   @@index([familyId, read])
   @@index([familyId, timestamp])
   @@map("notifications")
+}
+
+model PushSubscription {
+  id          String   @id @default(cuid())
+  familyId    String   @map("family_id")
+  endpoint    String   @unique
+  p256dh      String
+  auth        String
+  userAgent   String?  @map("user_agent")
+  deviceLabel String?  @map("device_label")
+  isActive    Boolean  @default(true) @map("is_active")
+  lastSeenAt  DateTime @default(now()) @map("last_seen_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  family Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  @@index([familyId, isActive])
+  @@map("push_subscriptions")
 }
 
 // Brain mind-map projects

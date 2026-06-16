@@ -239,9 +239,9 @@ self.addEventListener('notificationclick', (event) => {
 
   if (clickedAction === 'view') {
     // Open the app and navigate to the event
-    const urlToOpen = notificationData.eventId
+    const urlToOpen = notificationData.url || (notificationData.eventId
       ? `/?event=${notificationData.eventId}`
-      : '/';
+      : '/');
 
     event.waitUntil(
       clients.matchAll({ type: 'window' }).then((clientList) => {
@@ -279,7 +279,7 @@ self.addEventListener('notificationclick', (event) => {
     );
   } else {
     // Default click action - open app
-    const urlToOpen = '/';
+    const urlToOpen = notificationData.url || '/';
     event.waitUntil(
       clients.matchAll({ type: 'window' }).then((clientList) => {
         for (const client of clientList) {

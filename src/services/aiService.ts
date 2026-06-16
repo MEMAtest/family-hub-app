@@ -738,6 +738,26 @@ Provide a brief assessment of their weekly balance and one suggestion if needed.
 
     return await this.chat(systemPrompt, userPrompt);
   }
+
+  /**
+   * Polish user-entered free text while preserving meaning.
+   */
+  async enhanceFreeText(data: {
+    text: string;
+    context?: string;
+    mode?: 'polish' | 'spellcheck';
+  }): Promise<string> {
+    const mode = data.mode ?? 'polish';
+    const systemPrompt = `You are a concise UK English writing assistant for a family productivity app. Improve clarity, spelling, punctuation, and grammar without adding new facts. Keep dates, names, quantities, and intent unchanged. Output only the revised text.`;
+
+    const userPrompt = `Context: ${data.context || 'General family app field'}
+Mode: ${mode}
+
+Text:
+${data.text}`;
+
+    return await this.chat(systemPrompt, userPrompt, 600);
+  }
 }
 
 // Export singleton instance
