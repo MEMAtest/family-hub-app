@@ -21,12 +21,12 @@ export const metadata: Metadata = {
   title: 'Omosanya Home',
   description: 'A family command centre for plans, money, meals, shopping, goals, and household moments.',
   keywords: ['family', 'management', 'calendar', 'budget', 'meals', 'shopping', 'goals', 'PWA', 'mobile'],
-  authors: [{ name: 'Omosanya Family Hub Team' }],
+  authors: [{ name: 'Omosanya Home Team' }],
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
-    title: 'Omosanya Hub',
+    title: 'Omosanya Home',
     startupImage: [
       {
         url: '/apple-splash-1170x2532.png',
@@ -85,12 +85,12 @@ export const metadata: Metadata = {
       { url: '/icon-180x180.png', sizes: '180x180', type: 'image/png' }
     ],
     other: [
-      { rel: 'mask-icon', url: '/icon.svg', color: '#2563EB' }
+      { rel: 'mask-icon', url: '/icon.svg', color: '#147C72' }
     ]
   },
   openGraph: {
     type: 'website',
-    siteName: 'Omosanya Family Hub',
+    siteName: 'Omosanya Home',
     title: 'Omosanya Home',
     description: 'A comprehensive family management application with calendar, budget, meals, and more',
     images: [
@@ -98,7 +98,7 @@ export const metadata: Metadata = {
         url: '/og-image.png',
         width: 1200,
         height: 630,
-        alt: 'Omosanya Family Hub'
+        alt: 'Omosanya Home'
       }
     ]
   },

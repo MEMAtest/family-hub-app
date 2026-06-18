@@ -17,6 +17,7 @@ import {
   Camera,
   FileUp,
   Search,
+  Calculator,
 } from 'lucide-react';
 import {
   PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip,
@@ -30,6 +31,7 @@ import AdvancedReportsDashboard from './reports/AdvancedReportsDashboard';
 import { AIInsightsCard } from './AIInsightsCard';
 import { ReceiptScanner } from './ReceiptScanner';
 import StatementImportModal from './modals/StatementImportModal';
+import BudgetCalculator from './BudgetCalculator';
 import databaseService from '@/services/databaseService';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { filterExpenses, filterIncome } from '@/utils/budgetFilters';
@@ -77,6 +79,7 @@ const SimpleBudgetDashboard: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [viewTab, setViewTab] = useState<'all' | 'receipt-scans'>('all');
+  const [budgetMode, setBudgetMode] = useState<'overview' | 'calculator'>('overview');
   const [showMobileMenu, setShowMobileMenu] = useState(false);
 
   // Month/Year navigation state
@@ -451,6 +454,22 @@ const SimpleBudgetDashboard: React.FC = () => {
     return filterExpenses(dashboardData.filteredExpenses as any[], searchQuery, { viewTab });
   }, [dashboardData, searchQuery, viewTab]);
 
+  const calculatorDefaults = useMemo(() => {
+    const filteredExpenses = sanitizeBudgetItems(dashboardData?.filteredExpenses ?? []);
+    const fixedCosts = filteredExpenses
+      .filter((expense) => Boolean((expense as any).isRecurring))
+      .reduce((sum, expense) => sum + (parseFloat((expense as any).amount) || 0), 0);
+    const variableSpend = filteredExpenses
+      .filter((expense) => !Boolean((expense as any).isRecurring))
+      .reduce((sum, expense) => sum + (parseFloat((expense as any).amount) || 0), 0);
+
+    return {
+      totalIncome: dashboardData?.totalIncome ?? 0,
+      fixedCosts,
+      variableSpend,
+    };
+  }, [dashboardData, sanitizeBudgetItems]);
+
   // Helper function for currency formatting (defined before useMemo hooks that use it)
   const formatCurrency = useCallback((amount: number) => {
     return new Intl.NumberFormat('en-GB', {
@@ -623,6 +642,16 @@ const SimpleBudgetDashboard: React.FC = () => {
             </button>
             <button
               onClick={() => {
+                setBudgetMode('calculator');
+                setShowMobileMenu(false);
+              }}
+              className="mobile-btn-secondary w-full flex items-center gap-3"
+            >
+              <Calculator className="w-5 h-5" />
+              Calculator
+            </button>
+            <button
+              onClick={() => {
                 setShowAdvancedReports(true);
                 setShowMobileMenu(false);
               }}
@@ -758,6 +787,13 @@ const SimpleBudgetDashboard: React.FC = () => {
                 Savings Goal
               </button>
               <button
+                onClick={() => setBudgetMode('calculator')}
+                className="bg-[#147c72] text-white px-4 py-2 rounded-sm hover:bg-[#0f625a] transition-colors text-sm font-medium flex items-center gap-2"
+              >
+                <Calculator className="w-4 h-4" />
+                Calculator
+              </button>
+              <button
                 onClick={() => setShowAdvancedReports(true)}
                 className="bg-purple-600 text-white px-4 py-2 rounded-sm hover:bg-purple-700 transition-colors text-sm font-medium flex items-center gap-2"
               >
@@ -775,6 +811,43 @@ const SimpleBudgetDashboard: React.FC = () => {
         </div>
       )}
 
+      <div className={`${isMobile ? 'px-4' : ''} mb-4`}>
+        <div className="inline-flex rounded-lg border border-[#dde5e0] bg-white/80 p-1 dark:border-slate-800 dark:bg-slate-900/80">
+          <button
+            type="button"
+            onClick={() => setBudgetMode('overview')}
+            className={`rounded-md px-3 py-2 text-sm font-semibold transition ${
+              budgetMode === 'overview'
+                ? 'bg-[#147c72] text-white'
+                : 'text-[#5f6a64] hover:bg-[#eaf1e7] dark:text-slate-300 dark:hover:bg-slate-800'
+            }`}
+          >
+            Overview
+          </button>
+          <button
+            type="button"
+            onClick={() => setBudgetMode('calculator')}
+            className={`rounded-md px-3 py-2 text-sm font-semibold transition ${
+              budgetMode === 'calculator'
+                ? 'bg-[#147c72] text-white'
+                : 'text-[#5f6a64] hover:bg-[#eaf1e7] dark:text-slate-300 dark:hover:bg-slate-800'
+            }`}
+          >
+            Calculator
+          </button>
+        </div>
+      </div>
+
+      {budgetMode === 'calculator' ? (
+        <BudgetCalculator
+          totalIncome={calculatorDefaults.totalIncome}
+          fixedCosts={calculatorDefaults.fixedCosts}
+          variableSpend={calculatorDefaults.variableSpend}
+          monthLabel={`${getMonthName(selectedMonth)} ${selectedYear}`}
+          formatCurrency={formatCurrency}
+        />
+      ) : (
+      <>
       {/* Key Metrics Cards */}
       <div className={`grid gap-3 mb-4 md:mb-8 ${
         isMobile
@@ -1399,6 +1472,8 @@ const SimpleBudgetDashboard: React.FC = () => {
           )}
         </div>
       </div>
+      </>
+      )}
 
       {/* Modals */}
       <AddIncomeModal

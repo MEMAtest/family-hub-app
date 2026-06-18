@@ -3,8 +3,8 @@
   "name": "Omosanya Home",
   "short_name": "Omosanya Home",
   "description": "The Omosanya family's management app for calendar, budget, meals, shopping, and goals tracking.",
-  "theme_color": "#3B82F6",
-  "background_color": "#0F172A",
+  "theme_color": "#147C72",
+  "background_color": "#0D1215",
   "display": "standalone",
   "display_override": [
     "fullscreen",

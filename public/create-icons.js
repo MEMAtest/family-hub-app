@@ -1,28 +1,46 @@
+const { execFileSync } = require('child_process');
 const fs = require('fs');
-const { createCanvas } = require('canvas');
+const os = require('os');
+const path = require('path');
 
-const sizes = [72, 96, 128, 144, 152, 192, 384, 512];
+const root = path.resolve(__dirname, '..');
+const sourceSvg = path.join(__dirname, 'icon.svg');
+const outputDir = __dirname;
+const scratchDir = fs.mkdtempSync(path.join(os.tmpdir(), 'omosanya-home-icons-'));
 
-sizes.forEach(size => {
-  const canvas = createCanvas(size, size);
-  const ctx = canvas.getContext('2d');
+const sizes = [72, 96, 128, 144, 152, 167, 180, 192, 256, 384];
+const extraOutputs = [
+  { name: 'icon-192.png', size: 192 },
+  { name: 'icon-512.png', size: 512 },
+  { name: 'icon-maskable-192.png', size: 192 },
+  { name: 'icon-maskable-512.png', size: 512 },
+];
 
-  // Background
-  const gradient = ctx.createLinearGradient(0, 0, size, size);
-  gradient.addColorStop(0, '#3B82F6');
-  gradient.addColorStop(1, '#8B5CF6');
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, size, size);
+if (!fs.existsSync(sourceSvg)) {
+  throw new Error(`Missing source icon: ${sourceSvg}`);
+}
 
-  // Text
-  ctx.fillStyle = 'white';
-  ctx.font = `bold ${size/3}px Arial`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText('FH', size/2, size/2);
-
-  // Save
-  const buffer = canvas.toBuffer('image/png');
-  fs.writeFileSync(`./public/icon-${size}x${size}.png`, buffer);
-  console.log(`Created icon-${size}x${size}.png`);
+execFileSync('qlmanage', ['-t', '-s', '1024', '-o', scratchDir, sourceSvg], {
+  cwd: root,
+  stdio: 'inherit',
 });
+
+const sourcePng = path.join(scratchDir, 'icon.svg.png');
+if (!fs.existsSync(sourcePng)) {
+  throw new Error(`QuickLook did not produce ${sourcePng}`);
+}
+
+for (const size of sizes) {
+  const fileName = `icon-${size}x${size}.png`;
+  execFileSync('sips', ['-z', String(size), String(size), sourcePng, '--out', path.join(outputDir, fileName)], {
+    stdio: 'ignore',
+  });
+  console.log(`Created ${fileName}`);
+}
+
+for (const output of extraOutputs) {
+  execFileSync('sips', ['-z', String(output.size), String(output.size), sourcePng, '--out', path.join(outputDir, output.name)], {
+    stdio: 'ignore',
+  });
+  console.log(`Created ${output.name}`);
+}

@@ -114,7 +114,20 @@ const switchToView = async (page: Page, label: string) => {
     return;
   } catch {
     const textMatch = primaryNav.locator('button').filter({ hasText: label });
-    await clickVisibleButton(textMatch, `view "${label}" (text)`);
+    try {
+      await clickVisibleButton(textMatch, `view "${label}" (text)`);
+      return;
+    } catch {
+      await clickVisibleButton(page.getByRole('button', { name: 'Open navigation' }), 'open mobile navigation');
+      await page.waitForTimeout(300);
+      const drawerButton = page
+        .locator('[role="dialog"]')
+        .locator('button')
+        .filter({ hasText: label })
+        .first();
+      await expect(drawerButton).toBeVisible({ timeout: 10_000 });
+      await drawerButton.evaluate((button: HTMLButtonElement) => button.click());
+    }
   }
 };
 

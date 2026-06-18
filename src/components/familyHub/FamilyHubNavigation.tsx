@@ -3,6 +3,7 @@
 import { Fragment } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
 import { LucideIcon, X } from 'lucide-react';
+import OmosanyaLogo from '@/components/common/OmosanyaLogo';
 
 export interface NavItem {
   id: string;
@@ -84,34 +85,7 @@ export const FamilyHubNavigation = ({
   );
 
   const renderBottomNav = () => (
-    <>
-      <nav
-        aria-label="All sections"
-        className="fixed inset-x-2 bottom-[4.75rem] z-40 overflow-x-auto rounded-xl border border-[#dde5e0] bg-white/90 px-2 py-1.5 shadow-[0_8px_20px_rgba(35,61,55,.10)] backdrop-blur lg:hidden dark:border-slate-800 dark:bg-slate-900/95"
-      >
-        <div className="flex w-max min-w-full items-center gap-1">
-          {items.map(({ id, label, icon: Icon }) => {
-            const isActive = activeId === id;
-            return (
-              <button
-                key={`mobile-rail-${id}`}
-                onClick={() => onSelect(id)}
-                className={`inline-flex min-h-[34px] flex-shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-[11px] font-semibold transition touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#147c72]/30 ${
-                  isActive
-                    ? 'bg-[#147c72] text-white dark:bg-[#147c72]'
-                    : 'text-[#5f6a64] hover:bg-[#eaf1e7] dark:text-slate-300 dark:hover:bg-slate-800'
-                }`}
-                aria-current={isActive ? 'page' : undefined}
-              >
-                <Icon className="h-3.5 w-3.5 flex-shrink-0" />
-                <span>{label}</span>
-              </button>
-            );
-          })}
-        </div>
-      </nav>
-
-      <nav className="fixed inset-x-2 bottom-2 z-40 rounded-2xl border border-[#dde5e0] bg-white/90 py-2 shadow-[0_12px_28px_rgba(35,61,55,.15)] backdrop-blur lg:hidden dark:border-slate-800 dark:bg-slate-900/95 pwa-safe-bottom">
+      <nav aria-label="Primary mobile navigation" className="fixed inset-x-2 bottom-2 z-40 rounded-2xl border border-[#dde5e0] bg-white/90 py-2 shadow-[0_12px_28px_rgba(35,61,55,.15)] backdrop-blur lg:hidden dark:border-slate-800 dark:bg-slate-900/95 pwa-safe-bottom">
         <div className="flex w-full items-center justify-around gap-0.5 px-1.5 sm:gap-1 sm:px-2">
           {primaryMobileItems.map(({ id, label, mobileLabel, icon: Icon }) => {
             const isActive = activeId === id;
@@ -134,7 +108,6 @@ export const FamilyHubNavigation = ({
           })}
         </div>
       </nav>
-    </>
   );
 
   return (
@@ -142,13 +115,7 @@ export const FamilyHubNavigation = ({
       {/* Desktop */}
       <aside className="hidden h-screen w-72 flex-shrink-0 flex-col overflow-y-auto overflow-x-hidden border-r border-[#dde5e0] bg-white/86 p-4 backdrop-blur-xl sticky top-0 dark:border-slate-800 dark:bg-slate-900/95 lg:flex">
         <div className="mb-6">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg bg-[#147c72] text-xl font-black text-white shadow-sm">K</div>
-            <div className="min-w-0">
-              <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#5f6a64] dark:text-slate-500">Omosanya</p>
-              <h2 className="kinboard-serif text-2xl leading-none text-[#18221f] dark:text-slate-100">Home</h2>
-            </div>
-          </div>
+          <OmosanyaLogo showText />
           <div className="mt-4 rounded-lg border border-[#dde5e0] bg-[#f8faf6] px-3 py-2 text-xs font-semibold text-[#5f6a64] dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-400">
             No-login family profiles
           </div>
@@ -184,10 +151,10 @@ export const FamilyHubNavigation = ({
               <Dialog.Panel className="relative flex w-[85vw] max-w-[280px] flex-col bg-white p-4 shadow-lg dark:bg-slate-900 sm:max-w-xs pwa-safe-top">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex min-w-0 items-center gap-3">
-                    <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-[#147c72] text-lg font-black text-white shadow-sm">K</div>
+                    <OmosanyaLogo className="h-10 w-10" />
                     <div className="min-w-0">
-                    <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#5f6a64] dark:text-slate-500">Omosanya</p>
-                    <h2 className="text-lg font-semibold text-[#18221f] dark:text-slate-100">Navigation</h2>
+                      <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#5f6a64] dark:text-slate-500">Omosanya</p>
+                      <h2 className="text-lg font-semibold text-[#18221f] dark:text-slate-100">Navigation</h2>
                     </div>
                   </div>
                   <button onClick={onCloseMobile} className="rounded-lg p-2 text-[#5f6a64] hover:bg-[#eaf1e7] dark:text-slate-300 dark:hover:bg-slate-800">

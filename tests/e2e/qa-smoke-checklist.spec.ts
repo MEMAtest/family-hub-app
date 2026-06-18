@@ -193,6 +193,14 @@ test.describe('QA Smoke Checklist - Mobile (iPhone 14 - 390x844)', () => {
     await page.goto(BASE_URL);
     await preparePage(page);
 
+    const bottomNav = page.getByRole('navigation', { name: 'Primary mobile navigation' });
+    await expect(bottomNav).toBeVisible();
+    await expect(page.getByRole('navigation', { name: 'All sections' })).toHaveCount(0);
+
+    for (const label of ['Cal', 'Money', 'Today', 'Meals', 'Basket', 'Quests']) {
+      await expect(bottomNav.getByText(label, { exact: true })).toBeVisible();
+    }
+
     await takeScreenshot(page, 'mobile-390x844-bottom-nav.png');
 
     console.log('✅ Mobile bottom navigation checked');
