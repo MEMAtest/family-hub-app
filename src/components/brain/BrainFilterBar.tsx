@@ -2,18 +2,19 @@
 
 import { Search } from 'lucide-react';
 import { useBrainContext } from '@/contexts/familyHub/BrainContext';
-import { NODE_STATUS_CONFIG, type BrainNodeStatus } from '@/types/brain.types';
 
-const FILTER_OPTIONS: Array<{ value: BrainNodeStatus | null; label: string }> = [
-  { value: null, label: 'All' },
-  ...Object.entries(NODE_STATUS_CONFIG).map(([key, cfg]) => ({
-    value: key as BrainNodeStatus,
-    label: cfg.label,
-  })),
-];
+const FILTER_OPTIONS = [
+  { value: 'all', label: 'All' },
+  { value: 'notes', label: 'Notes' },
+  { value: 'tasks', label: 'Tasks' },
+  { value: 'due', label: 'Due' },
+  { value: 'open', label: 'Open' },
+  { value: 'done', label: 'Done' },
+  { value: 'tagged', label: 'Tagged' },
+] as const;
 
 const BrainFilterBar = () => {
-  const { statusFilter, setStatusFilter, searchQuery, setSearchQuery } = useBrainContext();
+  const { quickFilter, setQuickFilter, searchQuery, setSearchQuery } = useBrainContext();
 
   return (
     <div className="flex items-center gap-2 border-b border-gray-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900">
@@ -22,9 +23,9 @@ const BrainFilterBar = () => {
         {FILTER_OPTIONS.map((opt) => (
           <button
             key={opt.label}
-            onClick={() => setStatusFilter(opt.value)}
+            onClick={() => setQuickFilter(opt.value)}
             className={`flex-shrink-0 rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
-              statusFilter === opt.value
+              quickFilter === opt.value
                 ? 'bg-blue-600 text-white'
                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600'
             }`}

@@ -174,6 +174,12 @@ const waitForNoRecord = async (
 
 const todayIso = () => new Date().toISOString().split('T')[0];
 
+const tomorrowIso = () => {
+  const date = new Date();
+  date.setDate(date.getDate() + 1);
+  return date.toISOString().split('T')[0];
+};
+
 const isDatabaseConnected = async (page: Page) =>
   page.getByText('Database Connected').first().isVisible().catch(() => false);
 
@@ -464,7 +470,7 @@ test('calendar event create and delete persists', async ({ page }) => {
   test.setTimeout(180_000);
 
   const eventTitle = `${runTag} Calendar Event`;
-  const eventDate = todayIso();
+  const eventDate = tomorrowIso();
 
   await page.setViewportSize({ width: 1366, height: 900 });
   await page.goto('/?view=calendar');
@@ -482,6 +488,15 @@ test('calendar event create and delete persists', async ({ page }) => {
   await page.locator('input[type="time"]').first().fill('10:00');
 
   await page.getByRole('button', { name: 'Save Event' }).click();
+  await expect(page.getByRole('heading', { name: 'New Event' })).toBeHidden({ timeout: 20_000 });
+
+  await clickVisibleButton(page.getByRole('button', { name: /^Event$/ }), 'header create event after save');
+  await expect(page.getByRole('heading', { name: 'New Event' })).toBeVisible({ timeout: 20_000 });
+  await expect(page.locator('input[type="date"]').first()).toHaveValue(todayIso());
+  const newEventModal = page.locator('.fixed.inset-0').filter({
+    has: page.getByRole('heading', { name: 'New Event' }),
+  }).last();
+  await newEventModal.locator('button').first().click();
   await expect(page.getByRole('heading', { name: 'New Event' })).toBeHidden({ timeout: 20_000 });
 
   const databaseConnected = await isDatabaseConnected(page);
@@ -520,6 +535,42 @@ test('calendar event create and delete persists', async ({ page }) => {
 
     createdIds.calendarEvents.delete(createdEvent.id);
   }
+});
+
+test('calendar refreshes database events created on another device', async ({ page }) => {
+  test.setTimeout(180_000);
+
+  const externalTitle = `${runTag} Angela iPhone Event`;
+  const eventDateTime = new Date(`${todayIso()}T12:00:00Z`);
+
+  await page.setViewportSize({ width: 1366, height: 900 });
+  await page.goto('/?view=calendar');
+  await page.waitForLoadState('domcontentloaded');
+  await waitForHubShell(page);
+  await dismissSetupWizard(page);
+  await switchToView(page, 'Calendar');
+
+  const createdEvent = await prisma.calendarEvent.create({
+    data: {
+      familyId,
+      personId: firstMemberId,
+      title: externalTitle,
+      description: 'Created after the calendar page was already open',
+      eventDate: eventDateTime,
+      eventTime: eventDateTime,
+      durationMinutes: 45,
+      location: 'iPhone',
+      cost: 0,
+      eventType: 'family',
+      recurringPattern: 'none',
+      isRecurring: false,
+      notes: 'Cross-device refresh check',
+    },
+  });
+  createdIds.calendarEvents.add(createdEvent.id);
+
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect(page.getByText(externalTitle, { exact: true }).first()).toBeVisible({ timeout: 20_000 });
 });
 
 test('shopping list and item flows are accessible in UI', async ({ page }) => {

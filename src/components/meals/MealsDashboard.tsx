@@ -34,6 +34,7 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { AIMealPlan } from '@/types/meals.types';
 import { useMealsContext } from '@/contexts/familyHub/MealsContext';
 import { useAppView } from '@/contexts/familyHub/AppViewContext';
+import AIEnhancedField from '@/components/common/AIEnhancedField';
 
 interface MealsDashboardProps {
   onClose?: () => void;
@@ -1073,12 +1074,13 @@ const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Notes
                       </label>
-                      <textarea
-                        value={formData.mealNotes}
-                        onChange={(e) => setFormData({ ...formData, mealNotes: e.target.value })}
+                      <AIEnhancedField
+                        value={formData.mealNotes || ''}
+                        onChange={(value) => setFormData({ ...formData, mealNotes: value })}
                         placeholder="Any additional notes..."
                         rows={3}
                         className="w-full border border-gray-300 rounded-md px-3 py-2"
+                        context="Meal log notes"
                       />
                     </div>
                   </div>

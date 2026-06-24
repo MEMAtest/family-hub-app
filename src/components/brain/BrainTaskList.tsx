@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { Calendar, CheckCircle2, Circle, Plus } from 'lucide-react';
 import { useBrainContext } from '@/contexts/familyHub/BrainContext';
 import { NODE_PRIORITY_CONFIG, NODE_STATUS_CONFIG, type BrainNodePriority, type BrainNodeStatus } from '@/types/brain.types';
+import { extractBrainTags } from '@/utils/brainText';
 
 const statusOrder: Record<BrainNodeStatus, number> = {
   todo: 0,
@@ -20,15 +21,26 @@ const BrainTaskList = () => {
     updateNode,
     selectNode,
     statusFilter,
+    quickFilter,
     searchQuery,
   } = useBrainContext();
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [adding, setAdding] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
 
   const visibleNodes = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     return nodes
+      .filter((node) => node.nodeType === 'task')
       .filter((node) => (statusFilter ? node.status === statusFilter : true))
+      .filter((node) => {
+        if (quickFilter === 'all' || quickFilter === 'tasks') return true;
+        if (quickFilter === 'due') return Boolean(node.dueDate);
+        if (quickFilter === 'open') return node.status !== 'done';
+        if (quickFilter === 'done') return node.status === 'done';
+        if (quickFilter === 'tagged') return node.tags.length > 0 || extractBrainTags(node.content || '').length > 0;
+        return false;
+      })
       .filter((node) => {
         if (!query) return true;
         return (
@@ -44,13 +56,14 @@ const BrainTaskList = () => {
         const dueB = b.dueDate || '9999-12-31';
         return dueA.localeCompare(dueB);
       });
-  }, [nodes, searchQuery, statusFilter]);
+  }, [nodes, quickFilter, searchQuery, statusFilter]);
 
   const addTask = async () => {
     const title = newTaskTitle.trim();
     if (!title || adding) return;
 
     setAdding(true);
+    setAddError(null);
     try {
       await createNode({
         title,
@@ -59,6 +72,9 @@ const BrainTaskList = () => {
         priority: 'medium',
       });
       setNewTaskTitle('');
+    } catch (error) {
+      console.warn('Failed to add brain task:', error);
+      setAddError('Could not save this task. Try again.');
     } finally {
       setAdding(false);
     }
@@ -89,6 +105,7 @@ const BrainTaskList = () => {
             Add
           </button>
         </div>
+        {addError && <p className="mt-2 text-xs font-medium text-amber-600 dark:text-amber-300">{addError}</p>}
       </div>
 
       <div className="flex-1 overflow-y-auto p-3 sm:p-4">

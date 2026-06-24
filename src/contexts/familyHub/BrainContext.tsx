@@ -20,9 +20,15 @@ import type {
   BrainFlowNode,
   BrainFlowEdge,
   BrainNodeStatus,
+  BrainResolvedLink,
   CreateProjectFormData,
   CreateNodeFormData,
 } from '@/types/brain.types';
+import {
+  buildBrainRelationships,
+  extractBrainChecklistItems,
+  extractBrainTags,
+} from '@/utils/brainText';
 
 interface TodayData {
   total: number;
@@ -42,6 +48,9 @@ interface BrainContextValue {
   flowNodes: BrainFlowNode[];
   flowEdges: BrainFlowEdge[];
   todayData: TodayData | null;
+  linksByNodeId: Record<string, BrainResolvedLink[]>;
+  backlinksByNodeId: Record<string, BrainNode[]>;
+  mentionSuggestionsByNodeId: Record<string, BrainNode[]>;
 
   // Loading
   isLoading: boolean;
@@ -52,6 +61,7 @@ interface BrainContextValue {
   isCreateNodeOpen: boolean;
   isCreateProjectOpen: boolean;
   statusFilter: BrainNodeStatus | null;
+  quickFilter: 'all' | 'notes' | 'tasks' | 'due' | 'open' | 'done' | 'tagged';
   searchQuery: string;
 
   // Actions - projects
@@ -76,6 +86,7 @@ interface BrainContextValue {
   setIsCreateNodeOpen: (open: boolean) => void;
   setIsCreateProjectOpen: (open: boolean) => void;
   setStatusFilter: (status: BrainNodeStatus | null) => void;
+  setQuickFilter: (filter: BrainContextValue['quickFilter']) => void;
   setSearchQuery: (query: string) => void;
 
   // Refresh
@@ -112,6 +123,7 @@ export const BrainProvider = ({ children }: PropsWithChildren) => {
   const [isCreateNodeOpen, setIsCreateNodeOpen] = useState(false);
   const [isCreateProjectOpen, setIsCreateProjectOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<BrainNodeStatus | null>(null);
+  const [quickFilter, setQuickFilter] = useState<BrainContextValue['quickFilter']>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [todayData, setTodayData] = useState<TodayData | null>(null);
 
@@ -244,20 +256,48 @@ export const BrainProvider = ({ children }: PropsWithChildren) => {
   }, [refreshTodayData]);
 
   // ─── React Flow data transforms ──────────────────────────────────
+  const {
+    linksByNodeId,
+    backlinksByNodeId,
+    mentionSuggestionsByNodeId,
+  } = useMemo(() => buildBrainRelationships(nodes), [nodes]);
+
   const filteredNodes = useMemo(() => {
     let result = nodes;
     if (statusFilter) result = result.filter((n) => n.status === statusFilter);
+    if (quickFilter === 'notes') result = result.filter((n) => n.nodeType !== 'task');
+    if (quickFilter === 'tasks') result = result.filter((n) => n.nodeType === 'task');
+    if (quickFilter === 'due') result = result.filter((n) => Boolean(n.dueDate));
+    if (quickFilter === 'open') result = result.filter((n) => n.status !== 'done');
+    if (quickFilter === 'done') result = result.filter((n) => n.status === 'done');
+    if (quickFilter === 'tagged') {
+      result = result.filter((n) => n.tags.length > 0 || extractBrainTags(n.content || '').length > 0);
+    }
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       result = result.filter(
-        (n) =>
-          n.title.toLowerCase().includes(q) ||
-          (n.content || '').toLowerCase().includes(q) ||
-          n.tags.some((t) => t.toLowerCase().includes(q))
+        (n) => {
+          const linkedTitles = linksByNodeId[n.id]
+            ?.map((link) => link.target?.title || link.title)
+            .join(' ') || '';
+          const checklistText = extractBrainChecklistItems(n.content || '')
+            .map((item) => item.text)
+            .join(' ');
+          const inlineTags = extractBrainTags(n.content || '').join(' ');
+          return [
+            n.title,
+            n.content || '',
+            n.tags.join(' '),
+            linkedTitles,
+            checklistText,
+            inlineTags,
+            n.nodeType,
+          ].join(' ').toLowerCase().includes(q);
+        }
       );
     }
     return result;
-  }, [nodes, statusFilter, searchQuery]);
+  }, [linksByNodeId, nodes, quickFilter, statusFilter, searchQuery]);
 
   const flowNodes = useMemo<BrainFlowNode[]>(
     () =>
@@ -281,7 +321,8 @@ export const BrainProvider = ({ children }: PropsWithChildren) => {
 
   const flowEdges = useMemo<BrainFlowEdge[]>(() => {
     const nodeIds = new Set(filteredNodes.map((n) => n.id));
-    return edges
+    const manualEdgeKeys = new Set(edges.map((e) => `${e.sourceNodeId}:${e.targetNodeId}`));
+    const manualEdges = edges
       .filter((e) => nodeIds.has(e.sourceNodeId) && nodeIds.has(e.targetNodeId))
       .map((e) => ({
         id: e.id,
@@ -289,9 +330,26 @@ export const BrainProvider = ({ children }: PropsWithChildren) => {
         target: e.targetNodeId,
         label: e.label || undefined,
         animated: e.animated || e.edgeType === 'dependency' || e.edgeType === 'sequence',
-        data: { edgeType: e.edgeType, label: e.label },
+        data: { edgeType: e.edgeType, label: e.label, source: 'manual' as const },
       }));
-  }, [edges, filteredNodes]);
+
+    const derivedEdges = filteredNodes.flatMap((node) =>
+      (linksByNodeId[node.id] || [])
+        .filter((link) => link.target && nodeIds.has(link.target.id) && link.target.id !== node.id)
+        .filter((link) => !manualEdgeKeys.has(`${node.id}:${link.target?.id}`))
+        .map((link) => ({
+          id: `derived-link-${node.id}-${link.target?.id}`,
+          source: node.id,
+          target: link.target?.id as string,
+          label: undefined,
+          animated: false,
+          style: { stroke: '#14B8A6', strokeWidth: 2, strokeDasharray: '6 4' },
+          data: { edgeType: 'related' as const, label: null, source: 'derived-link' as const },
+        }))
+    );
+
+    return [...manualEdges, ...derivedEdges];
+  }, [edges, filteredNodes, linksByNodeId]);
 
   const activeProject = useMemo(
     () => projects.find((p) => p.id === activeProjectId) ?? null,
@@ -396,8 +454,8 @@ export const BrainProvider = ({ children }: PropsWithChildren) => {
         nodeType: data.nodeType,
         positionX: data.positionX ?? Math.random() * 400 + 100,
         positionY: data.positionY ?? Math.random() * 400 + 100,
-        tags: [],
-        showOnCalendar: false,
+        tags: data.tags ?? extractBrainTags(data.content || ''),
+        showOnCalendar: data.showOnCalendar ?? false,
         createdAt: now,
         updatedAt: now,
       };
@@ -417,10 +475,12 @@ export const BrainProvider = ({ children }: PropsWithChildren) => {
           }
           // Non-OK response - rollback
           deleteBrainNodeStore(optimistic.id);
+          throw new Error(`Failed to persist brain node (${res.status})`);
         } catch (err) {
           // Network error - rollback
           deleteBrainNodeStore(optimistic.id);
           console.warn('Failed to persist brain node:', err);
+          throw err;
         }
       }
       return optimistic;
@@ -568,6 +628,7 @@ export const BrainProvider = ({ children }: PropsWithChildren) => {
       setSelectedNodeId(null);
       setIsNodeDetailOpen(false);
       setStatusFilter(null);
+      setQuickFilter('all');
       setSearchQuery('');
     },
     [setActiveBrainProject]
@@ -584,12 +645,16 @@ export const BrainProvider = ({ children }: PropsWithChildren) => {
       flowNodes,
       flowEdges,
       todayData,
+      linksByNodeId,
+      backlinksByNodeId,
+      mentionSuggestionsByNodeId,
       isLoading,
       selectedNodeId,
       isNodeDetailOpen,
       isCreateNodeOpen,
       isCreateProjectOpen,
       statusFilter,
+      quickFilter,
       searchQuery,
       setActiveProject,
       createProject,
@@ -606,15 +671,16 @@ export const BrainProvider = ({ children }: PropsWithChildren) => {
       setIsCreateNodeOpen,
       setIsCreateProjectOpen,
       setStatusFilter,
+      setQuickFilter,
       setSearchQuery,
       refreshProjects,
       refreshTodayData,
     }),
     [
       projects, nodes, edges, activeProjectId, activeProject,
-      flowNodes, flowEdges, todayData, isLoading,
+      flowNodes, flowEdges, todayData, linksByNodeId, backlinksByNodeId, mentionSuggestionsByNodeId, isLoading,
       selectedNodeId, isNodeDetailOpen, isCreateNodeOpen, isCreateProjectOpen,
-      statusFilter, searchQuery,
+      statusFilter, quickFilter, searchQuery,
       setActiveProject, createProject, updateProject, deleteProject,
       createNode, updateNode, deleteNode, saveNodePositions,
       createEdge, deleteEdge, selectNode,

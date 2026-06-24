@@ -16,6 +16,7 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { GoalFormData, MilestoneFormData } from '../../types/goals.types';
+import AIEnhancedField from '@/components/common/AIEnhancedField';
 
 interface GoalFormProps {
   goal?: any;
@@ -219,10 +220,11 @@ const GoalForm: React.FC<GoalFormProps> = ({
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Description *
               </label>
-              <textarea
+              <AIEnhancedField
                 value={formData.description}
-                onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                onChange={(value) => setFormData(prev => ({ ...prev, description: value }))}
                 rows={3}
+                context="Family goal description"
                 className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                   errors.description ? 'border-red-300' : 'border-gray-300'
                 }`}
@@ -570,10 +572,11 @@ const GoalForm: React.FC<GoalFormProps> = ({
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Additional Notes
             </label>
-            <textarea
-              value={formData.notes}
-              onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+            <AIEnhancedField
+              value={formData.notes || ''}
+              onChange={(value) => setFormData(prev => ({ ...prev, notes: value }))}
               rows={3}
+              context="Family goal notes"
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="Any additional information or motivation..."
             />

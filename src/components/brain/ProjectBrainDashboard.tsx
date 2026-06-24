@@ -12,7 +12,8 @@ import CreateNodeModal from './CreateNodeModal';
 import CreateProjectModal from './CreateProjectModal';
 import BrainFloatingActions from './BrainFloatingActions';
 import BrainTaskList from './BrainTaskList';
-import { GitBranch, ListChecks, Plus } from 'lucide-react';
+import BrainNotesView from './BrainNotesView';
+import { FileText, GitBranch, ListChecks, Plus } from 'lucide-react';
 
 const MobileProjectSelector = () => {
   const { projects, activeProjectId, setActiveProject, setIsCreateProjectOpen } = useBrainContext();
@@ -57,7 +58,7 @@ const MobileProjectSelector = () => {
 const ProjectBrainDashboard = () => {
   const { activeProjectId, isLoading } = useBrainContext();
   const isDesktop = useMediaQuery('(min-width: 768px)');
-  const [mode, setMode] = useState<'map' | 'tasks'>('map');
+  const [mode, setMode] = useState<'notes' | 'map' | 'tasks'>('notes');
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -74,6 +75,18 @@ const ProjectBrainDashboard = () => {
             <>
               <div className="flex items-center justify-between border-b border-gray-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900">
                 <div className="flex rounded-lg bg-gray-100 p-1 dark:bg-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => setMode('notes')}
+                    className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                      mode === 'notes'
+                        ? 'bg-white text-gray-900 shadow-sm dark:bg-slate-950 dark:text-slate-100'
+                        : 'text-gray-600 hover:text-gray-900 dark:text-slate-300 dark:hover:text-slate-100'
+                    }`}
+                  >
+                    <FileText className="h-3.5 w-3.5" />
+                    Notes
+                  </button>
                   <button
                     type="button"
                     onClick={() => setMode('map')}
@@ -107,6 +120,8 @@ const ProjectBrainDashboard = () => {
                     <div className="flex h-full items-center justify-center">
                       <div className="h-8 w-8 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
                     </div>
+                  ) : mode === 'notes' ? (
+                    <BrainNotesView />
                   ) : mode === 'tasks' ? (
                     <BrainTaskList />
                   ) : (

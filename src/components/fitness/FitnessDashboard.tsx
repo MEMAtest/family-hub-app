@@ -59,6 +59,7 @@ const FitnessDashboard: React.FC<FitnessDashboardProps> = ({
   const [activities, setActivities] = useState<FitnessActivity[]>([]);
   const [stats, setStats] = useState<FitnessStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [repeatingLastWorkout, setRepeatingLastWorkout] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
@@ -124,6 +125,60 @@ const FitnessDashboard: React.FC<FitnessDashboardProps> = ({
       setError('Failed to delete activity');
     }
   }, [familyId, fetchData]);
+
+  const handleRepeatLastWorkout = useCallback(async () => {
+    const lastWorkout = activities[0];
+    if (!lastWorkout || repeatingLastWorkout) return;
+
+    try {
+      setRepeatingLastWorkout(true);
+      setError(null);
+
+      const response = await fetch(`/api/families/${familyId}/fitness`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          personId,
+          activityType: lastWorkout.activityType,
+          durationMinutes: lastWorkout.durationMinutes,
+          intensityLevel: lastWorkout.intensityLevel,
+          workoutName: lastWorkout.workoutName,
+          exercises: lastWorkout.exercises
+            ? lastWorkout.exercises.map((exercise, exerciseIndex) => ({
+                ...exercise,
+                id: `repeat_${Date.now()}_${exerciseIndex}`,
+                sets: exercise.sets.map((set) => ({ ...set })),
+              }))
+            : undefined,
+          notes: lastWorkout.notes,
+          activityDate: new Date().toISOString(),
+          source: 'manual',
+        }),
+      });
+
+      if (!response.ok) {
+        let message = 'Failed to repeat workout';
+        try {
+          const payload = await response.json();
+          if (typeof payload?.error === 'string' && payload.error.trim()) {
+            message = payload.error;
+          }
+        } catch {
+          // Keep default message.
+        }
+        throw new Error(message);
+      }
+
+      const activity = await response.json();
+      setActivities((prev) => [activity, ...prev]);
+      await fetchData();
+    } catch (err) {
+      console.error('Failed to repeat workout:', err);
+      setError(err instanceof Error ? err.message : 'Failed to repeat workout');
+    } finally {
+      setRepeatingLastWorkout(false);
+    }
+  }, [activities, familyId, fetchData, personId, repeatingLastWorkout]);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -199,6 +254,17 @@ const FitnessDashboard: React.FC<FitnessDashboardProps> = ({
             <span className="hidden sm:inline">Log Activity</span>
             <span className="sm:hidden">Log</span>
           </button>
+          {activities[0] && (
+            <button
+              onClick={() => void handleRepeatLastWorkout()}
+              disabled={repeatingLastWorkout}
+              className="flex items-center gap-2 rounded-lg bg-[#147c72] px-4 py-2 text-white transition-colors hover:bg-[#0f625a] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <RefreshCw className={`w-4 h-4 ${repeatingLastWorkout ? 'animate-spin' : ''}`} />
+              <span className="hidden sm:inline">Repeat Last</span>
+              <span className="sm:hidden">Repeat</span>
+            </button>
+          )}
           {activities[0] && (
             <button
               onClick={() => {

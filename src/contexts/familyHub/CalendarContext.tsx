@@ -119,6 +119,36 @@ const mergeEvents = (primary: CalendarEvent[], secondary: CalendarEvent[]) => {
   return Array.from(merged.values());
 };
 
+const mapDatabaseEventsToCalendarEvents = (dbEvents: any[]): CalendarEvent[] =>
+  dbEvents.map((e: any) => {
+    const eventTime = new Date(e.eventTime);
+    const hours = eventTime.getUTCHours().toString().padStart(2, '0');
+    const minutes = eventTime.getUTCMinutes().toString().padStart(2, '0');
+    const date = e.eventDate ? e.eventDate.split('T')[0] : new Date().toISOString().split('T')[0];
+
+    return {
+      id: e.id,
+      title: e.title,
+      person: e.personId,
+      date,
+      endDate: inferEndDate(date, `${hours}:${minutes}`, e.durationMinutes),
+      time: `${hours}:${minutes}`,
+      duration: e.durationMinutes,
+      location: e.location,
+      recurring: e.recurringPattern,
+      cost: e.cost,
+      type: e.eventType,
+      notes: e.notes,
+      isRecurring: e.isRecurring,
+      priority: 'medium' as const,
+      status: 'confirmed' as const,
+      createdAt: e.createdAt,
+      updatedAt: e.updatedAt,
+      reminders: [{ id: 'reminder-15', type: 'notification' as const, time: 15, enabled: true }],
+      attendees: [],
+    };
+  });
+
 export const CalendarProvider = ({ children }: PropsWithChildren) => {
   const events = useFamilyStore((state) => state.events);
   const setEvents = useFamilyStore((state) => state.setEvents);
@@ -185,13 +215,54 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
 
   const lastHydrationKey = useRef<string | null>(null);
 
+  const getActiveFamilyId = useCallback(() =>
+    databaseStatus.familyId ||
+    (typeof window !== 'undefined' ? localStorage.getItem('familyId') : null) ||
+    DEFAULT_FAMILY_ID,
+  [databaseStatus.familyId]);
+
+  const refreshEventsFromDatabase = useCallback(async () => {
+    const familyId = getActiveFamilyId();
+    if (!familyId || !databaseStatus.connected) return;
+
+    try {
+      const response = await fetch(`/api/families/${familyId}/events`);
+      if (!response.ok) return;
+
+      const dbEvents = await response.json();
+      if (!Array.isArray(dbEvents)) return;
+
+      const formattedEvents = mapDatabaseEventsToCalendarEvents(dbEvents);
+      const storedEvents = (() => {
+        if (typeof window === 'undefined') return [] as CalendarEvent[];
+        try {
+          const stored = localStorage.getItem('calendarEvents');
+          const parsed = stored ? JSON.parse(stored) : [];
+          return Array.isArray(parsed) ? parsed : [];
+        } catch {
+          return [] as CalendarEvent[];
+        }
+      })();
+      const currentEvents = useFamilyStore.getState().events;
+      const mergedEvents = mergeEvents(
+        formattedEvents,
+        mergeEvents(storedEvents, currentEvents)
+      );
+
+      setEvents(mergedEvents);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('calendarEvents', JSON.stringify(mergedEvents));
+      }
+      await loadBrainEvents(familyId);
+    } catch (error) {
+      console.warn('📆 CalendarContext: Failed to refresh events from database:', error);
+    }
+  }, [databaseStatus.connected, getActiveFamilyId, loadBrainEvents, setEvents]);
+
   // Hydrate events from database/localStorage on mount
   useEffect(() => {
     const loadEvents = async () => {
-      const familyId =
-        databaseStatus.familyId ||
-        (typeof window !== 'undefined' ? localStorage.getItem('familyId') : null) ||
-        DEFAULT_FAMILY_ID;
+      const familyId = getActiveFamilyId();
       const hydrationKey = `${familyId}:${databaseStatus.connected ? 'database' : databaseStatus.mode}`;
 
       if (lastHydrationKey.current === hydrationKey) {
@@ -222,37 +293,7 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
             const dbEvents = await response.json();
             if (Array.isArray(dbEvents)) {
               // Convert database events to app format
-              const formattedEvents = dbEvents.map((e: any) => {
-                const eventTime = new Date(e.eventTime);
-                const hours = eventTime.getUTCHours().toString().padStart(2, '0');
-                const minutes = eventTime.getUTCMinutes().toString().padStart(2, '0');
-
-                return {
-                  id: e.id,
-                  title: e.title,
-                  person: e.personId,
-                  date: e.eventDate ? e.eventDate.split('T')[0] : new Date().toISOString().split('T')[0],
-                  endDate: inferEndDate(
-                    e.eventDate ? e.eventDate.split('T')[0] : new Date().toISOString().split('T')[0],
-                    `${hours}:${minutes}`,
-                    e.durationMinutes
-                  ),
-                  time: `${hours}:${minutes}`,
-                  duration: e.durationMinutes,
-                  location: e.location,
-                  recurring: e.recurringPattern,
-                  cost: e.cost,
-                  type: e.eventType,
-                  notes: e.notes,
-                  isRecurring: e.isRecurring,
-                  priority: 'medium' as const,
-                  status: 'confirmed' as const,
-                  createdAt: e.createdAt,
-                  updatedAt: e.updatedAt,
-                  reminders: [{ id: 'reminder-15', type: 'notification' as const, time: 15, enabled: true }],
-                  attendees: [],
-                };
-              });
+              const formattedEvents = mapDatabaseEventsToCalendarEvents(dbEvents);
               const mergedEvents = mergeEvents(
                 formattedEvents,
                 mergeEvents(storedEvents, currentEvents)
@@ -293,7 +334,29 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
     };
 
     loadEvents();
-  }, [databaseStatus.connected, databaseStatus.familyId, databaseStatus.mode, loadBrainEvents, setEvents]);
+  }, [databaseStatus.connected, databaseStatus.familyId, databaseStatus.mode, getActiveFamilyId, loadBrainEvents, setEvents]);
+
+  useEffect(() => {
+    if (!databaseStatus.connected) return;
+
+    const refresh = () => {
+      void refreshEventsFromDatabase();
+    };
+
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') refresh();
+    };
+
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+    const intervalId = window.setInterval(refresh, 60_000);
+
+    return () => {
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+      window.clearInterval(intervalId);
+    };
+  }, [databaseStatus.connected, refreshEventsFromDatabase]);
 
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [defaultSlot, setDefaultSlot] = useState<{ start: Date; end: Date } | null>(null);
@@ -305,9 +368,10 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
   const [conflictRules, setConflictRules] = useState(conflictDetectionService.getRules());
 
   const openCreateForm = useCallback((slot?: { start: Date; end: Date }) => {
-    setDefaultSlot(slot ?? null);
+    setIsEventFormOpen(false);
     setSelectedEvent(null);
-    setIsEventFormOpen(true);
+    setDefaultSlot(slot ?? null);
+    window.requestAnimationFrame(() => setIsEventFormOpen(true));
   }, []);
 
   const openEditForm = useCallback((event: CalendarEvent) => {

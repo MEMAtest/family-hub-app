@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { X, Trash2, Calendar, Tag } from 'lucide-react';
+import { X, Trash2, Calendar, Tag, Link2, CheckCircle2, Circle } from 'lucide-react';
 import { useBrainContext } from '@/contexts/familyHub/BrainContext';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import {
@@ -12,6 +12,7 @@ import {
   type BrainNodeType,
 } from '@/types/brain.types';
 import AIEnhancedField from '@/components/common/AIEnhancedField';
+import { buildBrainLinkMarkup, extractBrainChecklistItems, replaceBrainChecklistItem } from '@/utils/brainText';
 
 const NODE_TYPES: { value: BrainNodeType; label: string }[] = [
   { value: 'thought', label: 'Thought' },
@@ -29,6 +30,10 @@ const NodeDetailPanel = () => {
     setIsNodeDetailOpen,
     updateNode,
     deleteNode,
+    selectNode,
+    linksByNodeId,
+    backlinksByNodeId,
+    mentionSuggestionsByNodeId,
   } = useBrainContext();
 
   const isDesktop = useMediaQuery('(min-width: 768px)');
@@ -52,11 +57,13 @@ const NodeDetailPanel = () => {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [tagInput, setTagInput] = useState('');
+  const [linkTargetId, setLinkTargetId] = useState('');
 
   useEffect(() => {
     if (node) {
       setTitle(node.title);
       setContent(node.content || '');
+      setLinkTargetId('');
     }
   }, [node]);
 
@@ -105,7 +112,24 @@ const NodeDetailPanel = () => {
     setIsNodeDetailOpen(false);
   };
 
+  const handleInsertLink = () => {
+    if (!node || !linkTargetId) return;
+    const target = nodes.find((n) => n.id === linkTargetId);
+    if (!target) return;
+    handleContentChange(`${content}${content ? '\n' : ''}${buildBrainLinkMarkup(target)}`);
+  };
+
+  const handleChecklistToggle = (lineIndex: number, checked: boolean) => {
+    if (!node) return;
+    handleContentChange(replaceBrainChecklistItem(content, lineIndex, checked));
+  };
+
   if (!isNodeDetailOpen || !node) return null;
+
+  const linkedItems = linksByNodeId[node.id] || [];
+  const backlinks = backlinksByNodeId[node.id] || [];
+  const mentionSuggestions = mentionSuggestionsByNodeId[node.id] || [];
+  const checklistItems = extractBrainChecklistItems(content);
 
   const panelContent = (
     <div className="flex h-full flex-col">
@@ -255,6 +279,122 @@ const NodeDetailPanel = () => {
             className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-gray-900 font-mono focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
           />
         </div>
+
+        <div>
+          <label className="mb-1 flex items-center gap-1 text-xs font-medium text-gray-500 dark:text-slate-400">
+            <Link2 className="h-3 w-3" /> Link item
+          </label>
+          <div className="flex gap-1">
+            <select
+              value={linkTargetId}
+              onChange={(event) => setLinkTargetId(event.target.value)}
+              className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+            >
+              <option value="">Choose item...</option>
+              {nodes
+                .filter((candidate) => candidate.id !== node.id)
+                .map((candidate) => (
+                  <option key={candidate.id} value={candidate.id}>
+                    {candidate.title}
+                  </option>
+                ))}
+            </select>
+            <button
+              type="button"
+              onClick={handleInsertLink}
+              disabled={!linkTargetId}
+              className="rounded-lg bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-200 disabled:opacity-50 dark:bg-slate-700 dark:text-slate-300"
+            >
+              Insert
+            </button>
+          </div>
+        </div>
+
+        {checklistItems.length > 0 && (
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-slate-400">Checklist</label>
+            <div className="space-y-1 rounded-lg border border-gray-200 bg-gray-50 p-2 dark:border-slate-700 dark:bg-slate-950">
+              {checklistItems.map((item) => (
+                <label key={item.id} className="flex cursor-pointer items-center gap-2 text-xs text-gray-700 dark:text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={item.checked}
+                    onChange={(event) => handleChecklistToggle(item.lineIndex, event.target.checked)}
+                    className="sr-only"
+                  />
+                  {item.checked ? (
+                    <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
+                  ) : (
+                    <Circle className="h-3.5 w-3.5 text-gray-400" />
+                  )}
+                  <span className={item.checked ? 'line-through opacity-60' : ''}>{item.text}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {(linkedItems.length > 0 || backlinks.length > 0 || mentionSuggestions.length > 0) && (
+          <div>
+            <label className="mb-2 block text-xs font-medium text-gray-500 dark:text-slate-400">Related</label>
+            <div className="space-y-3 rounded-lg border border-gray-200 bg-white p-2 dark:border-slate-700 dark:bg-slate-800">
+              {linkedItems.length > 0 && (
+                <div>
+                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:text-slate-500">Links from this note</p>
+                  <div className="flex flex-wrap gap-1">
+                    {linkedItems.map((link) => (
+                      <button
+                        key={link.raw}
+                        type="button"
+                        onClick={() => link.target && selectNode(link.target.id)}
+                        disabled={!link.target}
+                        className="rounded-full bg-teal-50 px-2 py-0.5 text-[11px] font-medium text-teal-700 disabled:opacity-60 dark:bg-teal-900/30 dark:text-teal-200"
+                      >
+                        {link.target?.title || `${link.title} (${link.ambiguous ? 'ambiguous' : 'missing'})`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {backlinks.length > 0 && (
+                <div>
+                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:text-slate-500">Linked here</p>
+                  <div className="flex flex-wrap gap-1">
+                    {backlinks.map((linkedNode) => (
+                      <button
+                        key={linkedNode.id}
+                        type="button"
+                        onClick={() => selectNode(linkedNode.id)}
+                        className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-200"
+                      >
+                        {linkedNode.title}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {mentionSuggestions.length > 0 && (
+                <div>
+                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:text-slate-500">Mentioned but not linked</p>
+                  <div className="flex flex-wrap gap-1">
+                    {mentionSuggestions.map((mentionedNode) => (
+                      <button
+                        key={mentionedNode.id}
+                        type="button"
+                        onClick={() => selectNode(mentionedNode.id)}
+                        className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-200"
+                      >
+                        {mentionedNode.title}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

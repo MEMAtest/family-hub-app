@@ -347,7 +347,7 @@ export const FamilyHubShell = () => {
         <button
           type="button"
           onClick={scrollMainToTop}
-          className="fixed bottom-24 right-4 z-40 inline-flex h-11 w-11 items-center justify-center rounded-full border border-[#dde5e0] bg-white/95 text-[#147c72] shadow-lg backdrop-blur transition hover:bg-[#eaf1e7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#147c72]/30 dark:border-slate-700 dark:bg-slate-900/95 dark:text-[#56c6b8] dark:hover:bg-slate-800 lg:bottom-6"
+          className="fixed bottom-6 right-4 z-40 hidden h-11 w-11 items-center justify-center rounded-full border border-[#dde5e0] bg-white/95 text-[#147c72] shadow-lg backdrop-blur transition hover:bg-[#eaf1e7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#147c72]/30 dark:border-slate-700 dark:bg-slate-900/95 dark:text-[#56c6b8] dark:hover:bg-slate-800 lg:inline-flex"
           aria-label="Back to top"
           title="Back to top"
         >
