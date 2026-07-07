@@ -42,6 +42,38 @@ const mapPerson = (person: any): Person => ({
   role: person.role,
 });
 
+const isKnownPdfParserWarning = (value: unknown) => {
+  const message = value instanceof Error ? value.message : String(value);
+  return (
+    message.startsWith('Warning: TT:') ||
+    message.includes('TT: undefined function') ||
+    message.includes('TT: invalid function id') ||
+    message.includes('Buffer() is deprecated')
+  );
+};
+
+const parsePdfQuietly = async (buffer: Buffer) => {
+  const originalWarn = console.warn;
+  const originalEmitWarning = process.emitWarning;
+
+  console.warn = (...args: unknown[]) => {
+    if (args.some(isKnownPdfParserWarning)) return;
+    originalWarn(...args);
+  };
+
+  process.emitWarning = ((warning: string | Error, ...args: any[]) => {
+    if (isKnownPdfParserWarning(warning)) return;
+    return originalEmitWarning.call(process, warning as any, ...args);
+  }) as typeof process.emitWarning;
+
+  try {
+    return await pdf(buffer);
+  } finally {
+    console.warn = originalWarn;
+    process.emitWarning = originalEmitWarning;
+  }
+};
+
 export const POST = requireFamilyAccess(async (request: NextRequest, context) => {
   try {
     const { familyId } = await context.params;
@@ -57,7 +89,7 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context) =>
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
-    const parsed = await pdf(buffer);
+    const parsed = await parsePdfQuietly(buffer);
     const text = parsed.text?.trim() || '';
 
     if (!text) {
