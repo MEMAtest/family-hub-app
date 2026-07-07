@@ -575,9 +575,17 @@ test('6 · Brain notes workspace shows links, related items, checklist, search, 
   await page.waitForTimeout(2_000);
 
   await expect(page.getByRole('button', { name: /Notes/i }).first()).toBeVisible({ timeout: 10_000 });
-  await page.getByPlaceholder('Optional note title').fill('UI created note');
-  await page.getByPlaceholder('Capture a note, checklist, or linked thought...').fill('Created through the note composer #ui');
-  await page.getByRole('button', { name: /^Add note$/ }).click();
+
+  const titleInput = page.getByPlaceholder('Optional note title');
+  const contentInput = page.getByPlaceholder('Capture a note, checklist, or linked thought...');
+  const addNoteButton = page.getByRole('button', { name: /^Add note$/ });
+
+  await titleInput.fill('UI created note');
+  await contentInput.fill('Created through the note composer #ui');
+  await expect(titleInput).toHaveValue('UI created note', { timeout: 10_000 });
+  await expect(contentInput).toHaveValue('Created through the note composer #ui', { timeout: 10_000 });
+  await expect(addNoteButton).toBeEnabled({ timeout: 10_000 });
+  await addNoteButton.click();
   await expect(
     page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'UI created note' }) }).first()
   ).toBeVisible({ timeout: 15_000 });

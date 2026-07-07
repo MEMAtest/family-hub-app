@@ -13,7 +13,7 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context, _a
     const { familyId } = await context.params;
     const body = pushTestSchema.parse(await request.json().catch(() => ({})));
     const title = body.title ?? 'Omosanya Home notifications are on';
-    const message = body.message ?? 'This test notification was sent to your Android device.';
+    const message = body.message ?? 'This test notification was sent to your mobile web app.';
 
     const result = await sendFamilyPushNotification(familyId, {
       title,

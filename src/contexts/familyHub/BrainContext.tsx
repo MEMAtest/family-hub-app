@@ -96,6 +96,8 @@ interface BrainContextValue {
 
 const BrainContext = createContext<BrainContextValue | undefined>(undefined);
 
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 export const BrainProvider = ({ children }: PropsWithChildren) => {
   const familyId = useFamilyStore((s) => s.databaseStatus.familyId);
   const projects = useFamilyStore((s) => s.brainProjects);
@@ -220,8 +222,18 @@ export const BrainProvider = ({ children }: PropsWithChildren) => {
         if (nodesRes.ok) {
           const data = await nodesRes.json();
           if (Array.isArray(data)) {
-            setBrainNodes(data);
-            checkOverdueNotifications(data);
+            const loadedIds = new Set(data.map((node: BrainNode) => node.id));
+            const recentOptimisticNodes = useFamilyStore
+              .getState()
+              .brainNodes
+              .filter((node) => {
+                if (node.projectId !== activeProjectId || loadedIds.has(node.id)) return false;
+                const createdAt = new Date(node.createdAt).getTime();
+                return node.id.startsWith('bn-') && Date.now() - createdAt < 2 * 60 * 1000;
+              });
+            const mergedNodes = [...data, ...recentOptimisticNodes];
+            setBrainNodes(mergedNodes);
+            checkOverdueNotifications(mergedNodes);
           }
         }
         if (edgesRes.ok) {
@@ -462,26 +474,36 @@ export const BrainProvider = ({ children }: PropsWithChildren) => {
       addBrainNode(optimistic);
 
       if (familyId) {
-        try {
-          const res = await fetch(`/api/families/${familyId}/brain/nodes`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(optimistic),
-          });
-          if (res.ok) {
-            const saved = await res.json();
-            updateBrainNodeStore(optimistic.id, saved);
-            return { ...optimistic, ...saved };
+        const payload = JSON.stringify(optimistic);
+        let lastError: unknown = null;
+
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+          try {
+            const res = await fetch(`/api/families/${familyId}/brain/nodes`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: payload,
+            });
+            if (res.ok) {
+              const saved = await res.json();
+              updateBrainNodeStore(optimistic.id, saved);
+              return { ...optimistic, ...saved };
+            }
+
+            if (res.status === 400 || res.status === 404) {
+              deleteBrainNodeStore(optimistic.id);
+              throw new Error(`Failed to persist brain node (${res.status})`);
+            }
+
+            lastError = new Error(`Failed to persist brain node (${res.status})`);
+          } catch (err) {
+            lastError = err;
           }
-          // Non-OK response - rollback
-          deleteBrainNodeStore(optimistic.id);
-          throw new Error(`Failed to persist brain node (${res.status})`);
-        } catch (err) {
-          // Network error - rollback
-          deleteBrainNodeStore(optimistic.id);
-          console.warn('Failed to persist brain node:', err);
-          throw err;
+
+          await wait(350 * (attempt + 1));
         }
+
+        console.warn('Failed to persist brain node after retries; keeping local optimistic note:', lastError);
       }
       return optimistic;
     },

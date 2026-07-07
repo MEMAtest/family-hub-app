@@ -49,6 +49,7 @@ import { getNextSchoolBreak } from '@/utils/schoolBreaks';
 import { UpcomingContractorVisits } from '@/components/contractors';
 import BrainFocusWidget from '@/components/dashboard/BrainFocusWidget';
 import { DEFAULT_DASHBOARD_PREFERENCES, useFamilyStore } from '@/store/familyStore';
+import { useNotifications } from '@/contexts/NotificationContext';
 
 type FeedItem = {
   id: string;
@@ -226,6 +227,7 @@ export const DashboardView = () => {
   const { members, openForm: openFamilyForm } = useFamilyContext();
   const { goalsData, openQuickActivityForm, personalTracking } = useGoalsContext();
   const { openQuickAppointment } = useContractorContext();
+  const { showNotification } = useNotifications();
   const mealPlanning = mealsContext.mealPlanning;
   const familyId = useFamilyStore((state) => state.databaseStatus.familyId);
   const storedDashboardPreferences = useFamilyStore((state) => state.dashboardPreferences);
@@ -418,6 +420,68 @@ export const DashboardView = () => {
   }, [schoolTerms]);
 
   const nextSchoolBreak = useMemo(() => getNextSchoolBreak(schoolTerms), [schoolTerms]);
+
+  useEffect(() => {
+    if (!familyId) return;
+
+    fetch(`/api/families/${familyId}/notifications/sweep`, {
+      method: 'POST',
+    }).catch((error) => {
+      console.warn('Failed to run notification sweep:', error);
+    });
+  }, [familyId]);
+
+  useEffect(() => {
+    if (!nextSchoolBreak || nextSchoolBreak.isCurrentlyOnBreak || nextSchoolBreak.daysUntilBreak > 21) return;
+
+    const dedupeKey = `school-prep:${nextSchoolBreak.breakStartDate}:${nextSchoolBreak.breakEndDate}`;
+    if (typeof window !== 'undefined' && localStorage.getItem(dedupeKey)) return;
+
+    const title = `${nextSchoolBreak.breakUpName} is coming up`;
+    const message = `${nextSchoolBreak.daysUntilBreak} day${nextSchoolBreak.daysUntilBreak === 1 ? '' : 's'} until break-up. Check childcare, activities, meals, budget, and work cover.`;
+
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(dedupeKey, new Date().toISOString());
+    }
+
+    void showNotification({
+      type: 'reminder',
+      title,
+      message,
+      priority: nextSchoolBreak.daysUntilBreak <= 7 ? 'urgent' : 'high',
+      category: 'event',
+      read: false,
+      actionRequired: true,
+      icon: '🎒',
+      actions: [
+        { id: 'open-calendar', label: 'Open calendar', type: 'primary', action: 'view_calendar', data: { url: '/?view=calendar' } },
+        { id: 'dismiss', label: 'Dismiss', type: 'secondary', action: 'dismiss' },
+      ],
+      metadata: {
+        dedupeKey,
+        type: 'school-break-prep',
+        url: '/?view=calendar',
+      },
+    });
+
+    if (familyId) {
+      fetch(`/api/families/${familyId}/reactive-prompts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title,
+          message,
+          dedupeKey,
+          priority: nextSchoolBreak.daysUntilBreak <= 7 ? 'urgent' : 'high',
+          category: 'event',
+          url: '/?view=calendar',
+          actionLabel: 'Open calendar',
+        }),
+      }).catch((error) => {
+        console.warn('Failed to create school break push prompt:', error);
+      });
+    }
+  }, [familyId, nextSchoolBreak, showNotification]);
 
   const snapshotCards = useMemo(() => ([
     {
@@ -839,6 +903,37 @@ export const DashboardView = () => {
                     )}
                   </>
                 )}
+              </div>
+            </div>
+          )}
+
+          {nextSchoolBreak && !nextSchoolBreak.isCurrentlyOnBreak && nextSchoolBreak.daysUntilBreak <= 21 && (
+            <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-900/20">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">
+                    Prep needed before {nextSchoolBreak.breakUpName.toLowerCase()}
+                  </p>
+                  <p className="mt-1 text-xs text-amber-800 dark:text-amber-200">
+                    Check childcare, activities, meal plans, budget buffer, work cover, and any school forms.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setView('calendar')}
+                    className="inline-flex items-center justify-center rounded-md bg-amber-600 px-3 py-2 text-sm font-semibold text-white hover:bg-amber-700"
+                  >
+                    Open calendar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setView('brain')}
+                    className="inline-flex items-center justify-center rounded-md border border-amber-300 bg-white px-3 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-100 dark:border-amber-700 dark:bg-slate-900 dark:text-amber-100"
+                  >
+                    Prep notes
+                  </button>
+                </div>
               </div>
             </div>
           )}

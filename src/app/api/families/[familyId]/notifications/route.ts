@@ -78,7 +78,11 @@ export const GET = requireFamilyAccess(async (request: NextRequest, context, _au
 export const POST = requireFamilyAccess(async (request: NextRequest, context, _authUser) => {
   try {
     const { familyId } = await context.params;
-    const raw = await request.json();
+    const raw = await request.json().catch(() => null);
+    if (!raw) {
+      return NextResponse.json({ error: 'Invalid notification payload' }, { status: 400 });
+    }
+
     const body = createNotificationSchema.parse(raw);
 
     const notification = await prisma.notification.create({

@@ -7,6 +7,7 @@ import {
   NotificationSettings,
   NotificationPermission
 } from '@/types/notification.types';
+import type { CalendarEvent } from '@/types/calendar.types';
 import notificationService from '@/services/notificationService';
 import { useFamilyStore } from '@/store/familyStore';
 
@@ -153,10 +154,9 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
   }, []);
 
   // Schedule event reminders
-  const scheduleEventReminders = useCallback(async (eventId: string, eventDate: Date, eventType: string) => {
+  const scheduleEventReminders = useCallback(async (event: CalendarEvent) => {
     try {
-      // This would be implemented when we have the full event object
-      console.log('Scheduling reminders for event:', eventId, eventDate, eventType);
+      await notificationService.scheduleEventReminders(event);
     } catch (error) {
       console.error('Failed to schedule event reminders:', error);
     }

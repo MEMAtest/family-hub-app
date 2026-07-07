@@ -3,6 +3,7 @@
 import { useCallback, useMemo } from 'react';
 import { Settings, LayoutGrid } from 'lucide-react';
 import CalendarMain from '@/components/calendar/CalendarMain';
+import CalendarCopilotPanel from '@/components/calendar/CalendarCopilotPanel';
 import { useCalendarContext } from '@/contexts/familyHub/CalendarContext';
 import { useFamilyContext } from '@/contexts/familyHub/FamilyContext';
 import { useAppView } from '@/contexts/familyHub/AppViewContext';
@@ -77,6 +78,14 @@ export const CalendarView = () => {
           </button>
         </div>
       </div>
+
+      <CalendarCopilotPanel
+        events={events}
+        people={people}
+        currentDate={currentDate}
+        createEvent={createEvent}
+        onOpenCalendar={() => setCurrentDate(currentDate)}
+      />
 
       <div className="min-h-[720px] flex-1 overflow-visible pb-4 sm:pb-6 lg:pb-0">
         <CalendarMain

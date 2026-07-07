@@ -668,8 +668,17 @@ class FamilyHubNotificationService implements NotificationService {
    */
   async scheduleEventReminders(event: CalendarEvent): Promise<void> {
     const eventDateTime = new Date(`${event.date}T${event.time}`);
-    const eventType = event.type as keyof NotificationSettings['defaultReminders'];
-    const reminderTimes = this.settings.defaultReminders[eventType] || this.settings.defaultReminders.other;
+    const reminderKey =
+      event.type === 'education'
+        ? 'school'
+        : event.type === 'appointment'
+        ? 'medical'
+        : event.type === 'sport' || event.type === 'fitness'
+        ? 'activities'
+        : event.type === 'social'
+        ? 'social'
+        : 'other';
+    const reminderTimes = this.settings.defaultReminders[reminderKey] || this.settings.defaultReminders.other;
 
     // Cancel existing reminders for this event
     await this.cancelEventReminders(event.id);
@@ -688,10 +697,11 @@ class FamilyHubNotificationService implements NotificationService {
           retryCount: 0,
           metadata: {
             title: `Upcoming: ${event.title}`,
-            body: `${event.title} starts in ${this.formatDuration(minutesBefore)}`,
-            icon: '/icons/calendar-icon.png',
+            body: `${event.title} starts in ${this.formatDuration(minutesBefore)}.`,
+            icon: '/icon-192x192.png',
+            badge: '/icon-96x96.png',
             tag: `event-${event.id}`,
-            data: { eventId: event.id, type: 'reminder' }
+            data: { eventId: event.id, type: 'reminder', url: '/?view=calendar' }
           }
         });
       }

@@ -69,22 +69,45 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context) =>
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
 
-    const node = await prisma.brainNode.create({
-      data: {
-        ...(body.id ? { id: body.id } : {}),
-        projectId: body.projectId,
-        title: body.title,
-        content: body.content,
-        status: body.status,
-        priority: body.priority,
-        dueDate: body.dueDate ? new Date(body.dueDate) : null,
-        nodeType: body.nodeType,
-        positionX: body.positionX,
-        positionY: body.positionY,
-        tags: body.tags,
-        showOnCalendar: body.showOnCalendar,
-      },
-    });
+    if (body.id) {
+      const existingNode = await prisma.brainNode.findUnique({
+        where: { id: body.id },
+        select: {
+          id: true,
+          project: {
+            select: { familyId: true },
+          },
+        },
+      });
+
+      if (existingNode && existingNode.project.familyId !== familyId) {
+        return NextResponse.json({ error: 'Node not found' }, { status: 404 });
+      }
+    }
+
+    const nodeData = {
+      projectId: body.projectId,
+      title: body.title,
+      content: body.content,
+      status: body.status,
+      priority: body.priority,
+      dueDate: body.dueDate ? new Date(body.dueDate) : null,
+      nodeType: body.nodeType,
+      positionX: body.positionX,
+      positionY: body.positionY,
+      tags: body.tags,
+      showOnCalendar: body.showOnCalendar,
+    };
+
+    const node = body.id
+      ? await prisma.brainNode.upsert({
+          where: { id: body.id },
+          update: nodeData,
+          create: { id: body.id, ...nodeData },
+        })
+      : await prisma.brainNode.create({
+          data: nodeData,
+        });
 
     return NextResponse.json(node, { status: 201 });
   } catch (error) {

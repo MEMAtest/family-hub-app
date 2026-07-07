@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Calculator, CalendarDays, PiggyBank, TrendingDown, TrendingUp } from 'lucide-react';
 
 interface BudgetCalculatorProps {
@@ -58,14 +58,34 @@ export const BudgetCalculator = ({
   const [variable, setVariable] = useState(toInputValue(variableSpend));
   const [savingsTarget, setSavingsTarget] = useState(toInputValue(suggestedSavingsTarget));
   const [buffer, setBuffer] = useState(toInputValue(suggestedBuffer));
+  const userEditedRef = useRef(false);
+  const defaultKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
+    const defaultKey = `${monthLabel}:${toInputValue(totalIncome)}:${toInputValue(fixedCosts)}:${toInputValue(variableSpend)}`;
+    const previousKey = defaultKeyRef.current;
+    const previousMonth = previousKey?.split(':')[0];
+    const monthChanged = previousMonth !== undefined && previousMonth !== monthLabel;
+
+    if (previousKey === defaultKey) return;
+    if (previousKey && !monthChanged && userEditedRef.current) {
+      defaultKeyRef.current = defaultKey;
+      return;
+    }
+
     setIncome(toInputValue(totalIncome));
     setFixed(toInputValue(fixedCosts));
     setVariable(toInputValue(variableSpend));
     setSavingsTarget(toInputValue(Math.max(0, Math.round(totalIncome * 0.2))));
     setBuffer(toInputValue(Math.max(0, Math.round(totalIncome * 0.05))));
-  }, [fixedCosts, totalIncome, variableSpend]);
+    userEditedRef.current = false;
+    defaultKeyRef.current = defaultKey;
+  }, [fixedCosts, monthLabel, totalIncome, variableSpend]);
+
+  const setUserInput = (setter: (value: string) => void) => (value: string) => {
+    userEditedRef.current = true;
+    setter(value);
+  };
 
   const result = useMemo(() => {
     const monthlyIncome = parseMoney(income);
@@ -95,11 +115,11 @@ export const BudgetCalculator = ({
   }, [buffer, fixed, income, savingsTarget, variable]);
 
   const inputs = [
-    { label: 'Monthly income', value: income, onChange: setIncome, icon: TrendingUp },
-    { label: 'Fixed costs', value: fixed, onChange: setFixed, icon: CalendarDays },
-    { label: 'Variable spend', value: variable, onChange: setVariable, icon: TrendingDown },
-    { label: 'Savings target', value: savingsTarget, onChange: setSavingsTarget, icon: PiggyBank },
-    { label: 'Buffer', value: buffer, onChange: setBuffer, icon: Calculator },
+    { label: 'Monthly income', value: income, onChange: setUserInput(setIncome), icon: TrendingUp },
+    { label: 'Fixed costs', value: fixed, onChange: setUserInput(setFixed), icon: CalendarDays },
+    { label: 'Variable spend', value: variable, onChange: setUserInput(setVariable), icon: TrendingDown },
+    { label: 'Savings target', value: savingsTarget, onChange: setUserInput(setSavingsTarget), icon: PiggyBank },
+    { label: 'Buffer', value: buffer, onChange: setUserInput(setBuffer), icon: Calculator },
   ];
 
   return (
@@ -126,6 +146,7 @@ export const BudgetCalculator = ({
               setVariable(toInputValue(variableSpend));
               setSavingsTarget(toInputValue(suggestedSavingsTarget));
               setBuffer(toInputValue(suggestedBuffer));
+              userEditedRef.current = false;
             }}
             className="inline-flex items-center justify-center rounded-md border border-[#dde5e0] px-3 py-2 text-sm font-semibold text-[#18221f] transition hover:bg-[#eaf1e7] dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
           >

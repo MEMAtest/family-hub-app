@@ -153,13 +153,17 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
         await snoozeNotification(notification.id, snoozeTime);
         break;
       case 'view_event':
-        // Navigate to event view
-        console.log('Navigate to event:', notification.relatedEventId);
+      case 'view_calendar':
+        setView('calendar');
+        await markAsRead(notification.id);
+        onClose();
         break;
       case 'view_brain_node': {
-        const { projectId } = action.data || {};
+        const { projectId, url } = action.data || {};
         if (projectId) {
           setActiveBrainProject(projectId);
+          setView('brain');
+        } else if (typeof url === 'string' && url.includes('view=brain')) {
           setView('brain');
         }
         await markAsRead(notification.id);

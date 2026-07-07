@@ -106,8 +106,8 @@ const BrainNotesView = () => {
   };
 
   return (
-    <div className="flex h-full flex-col bg-gray-50 dark:bg-slate-950">
-      <div className="border-b border-gray-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
+    <div className="bg-gray-50 pb-6 dark:bg-slate-950">
+      <div className="sticky top-0 z-10 border-b border-gray-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
         <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_260px]">
           <div className="space-y-2">
             <input
@@ -181,13 +181,13 @@ const BrainNotesView = () => {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-3 sm:p-4">
+      <div className="p-3 sm:p-4">
         {noteNodes.length === 0 ? (
           <div className="rounded-lg border border-dashed border-gray-300 bg-white p-8 text-center text-sm text-gray-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
             No notes found.
           </div>
         ) : (
-          <div className="grid gap-3 xl:grid-cols-2">
+          <div className="grid items-start gap-3 xl:grid-cols-2">
             {noteNodes.map((node) => {
               const checklist = extractBrainChecklistItems(node.content || '');
               const openChecklistCount = checklist.filter((item) => !item.checked).length;
@@ -233,7 +233,7 @@ const BrainNotesView = () => {
                             ) : (
                               <Circle className="h-3.5 w-3.5 text-gray-400" />
                             )}
-                            <span className={item.checked ? 'line-through opacity-60' : ''}>{item.text}</span>
+                            <span className={`min-w-0 break-words ${item.checked ? 'line-through opacity-60' : ''}`}>{item.text}</span>
                           </label>
                         ))}
                       </div>

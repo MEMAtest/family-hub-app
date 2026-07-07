@@ -419,8 +419,7 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
     setEvents([...events, savedEvent]);
 
     try {
-      const eventDateTime = new Date(`${savedEvent.date}T${savedEvent.time}`);
-      await scheduleEventReminders(savedEvent.id, eventDateTime, savedEvent.type);
+      await scheduleEventReminders(savedEvent);
       await showNotification({
         type: 'system',
         title: 'Event Created',
@@ -477,8 +476,7 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
     if (updates.date || updates.time) {
       try {
         await cancelEventReminders(id);
-        const eventDateTime = new Date(`${updatedEvent.date}T${updatedEvent.time}`);
-        await scheduleEventReminders(id, eventDateTime, updatedEvent.type);
+        await scheduleEventReminders(updatedEvent);
         await showNotification({
           type: 'system',
           title: 'Event Updated',

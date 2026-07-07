@@ -1,4 +1,5 @@
 // Notification System TypeScript Definitions
+import type { CalendarEvent } from './calendar.types';
 
 export interface NotificationSettings {
   enabled: boolean;
@@ -186,6 +187,6 @@ export interface NotificationContextType {
   updateSettings(settings: Partial<NotificationSettings>): Promise<void>;
 
   // Event scheduling
-  scheduleEventReminders(eventId: string, eventDate: Date, eventType: string): Promise<void>;
+  scheduleEventReminders(event: CalendarEvent): Promise<void>;
   cancelEventReminders(eventId: string): Promise<void>;
 }
