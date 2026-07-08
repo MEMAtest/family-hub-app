@@ -70,6 +70,7 @@ export const FamilyHubShell = () => {
   const {
     currentView,
     currentSubView,
+    currentDate,
     setView,
     setSubView,
     isMobileMenuOpen,
@@ -200,6 +201,19 @@ export const FamilyHubShell = () => {
     window.requestAnimationFrame(scrollMainToTop);
   }, [closeMobileMenu, scrollMainToTop, setSubView, setView]);
 
+  const buildCalendarQuickAddSlot = useCallback(() => {
+    const now = new Date();
+    const start = new Date(currentDate);
+    start.setHours(now.getHours(), now.getMinutes(), 0, 0);
+    const end = new Date(start);
+    end.setHours(start.getHours() + 1);
+    return { start, end };
+  }, [currentDate]);
+
+  const openHeaderEventForm = useCallback(() => {
+    openCreateForm(currentView === 'calendar' ? buildCalendarQuickAddSlot() : undefined);
+  }, [buildCalendarQuickAddSlot, currentView, openCreateForm]);
+
   // Check if setup wizard should be shown on mount (client-side only)
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -218,7 +232,7 @@ export const FamilyHubShell = () => {
   const rightContent = useMemo(() => (
     <div className="hidden items-center gap-2 lg:flex">
       <button
-        onClick={() => openCreateForm()}
+        onClick={openHeaderEventForm}
         className="inline-flex items-center gap-2 rounded-lg bg-[#147c72] px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#0f625a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#147c72]/30"
       >
         <Plus className="h-4 w-4" /> Event
@@ -242,7 +256,7 @@ export const FamilyHubShell = () => {
         <ShoppingBag className="h-4 w-4" /> Item
       </button>
     </div>
-  ), [lists, openBudgetForm, openCreateForm, openQuickAppointment, openShoppingForm]);
+  ), [lists, openBudgetForm, openHeaderEventForm, openQuickAppointment, openShoppingForm]);
 
   const subtitle = useMemo(() => {
     if (!isClient || !clientTime) return 'Loading family insights…';

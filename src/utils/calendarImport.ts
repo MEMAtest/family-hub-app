@@ -27,6 +27,13 @@ export interface CalendarImportDraft {
   conflictWith?: string[];
 }
 
+export interface CalendarEmailInput {
+  subject?: string | null;
+  from?: string | null;
+  text?: string | null;
+  html?: string | null;
+}
+
 const monthLookup: Record<string, number> = {
   jan: 1,
   january: 1,
@@ -66,6 +73,21 @@ const schoolKeywords = [
   'exam',
   'club',
   'lesson',
+];
+
+const entertainmentKeywords = [
+  'cinema',
+  'movie',
+  'film',
+  'theatre',
+  'theater',
+  'show',
+  'screening',
+  'performance',
+  'concert',
+  'gig',
+  'ticket',
+  'booking',
 ];
 
 const pad = (value: number) => String(value).padStart(2, '0');
@@ -108,6 +130,76 @@ const parseDelimitedRows = (text: string) => {
   });
 
   return rows;
+};
+
+const stripHtml = (html: string) =>
+  html
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|li|tr|h[1-6])>/gi, '\n')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\s+\n/g, '\n')
+    .replace(/\n\s+/g, '\n')
+    .replace(/[ \t]+/g, ' ')
+    .trim();
+
+const cleanEmailLine = (line: string) =>
+  line
+    .replace(/\s+/g, ' ')
+    .replace(/^[>*\s-]+/g, '')
+    .trim();
+
+const isEmailNoiseLine = (line: string) =>
+  /unsubscribe|privacy policy|terms and conditions|view in browser|manage your booking|download app|add to wallet|do not reply/i.test(line);
+
+export const normalizeCalendarEmailText = ({
+  subject,
+  from,
+  text,
+  html,
+}: CalendarEmailInput) => {
+  const cleanSubject = cleanEmailLine(subject || '');
+  const body = text?.trim() || (html ? stripHtml(html) : '');
+  const lines = body
+    .split(/\r?\n/)
+    .map(cleanEmailLine)
+    .filter((line) => line.length >= 4 && !isEmailNoiseLine(line));
+
+  const candidateLines = new Set<string>();
+  if (cleanSubject) candidateLines.add(cleanSubject);
+
+  lines.forEach((line, index) => {
+    const previous = lines[index - 1] || '';
+    const next = lines[index + 1] || '';
+    const hasDate = Boolean(parseDateValue(line, new Date().getFullYear()));
+    const hasTime = /\b(\d{1,2})(?::|\.)(\d{2})\s*(am|pm)?\b/i.test(line) || /\b(\d{1,2})\s*(am|pm)\b/i.test(line);
+    const hasEventKeyword = [...schoolKeywords, ...entertainmentKeywords].some((keyword) =>
+      line.toLowerCase().includes(keyword)
+    );
+
+    if (hasDate || hasTime || hasEventKeyword) {
+      const context = [cleanSubject, previous, line, next]
+        .filter(Boolean)
+        .join(' • ');
+      candidateLines.add(context);
+    }
+  });
+
+  if (candidateLines.size === 1 && cleanSubject && lines.length > 0) {
+    candidateLines.add([cleanSubject, ...lines.slice(0, 8)].join(' • '));
+  }
+
+  const metadata = [
+    cleanSubject ? `Subject: ${cleanSubject}` : '',
+    from ? `From: ${from}` : '',
+  ].filter(Boolean);
+
+  return [...metadata, ...candidateLines].join('\n');
 };
 
 const parseDateValue = (value: string, fallbackYear?: number): { date: string; match: string } | null => {
@@ -217,13 +309,14 @@ const inferType = (line: string): CalendarEvent['type'] => {
   if (lower.includes('football') || lower.includes('swim') || lower.includes('sport')) return 'sport';
   if (schoolKeywords.some((keyword) => lower.includes(keyword))) return 'education';
   if (lower.includes('doctor') || lower.includes('dentist') || lower.includes('appointment')) return 'appointment';
+  if (entertainmentKeywords.some((keyword) => lower.includes(keyword))) return 'social';
   if (lower.includes('party') || lower.includes('birthday')) return 'social';
   if (lower.includes('meeting')) return 'meeting';
   return 'family';
 };
 
 const inferTitle = (line: string, dateMatch: string) => {
-  const beforeDate = line.split(dateMatch)[0]?.replace(/[:\-–—]+$/g, '').trim();
+  const beforeDate = line.split(dateMatch)[0]?.split(/\s•\s/)[0]?.replace(/[:\-–—]+$/g, '').trim();
   const afterDate = line.split(dateMatch)[1]?.replace(/^[:\-–—]+/g, '').trim();
   const raw = beforeDate || afterDate || line;
   return titleCase(raw.replace(/\b(at\s+)?\d{1,2}[:.]\d{2}\s*(am|pm)?\b/gi, '').slice(0, 90)) || 'Imported event';
@@ -252,7 +345,7 @@ const toDraft = (
   recurring: 'none',
   cost: 0,
   type: event.type || inferType(line),
-  notes: event.notes || `Imported from school calendar: ${line}`,
+  notes: event.notes || `Imported from calendar intake: ${line}`,
   isRecurring: false,
   priority: event.priority || (inferType(line) === 'education' ? 'high' : 'medium'),
   status: 'confirmed',

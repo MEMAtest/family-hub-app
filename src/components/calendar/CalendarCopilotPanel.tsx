@@ -28,6 +28,24 @@ const statusLabel: Record<CalendarImportDraft['importStatus'], string> = {
   needs_review: 'Review',
 };
 
+const extractForwardedEmailFields = (text: string) => {
+  const subject = text.match(/^\s*Subject:\s*(.+)$/im)?.[1]?.trim();
+  const from = text.match(/^\s*From:\s*(.+)$/im)?.[1]?.trim();
+  const withoutHeaders = text
+    .replace(/^\s*(From|To|Cc|Bcc|Sent|Date|Subject):\s*.+$/gim, '')
+    .trim();
+
+  return {
+    subject,
+    from,
+    text: withoutHeaders || text,
+  };
+};
+
+const looksLikeForwardedEmail = (text: string) =>
+  /^\s*(From|Subject|Sent|To):\s*.+$/im.test(text) ||
+  /booking confirmation|ticket confirmation|your tickets|order confirmation/i.test(text);
+
 const CalendarCopilotPanel = ({
   events,
   people,
@@ -184,14 +202,21 @@ const CalendarCopilotPanel = ({
     try {
       const payload = familyId
         ? await (async () => {
-            const response = await fetch(`/api/families/${familyId}/calendar-intake`, {
+            const isEmail = looksLikeForwardedEmail(importText);
+            const response = await fetch(`/api/families/${familyId}/calendar-intake${isEmail ? '/email' : ''}`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                text: importText,
-                defaultPersonId: people[0]?.id,
-                today: currentDate.toISOString(),
-              }),
+              body: JSON.stringify(isEmail
+                ? {
+                    ...extractForwardedEmailFields(importText),
+                    defaultPersonId: people[0]?.id,
+                    today: currentDate.toISOString(),
+                  }
+                : {
+                    text: importText,
+                    defaultPersonId: people[0]?.id,
+                    today: currentDate.toISOString(),
+                  }),
             });
             const json = await response.json();
             if (!response.ok) throw new Error(json.error || 'Calendar import review failed');
@@ -331,7 +356,7 @@ const CalendarCopilotPanel = ({
           value={importText}
           onChange={(event) => setImportText(event.target.value)}
           rows={4}
-          placeholder="Paste term dates, school events, CSV rows, or copied PDF text..."
+          placeholder="Paste term dates, forwarded ticket emails, school events, CSV rows, or copied PDF text..."
           className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/15 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
         />
         <div className="mt-2 flex flex-wrap items-center gap-2">

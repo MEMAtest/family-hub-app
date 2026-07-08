@@ -60,6 +60,19 @@ const getEventEnd = (event: CalendarEvent) => {
   return eventStart.clone().add(event.duration, 'minutes').toDate()
 }
 
+const buildDefaultSlotForDate = (date: Date) => {
+  const now = moment()
+  const start = moment(date)
+    .hour(now.hour())
+    .minute(now.minute())
+    .second(0)
+    .millisecond(0)
+  return {
+    start: start.toDate(),
+    end: start.clone().add(1, 'hour').toDate()
+  }
+}
+
 /**
  * Drag and Drop Features:
  *
@@ -678,6 +691,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
             handleNavigate(moment(currentDate).subtract(1, unit).toDate());
           }}
           className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg touch-target"
+          aria-label="Previous calendar period"
         >
           <ChevronLeft className="w-5 h-5" />
         </button>
@@ -698,6 +712,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
             handleNavigate(moment(currentDate).add(1, unit).toDate());
           }}
           className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg touch-target"
+          aria-label="Next calendar period"
         >
           <ChevronRight className="w-5 h-5" />
         </button>
@@ -743,7 +758,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
             <Filter className="w-4 h-4" />
           </button>
           <button
-            onClick={() => onEventCreate({ start: new Date(), end: moment().add(1, 'hour').toDate() })}
+            onClick={() => onEventCreate(buildDefaultSlotForDate(currentDate))}
             className="mobile-btn-primary flex items-center gap-2"
           >
             <Plus className="w-4 h-4" />
@@ -771,6 +786,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                 handleNavigate(moment(currentDate).subtract(1, unit).toDate());
               }}
               className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-md transition-colors"
+              aria-label="Previous calendar period"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
@@ -791,6 +807,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                 handleNavigate(moment(currentDate).add(1, unit).toDate());
               }}
               className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-md transition-colors"
+              aria-label="Next calendar period"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
@@ -1221,7 +1238,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
           </button>
 
           <button
-            onClick={() => onEventCreate({ start: new Date(), end: moment().add(1, 'hour').toDate() })}
+            onClick={() => onEventCreate(buildDefaultSlotForDate(currentDate))}
             className="flex shrink-0 items-center gap-2 rounded-md bg-[#147c72] px-4 py-2 text-white transition-colors hover:bg-[#0f625a]"
           >
             <Plus className="w-4 h-4" />

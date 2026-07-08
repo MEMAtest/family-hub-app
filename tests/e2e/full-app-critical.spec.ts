@@ -486,8 +486,12 @@ test('calendar event create and delete persists', async ({ page }) => {
   await dismissSetupWizard(page);
   await switchToView(page, 'Calendar');
 
+  await clickVisibleButton(page.getByRole('button', { name: /^Day$/ }), 'calendar day view');
+  await clickVisibleButton(page.getByRole('button', { name: /^Next calendar period$/ }), 'next calendar day');
+
   await clickVisibleButton(page.getByRole('button', { name: /^Event$/ }), 'header create event');
   await expect(page.getByRole('heading', { name: 'New Event' })).toBeVisible({ timeout: 20_000 });
+  await expect(page.locator('input[type="date"]').first()).toHaveValue(eventDate);
 
   await page.getByPlaceholder('Enter event title').fill(eventTitle);
   await selectAssignedPerson(page);
@@ -499,7 +503,7 @@ test('calendar event create and delete persists', async ({ page }) => {
 
   await clickVisibleButton(page.getByRole('button', { name: /^Event$/ }), 'header create event after save');
   await expect(page.getByRole('heading', { name: 'New Event' })).toBeVisible({ timeout: 20_000 });
-  await expect(page.locator('input[type="date"]').first()).toHaveValue(todayIso());
+  await expect(page.locator('input[type="date"]').first()).toHaveValue(eventDate);
   const newEventModal = page.locator('.fixed.inset-0').filter({
     has: page.getByRole('heading', { name: 'New Event' }),
   }).last();

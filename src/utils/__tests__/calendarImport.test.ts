@@ -1,4 +1,4 @@
-import { parseCalendarImportText } from '@/utils/calendarImport';
+import { normalizeCalendarEmailText, parseCalendarImportText } from '@/utils/calendarImport';
 import type { Person } from '@/types/calendar.types';
 
 const people: Person[] = [
@@ -85,5 +85,36 @@ Staff leaving and those on leave
     ]);
     expect(drafts[1].time).toBe('15:45');
     expect(drafts[1].duration).toBe(105);
+  });
+
+  it('extracts show and cinema dates from forwarded ticket emails', () => {
+    const normalized = normalizeCalendarEmailText({
+      from: 'tickets@example.com',
+      subject: 'Cinema booking confirmation: The Wild Robot',
+      text: `
+Booking confirmation
+The Wild Robot
+Vue Bromley
+Saturday 18 July 2026
+7:30pm - 9:15pm
+Seats: E4, E5
+Manage your booking
+      `,
+    });
+
+    const drafts = parseCalendarImportText({
+      text: normalized,
+      people,
+      today: new Date('2026-07-08T09:00:00Z'),
+    });
+
+    expect(drafts[0]).toMatchObject({
+      title: 'Cinema Booking Confirmation: The Wild Robot',
+      date: '2026-07-18',
+      time: '19:30',
+      duration: 105,
+      type: 'social',
+      importStatus: 'ready',
+    });
   });
 });
