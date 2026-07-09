@@ -107,19 +107,18 @@ export const FamilyView = () => {
             {milestonesError}
           </div>
         )}
-        {milestonesLoading ? (
-          <div className="rounded-lg border border-gray-200 bg-white p-6 text-sm text-gray-600">
-            Loading timeline…
+        {milestonesLoading && (
+          <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+            Refreshing timeline…
           </div>
-        ) : (
-          <FamilyTimeline
-            milestones={milestones}
-            familyMembers={members}
-            onAddMilestone={handleAddMilestone}
-            onEditMilestone={handleEditMilestone}
-            onDeleteMilestone={handleDeleteMilestone}
-          />
         )}
+        <FamilyTimeline
+          milestones={milestones}
+          familyMembers={members}
+          onAddMilestone={handleAddMilestone}
+          onEditMilestone={handleEditMilestone}
+          onDeleteMilestone={handleDeleteMilestone}
+        />
       </div>
     );
   } else if (activeTab === 'analytics') {

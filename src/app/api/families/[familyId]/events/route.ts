@@ -1,49 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireFamilyAccess } from '@/lib/auth-utils';
-
-const buildUtcDateTime = (dateValue?: string | null, timeValue?: string | null, fallback?: Date | string | null) => {
-  if (dateValue) {
-    const [year, month, day] = dateValue.split('-').map(Number);
-    const [hours, minutes] = (timeValue || '00:00').split(':').map(Number);
-    return new Date(Date.UTC(year, month - 1, day, hours || 0, minutes || 0, 0, 0));
-  }
-
-  if (fallback) {
-    return new Date(fallback);
-  }
-
-  return new Date();
-};
-
-const toDateKey = (value: Date) => value.toISOString().split('T')[0];
-
-const toTimeKey = (value: Date) => {
-  const hours = value.getUTCHours().toString().padStart(2, '0');
-  const minutes = value.getUTCMinutes().toString().padStart(2, '0');
-  return `${hours}:${minutes}`;
-};
-
-const inferEndDate = (eventDate: Date, eventTime: Date, durationMinutes?: number | null) => {
-  if (!durationMinutes || durationMinutes <= 0) return undefined;
-  const date = toDateKey(eventDate);
-  const time = toTimeKey(eventTime);
-  const start = buildUtcDateTime(date, time);
-  const end = new Date(start.getTime() + durationMinutes * 60 * 1000);
-  const endDate = toDateKey(end);
-  return endDate > date ? endDate : undefined;
-};
-
-const toCalendarEventResponse = (event: any) => ({
-  ...event,
-  date: toDateKey(event.eventDate),
-  endDate: inferEndDate(event.eventDate, event.eventTime, event.durationMinutes),
-  time: toTimeKey(event.eventTime),
-  person: event.personId,
-  duration: event.durationMinutes,
-  type: event.eventType,
-  recurring: event.recurringPattern,
-});
+import { buildUtcDateTime, toCalendarEventResponse, toDateKey, toTimeKey } from '@/lib/calendarEventMapping';
 
 // GET all calendar events for a family
 export const GET = requireFamilyAccess(async (_request: NextRequest, context, _authUser) => {
@@ -88,6 +46,10 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context, _a
       notes,
       date,
       time,
+      source,
+      sourceId,
+      googleCalendarId,
+      googleEventId,
     } = body;
 
     const dateTime = buildUtcDateTime(date, time, eventDateTime);
@@ -107,6 +69,10 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context, _a
         recurringPattern: recurringPattern || 'none',
         isRecurring: isRecurring || false,
         notes,
+        source,
+        sourceId,
+        googleCalendarId,
+        googleEventId,
       },
       include: {
         person: true,
@@ -179,6 +145,10 @@ export const PUT = requireFamilyAccess(async (request: NextRequest, context, _au
     if (rest.location !== undefined) updateData.location = rest.location;
     if (rest.cost !== undefined) updateData.cost = rest.cost;
     if (rest.notes !== undefined) updateData.notes = rest.notes;
+    if (rest.source !== undefined) updateData.source = rest.source;
+    if (rest.sourceId !== undefined) updateData.sourceId = rest.sourceId;
+    if (rest.googleCalendarId !== undefined) updateData.googleCalendarId = rest.googleCalendarId;
+    if (rest.googleEventId !== undefined) updateData.googleEventId = rest.googleEventId;
 
     updateData.updatedAt = new Date();
 

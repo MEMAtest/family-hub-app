@@ -2,14 +2,10 @@
 
 import React, { useState, useEffect } from 'react'
 import {
-  X,
   Calendar,
-  Settings,
   RefreshCw,
   Check,
   AlertTriangle,
-  Clock,
-  Download,
   Upload,
   Zap,
   Shield,
@@ -18,8 +14,35 @@ import {
   ChevronUp,
   Info
 } from 'lucide-react'
-import googleCalendarService, { GoogleCalendarInfo, GoogleCalendarSettings, SyncResult } from '@/services/googleCalendarService'
 import { CalendarEvent } from '@/types/calendar.types'
+import { useFamilyStore } from '@/store/familyStore'
+
+interface GoogleCalendarInfo {
+  id: string
+  summary: string
+  description?: string
+  primary: boolean
+  accessRole?: string
+  backgroundColor?: string
+}
+
+interface GoogleCalendarSettings {
+  enabled: boolean
+  selectedCalendars: string[]
+  syncDirection: 'export'
+  autoSync: boolean
+  syncInterval: number
+  lastSync?: Date
+}
+
+interface SyncResult {
+  success: boolean
+  imported: number
+  exported: number
+  updated: number
+  errors: string[]
+  conflicts: Array<{ familyHubEvent: CalendarEvent; conflictType: string }>
+}
 
 interface GoogleCalendarSyncProps {
   events?: CalendarEvent[]
@@ -27,9 +50,9 @@ interface GoogleCalendarSyncProps {
 }
 
 const GoogleCalendarSync: React.FC<GoogleCalendarSyncProps> = ({
-  events = [],
   onSyncComplete
 }) => {
+  const storeFamilyId = useFamilyStore((state) => state.databaseStatus.familyId)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isConnecting, setIsConnecting] = useState(false)
   const [isSyncing, setIsSyncing] = useState(false)
@@ -37,8 +60,8 @@ const GoogleCalendarSync: React.FC<GoogleCalendarSyncProps> = ({
   const [settings, setSettings] = useState<GoogleCalendarSettings>({
     enabled: false,
     selectedCalendars: [],
-    syncDirection: 'both',
-    autoSync: true,
+    syncDirection: 'export',
+    autoSync: false,
     syncInterval: 30
   })
   const [syncStatus, setSyncStatus] = useState<SyncResult | null>(null)
@@ -50,41 +73,38 @@ const GoogleCalendarSync: React.FC<GoogleCalendarSyncProps> = ({
     message: string
   } | null>(null)
 
+  const familyId = storeFamilyId || (typeof window !== 'undefined' ? localStorage.getItem('familyId') || '' : '')
+
   useEffect(() => {
-    checkAuthStatus()
-    loadSettings()
-  }, [])
+    if (!familyId) return
+    void checkAuthStatus()
+  }, [familyId])
 
-  const checkAuthStatus = () => {
-    const authenticated = googleCalendarService.isAuthenticated()
-    setIsAuthenticated(authenticated)
-
-    if (authenticated) {
-      loadCalendars()
-    }
-  }
-
-  const loadSettings = () => {
-    // Load settings from localStorage or API
-    const stored = localStorage.getItem('google_calendar_settings')
-    if (stored) {
-      setSettings(JSON.parse(stored))
+  const checkAuthStatus = async () => {
+    if (!familyId) return
+    try {
+      const response = await fetch(`/api/families/${familyId}/google-calendar`)
+      const payload = await response.json()
+      if (!response.ok) throw new Error(payload.error || 'Failed to load Google Calendar status')
+      setIsAuthenticated(Boolean(payload.connected))
+      setCalendars(payload.calendars || [])
+      if (payload.connection) {
+        setSettings((prev) => ({
+          ...prev,
+          enabled: Boolean(payload.connected),
+          selectedCalendars: payload.connection.selectedCalendarId ? [payload.connection.selectedCalendarId] : [],
+          syncDirection: 'export',
+          lastSync: payload.connection.lastExportAt ? new Date(payload.connection.lastExportAt) : undefined,
+        }))
+      }
+    } catch (error) {
+      console.error('Failed to load Google Calendar status:', error)
+      setError(error instanceof Error ? error.message : 'Failed to load Google Calendar status')
     }
   }
 
   const saveSettings = (newSettings: GoogleCalendarSettings) => {
     setSettings(newSettings)
-    localStorage.setItem('google_calendar_settings', JSON.stringify(newSettings))
-  }
-
-  const loadCalendars = async () => {
-    try {
-      const calendarList = await googleCalendarService.getCalendarList()
-      setCalendars(calendarList)
-    } catch (error) {
-      console.error('Failed to load calendars:', error)
-      setError('Failed to load Google Calendars')
-    }
   }
 
   const handleConnect = async () => {
@@ -92,7 +112,11 @@ const GoogleCalendarSync: React.FC<GoogleCalendarSyncProps> = ({
       setIsConnecting(true)
       setError(null)
 
-      const authUrl = googleCalendarService.getAuthUrl()
+      if (!familyId) throw new Error('Family is not loaded yet')
+      const response = await fetch(`/api/families/${familyId}/google-calendar/connect`)
+      const payload = await response.json()
+      if (!response.ok) throw new Error(payload.error || 'Failed to start Google Calendar connection')
+      const authUrl = payload.authUrl
 
       // Open popup window for OAuth
       const popup = window.open(
@@ -108,7 +132,7 @@ const GoogleCalendarSync: React.FC<GoogleCalendarSyncProps> = ({
         if (event.data.type === 'google_calendar_auth_success') {
           window.removeEventListener('message', messageListener)
           setIsConnecting(false)
-          checkAuthStatus()
+          void checkAuthStatus()
         } else if (event.data.type === 'google_calendar_auth_error') {
           window.removeEventListener('message', messageListener)
           setIsConnecting(false)
@@ -125,7 +149,7 @@ const GoogleCalendarSync: React.FC<GoogleCalendarSyncProps> = ({
             clearInterval(pollTimer)
             window.removeEventListener('message', messageListener)
             setIsConnecting(false)
-            checkAuthStatus()
+            void checkAuthStatus()
           }
         } catch (error) {
           // Ignore cross-origin errors
@@ -141,7 +165,8 @@ const GoogleCalendarSync: React.FC<GoogleCalendarSyncProps> = ({
 
   const handleDisconnect = async () => {
     try {
-      await googleCalendarService.disconnect()
+      if (!familyId) throw new Error('Family is not loaded yet')
+      await fetch(`/api/families/${familyId}/google-calendar`, { method: 'DELETE' })
       setIsAuthenticated(false)
       setCalendars([])
       setSyncStatus(null)
@@ -175,29 +200,31 @@ const GoogleCalendarSync: React.FC<GoogleCalendarSyncProps> = ({
         message: 'Verifying Google Calendar access...'
       })
 
-      // Phase 2: Fetching Google Calendar data
+      // Phase 2: Preparing export data
       setSyncProgress({
         phase: 'Fetching',
         progress: 30,
-        message: 'Fetching Google Calendar events...'
+        message: 'Preparing Family Hub events for export...'
       })
 
       // Phase 3: Conflict detection
       setSyncProgress({
         phase: 'Analysis',
         progress: 50,
-        message: 'Analyzing events for conflicts...'
+        message: 'Checking which events already have Google links...'
       })
 
       // Phase 4: Sync operation
       setSyncProgress({
         phase: 'Syncing',
         progress: 70,
-        message: 'Synchronizing events...'
+        message: 'Exporting events to Google Calendar...'
       })
 
-      const familyHubEvents = events
-      const result = await googleCalendarService.syncCalendars(familyHubEvents, settings)
+      if (!familyId) throw new Error('Family is not loaded yet')
+      const response = await fetch(`/api/families/${familyId}/google-calendar/export`, { method: 'POST' })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.errors?.[0] || result.error || 'Google Calendar export failed')
 
       // Phase 5: Completion
       setSyncProgress({
@@ -212,7 +239,7 @@ const GoogleCalendarSync: React.FC<GoogleCalendarSyncProps> = ({
       setSyncProgress({
         phase: 'Complete',
         progress: 100,
-        message: `Sync completed! ${result.imported} imported, ${result.exported} exported, ${result.updated} updated`
+        message: `Export completed! ${result.exported} exported, ${result.updated} updated`
       })
 
       // Clear progress after 3 seconds
@@ -232,27 +259,24 @@ const GoogleCalendarSync: React.FC<GoogleCalendarSyncProps> = ({
   }
 
   const toggleCalendar = (calendarId: string) => {
-    const newSelected = settings.selectedCalendars.includes(calendarId)
-      ? settings.selectedCalendars.filter(id => id !== calendarId)
-      : [...settings.selectedCalendars, calendarId]
+    const newSelected = settings.selectedCalendars.includes(calendarId) ? [] : [calendarId]
+    const selectedCalendar = calendars.find((calendar) => calendar.id === calendarId)
 
     saveSettings({
       ...settings,
       selectedCalendars: newSelected,
       enabled: newSelected.length > 0
     })
-  }
-
-  const updateSyncDirection = (direction: 'import' | 'export' | 'both') => {
-    saveSettings({ ...settings, syncDirection: direction })
-  }
-
-  const updateAutoSync = (enabled: boolean) => {
-    saveSettings({ ...settings, autoSync: enabled })
-  }
-
-  const updateSyncInterval = (interval: number) => {
-    saveSettings({ ...settings, syncInterval: interval })
+    if (familyId) {
+      void fetch(`/api/families/${familyId}/google-calendar`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          selectedCalendarId: newSelected[0] || null,
+          selectedCalendarName: selectedCalendar?.summary || null,
+        }),
+      })
+    }
   }
 
   return (
@@ -264,7 +288,7 @@ const GoogleCalendarSync: React.FC<GoogleCalendarSyncProps> = ({
         </div>
         <div>
           <h2 className="text-xl font-semibold text-gray-900">Google Calendar Sync</h2>
-          <p className="text-sm text-gray-600">Connect and sync with your Google Calendar</p>
+          <p className="text-sm text-gray-600">Export Family Hub events to Google Calendar</p>
         </div>
       </div>
 
@@ -300,7 +324,7 @@ const GoogleCalendarSync: React.FC<GoogleCalendarSyncProps> = ({
               </div>
               <h3 className="text-lg font-medium text-gray-900 mb-2">Connect Google Calendar</h3>
               <p className="text-gray-600 mb-6 max-w-md mx-auto">
-                Sync your Family Hub events with Google Calendar to keep everything in sync across all your devices.
+                Export your Family Hub events to Google Calendar so they appear across your devices.
               </p>
 
               <div className="space-y-4 mb-6">
@@ -310,11 +334,11 @@ const GoogleCalendarSync: React.FC<GoogleCalendarSyncProps> = ({
                 </div>
                 <div className="flex items-center justify-center space-x-2 text-sm text-gray-600">
                   <Zap className="w-4 h-4 text-blue-600" />
-                  <span>Two-way sync keeps everything up to date</span>
+                  <span>Export-only sync avoids duplicate imports</span>
                 </div>
                 <div className="flex items-center justify-center space-x-2 text-sm text-gray-600">
-                  <Settings className="w-4 h-4 text-purple-600" />
-                  <span>Full control over which calendars to sync</span>
+                  <Upload className="w-4 h-4 text-purple-600" />
+                  <span>Choose the Google calendar to receive events</span>
                 </div>
               </div>
 
@@ -348,7 +372,7 @@ const GoogleCalendarSync: React.FC<GoogleCalendarSyncProps> = ({
                     <p className="text-sm text-green-700">
                       {settings.lastSync
                         ? `Last synced: ${new Date(settings.lastSync).toLocaleString()}`
-                        : 'Ready to sync'
+                        : 'Ready to export'
                       }
                     </p>
                   </div>
@@ -362,12 +386,12 @@ const GoogleCalendarSync: React.FC<GoogleCalendarSyncProps> = ({
                     {isSyncing ? (
                       <>
                         <RefreshCw className="w-4 h-4 mr-1 animate-spin" />
-                        Syncing...
+                        Exporting...
                       </>
                     ) : (
                       <>
                         <RefreshCw className="w-4 h-4 mr-1" />
-                        Sync Now
+                        Export Now
                       </>
                     )}
                   </button>
@@ -382,7 +406,7 @@ const GoogleCalendarSync: React.FC<GoogleCalendarSyncProps> = ({
 
               {/* Calendar Selection */}
               <div>
-                <h4 className="font-medium text-gray-900 mb-3">Select Calendars to Sync</h4>
+                <h4 className="font-medium text-gray-900 mb-3">Select Google Calendar</h4>
                 <div className="space-y-2 max-h-48 overflow-y-auto">
                   {calendars.map(calendar => (
                     <div
@@ -417,64 +441,6 @@ const GoogleCalendarSync: React.FC<GoogleCalendarSyncProps> = ({
                 </div>
               </div>
 
-              {/* Sync Direction */}
-              <div>
-                <h4 className="font-medium text-gray-900 mb-3">Sync Direction</h4>
-                <div className="grid grid-cols-3 gap-2">
-                  {[
-                    { value: 'import', label: 'Import Only', icon: Download, desc: 'Google → Family Hub' },
-                    { value: 'export', label: 'Export Only', icon: Upload, desc: 'Family Hub → Google' },
-                    { value: 'both', label: 'Two-Way Sync', icon: RefreshCw, desc: 'Keep both in sync' }
-                  ].map(option => (
-                    <button
-                      key={option.value}
-                      onClick={() => updateSyncDirection(option.value as any)}
-                      className={`p-3 border rounded-lg text-center transition-colors ${
-                        settings.syncDirection === option.value
-                          ? 'border-blue-500 bg-blue-50 text-blue-700'
-                          : 'border-gray-200 hover:bg-gray-50'
-                      }`}
-                    >
-                      <option.icon className="w-5 h-5 mx-auto mb-1" />
-                      <p className="text-sm font-medium">{option.label}</p>
-                      <p className="text-xs text-gray-600">{option.desc}</p>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Auto Sync Settings */}
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <h4 className="font-medium text-gray-900">Automatic Sync</h4>
-                  <input
-                    type="checkbox"
-                    checked={settings.autoSync}
-                    onChange={(e) => updateAutoSync(e.target.checked)}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                  />
-                </div>
-
-                {settings.autoSync && (
-                  <div>
-                    <label className="block text-sm text-gray-700 mb-2">
-                      Sync Interval (minutes)
-                    </label>
-                    <select
-                      value={settings.syncInterval}
-                      onChange={(e) => updateSyncInterval(parseInt(e.target.value))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value={15}>Every 15 minutes</option>
-                      <option value={30}>Every 30 minutes</option>
-                      <option value={60}>Every hour</option>
-                      <option value={180}>Every 3 hours</option>
-                      <option value={360}>Every 6 hours</option>
-                    </select>
-                  </div>
-                )}
-              </div>
-
               {/* Advanced Settings */}
               <div>
                 <button
@@ -494,16 +460,8 @@ const GoogleCalendarSync: React.FC<GoogleCalendarSyncProps> = ({
                     <div className="flex items-start space-x-2 text-sm text-gray-600">
                       <Info className="w-4 h-4 mt-0.5" />
                       <div>
-                        <p className="font-medium">Conflict Resolution</p>
-                        <p>When conflicts occur, Google Calendar events take precedence for now. Future versions will offer more options.</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start space-x-2 text-sm text-gray-600">
-                      <Clock className="w-4 h-4 mt-0.5" />
-                      <div>
-                        <p className="font-medium">Sync History</p>
-                        <p>Sync history is stored locally. Clear browser data will reset sync status.</p>
+                        <p className="font-medium">Export-only v1</p>
+                        <p>Family Hub sends events to Google Calendar. Google events are not imported back into Family Hub yet.</p>
                       </div>
                     </div>
                   </div>

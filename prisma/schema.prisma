@@ -59,6 +59,8 @@ model Family {
   notifications         Notification[]
   pushSubscriptions     PushSubscription[]
   brainProjects         BrainProject[]
+  calendarEmailIntakes  CalendarEmailIntake[]
+  googleCalendarConnections GoogleCalendarConnection[]
 
   @@map("families")
 }
@@ -132,6 +134,10 @@ model CalendarEvent {
   recurringPattern String   @default("none") @map("recurring_pattern")
   isRecurring      Boolean  @default(false) @map("is_recurring")
   notes            String?
+  source           String?  @map("source")
+  sourceId         String?  @map("source_id")
+  googleCalendarId String?  @map("google_calendar_id")
+  googleEventId    String?  @map("google_event_id")
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
 
@@ -139,7 +145,62 @@ model CalendarEvent {
   family Family       @relation(fields: [familyId], references: [id], onDelete: Cascade)
   person FamilyMember @relation(fields: [personId], references: [id], onDelete: Cascade)
 
+  @@index([familyId, source, sourceId])
+  @@index([familyId, googleCalendarId, googleEventId])
   @@map("calendar_events")
+}
+
+model CalendarEmailIntake {
+  id             String   @id @default(cuid())
+  familyId       String   @map("family_id")
+  messageId      String?  @map("message_id")
+  recipient      String?
+  sender         String?
+  subject        String?
+  text           String?
+  html           String?
+  normalizedText String?  @map("normalized_text")
+  parsedDrafts   Json     @map("parsed_drafts")
+  createdEventIds Json?   @map("created_event_ids")
+  status         String   @default("review_required")
+  autoCreated    Int      @default(0) @map("auto_created")
+  needsReview    Int      @default(0) @map("needs_review")
+  duplicateCount Int      @default(0) @map("duplicate_count")
+  conflictCount  Int      @default(0) @map("conflict_count")
+  metadata       Json?
+  receivedAt     DateTime @default(now()) @map("received_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  family Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  @@index([familyId, receivedAt])
+  @@index([familyId, status])
+  @@map("calendar_email_intakes")
+}
+
+model GoogleCalendarConnection {
+  id                String   @id @default(cuid())
+  familyId          String   @map("family_id")
+  googleUserEmail   String?  @map("google_user_email")
+  accessToken       String   @map("access_token")
+  refreshToken      String?  @map("refresh_token")
+  tokenType         String?  @map("token_type")
+  scope             String?
+  expiryDate        DateTime? @map("expiry_date")
+  selectedCalendarId String? @map("selected_calendar_id")
+  selectedCalendarName String? @map("selected_calendar_name")
+  syncDirection     String   @default("export") @map("sync_direction")
+  enabled           Boolean  @default(true)
+  lastExportAt      DateTime? @map("last_export_at")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  family Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  @@unique([familyId])
+  @@index([familyId, enabled])
+  @@map("google_calendar_connections")
 }
 
 // Budget income table

@@ -20,6 +20,9 @@ export interface CalendarEvent {
   priority: 'low' | 'medium' | 'high';
   status: 'confirmed' | 'tentative' | 'cancelled';
   color?: string;
+  source?: string;
+  sourceId?: string;
+  googleCalendarId?: string;
   googleEventId?: string;
   createdAt: Date;
   updatedAt: Date;

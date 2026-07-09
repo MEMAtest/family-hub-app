@@ -175,7 +175,10 @@ export const normalizeCalendarEmailText = ({
 
   lines.forEach((line, index) => {
     const previous = lines[index - 1] || '';
+    const previousTwo = lines[index - 2] || '';
     const next = lines[index + 1] || '';
+    const nextTwo = lines[index + 2] || '';
+    const nextThree = lines[index + 3] || '';
     const hasDate = Boolean(parseDateValue(line, new Date().getFullYear()));
     const hasTime = /\b(\d{1,2})(?::|\.)(\d{2})\s*(am|pm)?\b/i.test(line) || /\b(\d{1,2})\s*(am|pm)\b/i.test(line);
     const hasEventKeyword = [...schoolKeywords, ...entertainmentKeywords].some((keyword) =>
@@ -183,7 +186,7 @@ export const normalizeCalendarEmailText = ({
     );
 
     if (hasDate || hasTime || hasEventKeyword) {
-      const context = [cleanSubject, previous, line, next]
+      const context = [cleanSubject, previousTwo, previous, line, next, nextTwo, nextThree]
         .filter(Boolean)
         .join(' • ');
       candidateLines.add(context);
@@ -282,7 +285,7 @@ const parseTime = (line: string) => {
 
 const parseDurationMinutes = (line: string) => {
   const normalized = line.replace(/[–—]/g, '-');
-  const range = normalized.match(/\b(\d{1,2})(?::|\.)(\d{2})\s*(am|pm)?\s*-\s*(\d{1,2})(?::|\.)(\d{2})\s*(am|pm)?\b/i);
+  const range = normalized.match(/\b(\d{1,2})(?::|\.)(\d{2})\s*(am|pm)?\s*(?:-|to)\s*(\d{1,2})(?::|\.)(\d{2})\s*(am|pm)?\b/i);
   if (!range) return undefined;
 
   let startHours = Number(range[1]);
@@ -320,6 +323,18 @@ const inferTitle = (line: string, dateMatch: string) => {
   const afterDate = line.split(dateMatch)[1]?.replace(/^[:\-–—]+/g, '').trim();
   const raw = beforeDate || afterDate || line;
   return titleCase(raw.replace(/\b(at\s+)?\d{1,2}[:.]\d{2}\s*(am|pm)?\b/gi, '').slice(0, 90)) || 'Imported event';
+};
+
+const hasExplicitTime = (line: string) =>
+  /\b(\d{1,2})(?::|\.)(\d{2})\s*(am|pm)?\b/i.test(line) ||
+  /\b(\d{1,2})\s*(am|pm)\b/i.test(line);
+
+const confidenceForLine = (line: string) => {
+  const lower = line.toLowerCase();
+  let confidence = schoolKeywords.some((keyword) => lower.includes(keyword)) ? 0.86 : 0.72;
+  if (entertainmentKeywords.some((keyword) => lower.includes(keyword))) confidence = Math.max(confidence, 0.82);
+  if (hasExplicitTime(line)) confidence = Math.max(confidence, 0.9);
+  return confidence;
 };
 
 const getDefaultPerson = (people: Person[], defaultPersonId?: string) =>
@@ -481,12 +496,41 @@ export const parseCalendarImportText = ({
         time: parseTime(line),
         duration: parseDurationMinutes(line),
         type: inferType(line),
-        confidence: schoolKeywords.some((keyword) => line.toLowerCase().includes(keyword)) ? 0.86 : 0.72,
+        confidence: confidenceForLine(line),
       }, line, index, people, defaultPersonId);
     });
 
-  const drafts = structured.length > 0 ? structured : lineDrafts;
+  const drafts = structured.length > 0 ? structured : dedupeImportDrafts(lineDrafts);
   return annotateCalendarImportDrafts(drafts, existingEvents);
+};
+
+const dedupeImportDrafts = (drafts: CalendarImportDraft[]) => {
+  const byKey = new Map<string, CalendarImportDraft>();
+
+  drafts.forEach((draft) => {
+    const key = [
+      draft.person,
+      draft.title.trim().toLowerCase(),
+      draft.date,
+      draft.endDate || '',
+    ].join('|');
+    const existing = byKey.get(key);
+    if (!existing) {
+      byKey.set(key, draft);
+      return;
+    }
+
+    const score = (candidate: CalendarImportDraft) =>
+      candidate.confidence +
+      (candidate.time !== '09:00' ? 0.2 : 0) +
+      (candidate.duration !== 60 ? 0.1 : 0);
+
+    if (score(draft) > score(existing)) {
+      byKey.set(key, draft);
+    }
+  });
+
+  return Array.from(byKey.values());
 };
 
 export const importDraftToCalendarEventDraft = (

@@ -117,4 +117,35 @@ Manage your booking
       importStatus: 'ready',
     });
   });
+
+  it('keeps the show time when email date and time are separated by venue text', () => {
+    const normalized = normalizeCalendarEmailText({
+      from: 'tickets@example.com',
+      subject: 'Show tickets: Hamilton',
+      text: `
+Hamilton
+Victoria Palace Theatre
+Saturday 18 July 2026
+Doors open
+7:30pm to 10:00pm
+Seats A1 A2
+      `,
+    });
+
+    const drafts = parseCalendarImportText({
+      text: normalized,
+      people,
+      today: new Date('2026-07-09T09:00:00Z'),
+    });
+
+    expect(drafts).toHaveLength(1);
+    expect(drafts[0]).toMatchObject({
+      title: 'Show Tickets: Hamilton',
+      date: '2026-07-18',
+      time: '19:30',
+      duration: 150,
+      type: 'social',
+      importStatus: 'ready',
+    });
+  });
 });

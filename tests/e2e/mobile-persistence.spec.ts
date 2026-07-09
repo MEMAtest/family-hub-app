@@ -285,12 +285,24 @@ test('mobile fitness add, edit, and delete persists end-to-end', async ({ page }
 
   await expect(page.getByText('What exercises did you do?')).toBeVisible({ timeout: 20_000 });
   await page.getByPlaceholder('e.g., Push Day, Upper Body, Leg Day').fill(workoutName);
-  await page.getByPlaceholder('Search exercises...').fill('Bench Press');
-  await page.getByRole('button', { name: /Bench Press/ }).first().click();
+  const pushDayTemplate = page.getByRole('button', { name: /^Push Day$/ });
+  if (await pushDayTemplate.isVisible().catch(() => false)) {
+    await pushDayTemplate.click({ force: true });
+    await page.getByPlaceholder('e.g., Push Day, Upper Body, Leg Day').fill(workoutName);
+  } else {
+    await page.getByPlaceholder('Search exercises...').fill('Bench Press');
+    await clickVisibleButton(page.getByRole('button', { name: /Bench Press/ }), 'bench press exercise');
+  }
   await page.getByRole('button', { name: 'Continue to sets & reps' }).click();
 
   await expect(page.getByText('Add your sets and reps')).toBeVisible({ timeout: 20_000 });
-  await page.getByRole('button', { name: 'Continue' }).click();
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    if (await page.getByText('Any other activities?').isVisible().catch(() => false)) {
+      break;
+    }
+    await clickVisibleButton(page.getByRole('button', { name: /^(Continue|Next Exercise)$/ }), 'exercise details continue');
+    await page.waitForTimeout(150);
+  }
 
   await expect(page.getByText('Any other activities?')).toBeVisible({ timeout: 20_000 });
   await page.getByRole('button', { name: 'Continue' }).click();

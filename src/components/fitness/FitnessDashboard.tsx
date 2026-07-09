@@ -106,6 +106,12 @@ const FitnessDashboard: React.FC<FitnessDashboardProps> = ({
     setCopySourceActivity(null);
   };
 
+  const openNewActivity = () => {
+    setEditingActivity(null);
+    setCopySourceActivity(null);
+    setShowWizard(true);
+  };
+
   const handleDeleteActivity = useCallback(async (activityId: string) => {
     if (!confirm('Delete this activity?')) return;
 
@@ -203,14 +209,6 @@ const FitnessDashboard: React.FC<FitnessDashboardProps> = ({
     return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-4 sm:space-y-6">
       {/* Header */}
@@ -243,11 +241,7 @@ const FitnessDashboard: React.FC<FitnessDashboardProps> = ({
             <RefreshCw className="w-5 h-5" />
           </button>
           <button
-            onClick={() => {
-              setEditingActivity(null);
-              setCopySourceActivity(null);
-              setShowWizard(true);
-            }}
+            onClick={openNewActivity}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
             <Plus className="w-5 h-5" />
@@ -285,6 +279,13 @@ const FitnessDashboard: React.FC<FitnessDashboardProps> = ({
       {error && (
         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 text-red-700 dark:text-red-300">
           {error}
+        </div>
+      )}
+
+      {loading && (
+        <div className="flex items-center gap-3 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700 dark:border-blue-900/40 dark:bg-blue-900/20 dark:text-blue-200">
+          <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-300 border-b-blue-700" />
+          Refreshing fitness data…
         </div>
       )}
 
@@ -431,11 +432,7 @@ const FitnessDashboard: React.FC<FitnessDashboardProps> = ({
               No activities logged yet
             </p>
             <button
-              onClick={() => {
-                setEditingActivity(null);
-                setCopySourceActivity(null);
-                setShowWizard(true);
-              }}
+              onClick={openNewActivity}
               className="text-blue-600 dark:text-blue-400 hover:underline"
             >
               Log your first workout

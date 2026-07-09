@@ -184,7 +184,7 @@ const CalendarCopilotPanel = ({
 
     const text = await file.text();
     if (!text.trim()) {
-      setImportError('This file does not contain readable text. Paste the school calendar text into the box below.');
+      setImportError('This file does not contain readable text. Paste the calendar or email text into the box below.');
       return;
     }
 
@@ -350,7 +350,7 @@ const CalendarCopilotPanel = ({
       <div className="rounded-lg border border-[#dde5e0] bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
         <div className="mb-2 flex items-center gap-2">
           <FileUp className="h-4 w-4 text-purple-600" />
-          <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-100">Import school calendar</h3>
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-100">Add dates from email, PDF, or calendar</h3>
         </div>
         <textarea
           value={importText}

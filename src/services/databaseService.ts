@@ -264,6 +264,10 @@ class DatabaseService {
             type: e.eventType,
             notes: e.notes,
             isRecurring: e.isRecurring,
+            source: e.source,
+            sourceId: e.sourceId,
+            googleCalendarId: e.googleCalendarId,
+            googleEventId: e.googleEventId,
             priority: 'medium',
             status: 'confirmed',
             createdAt: e.createdAt,
@@ -333,6 +337,10 @@ class DatabaseService {
           recurringPattern: event.recurring || 'none',
           isRecurring: event.isRecurring || false,
           notes: event.notes || '',
+          source: event.source,
+          sourceId: event.sourceId,
+          googleCalendarId: event.googleCalendarId,
+          googleEventId: event.googleEventId,
         }),
       });
 
