@@ -2,6 +2,8 @@ import type { Metadata } from 'next'
 import { Instrument_Serif, Plus_Jakarta_Sans } from 'next/font/google'
 import './globals.css'
 import { AppProviders } from '@/components/common/AppProviders'
+import Script from 'next/script'
+import { Analytics } from '@vercel/analytics/next'
 
 const plusJakarta = Plus_Jakarta_Sans({
   subsets: ['latin'],
@@ -137,6 +139,12 @@ export default function RootLayout({
         <AppProviders>
           {children}
         </AppProviders>
+        <Analytics />
+        <Script
+          src="https://owned-portfolio-analytics.mema-consultants.workers.dev/tracker.js"
+          data-project="family-hub-app"
+          strategy="afterInteractive"
+        />
       </body>
     </html>
   )
