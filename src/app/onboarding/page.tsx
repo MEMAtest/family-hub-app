@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Users, Home, ArrowRight, Loader2 } from "lucide-react";
+import { trackOwnedEvent } from "@/utils/ownedAnalytics";
 
 const colorOptions = [
   { color: "#3B82F6", name: "Blue" },
@@ -50,6 +51,7 @@ export default function OnboardingPage() {
         throw new Error(data.error || "Failed to create family");
       }
 
+      trackOwnedEvent("signup_completed", { flow: "family_onboarding" });
       router.push("/");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
