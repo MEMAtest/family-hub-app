@@ -47,6 +47,7 @@ import YearView from './YearView'
 import WorkStatusManager from './WorkStatusManager'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { useFamilyStore } from '@/store/familyStore'
+import { formatConflictGroupTimeRange, getSameDayConflictGroups } from '@/utils/calendarConflicts'
 
 // Set up moment localizer and drag-and-drop calendar
 const localizer = momentLocalizer(moment)
@@ -687,6 +688,16 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
   const selectedDayLabel = useMemo(
     () => moment(selectedAgendaDate, 'YYYY-MM-DD').format('dddd, D MMMM'),
     [selectedAgendaDate]
+  )
+
+  const selectedDayConflictGroups = useMemo(
+    () => getSameDayConflictGroups(selectedDayEvents, selectedAgendaDate),
+    [selectedAgendaDate, selectedDayEvents]
+  )
+
+  const selectedDayConflictingEventIds = useMemo(
+    () => new Set(selectedDayConflictGroups.flatMap((group) => group.events.map((event) => event.id))),
+    [selectedDayConflictGroups]
   )
 
   // Mobile Calendar Header Component
@@ -1739,23 +1750,75 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                       : `${selectedDayEvents.length} event${selectedDayEvents.length === 1 ? '' : 's'} on this date`}
                   </p>
                 </div>
-                {selectedDayEvents.length > 1 && (
+                {selectedDayConflictGroups.length > 0 && (
                   <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-800 dark:bg-amber-500/20 dark:text-amber-200">
-                    Check clashes
+                    {selectedDayConflictGroups.length} clash{selectedDayConflictGroups.length === 1 ? '' : 'es'}
                   </span>
                 )}
               </div>
+
+              {selectedDayConflictGroups.length > 0 && (
+                <div className="mb-3 space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-400/25 dark:bg-amber-500/10">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-amber-900 dark:text-amber-100">
+                    <AlertTriangle className="h-4 w-4" />
+                    <span>Competing events</span>
+                  </div>
+                  <div className="space-y-2">
+                    {selectedDayConflictGroups.map((group) => (
+                      <div
+                        key={group.id}
+                        className="rounded-md border border-amber-200/80 bg-white/80 p-2 dark:border-amber-300/20 dark:bg-slate-950/60"
+                      >
+                        <div className="mb-2 text-xs font-medium text-amber-800 dark:text-amber-200">
+                          {formatConflictGroupTimeRange(group)}
+                        </div>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {group.events.map((event) => {
+                            const person = people.find((item) => item.id === event.person)
+                            return (
+                              <button
+                                key={event.id}
+                                type="button"
+                                onClick={() => onEventClick(event)}
+                                className="flex items-start gap-2 rounded-md border border-amber-100 bg-amber-50/80 p-2 text-left transition hover:border-amber-200 hover:bg-amber-100 dark:border-amber-300/10 dark:bg-amber-500/10 dark:hover:bg-amber-500/20"
+                              >
+                                <span
+                                  className="mt-1 h-2.5 w-2.5 flex-shrink-0 rounded-full"
+                                  style={{ backgroundColor: person?.color || getPersonColor(event.person) }}
+                                />
+                                <span className="min-w-0">
+                                  <span className="block truncate text-xs font-semibold text-gray-900 dark:text-slate-100">
+                                    {event.title}
+                                  </span>
+                                  <span className="mt-0.5 block text-xs text-gray-600 dark:text-slate-300">
+                                    {event.time} · {person?.name || 'Family'}
+                                  </span>
+                                </span>
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {selectedDayEvents.length > 0 && (
                 <div className="space-y-2">
                   {selectedDayEvents.map((event) => {
                     const person = people.find((item) => item.id === event.person)
+                    const isConflicting = selectedDayConflictingEventIds.has(event.id)
                     return (
                       <button
                         key={event.id}
                         type="button"
                         onClick={() => onEventClick(event)}
-                        className="flex w-full items-start gap-3 rounded-md border border-gray-100 bg-gray-50 p-3 text-left transition hover:border-gray-200 hover:bg-gray-100 dark:border-slate-800 dark:bg-slate-950 dark:hover:border-slate-700 dark:hover:bg-slate-800"
+                        className={`flex w-full items-start gap-3 rounded-md border p-3 text-left transition ${
+                          isConflicting
+                            ? 'border-amber-200 bg-amber-50 hover:border-amber-300 hover:bg-amber-100 dark:border-amber-300/20 dark:bg-amber-500/10 dark:hover:bg-amber-500/20'
+                            : 'border-gray-100 bg-gray-50 hover:border-gray-200 hover:bg-gray-100 dark:border-slate-800 dark:bg-slate-950 dark:hover:border-slate-700 dark:hover:bg-slate-800'
+                        }`}
                       >
                         <span
                           className="mt-1 h-3 w-3 flex-shrink-0 rounded-full"
@@ -1765,10 +1828,15 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                           <span className="block truncate text-sm font-semibold text-gray-900 dark:text-slate-100">
                             {event.title}
                           </span>
-                          <span className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-600 dark:text-slate-300">
+                          <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-600 dark:text-slate-300">
                             <span>{event.time} · {event.duration} min</span>
                             {person && <span>{person.name}</span>}
                             {event.location && <span className="truncate">{event.location}</span>}
+                            {isConflicting && (
+                              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800 dark:bg-amber-400/15 dark:text-amber-100">
+                                Clashes
+                              </span>
+                            )}
                           </span>
                         </span>
                       </button>

@@ -15,7 +15,8 @@ import {
   Trash2,
   Search,
   Send,
-  Smartphone
+  Smartphone,
+  type LucideIcon
 } from 'lucide-react';
 import { useNotifications } from '@/contexts/NotificationContext';
 import { useFamilyStore } from '@/store/familyStore';
@@ -102,38 +103,65 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
     }
   });
 
+  const getNotificationIconTone = (notification: InAppNotification) => {
+    if (notification.category === 'event' || notification.type === 'reminder') {
+      return 'bg-[#eaf1e7] text-[#147c72] ring-[#b8d8d1] dark:bg-[#147c72]/20 dark:text-[#7ddbd0] dark:ring-[#56c6b8]/25';
+    }
+    if (notification.type === 'conflict' || notification.category === 'conflict') {
+      return 'bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-500/15 dark:text-amber-200 dark:ring-amber-300/25';
+    }
+    if (notification.type === 'sync') {
+      return 'bg-blue-50 text-blue-700 ring-blue-200 dark:bg-blue-500/15 dark:text-blue-200 dark:ring-blue-300/25';
+    }
+    if (notification.category === 'error' || notification.priority === 'urgent') {
+      return 'bg-red-50 text-red-700 ring-red-200 dark:bg-red-500/15 dark:text-red-200 dark:ring-red-300/25';
+    }
+    return 'bg-slate-100 text-slate-700 ring-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:ring-slate-700';
+  };
+
+  const renderIconFrame = (
+    notification: InAppNotification,
+    content: React.ReactNode,
+    label?: string
+  ) => (
+    <span
+      className={`flex h-9 w-9 items-center justify-center rounded-lg shadow-sm ring-1 ${getNotificationIconTone(notification)}`}
+      aria-label={label}
+    >
+      {content}
+    </span>
+  );
+
+  const renderLucideIcon = (
+    notification: InAppNotification,
+    Icon: LucideIcon,
+    label: string
+  ) => renderIconFrame(notification, <Icon className="h-4 w-4" />, label);
+
   // Get notification icon
   const getNotificationIcon = (notification: InAppNotification) => {
     const iconValue = notification.metadata?.eventIcon || notification.metadata?.iconEmoji || notification.icon;
     const isUrlIcon = typeof iconValue === 'string' && /^(\/|https?:\/\/|data:image\/)/i.test(iconValue);
 
     if (isUrlIcon) {
-      return (
-        <span className="flex h-8 w-8 items-center justify-center rounded-md bg-white shadow-sm ring-1 ring-gray-200 dark:bg-slate-950 dark:ring-slate-700">
-          <img src={iconValue} alt="" className="h-5 w-5" />
-        </span>
-      );
+      return renderIconFrame(notification, <img src={iconValue} alt="" className="h-5 w-5" />);
     }
 
     if (iconValue) {
-      return (
-        <span className="flex h-8 w-8 items-center justify-center rounded-md bg-white text-lg shadow-sm ring-1 ring-gray-200 dark:bg-slate-950 dark:ring-slate-700">
-          {iconValue}
-        </span>
-      );
+      return renderIconFrame(notification, <span className="text-lg leading-none">{iconValue}</span>);
     }
 
     switch (notification.type) {
       case 'reminder':
-        return <Bell className="w-4 h-4 text-blue-600 dark:text-blue-300" />;
+        return renderLucideIcon(notification, Bell, 'Reminder');
       case 'conflict':
-        return <AlertTriangle className="w-4 h-4 text-orange-600 dark:text-orange-300" />;
+        return renderLucideIcon(notification, AlertTriangle, 'Conflict');
       case 'sync':
-        return <Calendar className="w-4 h-4 text-emerald-600 dark:text-emerald-300" />;
+        return renderLucideIcon(notification, Calendar, 'Calendar sync');
       case 'system':
-        return <Info className="w-4 h-4 text-slate-600 dark:text-slate-300" />;
+        return renderLucideIcon(notification, Info, 'System');
       default:
-        return <Bell className="w-4 h-4 text-blue-600 dark:text-blue-300" />;
+        return renderLucideIcon(notification, Bell, 'Notification');
     }
   };
 
@@ -141,15 +169,15 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
   const getNotificationColor = (notification: InAppNotification) => {
     switch (notification.priority) {
       case 'urgent':
-        return 'border-l-red-500 bg-red-50 dark:bg-red-500/10';
+        return 'border-red-200 border-l-red-500 bg-red-50/95 dark:border-red-900/60 dark:border-l-red-400 dark:bg-red-950/35';
       case 'high':
-        return 'border-l-orange-500 bg-orange-50 dark:bg-orange-500/10';
+        return 'border-orange-200 border-l-orange-500 bg-orange-50/95 dark:border-orange-900/60 dark:border-l-orange-300 dark:bg-orange-950/35';
       case 'medium':
-        return 'border-l-blue-500 bg-blue-50 dark:bg-blue-500/10';
+        return 'border-[#b8d8d1] border-l-[#147c72] bg-[#f1f7f4] dark:border-[#147c72]/35 dark:border-l-[#56c6b8] dark:bg-[#12302d]/55';
       case 'low':
-        return 'border-l-gray-500 bg-gray-50 dark:bg-slate-800/80';
+        return 'border-slate-200 border-l-slate-500 bg-slate-50 dark:border-slate-700 dark:border-l-slate-400 dark:bg-slate-800/80';
       default:
-        return 'border-l-gray-300 bg-white dark:border-l-slate-600 dark:bg-slate-900';
+        return 'border-slate-200 border-l-slate-300 bg-white dark:border-slate-700 dark:border-l-slate-500 dark:bg-slate-900';
     }
   };
 
@@ -275,12 +303,12 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
     <div className={`fixed inset-0 z-[100] ${className}`} role="dialog" aria-modal="true" aria-label="Notifications">
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black bg-opacity-50"
+        className="absolute inset-0 bg-slate-950/60 backdrop-blur-[2px]"
         onClick={onClose}
       />
 
       {/* Notification Panel */}
-      <div className="absolute right-0 top-0 h-full w-full max-w-md bg-white shadow-xl dark:bg-slate-900">
+      <div className="absolute right-0 top-0 h-full w-full max-w-md bg-white text-gray-900 shadow-2xl ring-1 ring-black/5 dark:bg-[#111a22] dark:text-slate-100 dark:ring-white/10">
         <div className="flex flex-col h-full">
           {/* Header */}
           <div className="border-b border-gray-200 p-4 dark:border-slate-800">
@@ -299,17 +327,17 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
               <div className="flex items-center space-x-2">
                 <button
                   onClick={() => setShowSettings(!showSettings)}
-                  className="p-1 hover:bg-gray-100 rounded-md transition-colors dark:hover:bg-slate-800"
+                  className="p-1 text-gray-600 transition-colors hover:bg-gray-100 rounded-md dark:text-slate-300 dark:hover:bg-slate-800"
                   title="Settings"
                 >
-                  <Settings className="w-4 h-4 text-gray-600 dark:text-slate-300" />
+                  <Settings className="w-4 h-4" />
                 </button>
                 <button
                   onClick={onClose}
-                  className="p-1 hover:bg-gray-100 rounded-md transition-colors dark:hover:bg-slate-800"
+                  className="p-1 text-gray-600 transition-colors hover:bg-gray-100 rounded-md dark:text-slate-300 dark:hover:bg-slate-800"
                   title="Close"
                 >
-                  <X className="w-4 h-4 text-gray-600 dark:text-slate-300" />
+                  <X className="w-4 h-4" />
                 </button>
               </div>
             </div>
@@ -415,20 +443,20 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
           )}
 
           {/* Notifications List */}
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto bg-gray-50/70 dark:bg-[#0b1117]">
             {filteredNotifications.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-gray-500 dark:text-slate-400">
-                <Bell className="w-12 h-12 text-gray-300 mb-2" />
+                <Bell className="w-12 h-12 text-gray-300 mb-2 dark:text-slate-700" />
                 <p className="text-sm">
                   {searchTerm ? 'No matching notifications' : 'No notifications'}
                 </p>
               </div>
             ) : (
-              <div className="divide-y divide-gray-200 dark:divide-slate-800">
+              <div className="space-y-2 p-3">
                 {filteredNotifications.map((notification) => (
                   <div
                     key={notification.id}
-                    className={`p-4 border-l-4 ${getNotificationColor(notification)} ${ !notification.read ? 'bg-opacity-100' : 'bg-opacity-50' } dark:bg-opacity-80`}
+                    className={`rounded-lg border border-l-4 p-4 shadow-sm transition-colors ${getNotificationColor(notification)} ${notification.read ? 'opacity-80' : 'opacity-100'}`}
                   >
                     <div className="flex items-start space-x-3">
                       <div className="flex-shrink-0 mt-1">
@@ -439,12 +467,12 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
                             <h4 className={`text-sm font-medium ${
-                              !notification.read ? 'text-gray-900 dark:text-slate-100' : 'text-gray-600 dark:text-slate-400'
+                              !notification.read ? 'text-gray-950 dark:text-slate-50' : 'text-gray-600 dark:text-slate-300'
                             }`}>
                               {notification.title}
                             </h4>
                             <p className={`text-sm mt-1 ${
-                              !notification.read ? 'text-gray-700 dark:text-slate-300' : 'text-gray-500 dark:text-slate-400'
+                              !notification.read ? 'text-gray-700 dark:text-slate-200' : 'text-gray-500 dark:text-slate-400'
                             }`}>
                               {notification.message}
                             </p>
@@ -457,20 +485,20 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
                             {!notification.read && (
                               <button
                                 onClick={() => markAsRead(notification.id)}
-                                className="p-1 hover:bg-white hover:bg-opacity-50 rounded transition-colors dark:hover:bg-slate-800"
+                                className="p-1 rounded text-gray-600 transition-colors hover:bg-white/70 dark:text-slate-300 dark:hover:bg-white/10"
                                 title="Mark as read"
                               >
-                                <Check className="w-3 h-3 text-gray-600 dark:text-slate-300" />
+                                <Check className="w-3 h-3" />
                               </button>
                             )}
 
                             {/* Snooze dropdown */}
                             <div className="relative group">
                               <button
-                                className="p-1 hover:bg-white hover:bg-opacity-50 rounded transition-colors dark:hover:bg-slate-800"
+                                className="p-1 rounded text-gray-600 transition-colors hover:bg-white/70 dark:text-slate-300 dark:hover:bg-white/10"
                                 title="Snooze"
                               >
-                                <Clock className="w-3 h-3 text-gray-600 dark:text-slate-300" />
+                                <Clock className="w-3 h-3" />
                               </button>
                               <div className="invisible absolute right-0 top-full z-10 mt-1 w-32 rounded-md border border-gray-200 bg-white opacity-0 shadow-lg transition-all duration-200 group-hover:visible group-hover:opacity-100 dark:border-slate-700 dark:bg-slate-900">
                                 {snoozeOptions.map((option) => (
@@ -487,17 +515,17 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
 
                             <button
                               onClick={() => clearNotification(notification.id)}
-                              className="p-1 hover:bg-white hover:bg-opacity-50 rounded transition-colors dark:hover:bg-slate-800"
+                              className="p-1 rounded text-gray-600 transition-colors hover:bg-white/70 dark:text-slate-300 dark:hover:bg-white/10"
                               title="Delete"
                             >
-                              <Trash2 className="w-3 h-3 text-gray-600 dark:text-slate-300" />
+                              <Trash2 className="w-3 h-3" />
                             </button>
                           </div>
                         </div>
 
                         {/* Actions */}
                         {notification.actions && notification.actions.length > 0 && (
-                          <div className="flex space-x-2 mt-3">
+                          <div className="mt-3 flex flex-wrap gap-2">
                             {notification.actions.map((action) => (
                               <button
                                 key={action.id}

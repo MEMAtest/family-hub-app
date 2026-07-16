@@ -25,7 +25,7 @@ const NotificationBell: React.FC<NotificationBellProps> = ({ className = '' }) =
     <>
       <button
         onClick={handleBellClick}
-        className={`relative p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors ${className}`}
+        className={`relative rounded-md p-2 text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100 ${className}`}
         title={unreadCount > 0 ? `${unreadCount} unread notifications` : 'Notifications'}
       >
         {unreadCount > 0 ? (
@@ -43,7 +43,7 @@ const NotificationBell: React.FC<NotificationBellProps> = ({ className = '' }) =
 
         {/* Permission indicator */}
         {permission.prompt && (
-          <span className="absolute -bottom-1 -right-1 w-3 h-3 bg-yellow-400 border-2 border-white rounded-full" />
+          <span className="absolute -bottom-1 -right-1 h-3 w-3 rounded-full border-2 border-white bg-yellow-400 dark:border-slate-900" />
         )}
       </button>
 
