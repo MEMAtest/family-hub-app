@@ -172,4 +172,40 @@ Garden, 1A Bedford St, London WC2E 9HH
       importStatus: 'ready',
     });
   });
+
+  it('understands birthday party text with a natural venue and time', () => {
+    const drafts = parseCalendarImportText({
+      text: "Maya's 6th bday party at Kidspace Saturday 18 July 2026 9am",
+      people,
+      today: new Date('2026-07-16T09:00:00Z'),
+    });
+
+    expect(drafts).toHaveLength(1);
+    expect(drafts[0]).toMatchObject({
+      title: "Maya's 6th Birthday Party",
+      date: '2026-07-18',
+      time: '09:00',
+      location: 'Kidspace',
+      type: 'social',
+      importStatus: 'ready',
+    });
+  });
+
+  it('understands day out text with a natural venue and time', () => {
+    const drafts = parseCalendarImportText({
+      text: 'Angela day out at Greenwich Park Friday 24 July 2026 09:00',
+      people,
+      today: new Date('2026-07-16T09:00:00Z'),
+    });
+
+    expect(drafts).toHaveLength(1);
+    expect(drafts[0]).toMatchObject({
+      title: 'Angela Day Out',
+      date: '2026-07-24',
+      time: '09:00',
+      location: 'Greenwich Park',
+      type: 'family',
+      importStatus: 'ready',
+    });
+  });
 });

@@ -102,7 +102,8 @@ const titleCase = (value: string) =>
     .replace(/^[\s,:;.-]+|[\s,:;.-]+$/g, '')
     .replace(/\s+/g, ' ')
     .trim()
-    .replace(/\b\w/g, (match) => match.toUpperCase());
+    .replace(/\b\w/g, (match) => match.toUpperCase())
+    .replace(/(['’])S\b/g, '$1s');
 
 const parseDelimitedRows = (text: string) => {
   const rows: string[][] = [];
@@ -325,26 +326,158 @@ const inferType = (line: string): CalendarEvent['type'] => {
   if (schoolKeywords.some((keyword) => lower.includes(keyword))) return 'education';
   if (lower.includes('doctor') || lower.includes('dentist') || lower.includes('appointment')) return 'appointment';
   if (entertainmentKeywords.some((keyword) => lower.includes(keyword))) return 'social';
-  if (lower.includes('party') || lower.includes('birthday')) return 'social';
+  if (lower.includes('day out') || lower.includes('trip')) return 'family';
+  if (lower.includes('party') || lower.includes('birthday') || lower.includes('bday')) return 'social';
   if (lower.includes('meeting')) return 'meeting';
   return 'family';
 };
 
-const inferTitle = (line: string, dateMatch: string) => {
-  const beforeDate = line.split(dateMatch)[0]?.split(/\s•\s/)[0]?.replace(/[:\-–—]+$/g, '').trim();
-  const afterDate = line.split(dateMatch)[1]?.replace(/^[:\-–—]+/g, '').trim();
-  const location = extractLocation(line);
-  const raw = /^(date|when)\s*:?\s*$/i.test(beforeDate || '') ? location || afterDate : beforeDate || location || afterDate || line;
-  return titleCase((raw || '')
-    .replace(/\b(Date|Time|Location|Venue|Where|Place)\s*:/gi, ' ')
-    .replace(/\b(at\s+)?\d{1,2}[:.]\d{2}\s*(am|pm)?\b/gi, '')
-    .slice(0, 90)) || 'Imported event';
+const dayNamePattern = '(?:Mon(?:day)?|Tue(?:sday)?|Wed(?:nesday)?|Thu(?:rsday)?|Fri(?:day)?|Sat(?:urday)?|Sun(?:day)?)';
+const monthNamePattern = '(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t|tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)';
+
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const cleanTitleCandidate = (value: string, dateMatch?: string, location?: string) => {
+  let cleaned = value
+    .replace(/\b(Subject|From|Date|When|Time|Location|Venue|Where|Place)\s*:/gi, ' ')
+    .replace(/\bbday\b/gi, 'birthday')
+    .replace(/[•]+/g, ' ')
+    .replace(/\s+/g, ' ');
+
+  if (dateMatch) {
+    cleaned = cleaned.replace(dateMatch, ' ');
+  }
+  if (location) {
+    cleaned = cleaned.replace(new RegExp(`\\bat\\s+${escapeRegExp(location)}\\b`, 'i'), ' ');
+    cleaned = cleaned.replace(new RegExp(escapeRegExp(location), 'i'), ' ');
+  }
+
+  return cleaned
+    .replace(new RegExp(`\\b${dayNamePattern},?\\s+\\d{1,2}(?:st|nd|rd|th)?\\s+${monthNamePattern}(?:\\s+20\\d{2})?\\b`, 'gi'), ' ')
+    .replace(new RegExp(`\\b\\d{1,2}(?:st|nd|rd|th)?\\s+${monthNamePattern}(?:\\s+20\\d{2})?\\b`, 'gi'), ' ')
+    .replace(/\b20\d{2}[-/]\d{1,2}[-/]\d{1,2}\b/g, ' ')
+    .replace(/\b\d{1,2}[-/]\d{1,2}[-/]20\d{2}\b/g, ' ')
+    .replace(/\b\d{1,2}[:.]\d{2}\s*(am|pm)?\s*(?:-|to|–|—)?\s*\d{0,2}[:.]?\d{0,2}\s*(am|pm)?\b/gi, ' ')
+    .replace(/\b\d{1,2}\s*(am|pm)\b/gi, ' ')
+    .replace(/\b(on|at)\s*$/gi, ' ')
+    .replace(/^[\s,:;.-]+|[\s,:;.-]+$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 };
 
-const extractLocation = (line: string) => {
+const extractExplicitLocation = (line: string) => {
   const normalized = normalizeCalendarTextLabels(line).replace(/\s*\n\s*/g, ' ');
   const match = normalized.match(/\b(?:Location|Venue|Where|Place)\s*:\s*(.+?)(?=\s+(?:Date|Time|Subject|From)\s*:|$)/i);
-  return match?.[1]?.replace(/\s+/g, ' ').trim();
+  return match?.[1]
+    ?.replace(/\s+/g, ' ')
+    .replace(/^[\s,:;.-]+|[\s,:;.-]+$/g, '')
+    .trim();
+};
+
+const cleanLocationCandidate = (value: string, dateMatch?: string) => {
+  let cleaned = value.replace(/\s+/g, ' ').trim();
+  if (dateMatch) cleaned = cleaned.replace(dateMatch, ' ');
+
+  cleaned = cleaned
+    .replace(new RegExp(`\\b${dayNamePattern}\\b,?`, 'gi'), ' ')
+    .replace(new RegExp(`\\b\\d{1,2}(?:st|nd|rd|th)?\\s+${monthNamePattern}(?:\\s+20\\d{2})?\\b`, 'gi'), ' ')
+    .replace(/\b20\d{2}[-/]\d{1,2}[-/]\d{1,2}\b/g, ' ')
+    .replace(/\b\d{1,2}[-/]\d{1,2}[-/]20\d{2}\b/g, ' ')
+    .replace(/\b\d{1,2}[:.]\d{2}\s*(am|pm)?\b/gi, ' ')
+    .replace(/\b\d{1,2}\s*(am|pm)\b/gi, ' ')
+    .replace(/^[\s,:;.-]+|[\s,:;.-]+$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!/[A-Za-z]{3,}/.test(cleaned)) return undefined;
+  if (/^(on|at|from|to|date|time)$/i.test(cleaned)) return undefined;
+
+  return cleaned;
+};
+
+const extractNaturalAtLocation = (line: string, dateMatch?: string) => {
+  const normalized = normalizeCalendarTextLabels(line).replace(/\s*\n\s*/g, ' ');
+  const atMatches = Array.from(normalized.matchAll(
+    new RegExp(`\\bat\\s+(.+?)(?=\\s+(?:on\\s+)?(?:${dayNamePattern}\\b|\\d{1,2}(?:st|nd|rd|th)?\\s+${monthNamePattern}\\b|20\\d{2}|\\d{1,2}[:.]\\d{2}|\\d{1,2}\\s*(?:am|pm)\\b)|$)`, 'gi')
+  ));
+
+  for (const match of atMatches) {
+    const candidate = cleanLocationCandidate(match[1], dateMatch);
+    if (candidate) return candidate;
+  }
+
+  return undefined;
+};
+
+const extractContextVenue = (line: string, dateMatch?: string) => {
+  if (!dateMatch || !line.includes('•')) return undefined;
+
+  const beforeDate = line.split(dateMatch)[0] || '';
+  const segments = beforeDate
+    .split(/\s•\s/)
+    .map((segment) => cleanTitleCandidate(segment))
+    .filter((segment) =>
+      segment.length >= 4 &&
+      !/^(subject|from|booking confirmation)$/i.test(segment) &&
+      !entertainmentKeywords.some((keyword) => segment.toLowerCase() === keyword)
+    );
+
+  if (segments.length < 2) return undefined;
+
+  const candidate = segments[segments.length - 1];
+  if (/\b(confirmation|ticket|booking|subject)\b/i.test(candidate)) return undefined;
+  if (candidate.length > 80) return undefined;
+  return candidate;
+};
+
+const extractLocation = (line: string, dateMatch?: string) => (
+  extractExplicitLocation(line) ||
+  extractNaturalAtLocation(line, dateMatch) ||
+  extractContextVenue(line, dateMatch)
+);
+
+const inferSemanticTitle = (line: string, dateMatch: string, location?: string) => {
+  const cleaned = cleanTitleCandidate(line, dateMatch, location);
+  if (!cleaned) return undefined;
+
+  const birthdayOwnerFirst = cleaned.match(/\b([A-Z][A-Za-z'’ -]{1,36}?)(?:'s|’s)?\s+(\d{1,2}(?:st|nd|rd|th)?)?\s*(birthday|bday|b-day)\s*(party|celebration)?\b/i);
+  if (birthdayOwnerFirst) {
+    const owner = titleCase(birthdayOwnerFirst[1] || '').replace(/'s$/i, '');
+    const age = birthdayOwnerFirst[2] ? `${birthdayOwnerFirst[2]} ` : '';
+    const party = birthdayOwnerFirst[4] ? ' Party' : '';
+    return `${owner}'s ${age}Birthday${party}`.trim();
+  }
+
+  const birthdayFor = cleaned.match(/\b(birthday|bday|b-day)\s*(party|celebration)?\s+(?:for\s+)?([A-Z][A-Za-z'’ -]{1,36})\b/i);
+  if (birthdayFor) {
+    const owner = titleCase(birthdayFor[3] || '').replace(/'s$/i, '');
+    const party = birthdayFor[2] ? ' Party' : '';
+    return `${owner}'s Birthday${party}`.trim();
+  }
+
+  const dayOutMatch = cleaned.match(/\b([A-Z][A-Za-z'’ -]{1,36})\s+day\s+out\b/i);
+  if (dayOutMatch) {
+    return `${titleCase(dayOutMatch[1])} Day Out`;
+  }
+
+  if (/\bday\s+out\b/i.test(cleaned)) {
+    return 'Day Out';
+  }
+
+  return undefined;
+};
+
+const inferTitle = (line: string, dateMatch: string) => {
+  const location = extractLocation(line, dateMatch);
+  const beforeDate = line.split(dateMatch)[0]?.split(/\s•\s/)[0]?.replace(/[:\-–—]+$/g, '').trim();
+  const afterDate = line.split(dateMatch)[1]?.replace(/^[:\-–—]+/g, '').trim();
+  const semanticTitle = inferSemanticTitle(beforeDate || line, dateMatch, location);
+  const raw = /^(date|when)\s*:?\s*$/i.test(beforeDate || '')
+    ? location || afterDate
+    : semanticTitle || beforeDate || location || afterDate || line;
+  const removableLocation = raw === location ? undefined : location;
+
+  return titleCase(cleanTitleCandidate(raw || '', dateMatch, removableLocation).slice(0, 90)) || 'Imported event';
 };
 
 const hasExplicitTime = (line: string) =>
@@ -532,7 +665,7 @@ export const parseCalendarImportText = ({
         endDate: parseEndDate(candidate, parsedDate),
         time: parseTime(candidate),
         duration: parseDurationMinutes(candidate),
-        location: extractLocation(candidate),
+        location: extractLocation(candidate, parsedDate.match),
         type: inferType(candidate),
         confidence: confidenceForLine(candidate),
       }, candidate, index, people, defaultPersonId);

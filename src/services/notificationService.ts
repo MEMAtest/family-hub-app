@@ -8,6 +8,7 @@ import {
   NotificationPreferences
 } from '@/types/notification.types';
 import { CalendarEvent } from '@/types/calendar.types';
+import { getCalendarEventIcon, getEventNotificationMetadata } from '@/utils/eventSemantics';
 import conflictDetectionService, { DetectedConflict } from './conflictDetectionService';
 import { emailService } from './emailService';
 
@@ -403,11 +404,18 @@ class FamilyHubNotificationService implements NotificationService {
       type: 'reminder',
       title: reminder.metadata?.title || 'Event Reminder',
       message: reminder.metadata?.body || 'You have an upcoming event',
+      icon: reminder.metadata?.iconEmoji,
       priority: 'medium',
       category: 'event',
       read: false,
       actionRequired: false,
       relatedEventId: reminder.eventId,
+      metadata: {
+        eventIcon: reminder.metadata?.iconEmoji,
+        eventType: reminder.metadata?.eventType,
+        eventLocation: reminder.metadata?.location,
+        eventStartsAt: reminder.metadata?.startsAt,
+      },
       actions: [
         { id: 'view', label: 'View Event', type: 'primary', action: 'view_event' },
         { id: 'dismiss', label: 'Dismiss', type: 'secondary', action: 'dismiss' }
@@ -668,6 +676,7 @@ class FamilyHubNotificationService implements NotificationService {
    */
   async scheduleEventReminders(event: CalendarEvent): Promise<void> {
     const eventDateTime = new Date(`${event.date}T${event.time}`);
+    const eventIcon = getCalendarEventIcon(event);
     const reminderKey =
       event.type === 'education'
         ? 'school'
@@ -699,8 +708,12 @@ class FamilyHubNotificationService implements NotificationService {
             title: `Upcoming: ${event.title}`,
             body: `${event.title} starts in ${this.formatDuration(minutesBefore)}.`,
             icon: '/icon-192x192.png',
+            iconEmoji: eventIcon,
             badge: '/icon-96x96.png',
             tag: `event-${event.id}`,
+            location: event.location,
+            startsAt: eventDateTime.toISOString(),
+            ...getEventNotificationMetadata(event),
             data: { eventId: event.id, type: 'reminder', url: '/?view=calendar' }
           }
         });

@@ -104,19 +104,26 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
 
   // Get notification icon
   const getNotificationIcon = (notification: InAppNotification) => {
-    if (notification.icon) return notification.icon;
+    const emojiIcon = notification.icon || notification.metadata?.eventIcon || notification.metadata?.iconEmoji;
+    if (emojiIcon) {
+      return (
+        <span className="flex h-8 w-8 items-center justify-center rounded-md bg-white text-lg shadow-sm ring-1 ring-gray-200 dark:bg-slate-950 dark:ring-slate-700">
+          {emojiIcon}
+        </span>
+      );
+    }
 
     switch (notification.type) {
       case 'reminder':
-        return <Bell className="w-4 h-4" />;
+        return <Bell className="w-4 h-4 text-blue-600 dark:text-blue-300" />;
       case 'conflict':
-        return <AlertTriangle className="w-4 h-4" />;
+        return <AlertTriangle className="w-4 h-4 text-orange-600 dark:text-orange-300" />;
       case 'sync':
-        return <Calendar className="w-4 h-4" />;
+        return <Calendar className="w-4 h-4 text-emerald-600 dark:text-emerald-300" />;
       case 'system':
-        return <Info className="w-4 h-4" />;
+        return <Info className="w-4 h-4 text-slate-600 dark:text-slate-300" />;
       default:
-        return <Bell className="w-4 h-4" />;
+        return <Bell className="w-4 h-4 text-blue-600 dark:text-blue-300" />;
     }
   };
 

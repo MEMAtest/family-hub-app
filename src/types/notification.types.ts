@@ -40,8 +40,17 @@ export interface NotificationReminder {
     title: string;
     body: string;
     icon?: string;
+    iconEmoji?: string;
     badge?: string;
     tag?: string;
+    eventIcon?: string;
+    eventTitle?: string;
+    eventType?: CalendarEvent['type'];
+    eventDate?: string;
+    eventTime?: string;
+    eventLocation?: string;
+    location?: string;
+    startsAt?: string;
     data?: any;
   };
 }

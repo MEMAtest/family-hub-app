@@ -10,6 +10,7 @@ import { useFamilyStore } from '@/store/familyStore';
 import { createId } from '@/utils/id';
 import { useNotifications } from '@/contexts/NotificationContext';
 import { DEFAULT_FAMILY_ID } from '@/lib/defaultFamilyProfile';
+import { getCalendarEventIcon, getEventNotificationMetadata } from '@/utils/eventSemantics';
 
 interface CalendarContextValue {
   events: CalendarEvent[];
@@ -453,10 +454,13 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
         type: 'system',
         title: 'Event Created',
         message: `"${savedEvent.title}" has been added to your calendar with reminders.`,
+        icon: getCalendarEventIcon(savedEvent),
         priority: 'medium',
         category: 'event',
         read: false,
         actionRequired: false,
+        relatedEventId: savedEvent.id,
+        metadata: getEventNotificationMetadata(savedEvent),
       });
     } catch (error) {
       console.error('Failed to schedule reminders for created event', error);
@@ -510,10 +514,13 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
           type: 'system',
           title: 'Event Updated',
           message: `"${updatedEvent.title}" has been updated with new reminders.`,
+          icon: getCalendarEventIcon(updatedEvent),
           priority: 'medium',
           category: 'event',
           read: false,
           actionRequired: false,
+          relatedEventId: updatedEvent.id,
+          metadata: getEventNotificationMetadata(updatedEvent),
         });
       } catch (error) {
         console.error('Failed to reschedule reminders for updated event', error);
@@ -544,10 +551,13 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
           type: 'system',
           title: 'Event Deleted',
           message: `"${eventToDelete.title}" has been removed from your calendar.`,
+          icon: getCalendarEventIcon(eventToDelete),
           priority: 'medium',
           category: 'event',
           read: false,
           actionRequired: false,
+          relatedEventId: eventToDelete.id,
+          metadata: getEventNotificationMetadata(eventToDelete),
         });
       }
     }
@@ -611,10 +621,13 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
           type: 'system',
           title: 'Event Cancelled',
           message: `"${conflict.newEvent.title}" has been cancelled to resolve the conflict.`,
+          icon: getCalendarEventIcon(conflict.newEvent),
           priority: 'medium',
           category: 'conflict',
           read: false,
           actionRequired: false,
+          relatedEventId: conflict.newEvent.id,
+          metadata: getEventNotificationMetadata(conflict.newEvent),
         });
         break;
       case 'reschedule':
@@ -622,10 +635,13 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
           type: 'system',
           title: 'Manual Rescheduling Required',
           message: `Please reschedule "${conflict.newEvent.title}" to resolve the conflict.`,
+          icon: getCalendarEventIcon(conflict.newEvent),
           priority: 'high',
           category: 'conflict',
           read: false,
           actionRequired: true,
+          relatedEventId: conflict.newEvent.id,
+          metadata: getEventNotificationMetadata(conflict.newEvent),
         });
         break;
       case 'relocate':
@@ -633,10 +649,13 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
           type: 'system',
           title: 'Location Change Recommended',
           message: `Consider changing the location for "${conflict.newEvent.title}".`,
+          icon: getCalendarEventIcon(conflict.newEvent),
           priority: 'medium',
           category: 'conflict',
           read: false,
           actionRequired: true,
+          relatedEventId: conflict.newEvent.id,
+          metadata: getEventNotificationMetadata(conflict.newEvent),
         });
         break;
       default:
@@ -644,10 +663,13 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
           type: 'system',
           title: 'Resolution Applied',
           message: `Applied ${resolution.type} resolution for "${conflict.newEvent.title}".`,
+          icon: getCalendarEventIcon(conflict.newEvent),
           priority: 'medium',
           category: 'conflict',
           read: false,
           actionRequired: false,
+          relatedEventId: conflict.newEvent.id,
+          metadata: getEventNotificationMetadata(conflict.newEvent),
         });
     }
 
@@ -668,10 +690,13 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
       type: 'system',
       title: 'Conflict Ignored',
       message: `"${savedEvent.title}" has been added despite the conflict.`,
+      icon: getCalendarEventIcon(savedEvent),
       priority: 'medium',
       category: 'conflict',
       read: false,
       actionRequired: false,
+      relatedEventId: savedEvent.id,
+      metadata: getEventNotificationMetadata(savedEvent),
     });
 
     setDetectedConflicts((prev) => prev.filter((item) => item.id !== conflictId));
