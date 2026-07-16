@@ -23,6 +23,26 @@ describe('calendar import parser', () => {
     });
   });
 
+  it('expands timed holiday club ranges into one daily session per date', () => {
+    const drafts = parseCalendarImportText({
+      text: 'Angela holiday club 20th to 24th July 2026, 9am to 3pm',
+      people,
+      today: new Date('2026-07-17T09:00:00Z'),
+    });
+
+    expect(drafts).toHaveLength(5);
+    expect(drafts.map((draft) => draft.date)).toEqual([
+      '2026-07-20',
+      '2026-07-21',
+      '2026-07-22',
+      '2026-07-23',
+      '2026-07-24',
+    ]);
+    expect(drafts.every((draft) => draft.endDate === undefined)).toBe(true);
+    expect(drafts.every((draft) => draft.time === '09:00' && draft.duration === 360)).toBe(true);
+    expect(drafts.every((draft) => draft.title === 'Angela Holiday Club')).toBe(true);
+  });
+
   it('marks exact title/date/time matches as duplicates', () => {
     const drafts = parseCalendarImportText({
       text: 'Sports Day, 2026-07-14, 09:00',

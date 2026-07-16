@@ -75,6 +75,9 @@ const schoolKeywords = [
   'lesson',
 ];
 
+const dayNamePattern = '(?:Mon(?:day)?|Tue(?:sday)?|Wed(?:nesday)?|Thu(?:rsday)?|Fri(?:day)?|Sat(?:urday)?|Sun(?:day)?)';
+const monthNamePattern = '(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t|tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)';
+
 const entertainmentKeywords = [
   'cinema',
   'movie',
@@ -218,7 +221,7 @@ export const normalizeCalendarEmailText = ({
 };
 
 const parseDateValue = (value: string, fallbackYear?: number): { date: string; match: string } | null => {
-  const text = normalizeCalendarTextLabels(value).replace(/\b(\d{1,2})(st|nd|rd|th)\b/gi, '$1');
+  const text = normalizeCalendarTextLabels(value);
 
   const iso = text.match(/\b(20\d{2})[-/](\d{1,2})[-/](\d{1,2})\b/);
   if (iso) {
@@ -236,7 +239,7 @@ const parseDateValue = (value: string, fallbackYear?: number): { date: string; m
     };
   }
 
-  const compactRange = text.match(/\b(\d{1,2})\s*[-–—]\s*(\d{1,2})\s+([A-Za-z]+)(?:\s+(20\d{2}))?\b/i);
+  const compactRange = text.match(/\b(\d{1,2})(?:st|nd|rd|th)?\s*(?:-|to|until|–|—)\s*(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]+)(?:\s+(20\d{2}))?\b/i);
   if (compactRange) {
     const month = monthLookup[compactRange[3].toLowerCase()];
     const year = Number(compactRange[4] ?? fallbackYear);
@@ -249,7 +252,7 @@ const parseDateValue = (value: string, fallbackYear?: number): { date: string; m
   }
 
   const dayMonthMatches = Array.from(
-    text.matchAll(/\b(?:Mon(?:day)?|Tue(?:sday)?|Wed(?:nesday)?|Thu(?:rsday)?|Fri(?:day)?|Sat(?:urday)?|Sun(?:day)?)?,?\s*(\d{1,2})\s+([A-Za-z]+)(?:\s+(20\d{2}))?\b/gi)
+    text.matchAll(/\b(?:Mon(?:day)?|Tue(?:sday)?|Wed(?:nesday)?|Thu(?:rsday)?|Fri(?:day)?|Sat(?:urday)?|Sun(?:day)?)?,?\s*(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]+)(?:\s+(20\d{2}))?\b/gi)
   );
   for (const dayMonth of dayMonthMatches) {
     const month = monthLookup[dayMonth[2].toLowerCase()];
@@ -305,6 +308,10 @@ const toClockParts = (hoursText: string, minutesText?: string, periodText?: stri
 const parseTimeRange = (line: string) => {
   const normalized = normalizeCalendarTextLabels(line)
     .replace(/[–—]/g, '-')
+    // Remove date ranges before looking for clock ranges. Otherwise an input such
+    // as "20-24 July 2026, 9am-3pm" can be read as a 20:00-24:00 time range.
+    .replace(new RegExp(`\\b${dayNamePattern}\\s+\\d{1,2}(?:st|nd|rd|th)?\\s+${monthNamePattern}(?:\\s+20\\d{2})?\\s*(?:-|to|until)\\s*${dayNamePattern}\\s+\\d{1,2}(?:st|nd|rd|th)?\\s+${monthNamePattern}(?:\\s+20\\d{2})?\\b`, 'gi'), ' ')
+    .replace(new RegExp(`\\b\\d{1,2}(?:st|nd|rd|th)?\\s*(?:-|to|until)\\s*\\d{1,2}(?:st|nd|rd|th)?\\s+${monthNamePattern}(?:\\s+20\\d{2})?\\b`, 'gi'), ' ')
     .replace(/\b(?:20\d{2}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}[-/]\d{1,2}[-/]20\d{2})\b/g, ' ');
   const range = normalized.match(/\b(\d{1,2})(?:(?::|\.)(\d{2}))?\s*(am|pm)?\s*(?:-|to)\s*(\d{1,2})(?:(?::|\.)(\d{2}))?\s*(am|pm)?\b/i);
   if (!range) return undefined;
@@ -369,15 +376,13 @@ const inferType = (line: string): CalendarEvent['type'] => {
   return 'family';
 };
 
-const dayNamePattern = '(?:Mon(?:day)?|Tue(?:sday)?|Wed(?:nesday)?|Thu(?:rsday)?|Fri(?:day)?|Sat(?:urday)?|Sun(?:day)?)';
-const monthNamePattern = '(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t|tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)';
-
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const cleanTitleCandidate = (value: string, dateMatch?: string, location?: string) => {
   let cleaned = value
     .replace(/\b(Title|Event|Subject|From|Date|When|Time|Location|Venue|Where|Place)\s*:/gi, ' ')
     .replace(/\bbday\b/gi, 'birthday')
+    .replace(/^\s*(?:can you\s+)?(?:add|create|book|schedule|put|make|save|remember)\s+/i, ' ')
     .replace(/[*`]+/g, ' ')
     .replace(/[•]+/g, ' ')
     .replace(/\s+/g, ' ');
@@ -689,7 +694,7 @@ const overlaps = (a: CalendarImportDraft, b: Pick<CalendarEvent, 'id' | 'date' |
 export const annotateCalendarImportDrafts = (
   drafts: CalendarImportDraft[],
   existingEvents: CalendarEvent[]
-) => drafts.map((draft) => {
+): CalendarImportDraft[] => drafts.map((draft) => {
   const duplicate = existingEvents.find((event) =>
     event.date === draft.date &&
     event.time === draft.time &&
@@ -709,6 +714,31 @@ export const annotateCalendarImportDrafts = (
     conflictWith: conflicts.map((event) => event.id),
     warnings,
   };
+});
+
+const addDaysToDateKey = (date: string, days: number) => {
+  const [year, month, day] = date.split('-').map(Number);
+  const next = new Date(Date.UTC(year, month - 1, day + days));
+  return next.toISOString().split('T')[0];
+};
+
+const expandTimedDateRanges = (drafts: CalendarImportDraft[]) => drafts.flatMap((draft) => {
+  if (!draft.endDate || draft.endDate <= draft.date || draft.duration >= 24 * 60) {
+    return [draft];
+  }
+
+  const expanded: CalendarImportDraft[] = [];
+  for (let date = draft.date; date <= draft.endDate; date = addDaysToDateKey(date, 1)) {
+    expanded.push({
+      ...draft,
+      importId: `${draft.importId}-${date}`,
+      date,
+      endDate: undefined,
+      notes: `${draft.notes || `Imported from calendar intake: ${draft.source}`} (daily session in a timed date range)`,
+    });
+  }
+
+  return expanded;
 });
 
 export const parseCalendarImportText = ({
@@ -809,7 +839,7 @@ export const parseCalendarImportText = ({
     });
 
   const drafts = structured.length > 0 ? structured : dedupeImportDrafts(lineDrafts);
-  return annotateCalendarImportDrafts(drafts, existingEvents);
+  return annotateCalendarImportDrafts(expandTimedDateRanges(drafts), existingEvents);
 };
 
 const dedupeImportDrafts = (drafts: CalendarImportDraft[]) => {

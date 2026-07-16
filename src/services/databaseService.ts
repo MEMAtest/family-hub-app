@@ -142,18 +142,23 @@ class DatabaseService {
       console.log('Fetched families:', families);
 
       if (families && families.length > 0) {
-        this.familyId = families[0].id;
+        const storedFamilyId = typeof window !== 'undefined'
+          ? localStorage.getItem('familyId')
+          : null;
+        const activeFamily = families.find((family: { id?: string }) => family.id === storedFamilyId) || families[0];
+
+        this.familyId = activeFamily.id;
         if (this.familyId && typeof window !== 'undefined') {
           localStorage.setItem('familyId', this.familyId);
         }
-        if (families[0].familyName && typeof window !== 'undefined') {
-          localStorage.setItem('familyName', families[0].familyName);
+        if (activeFamily.familyName && typeof window !== 'undefined') {
+          localStorage.setItem('familyName', activeFamily.familyName);
         }
         console.log('Database connected: Family ID', this.familyId);
 
         // Store family members in localStorage
-        if (families[0].members && typeof window !== 'undefined') {
-          localStorage.setItem('familyMembers', JSON.stringify(families[0].members));
+        if (activeFamily.members && typeof window !== 'undefined') {
+          localStorage.setItem('familyMembers', JSON.stringify(activeFamily.members));
         }
 
         // Sync initial data from database with timeout
@@ -295,7 +300,7 @@ class DatabaseService {
   }
 
   // Save event to database
-  async saveEvent(event: CalendarEvent): Promise<CalendarEvent | null> {
+  async saveEvent(event: CalendarEvent): Promise<CalendarEvent> {
     console.log('saveEvent called with:', event);
     console.log('Database status:', { familyId: this.familyId, syncEnabled: this.syncEnabled });
 
@@ -357,16 +362,14 @@ class DatabaseService {
 
         this.upsertLocalEvent(savedEvent);
         return savedEvent;
-      } else {
-        console.warn('Database returned no event, falling back to localStorage');
-        this.upsertLocalEvent(event);
-        return event;
       }
+
+      throw new Error('The calendar service did not confirm this event was saved.');
     } catch (error) {
       console.error('Failed to save event to database:', error);
-      // Fall back to localStorage
-      this.upsertLocalEvent(event);
-      return event;
+      throw error instanceof Error
+        ? error
+        : new Error('Could not save this calendar event. Please try again.');
     }
   }
 

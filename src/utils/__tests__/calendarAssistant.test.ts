@@ -53,4 +53,25 @@ describe('calendar assistant parser', () => {
       type: 'sport',
     });
   });
+
+  it('prepares each holiday club day instead of incorrectly using today', () => {
+    const response = runCalendarAssistant({
+      command: 'add Angela holiday club 20th to 24th July 2026, 9am to 3pm',
+      events: [],
+      people,
+      today: new Date('2026-07-17T09:00:00Z'),
+    });
+
+    expect(response.action).toBe('create');
+    expect(response.drafts).toHaveLength(5);
+    expect(response.drafts?.map((draft) => draft.date)).toEqual([
+      '2026-07-20',
+      '2026-07-21',
+      '2026-07-22',
+      '2026-07-23',
+      '2026-07-24',
+    ]);
+    expect(response.drafts?.every((draft) => draft.time === '09:00' && draft.duration === 360)).toBe(true);
+    expect(response.warnings).not.toContain('I could not confidently find a date, so I used today.');
+  });
 });

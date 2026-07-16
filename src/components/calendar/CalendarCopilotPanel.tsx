@@ -54,6 +54,7 @@ const CalendarCopilotPanel = ({
   onOpenCalendar,
 }: CalendarCopilotPanelProps) => {
   const familyId = useFamilyStore((state) => state.databaseStatus.familyId);
+  const activeFamilyId = familyId || (typeof window !== 'undefined' ? localStorage.getItem('familyId') : null);
   const [command, setCommand] = useState('');
   const [assistantResult, setAssistantResult] = useState<CalendarAssistantResponse | null>(null);
   const [assistantLoading, setAssistantLoading] = useState(false);
@@ -72,6 +73,7 @@ const CalendarCopilotPanel = ({
     () => importDrafts.filter((draft) => selectedDraftIds.has(draft.importId)),
     [importDrafts, selectedDraftIds]
   );
+  const assistantDrafts = assistantResult?.drafts ?? (assistantResult?.draft ? [assistantResult.draft] : []);
 
   const runAssistant = async () => {
     if (!command.trim()) return;
@@ -81,8 +83,8 @@ const CalendarCopilotPanel = ({
     setAssistantResult(null);
 
     try {
-      if (familyId) {
-        const response = await fetch(`/api/families/${familyId}/events/assistant`, {
+      if (activeFamilyId) {
+        const response = await fetch(`/api/families/${activeFamilyId}/events/assistant`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -94,6 +96,9 @@ const CalendarCopilotPanel = ({
         if (!response.ok) throw new Error(payload.error || 'Assistant request failed');
         setAssistantResult(payload);
       } else {
+        if (people.length === 0) {
+          throw new Error('Family members are still loading. Try again in a moment.');
+        }
         setAssistantResult(runCalendarAssistant({ command, events, people, today: currentDate }));
       }
     } catch (error) {
@@ -104,20 +109,30 @@ const CalendarCopilotPanel = ({
   };
 
   const confirmAssistantDraft = async () => {
-    if (!assistantResult?.draft) return;
+    if (assistantDrafts.length === 0) return;
 
     setSavingDraft(true);
+    setAssistantError(null);
     try {
-      const result = await createEvent(assistantResult.draft);
-      if (result.status === 'created') {
+      const createdEvents: CalendarEvent[] = [];
+      for (const draft of assistantDrafts) {
+        const result = await createEvent(draft);
+        if (result.status === 'created') createdEvents.push(result.event);
+      }
+
+      if (createdEvents.length > 0) {
         setAssistantResult({
           action: 'search',
-          summary: `Added "${result.event.title}" to the calendar.`,
-          results: [result.event],
+          summary: createdEvents.length === 1
+            ? `Added "${createdEvents[0].title}" to the calendar.`
+            : `Added ${createdEvents.length} daily sessions to the calendar.`,
+          results: createdEvents,
           warnings: [],
         });
         setCommand('');
       }
+    } catch (error) {
+      setAssistantError(error instanceof Error ? error.message : 'Could not add the calendar event.');
     } finally {
       setSavingDraft(false);
     }
@@ -126,7 +141,7 @@ const CalendarCopilotPanel = ({
   const readImportFile = async (file: File) => {
     setImportError(null);
     if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
-      if (!familyId) {
+      if (!activeFamilyId) {
         setImportError('Family database is still connecting. Try the PDF again in a moment.');
         return;
       }
@@ -140,7 +155,7 @@ const CalendarCopilotPanel = ({
         if (people[0]?.id) formData.append('defaultPersonId', people[0].id);
         formData.append('today', currentDate.toISOString());
 
-        const response = await fetch(`/api/families/${familyId}/calendar-intake/pdf`, {
+        const response = await fetch(`/api/families/${activeFamilyId}/calendar-intake/pdf`, {
           method: 'POST',
           body: formData,
         });
@@ -202,10 +217,10 @@ const CalendarCopilotPanel = ({
     setSelectedDraftIds(new Set());
 
     try {
-      const payload = familyId
+      const payload = activeFamilyId
         ? await (async () => {
             const isEmail = looksLikeForwardedEmail(importText);
-            const response = await fetch(`/api/families/${familyId}/calendar-intake${isEmail ? '/email' : ''}`, {
+            const response = await fetch(`/api/families/${activeFamilyId}/calendar-intake${isEmail ? '/email' : ''}`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(isEmail
@@ -351,22 +366,24 @@ const CalendarCopilotPanel = ({
                 ))}
               </ul>
             )}
-            {assistantResult.draft && (
-              <div className="mt-3 flex flex-col gap-2 rounded-md border border-gray-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
-                <div>
-                  <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">{assistantResult.draft.title}</p>
-                  <p className="text-xs text-gray-500 dark:text-slate-400">
-                    {assistantResult.draft.date} at {assistantResult.draft.time} • {assistantResult.draft.type}
-                  </p>
+            {assistantDrafts.length > 0 && (
+              <div className="mt-3 border-t border-gray-200 pt-3 dark:border-slate-800">
+                <div className="max-h-32 space-y-1 overflow-y-auto">
+                  {assistantDrafts.map((draft, index) => (
+                    <div key={`${draft.date}-${draft.time}-${index}`} className="flex items-baseline justify-between gap-3 py-1 text-xs">
+                      <p className="min-w-0 truncate font-semibold text-gray-900 dark:text-slate-100">{draft.title}</p>
+                      <p className="shrink-0 text-gray-500 dark:text-slate-400">{draft.date} at {draft.time}</p>
+                    </div>
+                  ))}
                 </div>
                 <button
                   type="button"
                   onClick={() => void confirmAssistantDraft()}
                   disabled={savingDraft}
-                  className="inline-flex w-fit items-center gap-1.5 rounded-md bg-[#147c72] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                  className="mt-3 inline-flex w-fit items-center gap-1.5 rounded-md bg-[#147c72] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
                 >
                   {savingDraft ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                  Confirm and add
+                  {assistantDrafts.length === 1 ? 'Confirm and add' : `Confirm and add ${assistantDrafts.length}`}
                 </button>
               </div>
             )}

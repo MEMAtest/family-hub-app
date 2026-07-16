@@ -548,6 +548,50 @@ test('calendar event create and delete persists', async ({ page }) => {
   }
 });
 
+test('calendar assistant imports a timed holiday club range as daily sessions', async ({ page }) => {
+  test.setTimeout(180_000);
+
+  const source = `add ${runTag} Holiday Club 20th to 24th July 2026, 9am to 3pm`;
+  const expectedDates = [
+    '2026-07-20',
+    '2026-07-21',
+    '2026-07-22',
+    '2026-07-23',
+    '2026-07-24',
+  ];
+
+  await page.setViewportSize({ width: 1366, height: 900 });
+  await page.goto('/?view=calendar');
+  await page.waitForLoadState('domcontentloaded');
+  await waitForHubShell(page);
+  await dismissSetupWizard(page);
+  await switchToView(page, 'Calendar');
+
+  const commandInput = page.getByPlaceholder('Find summer holidays, or create swimming lesson next Tuesday at 5pm');
+  await expect(commandInput).toBeVisible({ timeout: 20_000 });
+  await commandInput.fill(source);
+  await page.getByRole('button', { name: /^Run$/ }).click();
+
+  await expect(page.getByText('Review 5 daily sessions before I add them to the calendar.')).toBeVisible({ timeout: 20_000 });
+  await page.getByRole('button', { name: 'Confirm and add 5' }).click();
+  await expect(page.getByText('Added 5 daily sessions to the calendar.')).toBeVisible({ timeout: 20_000 });
+
+  const createdEvents = await waitForRecord(
+    async () => {
+      const events = await prisma.calendarEvent.findMany({
+        where: { notes: { contains: source } },
+        orderBy: { eventDate: 'asc' },
+      });
+      return events.length === expectedDates.length ? events : null;
+    },
+    'holiday club daily sessions'
+  );
+
+  createdEvents.forEach((event) => createdIds.calendarEvents.add(event.id));
+  expect(createdEvents.map((event) => event.eventDate.toISOString().split('T')[0])).toEqual(expectedDates);
+  expect(createdEvents.every((event) => event.durationMinutes === 360)).toBe(true);
+});
+
 test('calendar refreshes database events created on another device', async ({ page }) => {
   test.setTimeout(180_000);
 

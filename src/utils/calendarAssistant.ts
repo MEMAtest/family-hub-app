@@ -1,4 +1,5 @@
 import type { CalendarEvent, Person } from '@/types/calendar.types';
+import { importDraftToCalendarEventDraft, parseCalendarImportText } from '@/utils/calendarImport';
 
 export type CalendarAssistantAction = 'search' | 'create' | 'unknown';
 
@@ -8,6 +9,7 @@ export interface CalendarAssistantResponse {
   query?: string;
   results?: CalendarEvent[];
   draft?: Omit<CalendarEvent, 'id' | 'createdAt' | 'updatedAt'>;
+  drafts?: Omit<CalendarEvent, 'id' | 'createdAt' | 'updatedAt'>[];
   warnings: string[];
 }
 
@@ -173,6 +175,29 @@ export const runCalendarAssistant = ({
   }
 
   if (isCreateIntent(trimmed)) {
+    const importedDrafts = parseCalendarImportText({
+      text: trimmed,
+      people,
+      existingEvents: events,
+      today,
+    }).filter((item) => item.importStatus !== 'duplicate');
+
+    if (importedDrafts.length > 0) {
+      const drafts = importedDrafts.map(importDraftToCalendarEventDraft);
+      const warnings = importedDrafts.flatMap((item) => item.warnings);
+      const firstDraft = drafts[0];
+
+      return {
+        action: 'create',
+        summary: drafts.length === 1
+          ? `Review this event before I add it: ${firstDraft.title} on ${firstDraft.date} at ${firstDraft.time}.`
+          : `Review ${drafts.length} daily sessions before I add them to the calendar.`,
+        draft: firstDraft,
+        drafts,
+        warnings: Array.from(new Set(warnings)),
+      };
+    }
+
     const date = parseNaturalDate(trimmed, today);
     const warnings: string[] = [];
     if (!date) warnings.push('I could not confidently find a date, so I used today.');

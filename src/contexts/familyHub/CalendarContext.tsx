@@ -438,27 +438,28 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
     | { status: 'created'; event: CalendarEvent }
   > => {
     const eventToSave = buildEvent(draft);
-    const conflicts = detectConflicts(eventToSave, events);
-
-    if (conflicts.length > 0) {
-      openConflictModal(conflicts);
-      return { status: 'conflict' };
+    if (!eventToSave.person) {
+      throw new Error('Choose a family member before saving this event.');
     }
+    const currentEvents = useFamilyStore.getState().events;
+    const conflicts = detectConflicts(eventToSave, currentEvents);
 
-    const savedEvent = await databaseService.saveEvent(eventToSave) ?? eventToSave;
-    setEvents([...events, savedEvent]);
+    const savedEvent = await databaseService.saveEvent(eventToSave);
+    setEvents([...currentEvents, savedEvent]);
 
     try {
       await scheduleEventReminders(savedEvent);
       await showNotification({
         type: 'system',
-        title: 'Event Created',
-        message: `"${savedEvent.title}" has been added to your calendar with reminders.`,
+        title: conflicts.length > 0 ? 'Event Added With Clash' : 'Event Created',
+        message: conflicts.length > 0
+          ? `"${savedEvent.title}" has been added. It overlaps ${conflicts.length === 1 ? 'another calendar item' : `${conflicts.length} calendar items`}.`
+          : `"${savedEvent.title}" has been added to your calendar with reminders.`,
         icon: getCalendarEventIcon(savedEvent),
         priority: 'medium',
-        category: 'event',
+        category: conflicts.length > 0 ? 'conflict' : 'event',
         read: false,
-        actionRequired: false,
+        actionRequired: conflicts.length > 0,
         relatedEventId: savedEvent.id,
         metadata: getEventNotificationMetadata(savedEvent),
       });
@@ -471,8 +472,6 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
   }, [
     closeEventForm,
     detectConflicts,
-    events,
-    openConflictModal,
     scheduleEventReminders,
     setEvents,
     showNotification,
@@ -482,22 +481,19 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
     id: string,
     updates: Partial<CalendarEvent>
   ): Promise<true | 'conflict'> => {
-    const existingEvent = events.find((event) => event.id === id);
+    const currentEvents = useFamilyStore.getState().events;
+    const existingEvent = currentEvents.find((event) => event.id === id);
     if (!existingEvent) {
       return true;
     }
 
     const updatedEvent = buildEvent({ ...existingEvent, ...updates }, id);
-    const otherEvents = events.filter((event) => event.id !== id);
+    const otherEvents = currentEvents.filter((event) => event.id !== id);
 
     const conflicts = detectConflicts(updatedEvent, otherEvents);
-    if (conflicts.length > 0) {
-      openConflictModal(conflicts);
-      return 'conflict';
-    }
 
     const success = await databaseService.updateEvent(id, updatedEvent);
-    const nextEvents = events.map((event) => (event.id === id ? updatedEvent : event));
+    const nextEvents = currentEvents.map((event) => (event.id === id ? updatedEvent : event));
     setEvents(nextEvents);
     if (typeof window !== 'undefined') {
       localStorage.setItem('calendarEvents', JSON.stringify(nextEvents));
@@ -506,19 +502,21 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
       console.warn('📆 CalendarContext: Updated event in local state after database update failed:', id);
     }
 
-    if (updates.date || updates.time) {
+    if (updates.date || updates.time || conflicts.length > 0) {
       try {
         await cancelEventReminders(id);
         await scheduleEventReminders(updatedEvent);
         await showNotification({
           type: 'system',
-          title: 'Event Updated',
-          message: `"${updatedEvent.title}" has been updated with new reminders.`,
+          title: conflicts.length > 0 ? 'Event Updated With Clash' : 'Event Updated',
+          message: conflicts.length > 0
+            ? `"${updatedEvent.title}" has been updated. It overlaps ${conflicts.length === 1 ? 'another calendar item' : `${conflicts.length} calendar items`}.`
+            : `"${updatedEvent.title}" has been updated with new reminders.`,
           icon: getCalendarEventIcon(updatedEvent),
           priority: 'medium',
-          category: 'event',
+          category: conflicts.length > 0 ? 'conflict' : 'event',
           read: false,
-          actionRequired: false,
+          actionRequired: conflicts.length > 0,
           relatedEventId: updatedEvent.id,
           metadata: getEventNotificationMetadata(updatedEvent),
         });
@@ -533,8 +531,6 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
     cancelEventReminders,
     closeEventForm,
     detectConflicts,
-    events,
-    openConflictModal,
     scheduleEventReminders,
     setEvents,
     showNotification,
@@ -683,7 +679,7 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
     const conflict = detectedConflicts.find((item) => item.id === conflictId);
     if (!conflict) return;
 
-    const savedEvent = await databaseService.saveEvent(conflict.newEvent) ?? conflict.newEvent;
+    const savedEvent = await databaseService.saveEvent(conflict.newEvent);
     const currentEvents = useFamilyStore.getState().events;
     setEvents([...currentEvents, savedEvent]);
     await showNotification({
