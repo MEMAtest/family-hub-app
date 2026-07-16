@@ -216,6 +216,66 @@ Garden, 1A Bedford St, London WC2E 9HH
     });
   });
 
+  it('understands chat-style birthday invites with embedded venue and vague time', () => {
+    const drafts = parseCalendarImportText({
+      text: "We're holding a gathering at our place in Tooting for Rafi's 2nd birthday on the afternoon of *Saturday 1st August* for anyone who is around. Partners/children etc v. welcome!",
+      people,
+      defaultPersonId: 'child-1',
+      today: new Date('2026-07-16T09:00:00Z'),
+    });
+
+    expect(drafts).toHaveLength(1);
+    expect(drafts[0]).toMatchObject({
+      title: "Rafi's 2nd Birthday",
+      person: 'child-1',
+      date: '2026-08-01',
+      time: '14:00',
+      location: 'our place in Tooting',
+      type: 'social',
+      importStatus: 'ready',
+    });
+  });
+
+  it('keeps previous event context when a date line uses ordinals', () => {
+    const drafts = parseCalendarImportText({
+      text: `
+Sol's birthday party
+Saturday 8th August
+Afternoon at the park
+      `,
+      people,
+      today: new Date('2026-07-16T09:00:00Z'),
+    });
+
+    expect(drafts).toHaveLength(1);
+    expect(drafts[0]).toMatchObject({
+      title: "Sol's Birthday Party",
+      date: '2026-08-08',
+      time: '14:00',
+      location: 'the park',
+      type: 'social',
+      importStatus: 'ready',
+    });
+  });
+
+  it('removes dictation commands from birthday titles', () => {
+    const drafts = parseCalendarImportText({
+      text: "Can you add Sol's birthday for Saturday 8th August afternoon at Grandma's?",
+      people,
+      today: new Date('2026-07-16T09:00:00Z'),
+    });
+
+    expect(drafts).toHaveLength(1);
+    expect(drafts[0]).toMatchObject({
+      title: "Sol's Birthday",
+      date: '2026-08-08',
+      time: '14:00',
+      location: "Grandma's",
+      type: 'social',
+      importStatus: 'ready',
+    });
+  });
+
   it('understands day out text with a natural venue and time', () => {
     const drafts = parseCalendarImportText({
       text: 'Angela day out at Greenwich Park Friday 24 July 2026 09:00',

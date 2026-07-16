@@ -102,7 +102,7 @@ const titleCase = (value: string) =>
     .replace(/^[\s,:;.-]+|[\s,:;.-]+$/g, '')
     .replace(/\s+/g, ' ')
     .trim()
-    .replace(/\b\w/g, (match) => match.toUpperCase())
+    .replace(/(^|[\s([{])([a-z])/g, (_, prefix: string, letter: string) => `${prefix}${letter.toUpperCase()}`)
     .replace(/(['’])S\b/g, '$1s');
 
 const parseDelimitedRows = (text: string) => {
@@ -333,7 +333,16 @@ const parseTime = (line: string) => {
 
   const withoutDates = normalizeCalendarTextLabels(line).replace(/\b(?:20\d{2}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}[-/]\d{1,2}[-/]20\d{2})\b/g, ' ');
   const match = withoutDates.match(/\b(\d{1,2})(?::|\.)(\d{2})\s*(am|pm)?\b/i) ?? withoutDates.match(/\b(\d{1,2})\s*(am|pm)\b/i);
-  if (!match) return '09:00';
+  if (!match) {
+    const lower = withoutDates.toLowerCase();
+    if (/\bafter\s+school\b/.test(lower)) return '15:30';
+    if (/\b(?:morning|breakfast)\b/.test(lower)) return '09:00';
+    if (/\b(?:lunchtime|lunch|noon)\b/.test(lower)) return '12:00';
+    if (/\bafternoon\b/.test(lower)) return '14:00';
+    if (/\bevening\b/.test(lower)) return '18:00';
+    if (/\bnight\b/.test(lower)) return '19:00';
+    return '09:00';
+  }
 
   const clock = toClockParts(
     match[1],
@@ -369,6 +378,7 @@ const cleanTitleCandidate = (value: string, dateMatch?: string, location?: strin
   let cleaned = value
     .replace(/\b(Title|Event|Subject|From|Date|When|Time|Location|Venue|Where|Place)\s*:/gi, ' ')
     .replace(/\bbday\b/gi, 'birthday')
+    .replace(/[*`]+/g, ' ')
     .replace(/[•]+/g, ' ')
     .replace(/\s+/g, ' ');
 
@@ -388,7 +398,7 @@ const cleanTitleCandidate = (value: string, dateMatch?: string, location?: strin
     .replace(/\b\d{1,2}[:.]\d{2}\s*(am|pm)?\s*(?:-|to|–|—)?\s*\d{0,2}[:.]?\d{0,2}\s*(am|pm)?\b/gi, ' ')
     .replace(/\b\d{1,2}\s*(am|pm)\b/gi, ' ')
     .replace(/\b(on|at)\s*$/gi, ' ')
-    .replace(/^[\s,:;.-]+|[\s,:;.-]+$/g, '')
+    .replace(/^[\s,:;.!?-]+|[\s,:;.!?-]+$/g, '')
     .replace(/\s+/g, ' ')
     .trim();
 };
@@ -404,17 +414,21 @@ const extractExplicitLocation = (line: string) => {
 };
 
 const cleanLocationCandidate = (value: string, dateMatch?: string) => {
-  let cleaned = value.replace(/\s+/g, ' ').trim();
+  let cleaned = value.replace(/[*`]+/g, ' ').replace(/\s+/g, ' ').trim();
   if (dateMatch) cleaned = cleaned.replace(dateMatch, ' ');
 
   cleaned = cleaned
+    .replace(/\s+\bfor\s+anyone\b.*$/i, ' ')
+    .replace(/\s+\bfor\s+[A-Z][A-Za-z'’ -]{0,40}(?:'s|’s)?\s+(?:\d{1,2}(?:st|nd|rd|th)?\s+)?(?:birthday|bday|b-day)\b.*$/i, ' ')
+    .replace(/\s+\bon\s+(?:the\s+)?(?:morning|afternoon|evening|night)\b.*$/i, ' ')
+    .replace(/\s+\b(?:morning|afternoon|evening|night)\s+of\b.*$/i, ' ')
     .replace(new RegExp(`\\b${dayNamePattern}\\b,?`, 'gi'), ' ')
     .replace(new RegExp(`\\b\\d{1,2}(?:st|nd|rd|th)?\\s+${monthNamePattern}(?:\\s+20\\d{2})?\\b`, 'gi'), ' ')
     .replace(/\b20\d{2}[-/]\d{1,2}[-/]\d{1,2}\b/g, ' ')
     .replace(/\b\d{1,2}[-/]\d{1,2}[-/]20\d{2}\b/g, ' ')
     .replace(/\b\d{1,2}[:.]\d{2}\s*(am|pm)?\b/gi, ' ')
     .replace(/\b\d{1,2}\s*(am|pm)\b/gi, ' ')
-    .replace(/^[\s,:;.-]+|[\s,:;.-]+$/g, '')
+    .replace(/^[\s,:;.!?-]+|[\s,:;.!?-]+$/g, '')
     .replace(/\s+/g, ' ')
     .trim();
 
@@ -425,9 +439,17 @@ const cleanLocationCandidate = (value: string, dateMatch?: string) => {
 };
 
 const extractNaturalAtLocation = (line: string, dateMatch?: string) => {
-  const normalized = normalizeCalendarTextLabels(line).replace(/\s*\n\s*/g, ' ');
+  const normalized = normalizeCalendarTextLabels(line).replace(/[*`]+/g, ' ').replace(/\s*\n\s*/g, ' ');
+  const stopPattern = [
+    'for\\s+anyone\\b',
+    "for\\s+[A-Z][A-Za-z'’ -]{0,40}(?:'s|’s)?\\s+(?:\\d{1,2}(?:st|nd|rd|th)?\\s+)?(?:birthday|bday|b-day)\\b",
+    'for\\s+(?:a|the)\\s+(?:birthday|bday|b-day|party|gathering|celebration)\\b',
+    'on\\s+(?:the\\s+)?(?:morning|afternoon|evening|night)\\b',
+    '(?:morning|afternoon|evening|night)\\s+of\\b',
+    `(?:on\\s+)?(?:${dayNamePattern}\\b|\\d{1,2}(?:st|nd|rd|th)?\\s+${monthNamePattern}\\b|20\\d{2}|\\d{1,2}[:.]\\d{2}|\\d{1,2}\\s*(?:am|pm)\\b)`,
+  ].join('|');
   const atMatches = Array.from(normalized.matchAll(
-    new RegExp(`\\bat\\s+(.+?)(?=\\s+(?:on\\s+)?(?:${dayNamePattern}\\b|\\d{1,2}(?:st|nd|rd|th)?\\s+${monthNamePattern}\\b|20\\d{2}|\\d{1,2}[:.]\\d{2}|\\d{1,2}\\s*(?:am|pm)\\b)|$)`, 'gi')
+    new RegExp(`\\bat\\s+(.+?)(?=\\s+(?:${stopPattern})|$)`, 'gi')
   ));
 
   for (const match of atMatches) {
@@ -468,6 +490,22 @@ const extractLocation = (line: string, dateMatch?: string) => (
 const inferSemanticTitle = (line: string, dateMatch: string, location?: string) => {
   const cleaned = cleanTitleCandidate(line, dateMatch, location);
   if (!cleaned) return undefined;
+
+  const birthdayCommand = cleaned.match(/\b(?:add|create|put|save|remember|calendar|book|arrange|organise|organize)\s+([A-Z][A-Za-z'’ -]{1,36}?)(?:'s|’s)?\s+(\d{1,2}(?:st|nd|rd|th)?)?\s*(birthday|bday|b-day)\s*(party|celebration|gathering)?\b/i);
+  if (birthdayCommand) {
+    const owner = titleCase(birthdayCommand[1] || '').replace(/'s$/i, '');
+    const age = birthdayCommand[2] ? `${birthdayCommand[2]} ` : '';
+    const party = birthdayCommand[4] ? ' Party' : '';
+    return `${owner}'s ${age}Birthday${party}`.trim();
+  }
+
+  const birthdayForOwner = cleaned.match(/\bfor\s+([A-Z][A-Za-z'’ -]{1,36}?)(?:'s|’s)?\s+(\d{1,2}(?:st|nd|rd|th)?)?\s*(birthday|bday|b-day)\s*(party|celebration|gathering)?\b/i);
+  if (birthdayForOwner) {
+    const owner = titleCase(birthdayForOwner[1] || '').replace(/'s$/i, '');
+    const age = birthdayForOwner[2] ? `${birthdayForOwner[2]} ` : '';
+    const party = birthdayForOwner[4] ? ' Party' : '';
+    return `${owner}'s ${age}Birthday${party}`.trim();
+  }
 
   const birthdayOwnerFirst = cleaned.match(/\b([A-Z][A-Za-z'’ -]{1,36}?)(?:'s|’s)?\s+(\d{1,2}(?:st|nd|rd|th)?)?\s*(birthday|bday|b-day)\s*(party|celebration)?\b/i);
   if (birthdayOwnerFirst) {
@@ -712,7 +750,7 @@ export const parseCalendarImportText = ({
     .flatMap(({ line, index }) => {
       const currentLineIndex = index - 1;
       const lineDate = parseDateValue(line, fallbackYear);
-      const dateLineRemainder = lineDate ? line.replace(lineDate.match, '') : line;
+      const dateLineRemainder = lineDate ? cleanTitleCandidate(line, lineDate.match) : line;
       const dateOnlyLine = Boolean(
         lineDate && !/[A-Za-z]{3,}/.test(dateLineRemainder.replace(/\b(date|when|on|at|am|pm)\b/gi, ''))
       );
