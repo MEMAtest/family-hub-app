@@ -236,6 +236,18 @@ const parseDateValue = (value: string, fallbackYear?: number): { date: string; m
     };
   }
 
+  const compactRange = text.match(/\b(\d{1,2})\s*[-–—]\s*(\d{1,2})\s+([A-Za-z]+)(?:\s+(20\d{2}))?\b/i);
+  if (compactRange) {
+    const month = monthLookup[compactRange[3].toLowerCase()];
+    const year = Number(compactRange[4] ?? fallbackYear);
+    if (month && year) {
+      return {
+        date: toDateKey(year, month, Number(compactRange[1])),
+        match: compactRange[0].trim(),
+      };
+    }
+  }
+
   const dayMonthMatches = Array.from(
     text.matchAll(/\b(?:Mon(?:day)?|Tue(?:sday)?|Wed(?:nesday)?|Thu(?:rsday)?|Fri(?:day)?|Sat(?:urday)?|Sun(?:day)?)?,?\s*(\d{1,2})\s+([A-Za-z]+)(?:\s+(20\d{2}))?\b/gi)
   );
@@ -281,43 +293,59 @@ const parseEndDate = (line: string, start: { date: string; match: string }) => {
   return endDate >= start.date ? endDate : undefined;
 };
 
+const toClockParts = (hoursText: string, minutesText?: string, periodText?: string) => {
+  let hours = Number(hoursText);
+  const minutes = Number(minutesText || 0);
+  const period = (periodText || '').toLowerCase();
+  if (period === 'pm' && hours < 12) hours += 12;
+  if (period === 'am' && hours === 12) hours = 0;
+  return { hours, minutes };
+};
+
+const parseTimeRange = (line: string) => {
+  const normalized = normalizeCalendarTextLabels(line)
+    .replace(/[–—]/g, '-')
+    .replace(/\b(?:20\d{2}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}[-/]\d{1,2}[-/]20\d{2})\b/g, ' ');
+  const range = normalized.match(/\b(\d{1,2})(?:(?::|\.)(\d{2}))?\s*(am|pm)?\s*(?:-|to)\s*(\d{1,2})(?:(?::|\.)(\d{2}))?\s*(am|pm)?\b/i);
+  if (!range) return undefined;
+
+  const hasMinutes = Boolean(range[2] || range[5]);
+  const hasPeriod = Boolean(range[3] || range[6]);
+  if (!hasMinutes && !hasPeriod) return undefined;
+
+  const startPeriod = range[3] || range[6] || '';
+  const endPeriod = range[6] || range[3] || '';
+  const start = toClockParts(range[1], range[2], startPeriod);
+  const end = toClockParts(range[4], range[5], endPeriod);
+  const startTotal = start.hours * 60 + start.minutes;
+  let endTotal = end.hours * 60 + end.minutes;
+  if (endTotal <= startTotal) endTotal += 24 * 60;
+
+  return {
+    start: `${pad(start.hours)}:${pad(start.minutes)}`,
+    duration: endTotal - startTotal,
+  };
+};
+
 const parseTime = (line: string) => {
+  const range = parseTimeRange(line);
+  if (range) return range.start;
+
   const withoutDates = normalizeCalendarTextLabels(line).replace(/\b(?:20\d{2}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}[-/]\d{1,2}[-/]20\d{2})\b/g, ' ');
   const match = withoutDates.match(/\b(\d{1,2})(?::|\.)(\d{2})\s*(am|pm)?\b/i) ?? withoutDates.match(/\b(\d{1,2})\s*(am|pm)\b/i);
   if (!match) return '09:00';
 
-  let hours = Number(match[1]);
-  const minutes = Number(match[2] && !Number.isNaN(Number(match[2])) ? match[2] : 0);
-  const period = (match[3] || match[2] || '').toLowerCase();
+  const clock = toClockParts(
+    match[1],
+    match[2] && !Number.isNaN(Number(match[2])) ? match[2] : undefined,
+    match[3] || match[2]
+  );
 
-  if (period === 'pm' && hours < 12) hours += 12;
-  if (period === 'am' && hours === 12) hours = 0;
-
-  return `${pad(hours)}:${pad(minutes)}`;
+  return `${pad(clock.hours)}:${pad(clock.minutes)}`;
 };
 
 const parseDurationMinutes = (line: string) => {
-  const normalized = normalizeCalendarTextLabels(line).replace(/[–—]/g, '-');
-  const range = normalized.match(/\b(\d{1,2})(?::|\.)(\d{2})\s*(am|pm)?\s*(?:-|to)\s*(\d{1,2})(?::|\.)(\d{2})\s*(am|pm)?\b/i);
-  if (!range) return undefined;
-
-  let startHours = Number(range[1]);
-  const startMinutes = Number(range[2]);
-  let endHours = Number(range[4]);
-  const endMinutes = Number(range[5]);
-  const startPeriod = (range[3] || range[6] || '').toLowerCase();
-  const endPeriod = (range[6] || range[3] || '').toLowerCase();
-
-  if (startPeriod === 'pm' && startHours < 12) startHours += 12;
-  if (startPeriod === 'am' && startHours === 12) startHours = 0;
-  if (endPeriod === 'pm' && endHours < 12) endHours += 12;
-  if (endPeriod === 'am' && endHours === 12) endHours = 0;
-
-  const startTotal = startHours * 60 + startMinutes;
-  let endTotal = endHours * 60 + endMinutes;
-  if (endTotal <= startTotal) endTotal += 24 * 60;
-
-  return endTotal - startTotal;
+  return parseTimeRange(line)?.duration;
 };
 
 const inferType = (line: string): CalendarEvent['type'] => {
@@ -327,7 +355,7 @@ const inferType = (line: string): CalendarEvent['type'] => {
   if (lower.includes('doctor') || lower.includes('dentist') || lower.includes('appointment')) return 'appointment';
   if (entertainmentKeywords.some((keyword) => lower.includes(keyword))) return 'social';
   if (lower.includes('day out') || lower.includes('trip')) return 'family';
-  if (lower.includes('party') || lower.includes('birthday') || lower.includes('bday')) return 'social';
+  if (lower.includes('party') || lower.includes('birthday') || lower.includes('bday') || lower.includes('b-day')) return 'social';
   if (lower.includes('meeting')) return 'meeting';
   return 'family';
 };
@@ -339,7 +367,7 @@ const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\
 
 const cleanTitleCandidate = (value: string, dateMatch?: string, location?: string) => {
   let cleaned = value
-    .replace(/\b(Subject|From|Date|When|Time|Location|Venue|Where|Place)\s*:/gi, ' ')
+    .replace(/\b(Title|Event|Subject|From|Date|When|Time|Location|Venue|Where|Place)\s*:/gi, ' ')
     .replace(/\bbday\b/gi, 'birthday')
     .replace(/[•]+/g, ' ')
     .replace(/\s+/g, ' ');
@@ -370,6 +398,7 @@ const extractExplicitLocation = (line: string) => {
   const match = normalized.match(/\b(?:Location|Venue|Where|Place)\s*:\s*(.+?)(?=\s+(?:Date|Time|Subject|From)\s*:|$)/i);
   return match?.[1]
     ?.replace(/\s+/g, ' ')
+    .replace(/\s*•\s*/g, ' ')
     .replace(/^[\s,:;.-]+|[\s,:;.-]+$/g, '')
     .trim();
 };
@@ -484,12 +513,52 @@ const hasExplicitTime = (line: string) =>
   /\b(\d{1,2})(?::|\.)(\d{2})\s*(am|pm)?\b/i.test(line) ||
   /\b(\d{1,2})\s*(am|pm)\b/i.test(line);
 
+const hasAmbiguousNumericDate = (line: string) =>
+  /\b(0?[1-9]|1[0-2])[-/](0?[1-9]|1[0-2])[-/]20\d{2}\b/.test(line);
+
+const hasCalendarCue = (line: string) => {
+  const lower = line.toLowerCase();
+  return [
+    ...schoolKeywords,
+    ...entertainmentKeywords,
+    'doctor',
+    'dentist',
+    'appointment',
+    'party',
+    'birthday',
+    'bday',
+    'b-day',
+    'day out',
+    'trip',
+    'football',
+    'swim',
+    'sport',
+    'meeting',
+    'camp',
+    'pickup',
+    'collection',
+  ].some((keyword) => lower.includes(keyword));
+};
+
+const hasCalendarLabel = (line: string) =>
+  /\b(Title|Event|Subject|Date|When|Time|Location|Venue|Where|Place)\s*:/i.test(line);
+
 const confidenceForLine = (line: string) => {
   const lower = line.toLowerCase();
   let confidence = schoolKeywords.some((keyword) => lower.includes(keyword)) ? 0.86 : 0.72;
   if (entertainmentKeywords.some((keyword) => lower.includes(keyword))) confidence = Math.max(confidence, 0.82);
+  if (!hasCalendarCue(line) && !hasCalendarLabel(line) && !hasExplicitTime(line)) confidence = 0.62;
   if (hasExplicitTime(line)) confidence = Math.max(confidence, 0.9);
+  if (hasAmbiguousNumericDate(line)) confidence = Math.min(confidence, 0.68);
   return confidence;
+};
+
+const warningsForLine = (line: string) => {
+  const warnings: string[] = [];
+  if (hasAmbiguousNumericDate(line)) {
+    warnings.push('Ambiguous numeric date. Review day/month before importing.');
+  }
+  return warnings;
 };
 
 const getDefaultPerson = (people: Person[], defaultPersonId?: string) =>
@@ -523,7 +592,7 @@ const toDraft = (
   source: line,
   sourceLine,
   importStatus: 'ready',
-  warnings: [],
+  warnings: event.warnings || [],
 });
 
 const mapHeader = (header: string) => {
@@ -641,20 +710,49 @@ export const parseCalendarImportText = ({
     .map((line, index) => ({ line: line.trim(), index: index + 1 }))
     .filter(({ line }) => line.length >= 8)
     .flatMap(({ line, index }) => {
-      const neighborhood = [
-        line,
-        sourceLines[index] || '',
-        sourceLines[index + 1] || '',
-        sourceLines[index + 2] || '',
-        sourceLines[index + 3] || '',
-        sourceLines[index + 4] || '',
-        sourceLines[index + 5] || '',
-        sourceLines[index + 6] || '',
-      ]
+      const currentLineIndex = index - 1;
+      const lineDate = parseDateValue(line, fallbackYear);
+      const dateLineRemainder = lineDate ? line.replace(lineDate.match, '') : line;
+      const dateOnlyLine = Boolean(
+        lineDate && !/[A-Za-z]{3,}/.test(dateLineRemainder.replace(/\b(date|when|on|at|am|pm)\b/gi, ''))
+      );
+      const dateLabelLine = /^\s*(date|when)\s*:/i.test(line);
+      const includeFollowingContext = Boolean(lineDate && (dateOnlyLine || dateLabelLine || !hasExplicitTime(line)));
+
+      const previousLines = (() => {
+        if (!lineDate) return [] as string[];
+        const candidates = [
+          sourceLines[currentLineIndex - 2] || '',
+          sourceLines[currentLineIndex - 1] || '',
+        ].map((value) => value.trim()).filter(Boolean);
+
+        if (dateLabelLine) {
+          return candidates.filter((value) => /^(title|event|subject)\s*:/i.test(value));
+        }
+        if (dateOnlyLine) {
+          return candidates.filter((value) => !parseDateValue(value, fallbackYear));
+        }
+        return [];
+      })();
+
+      const followingLines = (() => {
+        if (!includeFollowingContext) return [] as string[];
+        const lines: string[] = [];
+        for (let offset = 1; offset <= 6; offset += 1) {
+          const nextLine = sourceLines[currentLineIndex + offset]?.trim();
+          if (!nextLine) continue;
+          if (parseDateValue(nextLine, fallbackYear)) break;
+          lines.push(nextLine);
+        }
+        return lines;
+      })();
+
+      const neighborhoodParts = lineDate ? [...previousLines, line, ...followingLines] : [line];
+      const neighborhood = neighborhoodParts
         .map((value) => value.trim())
         .filter(Boolean)
-        .join(' ');
-      const candidate = parseDateValue(line, fallbackYear) ? neighborhood : line;
+        .join(previousLines.length > 0 || dateOnlyLine || dateLabelLine ? ' • ' : ' ');
+      const candidate = lineDate ? neighborhood : line;
       const parsedDate = parseDateValue(candidate, fallbackYear);
       if (!parsedDate) return [];
       if (!/[A-Za-z]/.test(candidate.replace(parsedDate.match, ''))) return [];
@@ -668,6 +766,7 @@ export const parseCalendarImportText = ({
         location: extractLocation(candidate, parsedDate.match),
         type: inferType(candidate),
         confidence: confidenceForLine(candidate),
+        warnings: warningsForLine(candidate),
       }, candidate, index, people, defaultPersonId);
     });
 

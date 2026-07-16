@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server';
+import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { requireFamilyAccess } from '@/lib/auth-utils';
 import { sendFamilyPushNotification } from '@/lib/webPush';
+import type { CalendarEvent } from '@/types/calendar.types';
+import { getCalendarEventIcon, getEventNotificationMetadata } from '@/utils/eventSemantics';
 
 const hasDedupeKey = (metadata: unknown, dedupeKey: string) => {
   if (!metadata || typeof metadata !== 'object') return false;
@@ -19,6 +22,9 @@ const describeWindow = (minutesUntil: number) => {
   if (minutesUntil <= 24 * 60) return { key: '24h', label: 'within 24 hours', priority: 'high' as const };
   return { key: '7d', label: 'this week', priority: 'medium' as const };
 };
+
+const compactMetadata = (metadata: Record<string, unknown>): Prisma.InputJsonObject =>
+  Object.fromEntries(Object.entries(metadata).filter(([, value]) => value !== undefined)) as Prisma.InputJsonObject;
 
 export const POST = requireFamilyAccess(async (_request, context) => {
   try {
@@ -83,6 +89,18 @@ export const POST = requireFamilyAccess(async (_request, context) => {
 
       const title = `Upcoming: ${event.title}`;
       const message = `${event.title} is ${window.label}${event.person?.name ? ` for ${event.person.name}` : ''}.`;
+      const eventDate = event.eventDate.toISOString().split('T')[0];
+      const eventTime = event.eventTime.toISOString().split('T')[1]?.slice(0, 5) ?? '09:00';
+      const eventUrl = `/?view=calendar&event=${event.id}`;
+      const semanticEvent = {
+        title: event.title,
+        type: event.eventType as CalendarEvent['type'],
+        date: eventDate,
+        time: eventTime,
+        location: event.location || undefined,
+        notes: event.notes || event.description || undefined,
+      };
+      const eventIcon = getCalendarEventIcon(semanticEvent);
 
       await prisma.notification.create({
         data: {
@@ -90,7 +108,7 @@ export const POST = requireFamilyAccess(async (_request, context) => {
           type: 'reminder',
           title,
           message,
-          icon: '🔔',
+          icon: eventIcon,
           priority: window.priority,
           category: 'event',
           read: false,
@@ -98,15 +116,16 @@ export const POST = requireFamilyAccess(async (_request, context) => {
           relatedEventId: event.id,
           relatedPersonId: event.personId,
           actions: [
-            { id: 'open', label: 'Open calendar', type: 'primary', action: 'view_calendar', data: { url: '/?view=calendar' } },
+            { id: 'open', label: 'Open calendar', type: 'primary', action: 'view_calendar', data: { url: eventUrl, eventId: event.id } },
             { id: 'dismiss', label: 'Dismiss', type: 'secondary', action: 'dismiss' },
           ],
-          metadata: {
+          metadata: compactMetadata({
             dedupeKey,
             source: 'notification-sweep',
             eventId: event.id,
-            url: '/?view=calendar',
-          },
+            url: eventUrl,
+            ...getEventNotificationMetadata(semanticEvent),
+          }),
         },
       });
       created += 1;
@@ -120,7 +139,7 @@ export const POST = requireFamilyAccess(async (_request, context) => {
           familyId,
           eventId: event.id,
           type: 'event-reminder',
-          url: '/?view=calendar',
+          url: eventUrl,
         },
         actions: [
           { action: 'view', title: 'Open calendar' },

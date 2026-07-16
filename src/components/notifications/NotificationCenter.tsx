@@ -104,11 +104,21 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
 
   // Get notification icon
   const getNotificationIcon = (notification: InAppNotification) => {
-    const emojiIcon = notification.icon || notification.metadata?.eventIcon || notification.metadata?.iconEmoji;
-    if (emojiIcon) {
+    const iconValue = notification.metadata?.eventIcon || notification.metadata?.iconEmoji || notification.icon;
+    const isUrlIcon = typeof iconValue === 'string' && /^(\/|https?:\/\/|data:image\/)/i.test(iconValue);
+
+    if (isUrlIcon) {
+      return (
+        <span className="flex h-8 w-8 items-center justify-center rounded-md bg-white shadow-sm ring-1 ring-gray-200 dark:bg-slate-950 dark:ring-slate-700">
+          <img src={iconValue} alt="" className="h-5 w-5" />
+        </span>
+      );
+    }
+
+    if (iconValue) {
       return (
         <span className="flex h-8 w-8 items-center justify-center rounded-md bg-white text-lg shadow-sm ring-1 ring-gray-200 dark:bg-slate-950 dark:ring-slate-700">
-          {emojiIcon}
+          {iconValue}
         </span>
       );
     }

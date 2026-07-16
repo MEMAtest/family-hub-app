@@ -149,6 +149,31 @@ Seats A1 A2
     });
   });
 
+  it('uses title and venue lines before a raw pasted ticket date', () => {
+    const drafts = parseCalendarImportText({
+      text: `
+Cinema booking: Superman
+Vue Bromley
+Saturday 18 July 2026
+7:30pm - 9:15pm
+Seats: E4, E5
+      `,
+      people,
+      today: new Date('2026-07-16T09:00:00Z'),
+    });
+
+    expect(drafts).toHaveLength(1);
+    expect(drafts[0]).toMatchObject({
+      title: 'Cinema Booking: Superman',
+      date: '2026-07-18',
+      time: '19:30',
+      duration: 105,
+      location: 'Vue Bromley',
+      type: 'social',
+      importStatus: 'ready',
+    });
+  });
+
   it('extracts time and location from copied date time location blocks', () => {
     const drafts = parseCalendarImportText({
       text: `
@@ -205,6 +230,126 @@ Garden, 1A Bedford St, London WC2E 9HH
       time: '09:00',
       location: 'Greenwich Park',
       type: 'family',
+      importStatus: 'ready',
+    });
+  });
+
+  it('does not let one dated event inherit the next event location', () => {
+    const drafts = parseCalendarImportText({
+      text: `
+Sports day Friday 24 July 2026 09:00
+Dentist appointment Monday 27 July 2026 16:30 at Smile Clinic
+      `,
+      people,
+      today: new Date('2026-07-16T09:00:00Z'),
+    });
+
+    expect(drafts).toHaveLength(2);
+    expect(drafts[0]).toMatchObject({
+      title: 'Sports Day',
+      date: '2026-07-24',
+      time: '09:00',
+      location: undefined,
+      type: 'sport',
+    });
+    expect(drafts[1]).toMatchObject({
+      title: 'Dentist Appointment',
+      date: '2026-07-27',
+      time: '16:30',
+      location: 'Smile Clinic',
+      type: 'appointment',
+    });
+  });
+
+  it('keeps title labels in date time location blocks', () => {
+    const drafts = parseCalendarImportText({
+      text: `
+Title: Alice dentist appointment
+Date: Thursday 23 July 2026
+Time: 15:30 - 16:00
+Location: Smile Clinic
+      `,
+      people,
+      today: new Date('2026-07-16T09:00:00Z'),
+    });
+
+    expect(drafts).toHaveLength(1);
+    expect(drafts[0]).toMatchObject({
+      title: 'Alice Dentist Appointment',
+      date: '2026-07-23',
+      time: '15:30',
+      duration: 30,
+      location: 'Smile Clinic',
+      type: 'appointment',
+    });
+  });
+
+  it('understands compact school ranges and hour-only time ranges', () => {
+    const termDrafts = parseCalendarImportText({
+      text: 'Half term 26-30 October 2026',
+      people,
+      today: new Date('2026-07-16T09:00:00Z'),
+    });
+    const cinemaDrafts = parseCalendarImportText({
+      text: 'Cinema Friday 31 July 2026 7pm - 9pm at Odeon',
+      people,
+      today: new Date('2026-07-16T09:00:00Z'),
+    });
+    const campDrafts = parseCalendarImportText({
+      text: 'Football camp Friday 31 July 2026 9-11am at Sports Centre',
+      people,
+      today: new Date('2026-07-16T09:00:00Z'),
+    });
+
+    expect(termDrafts[0]).toMatchObject({
+      title: 'Half Term',
+      date: '2026-10-26',
+      endDate: '2026-10-30',
+      type: 'education',
+    });
+    expect(cinemaDrafts[0]).toMatchObject({
+      time: '19:00',
+      duration: 120,
+      location: 'Odeon',
+      type: 'social',
+    });
+    expect(campDrafts[0]).toMatchObject({
+      time: '09:00',
+      duration: 120,
+      location: 'Sports Centre',
+      type: 'sport',
+    });
+  });
+
+  it('flags ambiguous or generic date text for review', () => {
+    const ambiguous = parseCalendarImportText({
+      text: 'School trip 03/04/2026 10am at Science Museum',
+      people,
+      today: new Date('2026-07-16T09:00:00Z'),
+    });
+    const generic = parseCalendarImportText({
+      text: 'Your voucher expires on 18 July 2026. Use code SUMMER20.',
+      people,
+      today: new Date('2026-07-16T09:00:00Z'),
+    });
+    const birthday = parseCalendarImportText({
+      text: "Oscar b-day celebration 5 August 2026 12pm at Grandma's",
+      people,
+      today: new Date('2026-07-16T09:00:00Z'),
+    });
+
+    expect(ambiguous[0]).toMatchObject({
+      date: '2026-04-03',
+      importStatus: 'needs_review',
+    });
+    expect(ambiguous[0].warnings).toContain('Ambiguous numeric date. Review day/month before importing.');
+    expect(generic[0]).toMatchObject({
+      title: 'Your Voucher Expires',
+      importStatus: 'needs_review',
+    });
+    expect(birthday[0]).toMatchObject({
+      title: "Oscar's Birthday Party",
+      type: 'social',
       importStatus: 'ready',
     });
   });
