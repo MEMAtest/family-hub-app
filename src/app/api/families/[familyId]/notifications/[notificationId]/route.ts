@@ -12,8 +12,15 @@ const patchSchema = z.object({
 export const PATCH = requireFamilyAccess(async (request: NextRequest, context, _authUser) => {
   try {
     const { familyId, notificationId } = await context.params;
-    const raw = await request.json();
+    const rawText = await request.text();
+    if (!rawText.trim()) {
+      return NextResponse.json({ error: 'Notification update body required' }, { status: 400 });
+    }
+    const raw = JSON.parse(rawText);
     const updates = patchSchema.parse(raw);
+    if (Object.keys(updates).length === 0) {
+      return NextResponse.json({ error: 'No notification updates provided' }, { status: 400 });
+    }
 
     const existing = await prisma.notification.findFirst({
       where: { id: notificationId, familyId },
@@ -62,6 +69,9 @@ export const PATCH = requireFamilyAccess(async (request: NextRequest, context, _
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: 'Invalid notification payload' }, { status: 400 });
+    }
+    if (error instanceof SyntaxError) {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
     }
     console.error('Error updating notification:', error);
     return NextResponse.json({ error: 'Failed to update notification' }, { status: 500 });

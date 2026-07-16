@@ -154,6 +154,17 @@ const cleanEmailLine = (line: string) =>
     .replace(/^[>*\s-]+/g, '')
     .trim();
 
+const normalizeCalendarTextLabels = (text: string) =>
+  text
+    .replace(/([a-z])([A-Z][a-z]+:)/g, '$1\n$2')
+    .replace(/\b(AM|PM)(?=(Date|Time|Location|Venue|Where|Place)\s*:)/gi, '$1\n')
+    .replace(/\b(Date|Time|Location|Venue|Where|Place)\s*:/gi, '\n$1: ')
+    .replace(/\bthe\s+(\d{1,2})(st|nd|rd|th)?\s+of\s+([A-Za-z]+)/gi, '$1 $3')
+    .replace(/\b(\d{1,2})(st|nd|rd|th)\s+of\s+([A-Za-z]+)/gi, '$1 $3')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
 const isEmailNoiseLine = (line: string) =>
   /unsubscribe|privacy policy|terms and conditions|view in browser|manage your booking|download app|add to wallet|do not reply/i.test(line);
 
@@ -206,7 +217,7 @@ export const normalizeCalendarEmailText = ({
 };
 
 const parseDateValue = (value: string, fallbackYear?: number): { date: string; match: string } | null => {
-  const text = value.replace(/\b(\d{1,2})(st|nd|rd|th)\b/gi, '$1');
+  const text = normalizeCalendarTextLabels(value).replace(/\b(\d{1,2})(st|nd|rd|th)\b/gi, '$1');
 
   const iso = text.match(/\b(20\d{2})[-/](\d{1,2})[-/](\d{1,2})\b/);
   if (iso) {
@@ -225,7 +236,7 @@ const parseDateValue = (value: string, fallbackYear?: number): { date: string; m
   }
 
   const dayMonthMatches = Array.from(
-    text.matchAll(/\b(?:Mon(?:day)?|Tue(?:sday)?|Wed(?:nesday)?|Thu(?:rsday)?|Fri(?:day)?|Sat(?:urday)?|Sun(?:day)?)?\s*(\d{1,2})\s+([A-Za-z]+)(?:\s+(20\d{2}))?\b/gi)
+    text.matchAll(/\b(?:Mon(?:day)?|Tue(?:sday)?|Wed(?:nesday)?|Thu(?:rsday)?|Fri(?:day)?|Sat(?:urday)?|Sun(?:day)?)?,?\s*(\d{1,2})\s+([A-Za-z]+)(?:\s+(20\d{2}))?\b/gi)
   );
   for (const dayMonth of dayMonthMatches) {
     const month = monthLookup[dayMonth[2].toLowerCase()];
@@ -270,7 +281,8 @@ const parseEndDate = (line: string, start: { date: string; match: string }) => {
 };
 
 const parseTime = (line: string) => {
-  const match = line.match(/\b(\d{1,2})(?::|\.)(\d{2})\s*(am|pm)?\b/i) ?? line.match(/\b(\d{1,2})\s*(am|pm)\b/i);
+  const withoutDates = normalizeCalendarTextLabels(line).replace(/\b(?:20\d{2}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}[-/]\d{1,2}[-/]20\d{2})\b/g, ' ');
+  const match = withoutDates.match(/\b(\d{1,2})(?::|\.)(\d{2})\s*(am|pm)?\b/i) ?? withoutDates.match(/\b(\d{1,2})\s*(am|pm)\b/i);
   if (!match) return '09:00';
 
   let hours = Number(match[1]);
@@ -284,7 +296,7 @@ const parseTime = (line: string) => {
 };
 
 const parseDurationMinutes = (line: string) => {
-  const normalized = line.replace(/[–—]/g, '-');
+  const normalized = normalizeCalendarTextLabels(line).replace(/[–—]/g, '-');
   const range = normalized.match(/\b(\d{1,2})(?::|\.)(\d{2})\s*(am|pm)?\s*(?:-|to)\s*(\d{1,2})(?::|\.)(\d{2})\s*(am|pm)?\b/i);
   if (!range) return undefined;
 
@@ -321,8 +333,18 @@ const inferType = (line: string): CalendarEvent['type'] => {
 const inferTitle = (line: string, dateMatch: string) => {
   const beforeDate = line.split(dateMatch)[0]?.split(/\s•\s/)[0]?.replace(/[:\-–—]+$/g, '').trim();
   const afterDate = line.split(dateMatch)[1]?.replace(/^[:\-–—]+/g, '').trim();
-  const raw = beforeDate || afterDate || line;
-  return titleCase(raw.replace(/\b(at\s+)?\d{1,2}[:.]\d{2}\s*(am|pm)?\b/gi, '').slice(0, 90)) || 'Imported event';
+  const location = extractLocation(line);
+  const raw = /^(date|when)\s*:?\s*$/i.test(beforeDate || '') ? location || afterDate : beforeDate || location || afterDate || line;
+  return titleCase((raw || '')
+    .replace(/\b(Date|Time|Location|Venue|Where|Place)\s*:/gi, ' ')
+    .replace(/\b(at\s+)?\d{1,2}[:.]\d{2}\s*(am|pm)?\b/gi, '')
+    .slice(0, 90)) || 'Imported event';
+};
+
+const extractLocation = (line: string) => {
+  const normalized = normalizeCalendarTextLabels(line).replace(/\s*\n\s*/g, ' ');
+  const match = normalized.match(/\b(?:Location|Venue|Where|Place)\s*:\s*(.+?)(?=\s+(?:Date|Time|Subject|From)\s*:|$)/i);
+  return match?.[1]?.replace(/\s+/g, ' ').trim();
 };
 
 const hasExplicitTime = (line: string) =>
@@ -384,7 +406,7 @@ const mapHeader = (header: string) => {
 };
 
 const parseStructuredRows = (text: string, people: Person[], defaultPersonId?: string) => {
-  const rows = parseDelimitedRows(text);
+  const rows = parseDelimitedRows(normalizeCalendarTextLabels(text));
   if (rows.length < 2) return [];
 
   const headers = rows[0].map(mapHeader);
@@ -462,11 +484,12 @@ export const parseCalendarImportText = ({
   defaultPersonId?: string;
   today?: Date;
 }) => {
-  const structured = parseStructuredRows(text, people, defaultPersonId);
+  const normalizedText = normalizeCalendarTextLabels(text);
+  const structured = parseStructuredRows(normalizedText, people, defaultPersonId);
   const fallbackYear = today.getFullYear();
 
   const sourceLines = (() => {
-    const lines = text.split(/\r?\n/);
+    const lines = normalizedText.split(/\r?\n/);
     const keyDatesIndex = lines.findIndex((line) => line.trim().toLowerCase() === 'key dates');
     if (keyDatesIndex === -1) return lines;
 
@@ -485,19 +508,34 @@ export const parseCalendarImportText = ({
     .map((line, index) => ({ line: line.trim(), index: index + 1 }))
     .filter(({ line }) => line.length >= 8)
     .flatMap(({ line, index }) => {
-      const parsedDate = parseDateValue(line, fallbackYear);
+      const neighborhood = [
+        line,
+        sourceLines[index] || '',
+        sourceLines[index + 1] || '',
+        sourceLines[index + 2] || '',
+        sourceLines[index + 3] || '',
+        sourceLines[index + 4] || '',
+        sourceLines[index + 5] || '',
+        sourceLines[index + 6] || '',
+      ]
+        .map((value) => value.trim())
+        .filter(Boolean)
+        .join(' ');
+      const candidate = parseDateValue(line, fallbackYear) ? neighborhood : line;
+      const parsedDate = parseDateValue(candidate, fallbackYear);
       if (!parsedDate) return [];
-      if (!/[A-Za-z]/.test(line.replace(parsedDate.match, ''))) return [];
+      if (!/[A-Za-z]/.test(candidate.replace(parsedDate.match, ''))) return [];
 
       return toDraft({
-        title: inferTitle(line, parsedDate.match),
+        title: inferTitle(candidate, parsedDate.match),
         date: parsedDate.date,
-        endDate: parseEndDate(line, parsedDate),
-        time: parseTime(line),
-        duration: parseDurationMinutes(line),
-        type: inferType(line),
-        confidence: confidenceForLine(line),
-      }, line, index, people, defaultPersonId);
+        endDate: parseEndDate(candidate, parsedDate),
+        time: parseTime(candidate),
+        duration: parseDurationMinutes(candidate),
+        location: extractLocation(candidate),
+        type: inferType(candidate),
+        confidence: confidenceForLine(candidate),
+      }, candidate, index, people, defaultPersonId);
     });
 
   const drafts = structured.length > 0 ? structured : dedupeImportDrafts(lineDrafts);

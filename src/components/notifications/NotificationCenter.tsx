@@ -124,15 +124,15 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
   const getNotificationColor = (notification: InAppNotification) => {
     switch (notification.priority) {
       case 'urgent':
-        return 'border-l-red-500 bg-red-50';
+        return 'border-l-red-500 bg-red-50 dark:bg-red-500/10';
       case 'high':
-        return 'border-l-orange-500 bg-orange-50';
+        return 'border-l-orange-500 bg-orange-50 dark:bg-orange-500/10';
       case 'medium':
-        return 'border-l-blue-500 bg-blue-50';
+        return 'border-l-blue-500 bg-blue-50 dark:bg-blue-500/10';
       case 'low':
-        return 'border-l-gray-500 bg-gray-50';
+        return 'border-l-gray-500 bg-gray-50 dark:bg-slate-800/80';
       default:
-        return 'border-l-gray-300 bg-white';
+        return 'border-l-gray-300 bg-white dark:border-l-slate-600 dark:bg-slate-900';
     }
   };
 
@@ -307,7 +307,7 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
                   placeholder="Search notifications..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full rounded-md border border-gray-300 bg-white py-2 pl-10 pr-4 text-sm text-gray-900 focus:border-transparent focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500"
                 />
               </div>
 
@@ -321,7 +321,7 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
                       className={`px-3 py-1 text-sm rounded-md transition-colors ${
                         filter === filterOption
                           ? 'bg-blue-600 text-white'
-                          : 'text-gray-600 hover:bg-gray-100'
+                          : 'text-gray-600 hover:bg-gray-100 dark:text-slate-300 dark:hover:bg-slate-800'
                       }`}
                     >
                       {filterOption.charAt(0).toUpperCase() + filterOption.slice(1)}
@@ -332,7 +332,7 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
                 {unreadCount > 0 && (
                   <button
                     onClick={markAllAsRead}
-                    className="ml-auto text-sm text-blue-600 hover:text-blue-700 transition-colors"
+                    className="ml-auto text-sm text-blue-600 transition-colors hover:text-blue-700 dark:text-blue-300 dark:hover:text-blue-200"
                     title="Mark all as read"
                   >
                     <CheckCheck className="w-4 h-4" />
@@ -443,7 +443,7 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
                                 className="p-1 hover:bg-white hover:bg-opacity-50 rounded transition-colors dark:hover:bg-slate-800"
                                 title="Mark as read"
                               >
-                                <Check className="w-3 h-3 text-gray-600" />
+                                <Check className="w-3 h-3 text-gray-600 dark:text-slate-300" />
                               </button>
                             )}
 
@@ -453,9 +453,9 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
                                 className="p-1 hover:bg-white hover:bg-opacity-50 rounded transition-colors dark:hover:bg-slate-800"
                                 title="Snooze"
                               >
-                                <Clock className="w-3 h-3 text-gray-600" />
+                                <Clock className="w-3 h-3 text-gray-600 dark:text-slate-300" />
                               </button>
-                              <div className="absolute right-0 top-full mt-1 w-32 bg-white border border-gray-200 rounded-md shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10">
+                              <div className="invisible absolute right-0 top-full z-10 mt-1 w-32 rounded-md border border-gray-200 bg-white opacity-0 shadow-lg transition-all duration-200 group-hover:visible group-hover:opacity-100 dark:border-slate-700 dark:bg-slate-900">
                                 {snoozeOptions.map((option) => (
                                   <button
                                     key={option.label}
@@ -473,7 +473,7 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
                               className="p-1 hover:bg-white hover:bg-opacity-50 rounded transition-colors dark:hover:bg-slate-800"
                               title="Delete"
                             >
-                              <Trash2 className="w-3 h-3 text-gray-600" />
+                              <Trash2 className="w-3 h-3 text-gray-600 dark:text-slate-300" />
                             </button>
                           </div>
                         </div>
@@ -490,7 +490,7 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
                                     ? 'bg-blue-600 text-white hover:bg-blue-700'
                                     : action.type === 'danger'
                                     ? 'bg-red-600 text-white hover:bg-red-700'
-                                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700'
                                 }`}
                               >
                                 {action.label}

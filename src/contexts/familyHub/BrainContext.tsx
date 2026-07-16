@@ -135,6 +135,7 @@ export const BrainProvider = ({ children }: PropsWithChildren) => {
   const hasFetchedProjects = useRef(false);
   const isMountedRef = useRef(true);
   const notifiedNodeIds = useRef<Set<string>>(new Set());
+  const pendingOptimisticNodes = useRef<Map<string, BrainNode>>(new Map());
 
   // Clean up position save timer on unmount
   useEffect(() => {
@@ -223,15 +224,18 @@ export const BrainProvider = ({ children }: PropsWithChildren) => {
           const data = await nodesRes.json();
           if (Array.isArray(data)) {
             const loadedIds = new Set(data.map((node: BrainNode) => node.id));
+            const pendingNodes = Array.from(pendingOptimisticNodes.current.values())
+              .filter((node) => node.projectId === activeProjectId && !loadedIds.has(node.id));
+            const pendingIds = new Set(pendingNodes.map((node) => node.id));
             const recentOptimisticNodes = useFamilyStore
               .getState()
               .brainNodes
               .filter((node) => {
-                if (node.projectId !== activeProjectId || loadedIds.has(node.id)) return false;
+                if (node.projectId !== activeProjectId || loadedIds.has(node.id) || pendingIds.has(node.id)) return false;
                 const createdAt = new Date(node.createdAt).getTime();
                 return node.id.startsWith('bn-') && Date.now() - createdAt < 2 * 60 * 1000;
               });
-            const mergedNodes = [...data, ...recentOptimisticNodes];
+            const mergedNodes = [...data, ...pendingNodes, ...recentOptimisticNodes];
             setBrainNodes(mergedNodes);
             checkOverdueNotifications(mergedNodes);
           }
@@ -471,6 +475,7 @@ export const BrainProvider = ({ children }: PropsWithChildren) => {
         createdAt: now,
         updatedAt: now,
       };
+      pendingOptimisticNodes.current.set(optimistic.id, optimistic);
       addBrainNode(optimistic);
 
       if (familyId) {
@@ -486,11 +491,13 @@ export const BrainProvider = ({ children }: PropsWithChildren) => {
             });
             if (res.ok) {
               const saved = await res.json();
+              pendingOptimisticNodes.current.delete(optimistic.id);
               updateBrainNodeStore(optimistic.id, saved);
               return { ...optimistic, ...saved };
             }
 
             if (res.status === 400 || res.status === 404) {
+              pendingOptimisticNodes.current.delete(optimistic.id);
               deleteBrainNodeStore(optimistic.id);
               throw new Error(`Failed to persist brain node (${res.status})`);
             }
@@ -512,6 +519,10 @@ export const BrainProvider = ({ children }: PropsWithChildren) => {
 
   const updateNode = useCallback(
     async (id: string, updates: Partial<BrainNode>) => {
+      const pendingNode = pendingOptimisticNodes.current.get(id);
+      if (pendingNode) {
+        pendingOptimisticNodes.current.set(id, { ...pendingNode, ...updates });
+      }
       updateBrainNodeStore(id, updates);
       if (!familyId) return;
       try {
@@ -533,6 +544,7 @@ export const BrainProvider = ({ children }: PropsWithChildren) => {
 
   const deleteNode = useCallback(
     async (id: string) => {
+      pendingOptimisticNodes.current.delete(id);
       deleteBrainNodeStore(id);
       if (selectedNodeId === id) {
         setSelectedNodeId(null);

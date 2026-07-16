@@ -50,6 +50,7 @@ interface CalendarContextValue {
 }
 
 const CalendarContext = createContext<CalendarContextValue | undefined>(undefined);
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const mapMembersToPeople = (members: ReturnType<typeof useFamilyStore.getState>['people']): Person[] => {
   return members.map((member) => {
@@ -171,46 +172,55 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
   // ─── Brain nodes → calendar events helper ─────────────────────────
   const loadBrainEvents = useCallback(async (fid: string) => {
     try {
-      const [nodesRes, projectsRes] = await Promise.all([
-        fetch(`/api/families/${fid}/brain/nodes?showOnCalendar=true`),
-        fetch(`/api/families/${fid}/brain/projects`),
-      ]);
-      if (!nodesRes.ok || !projectsRes.ok) return;
+      const retryDelays = [0, 500, 1200];
 
-      const nodes: BrainNode[] = await nodesRes.json();
-      const projects: BrainProject[] = await projectsRes.json();
-      if (!Array.isArray(nodes) || nodes.length === 0) return;
+      for (const [attempt, delay] of retryDelays.entries()) {
+        if (delay > 0) await wait(delay);
 
-      const projectMap = new Map(projects.map((p) => [p.id, p]));
+        const [nodesRes, projectsRes] = await Promise.all([
+          fetch(`/api/families/${fid}/brain/nodes?showOnCalendar=true`),
+          fetch(`/api/families/${fid}/brain/projects`),
+        ]);
+        if (!nodesRes.ok || !projectsRes.ok) {
+          if (attempt === retryDelays.length - 1) return;
+          continue;
+        }
 
-      const brainEvents: CalendarEvent[] = nodes
-        .filter((n): n is BrainNode & { dueDate: string } => !!n.dueDate)
-        .map((node) => {
-          const project = projectMap.get(node.projectId);
-          return {
-            id: `brain-${node.id}`,
-            title: `🧠 ${node.title}`,
-            person: '',
-            date: node.dueDate.split('T')[0],
-            time: '09:00',
-            duration: 30,
-            recurring: 'none' as const,
-            cost: 0,
-            type: 'brain' as const,
-            notes: `Brain: ${project?.name ?? 'Project'}`,
-            isRecurring: false,
-            priority: (node.priority === 'urgent' ? 'high' : node.priority) as 'low' | 'medium' | 'high',
-            status: 'confirmed' as const,
-            color: project?.color,
-            createdAt: new Date(node.createdAt),
-            updatedAt: new Date(node.updatedAt),
-          };
-        });
+        const nodes: BrainNode[] = await nodesRes.json();
+        const projects: BrainProject[] = await projectsRes.json();
+        if (!Array.isArray(nodes)) return;
+        if (nodes.length === 0 && attempt < retryDelays.length - 1) continue;
 
-      if (brainEvents.length > 0) {
+        const projectMap = new Map(projects.map((p) => [p.id, p]));
+
+        const brainEvents: CalendarEvent[] = nodes
+          .filter((n): n is BrainNode & { dueDate: string } => !!n.dueDate)
+          .map((node) => {
+            const project = projectMap.get(node.projectId);
+            return {
+              id: `brain-${node.id}`,
+              title: `🧠 ${node.title}`,
+              person: '',
+              date: node.dueDate.split('T')[0],
+              time: '09:00',
+              duration: 30,
+              recurring: 'none' as const,
+              cost: 0,
+              type: 'brain' as const,
+              notes: `Brain: ${project?.name ?? 'Project'}`,
+              isRecurring: false,
+              priority: (node.priority === 'urgent' ? 'high' : node.priority) as 'low' | 'medium' | 'high',
+              status: 'confirmed' as const,
+              color: project?.color,
+              createdAt: new Date(node.createdAt),
+              updatedAt: new Date(node.updatedAt),
+            };
+          });
+
         const currentEvents = useFamilyStore.getState().events;
         const nonBrainEvents = currentEvents.filter((e) => !e.id.startsWith('brain-'));
         setEvents(mergeEvents(brainEvents, nonBrainEvents));
+        return;
       }
     } catch (err) {
       console.warn('📆 CalendarContext: Failed to load brain events:', err);
@@ -361,6 +371,21 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
       window.clearInterval(intervalId);
     };
   }, [databaseStatus.connected, refreshEventsFromDatabase]);
+
+  useEffect(() => {
+    if (!databaseStatus.connected) return;
+
+    const refreshDelays = [750, 2500, 6000];
+    const timeoutIds = refreshDelays.map((delay) =>
+      window.setTimeout(() => {
+        void refreshEventsFromDatabase();
+      }, delay)
+    );
+
+    return () => {
+      timeoutIds.forEach((timeoutId) => window.clearTimeout(timeoutId));
+    };
+  }, [databaseStatus.connected, databaseStatus.familyId, refreshEventsFromDatabase]);
 
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [defaultSlot, setDefaultSlot] = useState<{ start: Date; end: Date } | null>(null);

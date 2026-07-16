@@ -172,6 +172,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
   const [dragFeedback, setDragFeedback] = useState<string | null>(null)
   const [showWorkStatusManager, setShowWorkStatusManager] = useState(false)
   const [showMobileMenu, setShowMobileMenu] = useState(false)
+  const [selectedAgendaDate, setSelectedAgendaDate] = useState(() => moment(currentDate).format('YYYY-MM-DD'))
   const [isAIConflictOpen, setIsAIConflictOpen] = useState(false)
   const [isAIScheduleOpen, setIsAIScheduleOpen] = useState(false)
   const [aiConflictForm, setAiConflictForm] = useState({
@@ -478,11 +479,13 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
 
   // Handle slot selection (creating new events)
   const handleSelectSlot = useCallback((slotInfo: { start: Date; end: Date }) => {
+    setSelectedAgendaDate(moment(slotInfo.start).format('YYYY-MM-DD'))
     onEventCreate(slotInfo)
   }, [onEventCreate])
 
   // Handle event selection
   const handleSelectEvent = useCallback((event: any) => {
+    setSelectedAgendaDate(event.resource!.date)
     onEventClick(event.resource!)
   }, [onEventClick])
 
@@ -571,6 +574,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
 
   // Navigate calendar
   const handleNavigate = useCallback((date: Date) => {
+    setSelectedAgendaDate(moment(date).format('YYYY-MM-DD'))
     onDateChange(date)
   }, [onDateChange])
 
@@ -666,6 +670,24 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
       monthName: currentMonth.format('MMMM YYYY')
     };
   }, [events, currentDate, view, selectedPeople, selectedCategories, people]);
+
+  const selectedDayEvents = useMemo(() => {
+    return events
+      .filter((event) => {
+        const personMatch = event.person === '' || selectedPeople.includes(event.person)
+        const categoryMatch = selectedCategories.includes(event.type)
+        const startsBeforeOrOn = event.date <= selectedAgendaDate
+        const endsAfterOrOn = (event.endDate || event.date) >= selectedAgendaDate
+        return personMatch && categoryMatch && startsBeforeOrOn && endsAfterOrOn
+      })
+      .slice()
+      .sort((a, b) => a.time.localeCompare(b.time) || a.title.localeCompare(b.title))
+  }, [events, selectedAgendaDate, selectedPeople, selectedCategories])
+
+  const selectedDayLabel = useMemo(
+    () => moment(selectedAgendaDate, 'YYYY-MM-DD').format('dddd, D MMMM'),
+    [selectedAgendaDate]
+  )
 
   // Mobile Calendar Header Component
   const renderMobileHeader = () => (
@@ -1631,6 +1653,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
               onDateChange={handleNavigate}
               onEventClick={handleSelectEvent}
               onDateClick={(date) => {
+                setSelectedAgendaDate(moment(date).format('YYYY-MM-DD'));
                 setView(Views.DAY);
                 handleNavigate(date);
               }}
@@ -1701,6 +1724,59 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
               )
             }}
           />
+          )}
+
+          {view !== 'YEAR' && (
+            <section className="mt-4 rounded-lg border border-gray-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-4">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h2 className="text-sm font-semibold text-gray-900 dark:text-slate-100">
+                    {selectedDayLabel}
+                  </h2>
+                  <p className="text-xs text-gray-500 dark:text-slate-400">
+                    {selectedDayEvents.length === 0
+                      ? 'No events on this date'
+                      : `${selectedDayEvents.length} event${selectedDayEvents.length === 1 ? '' : 's'} on this date`}
+                  </p>
+                </div>
+                {selectedDayEvents.length > 1 && (
+                  <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-800 dark:bg-amber-500/20 dark:text-amber-200">
+                    Check clashes
+                  </span>
+                )}
+              </div>
+
+              {selectedDayEvents.length > 0 && (
+                <div className="space-y-2">
+                  {selectedDayEvents.map((event) => {
+                    const person = people.find((item) => item.id === event.person)
+                    return (
+                      <button
+                        key={event.id}
+                        type="button"
+                        onClick={() => onEventClick(event)}
+                        className="flex w-full items-start gap-3 rounded-md border border-gray-100 bg-gray-50 p-3 text-left transition hover:border-gray-200 hover:bg-gray-100 dark:border-slate-800 dark:bg-slate-950 dark:hover:border-slate-700 dark:hover:bg-slate-800"
+                      >
+                        <span
+                          className="mt-1 h-3 w-3 flex-shrink-0 rounded-full"
+                          style={{ backgroundColor: person?.color || getPersonColor(event.person) }}
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-semibold text-gray-900 dark:text-slate-100">
+                            {event.title}
+                          </span>
+                          <span className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-600 dark:text-slate-300">
+                            <span>{event.time} · {event.duration} min</span>
+                            {person && <span>{person.name}</span>}
+                            {event.location && <span className="truncate">{event.location}</span>}
+                          </span>
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </section>
           )}
 
           {/* Event Tooltip */}

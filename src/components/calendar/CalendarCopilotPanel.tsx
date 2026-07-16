@@ -65,6 +65,7 @@ const CalendarCopilotPanel = ({
   const [selectedDraftIds, setSelectedDraftIds] = useState<Set<string>>(new Set());
   const [importLoading, setImportLoading] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
+  const [importSuccess, setImportSuccess] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
 
   const selectedDrafts = useMemo(
@@ -196,6 +197,7 @@ const CalendarCopilotPanel = ({
 
     setImportLoading(true);
     setImportError(null);
+    setImportSuccess(null);
     setImportDrafts([]);
     setSelectedDraftIds(new Set());
 
@@ -261,14 +263,49 @@ const CalendarCopilotPanel = ({
     if (selectedDrafts.length === 0) return;
 
     setImporting(true);
+    setImportError(null);
+    setImportSuccess(null);
     try {
+      const createdDraftIds = new Set<string>();
+      const failedDraftIds = new Set<string>();
+      let lastError: Error | null = null;
+
       for (const draft of selectedDrafts) {
-        await createEvent(importDraftToCalendarEventDraft(draft));
+        try {
+          const result = await createEvent(importDraftToCalendarEventDraft(draft));
+          if (result.status === 'created') {
+            createdDraftIds.add(draft.importId);
+          } else {
+            failedDraftIds.add(draft.importId);
+          }
+        } catch (error) {
+          failedDraftIds.add(draft.importId);
+          lastError = error instanceof Error ? error : new Error('Could not add one of the imported events.');
+        }
       }
-      setImportText('');
-      setImportDrafts([]);
-      setSelectedDraftIds(new Set());
-      onOpenCalendar();
+
+      const createdCount = createdDraftIds.size;
+      const failedCount = failedDraftIds.size;
+
+      if (createdCount > 0) {
+        const remainingDrafts = importDrafts.filter((draft) => !createdDraftIds.has(draft.importId));
+        setImportDrafts(remainingDrafts);
+        setSelectedDraftIds(new Set(remainingDrafts.filter((draft) => failedDraftIds.has(draft.importId)).map((draft) => draft.importId)));
+        if (remainingDrafts.length === 0) setImportText('');
+        setImportSuccess(`${createdCount} event${createdCount === 1 ? '' : 's'} added to the calendar.`);
+        onOpenCalendar();
+      }
+
+      if (failedCount > 0) {
+        setImportError(
+          lastError?.message ||
+            `${failedCount} event${failedCount === 1 ? '' : 's'} could not be added because of a conflict.`
+        );
+      }
+
+      if (createdCount === 0 && failedCount === 0) {
+        setImportError('No events were added. Review the selected events and try again.');
+      }
     } finally {
       setImporting(false);
     }
@@ -359,8 +396,8 @@ const CalendarCopilotPanel = ({
           placeholder="Paste term dates, forwarded ticket emails, school events, CSV rows, or copied PDF text..."
           className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/15 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
         />
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800">
+        <div className="mt-2 grid gap-2 sm:flex sm:flex-wrap sm:items-center">
+          <label className="inline-flex min-h-10 cursor-pointer items-center justify-center gap-1.5 rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800">
             <FileUp className="h-4 w-4" />
             Upload PDF/image/CSV
             <input
@@ -377,7 +414,7 @@ const CalendarCopilotPanel = ({
             type="button"
             onClick={() => void reviewImport()}
             disabled={importLoading || !importText.trim()}
-            className="inline-flex items-center gap-1.5 rounded-md bg-purple-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+            className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-md bg-purple-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
           >
             {importLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarPlus className="h-4 w-4" />}
             Review events
@@ -387,7 +424,7 @@ const CalendarCopilotPanel = ({
               type="button"
               onClick={() => void importSelectedDrafts()}
               disabled={importing}
-              className="inline-flex items-center gap-1.5 rounded-md bg-[#147c72] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+              className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-md bg-[#147c72] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
             >
               {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
               Import {selectedDrafts.length}
@@ -395,6 +432,12 @@ const CalendarCopilotPanel = ({
           )}
         </div>
         {importError && <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">{importError}</p>}
+        {importSuccess && (
+          <div className="mt-2 flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200">
+            <CheckCircle2 className="h-4 w-4" />
+            {importSuccess}
+          </div>
+        )}
 
         {importDrafts.length > 0 && (
           <div className="mt-3 max-h-56 space-y-2 overflow-y-auto">

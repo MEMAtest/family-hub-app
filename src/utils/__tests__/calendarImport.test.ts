@@ -148,4 +148,28 @@ Seats A1 A2
       importStatus: 'ready',
     });
   });
+
+  it('extracts time and location from copied date time location blocks', () => {
+    const drafts = parseCalendarImportText({
+      text: `
+Milestones.
+
+Date:Wednesday, the 12th of AugustTime:
+12:00 PM - 2:00 PMLocation:The Ivy City
+Garden, 1A Bedford St, London WC2E 9HH
+      `,
+      people,
+      today: new Date('2026-07-16T09:00:00Z'),
+    });
+
+    expect(drafts).toHaveLength(1);
+    expect(drafts[0]).toMatchObject({
+      title: 'The Ivy City Garden, 1A Bedford St, London WC2E 9HH',
+      date: '2026-08-12',
+      time: '12:00',
+      duration: 120,
+      location: 'The Ivy City Garden, 1A Bedford St, London WC2E 9HH',
+      importStatus: 'ready',
+    });
+  });
 });

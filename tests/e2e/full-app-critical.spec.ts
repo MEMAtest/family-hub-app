@@ -512,7 +512,7 @@ test('calendar event create and delete persists', async ({ page }) => {
 
   const databaseConnected = await isDatabaseConnected(page);
   if (!databaseConnected) {
-    await expect(page.getByText(eventTitle, { exact: true })).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText(eventTitle, { exact: true }).first()).toBeVisible({ timeout: 20_000 });
     return;
   }
 
