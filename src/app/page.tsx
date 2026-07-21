@@ -26,6 +26,7 @@ export default function HomePage() {
 
   useEffect(() => {
     let mounted = true
+    let canRenderApp = false
 
     const bootstrap = async () => {
       const controller = new AbortController()
@@ -37,18 +38,31 @@ export default function HomePage() {
         })
         if (!mounted) return
 
-        if (response.ok) {
-          const data = await response.json()
-          if (data?.needsOnboarding) {
-            router.replace('/onboarding')
-            return
-          }
+        if (response.status === 401) {
+          router.replace('/auth/sign-in')
+          return
         }
+
+        if (!response.ok) {
+          router.replace('/auth/sign-in')
+          return
+        }
+
+        const data = await response.json()
+        if (data?.accessPending) {
+          router.replace('/auth/join')
+          return
+        }
+        canRenderApp = true
       } catch {
-        // Keep app usable even if this probe fails.
+        if (process.env.NEXT_PUBLIC_E2E === 'true') {
+          canRenderApp = true
+          return
+        }
+        if (mounted) router.replace('/auth/sign-in')
       } finally {
         clearTimeout(timeoutId)
-        if (mounted) {
+        if (mounted && canRenderApp) {
           setIsBootstrapping(false)
         }
       }

@@ -23,8 +23,8 @@ export const FamilyHubHeader = ({
   rightContent,
   databaseStatus,
 }: FamilyHubHeaderProps) => {
-  const statusLabel = databaseStatus.connected ? 'Synced' : 'Saved on this device';
-  const statusDetail = databaseStatus.connected ? 'Family profiles and calendar' : 'No login required';
+  const statusLabel = databaseStatus.connected ? 'Synced' : 'Connecting';
+  const statusDetail = databaseStatus.connected ? 'Private profiles and household data' : 'Secure session required';
 
   return (
     <header className="sticky top-0 z-30 border-b border-[#dde5e0] bg-white/78 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/80 pwa-safe-top">

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import type { FitnessStats, ActivityType } from '@/types/fitness.types';
 import prisma from '@/lib/prisma';
-import { requireFamilyAccess } from '@/lib/auth-utils';
+import { privateAreaResponse, requireFamilyAccess, requireOwnProfile } from '@/lib/auth-utils';
 
 /**
  * Get the start date for a given period
@@ -82,12 +82,16 @@ function groupByType(activities: Array<{ activityType: string }>): Partial<Recor
  * Get aggregated fitness statistics
  * Query params: personId, period (week|month|year)
  */
-export const GET = requireFamilyAccess(async (request: NextRequest, context, _authUser) => {
+export const GET = requireFamilyAccess(async (request: NextRequest, context, authUser) => {
   try {
     const { familyId } = await context.params;
     const { searchParams } = new URL(request.url);
 
-    const personId = searchParams.get('personId');
+    const requestedPersonId = searchParams.get('personId');
+    if (requestedPersonId && !(await requireOwnProfile(authUser, requestedPersonId))) {
+      return privateAreaResponse();
+    }
+    const personId = authUser.familyMemberId;
     const period = (searchParams.get('period') || 'week') as 'week' | 'month' | 'year';
 
     const startDate = getStartDateForPeriod(period);

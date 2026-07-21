@@ -17,6 +17,8 @@ import {
   Wrench,
   Brain,
   ArrowUp,
+  Flower2,
+  HeartPulse,
 } from 'lucide-react';
 import { FamilyHubNavigation, NavItem } from './FamilyHubNavigation';
 import { FamilyHubHeader } from './FamilyHubHeader';
@@ -32,6 +34,8 @@ import { PropertyView } from './views/PropertyView';
 import { FitnessView } from './views/FitnessView';
 import { ContractorView } from './views/ContractorView';
 import { ProjectBrainView } from './views/ProjectBrainView';
+import { PerfumeView } from './views/PerfumeView';
+import { CycleView } from './views/CycleView';
 import { FamilyHubModals } from './FamilyHubModals';
 import Breadcrumb from '@/components/common/Breadcrumb';
 import SetupWizard from '@/components/common/SetupWizard';
@@ -60,6 +64,8 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'contractors', label: 'Contractors', icon: Wrench, section: 'Household' },
   { id: 'brain', label: 'Brain', icon: Brain, section: 'Household' },
   { id: 'news', label: 'News', icon: Newspaper, section: 'More' },
+  { id: 'perfume', label: 'Perfume', icon: Flower2, section: 'Personal' },
+  { id: 'cycle', label: 'Health & Cycle', icon: HeartPulse, section: 'Personal' },
 ];
 
 const SHOULD_SKIP_SETUP =
@@ -84,6 +90,7 @@ export const FamilyHubShell = () => {
   const appliedViewParam = useRef(false);
   const mainRef = useRef<HTMLElement | null>(null);
   const [showBackToTop, setShowBackToTop] = useState(false);
+  const [currentProfileName, setCurrentProfileName] = useState('');
 
   const { openCreateForm } = useCalendarContext();
   const { openForm: openBudgetForm } = useBudgetContext();
@@ -117,6 +124,24 @@ export const FamilyHubShell = () => {
         });
     }
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    fetch('/api/auth/me')
+      .then((response) => response.ok ? response.json() : null)
+      .then((data) => {
+        if (active) setCurrentProfileName(data?.familyMember?.name || '');
+      })
+      .catch(() => {
+        if (active) setCurrentProfileName('');
+      });
+    return () => { active = false; };
+  }, []);
+
+  const navItems = useMemo(
+    () => NAV_ITEMS.filter((item) => item.id !== 'cycle' || currentProfileName.trim().toLowerCase() === 'angela'),
+    [currentProfileName]
+  );
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -281,6 +306,10 @@ export const FamilyHubShell = () => {
         return <ShoppingView />;
       case 'fitness':
         return <FitnessView />;
+      case 'perfume':
+        return <PerfumeView />;
+      case 'cycle':
+        return <CycleView />;
       case 'contractors':
         return <ContractorView />;
       case 'goals':
@@ -306,6 +335,8 @@ export const FamilyHubShell = () => {
       meals: 'Meals',
       shopping: 'Shopping',
       fitness: 'Fitness',
+      perfume: 'Perfume Hub',
+      cycle: 'Health & Cycle',
       contractors: 'Contractors',
       goals: 'Quests',
       brain: 'Project Brain',
@@ -328,7 +359,7 @@ export const FamilyHubShell = () => {
   return (
     <div className="flex h-screen min-h-0 overflow-x-hidden bg-[#f5f7f1] text-[#18221f] dark:bg-[#0d1215] dark:text-slate-100">
       <FamilyHubNavigation
-        items={NAV_ITEMS}
+        items={navItems}
         activeId={currentView}
         onSelect={handleSelectView}
         isMobileOpen={isMobileMenuOpen}

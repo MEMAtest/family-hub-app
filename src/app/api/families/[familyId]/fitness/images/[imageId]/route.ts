@@ -4,12 +4,19 @@ import { requireFamilyAccess } from '@/lib/auth-utils';
 
 export const runtime = 'nodejs';
 
-export const GET = requireFamilyAccess(async (_request: NextRequest, context, _authUser) => {
+export const GET = requireFamilyAccess(async (_request: NextRequest, context, authUser) => {
   try {
     const { familyId, imageId } = await context.params;
 
     const image = await prisma.fitnessImage.findFirst({
-      where: { id: imageId, familyId },
+      where: {
+        id: imageId,
+        familyId,
+        OR: [
+          { uploadedById: authUser.familyMemberId },
+          { activity: { personId: authUser.familyMemberId } },
+        ],
+      },
       select: { data: true, mimeType: true, sizeBytes: true },
     });
 
@@ -36,12 +43,19 @@ export const GET = requireFamilyAccess(async (_request: NextRequest, context, _a
   }
 });
 
-export const DELETE = requireFamilyAccess(async (_request: NextRequest, context, _authUser) => {
+export const DELETE = requireFamilyAccess(async (_request: NextRequest, context, authUser) => {
   try {
     const { familyId, imageId } = await context.params;
 
     const existing = await prisma.fitnessImage.findFirst({
-      where: { id: imageId, familyId },
+      where: {
+        id: imageId,
+        familyId,
+        OR: [
+          { uploadedById: authUser.familyMemberId },
+          { activity: { personId: authUser.familyMemberId } },
+        ],
+      },
       select: { id: true },
     });
 

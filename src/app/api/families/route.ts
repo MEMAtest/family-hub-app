@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth-utils';
-import { getOrCreateOpenFamily } from '@/lib/defaultFamilyPersistence';
+import prisma from '@/lib/prisma';
 
 // GET all families or create initial family
 export const GET = requireAuth(async (_request: NextRequest, _context, authUser) => {
   try {
-    const family = await getOrCreateOpenFamily(authUser.familyId);
+    const family = await prisma.family.findUnique({
+      where: { id: authUser.familyId },
+      include: { members: { orderBy: { createdAt: 'asc' } } },
+    });
 
     return NextResponse.json(family ? [family] : []);
   } catch (error) {

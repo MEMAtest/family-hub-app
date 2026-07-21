@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
-import { requireFamilyAccess } from '@/lib/auth-utils';
+import { privateAreaResponse, requireFamilyAccess, requireOwnProfile } from '@/lib/auth-utils';
 
 /**
  * POST /api/families/[familyId]/devices/sync
  * Sync data from connected devices
  */
-export const POST = requireFamilyAccess(async (request: NextRequest, context, _authUser) => {
+export const POST = requireFamilyAccess(async (request: NextRequest, context, authUser) => {
   try {
     const { familyId } = await context.params;
     const body = await request.json();
@@ -19,6 +19,7 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context, _a
         { status: 400 }
       );
     }
+    if (!(await requireOwnProfile(authUser, personId))) return privateAreaResponse();
 
     // Verify person belongs to family
     const person = await prisma.familyMember.findFirst({

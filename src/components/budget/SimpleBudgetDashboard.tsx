@@ -32,6 +32,7 @@ import { AIInsightsCard } from './AIInsightsCard';
 import { ReceiptScanner } from './ReceiptScanner';
 import StatementImportModal from './modals/StatementImportModal';
 import BudgetCalculator from './BudgetCalculator';
+import { ActualCashFlowPanel } from './ActualCashFlowPanel';
 import databaseService from '@/services/databaseService';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { filterExpenses, filterIncome } from '@/utils/budgetFilters';
@@ -810,6 +811,8 @@ const SimpleBudgetDashboard: React.FC = () => {
           </div>
         </div>
       )}
+
+      <ActualCashFlowPanel familyId={familyId} month={`${selectedYear}-${String(selectedMonth).padStart(2, '0')}`} />
 
       <div className={`${isMobile ? 'px-4' : ''} mb-4`}>
         <div className="inline-flex rounded-lg border border-[#dde5e0] bg-white/80 p-1 dark:border-slate-800 dark:bg-slate-900/80">

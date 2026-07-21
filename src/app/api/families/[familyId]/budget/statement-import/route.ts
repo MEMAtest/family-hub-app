@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createHash, randomUUID } from 'crypto';
+import prisma from '@/lib/prisma';
 import { createId } from '@/utils/id';
 import { requireFamilyAccess } from '@/lib/auth-utils';
 
@@ -161,7 +163,131 @@ const normalizeDirection = (direction?: string, description?: string): Statement
   return 'debit';
 };
 
-export const POST = requireFamilyAccess(async (request: NextRequest, _context, _authUser) => {
+const transactionFingerprint = (transaction: StatementTransaction) =>
+  createHash('sha256')
+    .update(`${transaction.date}|${transaction.description.trim().toLowerCase().replace(/\s+/g, ' ')}|${Number(transaction.amount).toFixed(2)}|${transaction.direction}`)
+    .digest('hex');
+
+const looksLikeTransfer = (description: string) =>
+  /(bank transfer|faster payment|transfer|cash transfer|to account|from account|standing order)/i.test(description);
+
+async function persistStatementImport({
+  familyId,
+  accountId,
+  fileName,
+  contentHash,
+  sourceType,
+  result,
+  importedById,
+}: {
+  familyId: string;
+  accountId: string;
+  fileName: string;
+  contentHash: string;
+  sourceType: string;
+  result: StatementParseResult;
+  importedById: string;
+}) {
+  const account = await prisma.budgetAccount.findFirst({ where: { id: accountId, familyId }, select: { id: true } });
+  if (!account) throw new Error('Choose a household account before importing a statement.');
+
+  const existingFile = await prisma.statementImport.findUnique({
+    where: { accountId_contentHash: { accountId, contentHash } },
+    select: { id: true, importedRows: true, duplicateRows: true },
+  });
+  if (existingFile) {
+    return { id: existingFile.id, importedRows: existingFile.importedRows, duplicateRows: existingFile.duplicateRows, alreadyImported: true };
+  }
+
+  const validRows = result.transactions
+    .map((transaction) => ({ ...transaction, direction: normalizeDirection(transaction.direction, transaction.description) }))
+    .filter((transaction) => !Number.isNaN(new Date(`${transaction.date}T12:00:00Z`).getTime()) && Number(transaction.amount) > 0);
+  const rejectedRows = result.transactions
+    .filter((transaction) => !validRows.some((valid) => valid.id === transaction.id))
+    .map((transaction) => ({ id: transaction.id, date: transaction.date, description: transaction.description, amount: transaction.amount }))
+    .slice(0, 100);
+  const orderedRows = [...validRows].sort((a, b) => a.date.localeCompare(b.date));
+  const first = orderedRows[0];
+  const last = orderedRows[orderedRows.length - 1];
+  const openingBalance = first?.balance === undefined
+    ? null
+    : first.direction === 'debit' ? first.balance + first.amount : first.balance - first.amount;
+  const closingBalance = last?.balance ?? null;
+
+  const created = await prisma.$transaction(async (tx) => {
+    const statementImport = await tx.statementImport.create({
+      data: {
+        familyId,
+        accountId,
+        fileName,
+        sourceType,
+        contentHash,
+        statementStart: result.metadata.startDate ? new Date(`${result.metadata.startDate}T12:00:00Z`) : null,
+        statementEnd: result.metadata.endDate ? new Date(`${result.metadata.endDate}T12:00:00Z`) : null,
+        openingBalance,
+        closingBalance,
+        parsedRows: result.transactions.length,
+        rejectedRows: rejectedRows.length ? rejectedRows : undefined,
+        importedById,
+      },
+    });
+
+    const write = await tx.budgetTransaction.createMany({
+      data: validRows.map((transaction) => ({
+        familyId,
+        accountId,
+        statementImportId: statementImport.id,
+        transactionDate: new Date(`${transaction.date}T12:00:00Z`),
+        description: transaction.description,
+        amount: Number(transaction.amount),
+        direction: transaction.direction,
+        balance: transaction.balance ?? null,
+        category: transaction.category || null,
+        fingerprint: transactionFingerprint(transaction),
+      })),
+      skipDuplicates: true,
+    });
+
+    await tx.statementImport.update({
+      where: { id: statementImport.id },
+      data: { importedRows: write.count, duplicateRows: validRows.length - write.count },
+    });
+    return { id: statementImport.id, importedRows: write.count, duplicateRows: validRows.length - write.count };
+  });
+
+  const importedTransactions = await prisma.budgetTransaction.findMany({
+    where: { statementImportId: created.id, transactionType: 'normal' },
+    select: { id: true, accountId: true, transactionDate: true, description: true, amount: true, direction: true },
+  });
+  for (const transaction of importedTransactions) {
+    if (!looksLikeTransfer(transaction.description)) continue;
+    const candidate = await prisma.budgetTransaction.findFirst({
+      where: {
+        familyId,
+        accountId: { not: transaction.accountId },
+        transactionType: 'normal',
+        amount: transaction.amount,
+        direction: transaction.direction === 'credit' ? 'debit' : 'credit',
+        transactionDate: {
+          gte: new Date(transaction.transactionDate.getTime() - 3 * 24 * 60 * 60 * 1000),
+          lte: new Date(transaction.transactionDate.getTime() + 3 * 24 * 60 * 60 * 1000),
+        },
+      },
+      select: { id: true },
+    });
+    if (candidate) {
+      const transferGroupId = randomUUID();
+      await prisma.budgetTransaction.updateMany({
+        where: { id: { in: [transaction.id, candidate.id] } },
+        data: { transactionType: 'transfer', transferGroupId },
+      });
+    }
+  }
+
+  return created;
+}
+
+export const POST = requireFamilyAccess(async (request: NextRequest, _context, authUser) => {
   try {
     const formData = await request.formData();
     const file = formData.get('file');
@@ -246,6 +372,20 @@ export const POST = requireFamilyAccess(async (request: NextRequest, _context, _
         { error: 'Unsupported file type. Upload CSV, PDF, or Excel.' },
         { status: 400 }
       );
+    }
+
+    const accountId = formData.get('accountId');
+    if (typeof accountId === 'string' && accountId) {
+      const ledgerImport = await persistStatementImport({
+        familyId: authUser.familyId,
+        accountId,
+        fileName: file.name,
+        contentHash: createHash('sha256').update(buffer).digest('hex'),
+        sourceType: fileName.split('.').pop() || 'unknown',
+        result,
+        importedById: authUser.dbUser.id,
+      });
+      Object.assign(result, { ledgerImport });
     }
 
     console.log('📊 Statement import result:', {

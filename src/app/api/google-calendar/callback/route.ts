@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
       return popupResponse('google_calendar_auth_error', 'Missing Google authorization code.');
     }
 
-    const { familyId } = decodeGoogleState(state);
+    const { familyId, personId } = decodeGoogleState(state);
     const oauth2Client = createOAuthClient();
     const { tokens } = await oauth2Client.getToken(code);
     oauth2Client.setCredentials(tokens);
@@ -44,6 +44,38 @@ export async function GET(request: NextRequest) {
       googleUserEmail = tokenInfo?.email || null;
     } catch {
       googleUserEmail = null;
+    }
+
+    if (personId) {
+      const member = await prisma.familyMember.findFirst({ where: { id: personId, familyId }, select: { id: true } });
+      if (!member) throw new Error('Private calendar profile is invalid');
+      await prisma.personalGoogleCalendarConnection.upsert({
+        where: { personId },
+        create: {
+          personId,
+          googleUserEmail,
+          accessToken: tokens.access_token || '',
+          refreshToken: tokens.refresh_token || null,
+          tokenType: tokens.token_type || null,
+          scope: tokens.scope || null,
+          expiryDate: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
+          selectedCalendarId: 'primary',
+          selectedCalendarName: 'Personal calendar',
+          enabled: true,
+        },
+        update: {
+          googleUserEmail,
+          accessToken: tokens.access_token || '',
+          refreshToken: tokens.refresh_token || undefined,
+          tokenType: tokens.token_type || null,
+          scope: tokens.scope || null,
+          expiryDate: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
+          selectedCalendarId: 'primary',
+          selectedCalendarName: 'Personal calendar',
+          enabled: true,
+        },
+      });
+      return popupResponse('google_calendar_auth_success', 'Private Google Calendar connected.');
     }
 
     await prisma.googleCalendarConnection.upsert({

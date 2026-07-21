@@ -10,7 +10,7 @@ export interface NavItem {
   label: string;
   mobileLabel?: string;
   icon: LucideIcon;
-  section?: 'Home' | 'Plan' | 'Household' | 'More';
+  section?: 'Home' | 'Plan' | 'Household' | 'Personal' | 'More';
 }
 
 interface FamilyHubNavigationProps {
@@ -117,7 +117,7 @@ export const FamilyHubNavigation = ({
         <div className="mb-6">
           <OmosanyaLogo showText />
           <div className="mt-4 rounded-lg border border-[#dde5e0] bg-[#f8faf6] px-3 py-2 text-xs font-semibold text-[#5f6a64] dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-400">
-            No-login family profiles
+            Signed-in household profiles
           </div>
         </div>
         {renderNav('desktop')}

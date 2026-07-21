@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import FamilyDashboard from '@/components/family/FamilyDashboard';
 import { FamilyTimeline } from '@/components/family/FamilyTimeline';
 import { FamilyAnalytics } from '@/components/family/FamilyAnalytics';
@@ -16,6 +16,7 @@ const tabs = [
   { id: 'members', label: 'Members' },
   { id: 'timeline', label: 'Timeline' },
   { id: 'analytics', label: 'Analytics' },
+  { id: 'access', label: 'Access' },
 ] as const;
 
 type FamilyTab = typeof tabs[number]['id'];
@@ -54,6 +55,25 @@ export const FamilyView = () => {
   const addFamilyMilestone = useFamilyStore((state) => state.addFamilyMilestone);
   const updateFamilyMilestone = useFamilyStore((state) => state.updateFamilyMilestone);
   const deleteFamilyMilestone = useFamilyStore((state) => state.deleteFamilyMilestone);
+  const [isOwner, setIsOwner] = useState(false);
+  const [accessMembers, setAccessMembers] = useState<Array<any>>([]);
+  const [inviteCode, setInviteCode] = useState<{ memberName: string; code: string; expiresAt: string } | null>(null);
+  const [accessError, setAccessError] = useState('');
+
+  useEffect(() => {
+    fetch('/api/auth/me')
+      .then((response) => response.ok ? response.json() : null)
+      .then((data) => setIsOwner(Boolean(data?.isOwner)))
+      .catch(() => setIsOwner(false));
+  }, []);
+
+  useEffect(() => {
+    if (activeTab !== 'access' || !databaseStatus.familyId) return;
+    fetch(`/api/families/${databaseStatus.familyId}/members`)
+      .then((response) => response.ok ? response.json() : [])
+      .then((data) => setAccessMembers(Array.isArray(data) ? data : []))
+      .catch(() => setAccessMembers([]));
+  }, [activeTab, databaseStatus.familyId]);
 
   const { loading: milestonesLoading, error: milestonesError, refetch: refetchMilestones } =
     useFamilyMilestones(databaseStatus.familyId ?? undefined);
@@ -124,6 +144,37 @@ export const FamilyView = () => {
   } else if (activeTab === 'analytics') {
     activeTabContent = (
       <FamilyAnalytics familyMembers={members} milestones={milestones} />
+    );
+  } else if (activeTab === 'access') {
+    activeTabContent = (
+      <div className="mx-auto max-w-2xl space-y-4">
+        <div>
+          <h3 className="text-lg font-semibold text-[#18221f] dark:text-slate-100">Household access</h3>
+          <p className="mt-1 text-sm text-[#5f6a64] dark:text-slate-400">Each adult signs in with their own Google account. Child profiles do not sign in.</p>
+        </div>
+        {isOwner ? (
+          <div className="divide-y divide-[#dde5e0] border-y border-[#dde5e0] dark:divide-slate-800 dark:border-slate-800">
+            {accessMembers.filter((member) => member.ageGroup === 'Adult').map((member) => (
+              <div key={member.id} className="flex flex-wrap items-center justify-between gap-3 py-4">
+                <div><p className="font-semibold">{member.name}</p><p className="text-xs text-slate-500">{member.userId ? 'Google account linked' : 'No account linked yet'}</p></div>
+                {!member.userId && <button type="button" onClick={async () => {
+                  if (!databaseStatus.familyId) return;
+                  setAccessError('');
+                  try {
+                    const response = await fetch(`/api/families/${databaseStatus.familyId}/invites`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ memberId: member.id }) });
+                    const body = await response.json();
+                    if (!response.ok) throw new Error(body.error || 'Could not create invite.');
+                    setInviteCode(body);
+                  } catch (error) { setAccessError(error instanceof Error ? error.message : 'Could not create invite.'); }
+                }} className="h-9 rounded-md border border-[#147c72] px-3 text-xs font-semibold text-[#147c72] hover:bg-[#eaf1e7]">Create one-use invite</button>}
+              </div>
+            ))}
+            {accessMembers.filter((member) => member.ageGroup === 'Adult').length === 0 && <p className="py-4 text-sm text-slate-500">No adult profiles found.</p>}
+          </div>
+        ) : <p className="rounded-md border border-slate-200 bg-white p-4 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">Only the household owner can issue adult account invites.</p>}
+        {inviteCode && <div className="rounded-md border border-[#c6ddd1] bg-[#eef7f1] p-4 text-sm text-[#1d553f] dark:border-[#285e49] dark:bg-[#112d22] dark:text-[#b5e7cf]"><p className="font-semibold">Invite for {inviteCode.memberName}</p><p className="mt-2 font-mono text-lg tracking-wider">{inviteCode.code}</p><p className="mt-2 text-xs">Share this privately. It expires {new Date(inviteCode.expiresAt).toLocaleString('en-GB')} and can be used once.</p></div>}
+        {accessError && <p className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-200">{accessError}</p>}
+      </div>
     );
   } else {
     activeTabContent = <FamilyDashboard />;

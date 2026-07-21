@@ -389,7 +389,9 @@ export const useDatabaseSync = () => {
       console.log('🔄 Initializing database connection...');
 
       seedE2EBudgetFixtures();
-      const localFamilyId = ensureLocalFamilyBootstrap();
+      // A browser cache is never an authority for household identity. The active
+      // family must come from the signed-in session and protected API response.
+      const localFamilyId: string | undefined = undefined;
 
       const hydrateFromCache = (familyId?: string) => {
         const storeState = useFamilyStore.getState();
@@ -599,7 +601,7 @@ export const useDatabaseSync = () => {
       try {
         connected = await databaseService.initialize();
         const status = databaseService.getStatus();
-        resolvedFamilyId = status.familyId ?? localStorage.getItem('familyId') ?? localFamilyId;
+        resolvedFamilyId = status.familyId ?? undefined;
 
         if (connected) {
           console.log('✅ Database connected:', status);
@@ -609,26 +611,24 @@ export const useDatabaseSync = () => {
             mode: 'database',
           });
         } else {
-          console.log('📦 Falling back to localStorage mode');
-          // Try to get familyId from localStorage for offline operation
+          console.warn('Database connection unavailable; withholding household data until the secure session reconnects.');
           setDatabaseStatus({
             connected: false,
-            familyId: resolvedFamilyId ?? null,
-            mode: 'localStorage',
+            familyId: null,
+            mode: 'offline',
           });
         }
       } catch (error) {
         console.error('Database initialization failed:', error);
-        const storedFamilyId = localStorage.getItem('familyId') || localFamilyId;
         setDatabaseStatus({
           connected: false,
-          familyId: storedFamilyId,
-          mode: 'localStorage',
+          familyId: null,
+          mode: 'offline',
         });
-        resolvedFamilyId = storedFamilyId ?? localFamilyId;
+        resolvedFamilyId = undefined;
       } finally {
-        hydrateFromCache(resolvedFamilyId);
-        if (resolvedFamilyId) {
+        if (connected && resolvedFamilyId) {
+          hydrateFromCache(resolvedFamilyId);
           await refreshFromDatabase(resolvedFamilyId, connected);
         }
       }

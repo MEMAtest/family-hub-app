@@ -2,8 +2,6 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, CheckCircle2, FileText, Loader2, Upload, X, Sparkles, FileSearch, Brain, ListChecks, Zap } from 'lucide-react';
-import databaseService from '@/services/databaseService';
-import { createId } from '@/utils/id';
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from '@/utils/statementImport';
 import type { StatementDirection, StatementParseResult, StatementTransaction } from '@/types/statementImport.types';
 
@@ -68,21 +66,29 @@ const StatementImportModal = ({
   const [isImporting, setIsImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [useAi, setUseAi] = useState(true);
-  const [localFamilyId, setLocalFamilyId] = useState<string | null>(null);
+  const [accounts, setAccounts] = useState<Array<{ id: string; name: string }>>([]);
+  const [accountId, setAccountId] = useState('');
+  const [newAccountName, setNewAccountName] = useState('');
+  const [creatingAccount, setCreatingAccount] = useState(false);
 
   const duplicateFingerprints = useMemo(() => ({
     income: extractExistingFingerprints(existingIncome),
     expense: extractExistingFingerprints(existingExpenses),
   }), [existingIncome, existingExpenses]);
-  const isOffline = !familyId && !localFamilyId;
-  const displayError = error === 'Family ID not available yet.' ? null : error;
+  const displayError = error;
 
   useEffect(() => {
     if (!isOpen) return;
     setError(null);
-    if (typeof window !== 'undefined') {
-      setLocalFamilyId(localStorage.getItem('familyId'));
-    }
+    if (!familyId) return;
+    fetch(`/api/families/${familyId}/budget/accounts`)
+      .then((response) => response.ok ? response.json() : [])
+      .then((nextAccounts) => {
+        const normalised = Array.isArray(nextAccounts) ? nextAccounts : [];
+        setAccounts(normalised);
+        setAccountId((current) => current || normalised[0]?.id || '');
+      })
+      .catch(() => setAccounts([]));
   }, [isOpen]);
 
   const resetState = () => {
@@ -100,6 +106,10 @@ const StatementImportModal = ({
   };
 
   const handleFileSelect = async (file: File) => {
+    if (!familyId || !accountId) {
+      setError('Add or choose the household account this statement belongs to first.');
+      return;
+    }
     setError(null);
     setSelectedFile(file);
     setIsParsing(true);
@@ -127,10 +137,9 @@ const StatementImportModal = ({
       const formData = new FormData();
       formData.append('file', file);
       formData.append('useAi', useAi ? 'true' : 'false');
+      formData.append('accountId', accountId);
 
-      const activeFamilyId = familyId ?? localFamilyId ?? 'local';
-
-      const response = await fetch(`/api/families/${activeFamilyId}/budget/statement-import`, {
+      const response = await fetch(`/api/families/${familyId}/budget/statement-import`, {
         method: 'POST',
         body: formData,
       });
@@ -174,9 +183,7 @@ const StatementImportModal = ({
 
       const nextRows = (result.transactions ?? []).map((transaction: StatementTransaction) => {
         const importAs: 'income' | 'expense' = transaction.direction === 'credit' ? 'income' : 'expense';
-        const fingerprint = buildFingerprint(transaction.date, transaction.description, transaction.amount);
-        const duplicateSet = importAs === 'income' ? duplicateFingerprints.income : duplicateFingerprints.expense;
-        const duplicate = duplicateSet.has(fingerprint);
+        const duplicate = false;
         const warnings = [...(transaction.warnings ?? [])];
         const hasDate = Boolean(transaction.date);
         const hasAmount = transaction.amount > 0;
@@ -190,7 +197,7 @@ const StatementImportModal = ({
           amount: transaction.amount,
           direction: transaction.direction,
           category: transaction.category,
-          include: !duplicate && hasDate && hasAmount,
+          include: hasDate && hasAmount,
           importAs,
           warnings,
           duplicate,
@@ -223,6 +230,28 @@ const StatementImportModal = ({
     }
   };
 
+  const createAccount = async () => {
+    if (!familyId || !newAccountName.trim()) return;
+    setCreatingAccount(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/families/${familyId}/budget/accounts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newAccountName.trim() }),
+      });
+      const account = await response.json();
+      if (!response.ok) throw new Error(account.error || 'Could not add the account.');
+      setAccounts((current) => [...current, account]);
+      setAccountId(account.id);
+      setNewAccountName('');
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Could not add the account.');
+    } finally {
+      setCreatingAccount(false);
+    }
+  };
+
   const updateRow = (rowId: string, updates: Partial<ImportRow>) => {
     setRows((prev) => prev.map((row) => row.id === rowId ? { ...row, ...updates } : row));
   };
@@ -236,44 +265,10 @@ const StatementImportModal = ({
     setIsImporting(true);
     setError(null);
 
-    const importedIncome: any[] = [];
-    const importedExpenses: any[] = [];
-
     try {
-      for (const row of rows) {
-        if (!row.include || row.importAs === 'skip') continue;
-        if (!row.date || row.amount <= 0) continue;
-
-        if (row.importAs === 'income') {
-          const payload = {
-            id: createId('income'),
-            incomeName: row.description,
-            amount: row.amount,
-            category: INCOME_CATEGORIES.includes(row.category) ? row.category : 'Other',
-            isRecurring: false,
-            paymentDate: row.date,
-            personId: null,
-          };
-          const saved = await databaseService.saveBudgetIncome(payload);
-          if (saved) importedIncome.push(saved);
-        } else {
-          const payload = {
-            id: createId('expense'),
-            expenseName: row.description,
-            amount: row.amount,
-            category: EXPENSE_CATEGORIES.includes(row.category) ? row.category : 'Other',
-            isRecurring: false,
-            paymentDate: row.date,
-            personId: null,
-          };
-          const saved = await databaseService.saveBudgetExpense(payload);
-          if (saved) importedExpenses.push(saved);
-        }
-      }
-
-      if (importedIncome.length || importedExpenses.length) {
-        onImported(importedIncome, importedExpenses);
-      }
+      // Valid rows are saved as immutable actual transactions when the file is parsed.
+      // They are intentionally not converted into planned budget entries.
+      onImported([], []);
       handleClose();
     } catch (importError) {
       setError(importError instanceof Error ? importError.message : 'Failed to import transactions');
@@ -346,6 +341,20 @@ const StatementImportModal = ({
             </div>
           </div>
 
+          <div className="grid gap-3 rounded-lg border border-gray-200 p-4 sm:grid-cols-[1fr_auto]">
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-gray-700">Statement account</label>
+              <select value={accountId} onChange={(event) => setAccountId(event.target.value)} className="h-10 w-full rounded-md border border-gray-300 bg-white px-3 text-sm">
+                <option value="">Choose account</option>
+                {accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
+              </select>
+            </div>
+            <div className="flex items-end gap-2">
+              <input value={newAccountName} onChange={(event) => setNewAccountName(event.target.value)} placeholder="New account" className="h-10 min-w-0 rounded-md border border-gray-300 px-3 text-sm" />
+              <button type="button" onClick={createAccount} disabled={creatingAccount || !newAccountName.trim()} className="h-10 rounded-md border border-blue-200 px-3 text-xs font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-50">Add</button>
+            </div>
+          </div>
+
           {displayError && (
             <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
               <AlertTriangle className="h-4 w-4" />
@@ -353,9 +362,11 @@ const StatementImportModal = ({
             </div>
           )}
 
-          {!displayError && isOffline && (
-            <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-xs text-blue-700">
-              Offline mode: imports are saved locally on this device.
+          {parseResult && (parseResult as any).ledgerImport && (
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+              {(parseResult as any).ledgerImport.alreadyImported
+                ? 'This statement was already imported for this account.'
+                : `${(parseResult as any).ledgerImport.importedRows} valid transactions were added to actual cash flow. ${(parseResult as any).ledgerImport.duplicateRows || 0} duplicate rows were skipped.`}
             </div>
           )}
 
@@ -559,7 +570,7 @@ const StatementImportModal = ({
             className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
           >
             {isImporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-            Import {totals.count || 0} items
+            Done
           </button>
         </div>
       </div>

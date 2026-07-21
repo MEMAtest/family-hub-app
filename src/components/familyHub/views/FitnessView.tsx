@@ -1,22 +1,41 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ActivityHistory, FitnessDashboard } from '@/components/fitness';
 import { useFamilyStore } from '@/store/familyStore';
 
 export const FitnessView: React.FC = () => {
   const familyId = useFamilyStore((state) => state.databaseStatus.familyId);
   const familyMembers = useFamilyStore((state) => state.familyMembers);
-  const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
   const [tab, setTab] = useState<'dashboard' | 'history'>('dashboard');
+  const [profile, setProfile] = useState<{ id: string; name: string; color: string; icon: string } | null>(null);
 
-  // Filter to adult members for fitness tracking
-  const adults = familyMembers.filter((m) => m.ageGroup === 'Adult');
+  useEffect(() => {
+    let active = true;
+    fetch('/api/auth/me')
+      .then((response) => response.ok ? response.json() : null)
+      .then((data) => {
+        if (active && data?.familyMember?.id) {
+          setProfile({
+            id: data.familyMember.id,
+            name: data.familyMember.name || 'My profile',
+            color: data.familyMember.color || '#147c72',
+            icon: data.familyMember.icon || 'ME',
+          });
+        }
+      })
+      .catch(() => {
+        if (active) setProfile(null);
+      });
+    return () => { active = false; };
+  }, []);
 
-  // Default to first adult or first member
-  const defaultPerson = adults[0] || familyMembers[0];
-  const currentPersonId = selectedPersonId || defaultPerson?.id;
-  const currentPerson = familyMembers.find((m) => m.id === currentPersonId);
+  const currentPerson = profile
+    ? familyMembers.find((member) => member.id === profile.id) || profile
+    : process.env.NEXT_PUBLIC_E2E === 'true'
+      ? familyMembers.find((member) => member.ageGroup === 'Adult') || familyMembers[0] || null
+      : null;
+  const currentPersonId = profile?.id || (process.env.NEXT_PUBLIC_E2E === 'true' ? currentPerson?.id : null);
 
   if (!familyId) {
     return (
@@ -62,36 +81,6 @@ export const FitnessView: React.FC = () => {
           History
         </button>
       </div>
-      {/* Person selector */}
-      {adults.length > 1 && (
-        <div className="mb-4 sm:mb-6">
-          <label className="text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300 mb-2 block">
-            Tracking for
-          </label>
-          <div className="flex flex-wrap gap-1.5 sm:gap-2">
-            {adults.map((member) => (
-              <button
-                key={member.id}
-                onClick={() => setSelectedPersonId(member.id)}
-                className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg transition-colors touch-manipulation text-sm ${
-                  currentPersonId === member.id
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-700'
-                }`}
-              >
-                <span
-                  className="w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center text-xs sm:text-sm flex-shrink-0"
-                  style={{ backgroundColor: member.color }}
-                >
-                  {member.icon}
-                </span>
-                <span className="truncate">{member.name}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
       {currentPerson && currentPersonId && (
         tab === 'dashboard' ? (
           <FitnessDashboard

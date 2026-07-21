@@ -30,14 +30,14 @@ const parseFitnessImageIdFromUrl = (familyId: string, url: string): string | nul
   }
 };
 
-export const PUT = requireFamilyAccess(async (request: NextRequest, context, _authUser) => {
+export const PUT = requireFamilyAccess(async (request: NextRequest, context, authUser) => {
   try {
     const { familyId, activityId } = await context.params;
     const raw = await request.json();
     const updates = updateActivitySchema.parse(raw);
 
     const existing = await prisma.fitnessTracking.findFirst({
-      where: { id: activityId, person: { familyId } },
+      where: { id: activityId, personId: authUser.familyMemberId, person: { familyId } },
       select: { id: true },
     });
 
@@ -88,6 +88,7 @@ export const PUT = requireFamilyAccess(async (request: NextRequest, context, _au
             where: {
               familyId,
               id: { in: imageIds },
+              uploadedById: authUser.familyMemberId,
               OR: [{ fitnessTrackingId: null }, { fitnessTrackingId: activityId }],
             },
             data: { fitnessTrackingId: activityId },
@@ -98,6 +99,7 @@ export const PUT = requireFamilyAccess(async (request: NextRequest, context, _au
           where: {
             familyId,
             fitnessTrackingId: activityId,
+            uploadedById: authUser.familyMemberId,
             ...(imageIds.length ? { id: { notIn: imageIds } } : {}),
           },
         });
@@ -116,12 +118,12 @@ export const PUT = requireFamilyAccess(async (request: NextRequest, context, _au
   }
 });
 
-export const DELETE = requireFamilyAccess(async (_request: NextRequest, context, _authUser) => {
+export const DELETE = requireFamilyAccess(async (_request: NextRequest, context, authUser) => {
   try {
     const { familyId, activityId } = await context.params;
 
     const existing = await prisma.fitnessTracking.findFirst({
-      where: { id: activityId, person: { familyId } },
+      where: { id: activityId, personId: authUser.familyMemberId, person: { familyId } },
       select: { id: true },
     });
 
