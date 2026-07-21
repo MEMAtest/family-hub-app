@@ -6,7 +6,9 @@ const authMiddleware = process.env.NEON_AUTH_BASE_URL && process.env.NEXT_PUBLIC
   : (_request: NextRequest) => NextResponse.next();
 
 export async function middleware(request: NextRequest) {
-  return authMiddleware(request);
+  // The Neon SDK bundles a different Next.js type version, while both middleware
+  // implementations receive the same runtime request object from Next.js.
+  return authMiddleware(request as never);
 }
 
 export const config = {
