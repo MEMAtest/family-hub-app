@@ -1,14 +1,12 @@
-import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
+import { neonAuthMiddleware } from '@neondatabase/neon-js/auth/next/server';
+import { NextResponse, type NextRequest } from 'next/server';
+
+const authMiddleware = process.env.NEON_AUTH_BASE_URL && process.env.NEXT_PUBLIC_E2E !== 'true'
+  ? neonAuthMiddleware({ loginUrl: '/auth/sign-in' })
+  : (_request: NextRequest) => NextResponse.next();
 
 export async function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
-
-  if (pathname.startsWith('/api/families/') && pathname.includes('/budget/statement-import')) {
-    return NextResponse.next();
-  }
-
-  return NextResponse.next();
+  return authMiddleware(request);
 }
 
 export const config = {
