@@ -73,6 +73,9 @@ export const metadata: Metadata = {
     email: false,
     address: false
   },
+  other: {
+    'mobile-web-app-capable': 'yes'
+  },
   icons: {
     icon: [
       { url: '/icon.svg', type: 'image/svg+xml' },
