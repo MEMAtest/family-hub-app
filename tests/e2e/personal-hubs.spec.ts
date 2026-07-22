@@ -165,6 +165,68 @@ test('Angela can save and see a private period entry without using the shared ca
   expect(page.url()).not.toContain('calendar');
 });
 
+test('the catalogue search adds a verified release to the private collection', async ({ page }) => {
+  const catalogueEntry = {
+    id: 'catalogue-smoking-hot',
+    house: 'Kilian',
+    name: 'Smoking Hot',
+    concentration: 'Eau de Parfum',
+    releaseYear: 2023,
+    olfactiveFamily: 'Woody amber',
+    notes: ['smoke', 'apple', 'vanilla'],
+    accords: ['smoky', 'sweet'],
+    source: { name: 'Verified catalogue', url: null, kind: 'licensed', status: 'verified' },
+    isInCollection: false,
+  };
+  let collection: any[] = [];
+
+  await page.route('**/api/families/*/perfumes**', async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname.endsWith('/recommendations')) {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ wearToday: [], buyNext: [] }) });
+      return;
+    }
+    if (url.pathname.endsWith('/catalog')) {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ ...catalogueEntry, isInCollection: collection.length > 0 }]) });
+      return;
+    }
+    if (route.request().method() === 'POST') {
+      expect(route.request().postDataJSON()).toEqual({ catalogEntryId: catalogueEntry.id });
+      collection = [{
+        id: 'private-smoking-hot',
+        house: catalogueEntry.house,
+        name: catalogueEntry.name,
+        concentration: catalogueEntry.concentration,
+        photoUrl: null,
+        catalog: {
+          id: catalogueEntry.id,
+          olfactiveFamily: catalogueEntry.olfactiveFamily,
+          notes: catalogueEntry.notes,
+          accords: catalogueEntry.accords,
+          sourceName: catalogueEntry.source.name,
+          sourceUrl: null,
+          catalogueStatus: 'verified',
+        },
+        wearLogs: [],
+      }];
+      await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify(collection[0]) });
+      return;
+    }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(collection) });
+  });
+
+  await page.goto('/?view=perfume');
+  await dismissSetupWizard(page);
+  await expect(page.getByRole('heading', { name: 'Perfume Hub' })).toBeVisible({ timeout: 30_000 });
+  await page.getByRole('button', { name: 'Browse catalogue' }).click();
+  await expect(page.getByText('Source-aware library')).toBeVisible();
+  await page.getByRole('button', { name: 'Add bottle' }).click();
+
+  await expect(page.getByText('Kilian Smoking Hot added to your private collection.')).toBeVisible();
+  await expect(page.getByLabel('Log a wear test for Kilian Smoking Hot')).toBeVisible();
+  await expect(page.getByText('Woody amber · smoke · apple · vanilla · 2023')).toBeVisible();
+});
+
 test('a collection perfume accepts a direct bottle photo', async ({ page }) => {
   let hasPhoto = false;
   let photoUploadCount = 0;

@@ -639,10 +639,39 @@ model DeviceSync {
   @@map("device_syncs")
 }
 
+// Shared fragrance identity and transparent source provenance.
+model FragranceCatalogEntry {
+  id              String   @id @default(cuid())
+  slug            String   @unique
+  house           String
+  name            String
+  concentration   String?
+  releaseYear     Int?     @map("release_year")
+  olfactiveFamily String?  @map("olfactive_family")
+  notes           Json?
+  accords         Json?
+  description     String?
+  imageUrl        String?  @map("image_url")
+  sourceName      String   @map("source_name")
+  sourceUrl       String?  @map("source_url")
+  sourceKind      String   @default("curated") @map("source_kind")
+  catalogueStatus String   @default("verified") @map("catalogue_status")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  fragrances Fragrance[]
+  candidates FragranceCandidate[]
+
+  @@index([house, name])
+  @@index([olfactiveFamily])
+  @@map("fragrance_catalog_entries")
+}
+
 // Personal fragrance collection and wear evidence. Every record belongs to one profile.
 model Fragrance {
   id             String    @id @default(cuid())
   personId       String    @map("person_id")
+  catalogEntryId String?   @map("catalog_entry_id")
   house          String
   name           String
   concentration  String?
@@ -653,12 +682,14 @@ model Fragrance {
   createdAt      DateTime  @default(now()) @map("created_at")
   updatedAt      DateTime  @updatedAt @map("updated_at")
 
-  person      FamilyMember      @relation(fields: [personId], references: [id], onDelete: Cascade)
+  person       FamilyMember           @relation(fields: [personId], references: [id], onDelete: Cascade)
+  catalogEntry FragranceCatalogEntry? @relation(fields: [catalogEntryId], references: [id], onDelete: SetNull)
   wearLogs    FragranceWearLog[]
   benchmarks  FragranceBenchmark[]
 
   @@unique([personId, house, name, concentration])
   @@index([personId, createdAt])
+  @@index([catalogEntryId])
   @@map("fragrances")
 }
 
@@ -723,6 +754,7 @@ model FragranceBenchmark {
 model FragranceCandidate {
   id              String   @id @default(cuid())
   personId        String   @map("person_id")
+  catalogEntryId  String?  @map("catalog_entry_id")
   house           String
   name            String
   concentration   String?
@@ -736,10 +768,12 @@ model FragranceCandidate {
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
-  person FamilyMember @relation(fields: [personId], references: [id], onDelete: Cascade)
+  person       FamilyMember           @relation(fields: [personId], references: [id], onDelete: Cascade)
+  catalogEntry FragranceCatalogEntry? @relation(fields: [catalogEntryId], references: [id], onDelete: SetNull)
 
   @@unique([personId, house, name, sourceUrl])
   @@index([personId, capturedAt])
+  @@index([catalogEntryId])
   @@map("fragrance_candidates")
 }
 
