@@ -11,9 +11,17 @@ export const GET = requireFamilyAccess(async (_request: NextRequest, context, _a
         familyId,
       },
       orderBy: { createdAt: 'asc' },
+      include: {
+        user: {
+          select: { neonAuthId: true },
+        },
+      },
     });
 
-    return NextResponse.json(members);
+    return NextResponse.json(members.map(({ user, ...member }) => ({
+      ...member,
+      hasGoogleAccount: Boolean(user?.neonAuthId),
+    })));
   } catch (error) {
     console.error('Error fetching family members:', error);
     return NextResponse.json({ error: 'Failed to fetch family members' }, { status: 500 });

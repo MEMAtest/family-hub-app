@@ -21,6 +21,13 @@ const tabs = [
 
 type FamilyTab = typeof tabs[number]['id'];
 
+type AccessMember = {
+  id: string;
+  name: string;
+  ageGroup: string;
+  hasGoogleAccount: boolean;
+};
+
 const normalizeMilestone = (milestone: any, familyId?: string): FamilyMilestone => {
   const now = new Date().toISOString();
   const dateValue = milestone.date ? new Date(milestone.date) : null;
@@ -56,7 +63,7 @@ export const FamilyView = () => {
   const updateFamilyMilestone = useFamilyStore((state) => state.updateFamilyMilestone);
   const deleteFamilyMilestone = useFamilyStore((state) => state.deleteFamilyMilestone);
   const [isOwner, setIsOwner] = useState(false);
-  const [accessMembers, setAccessMembers] = useState<Array<any>>([]);
+  const [accessMembers, setAccessMembers] = useState<AccessMember[]>([]);
   const [inviteCode, setInviteCode] = useState<{ memberName: string; code: string; expiresAt: string } | null>(null);
   const [accessError, setAccessError] = useState('');
 
@@ -156,8 +163,8 @@ export const FamilyView = () => {
           <div className="divide-y divide-[#dde5e0] border-y border-[#dde5e0] dark:divide-slate-800 dark:border-slate-800">
             {accessMembers.filter((member) => member.ageGroup === 'Adult').map((member) => (
               <div key={member.id} className="flex flex-wrap items-center justify-between gap-3 py-4">
-                <div><p className="font-semibold">{member.name}</p><p className="text-xs text-slate-500">{member.userId ? 'Google account linked' : 'No account linked yet'}</p></div>
-                {!member.userId && <button type="button" onClick={async () => {
+                <div><p className="font-semibold">{member.name}</p><p className="text-xs text-slate-500">{member.hasGoogleAccount ? 'Google account linked' : 'No account linked yet'}</p></div>
+                {!member.hasGoogleAccount && <button type="button" onClick={async () => {
                   if (!databaseStatus.familyId) return;
                   setAccessError('');
                   try {

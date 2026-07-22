@@ -13,7 +13,11 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context, au
   const concentration = typeof body.concentration === 'string' ? body.concentration.trim() || null : null;
   const fragrance = await prisma.fragrance.upsert({
     where: { personId_house_name_concentration: { personId: authUser.familyMemberId, house, name, concentration } },
-    update: {},
+    update: {
+      photoData: draft.photoData,
+      photoMimeType: draft.photoMimeType,
+      photoSizeBytes: draft.photoSizeBytes,
+    },
     create: { personId: authUser.familyMemberId, house, name, concentration, photoData: draft.photoData, photoMimeType: draft.photoMimeType, photoSizeBytes: draft.photoSizeBytes },
   });
   await prisma.fragranceDraft.update({ where: { id: draft.id }, data: { confirmedAt: new Date() } });
