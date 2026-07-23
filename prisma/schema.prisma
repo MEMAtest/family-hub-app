@@ -66,6 +66,7 @@ model Family {
   budgetAccounts        BudgetAccount[]
   statementImports      StatementImport[]
   budgetTransactions    BudgetTransaction[]
+  fragranceRecognitionMemories FragranceRecognitionMemory[]
 
   @@map("families")
 }
@@ -661,6 +662,7 @@ model FragranceCatalogEntry {
 
   fragrances Fragrance[]
   candidates FragranceCandidate[]
+  recognitionMemories FragranceRecognitionMemory[]
 
   @@index([house, name])
   @@index([olfactiveFamily])
@@ -700,6 +702,12 @@ model FragranceDraft {
   suggestedName  String?  @map("suggested_name")
   suggestedConcentration String? @map("suggested_concentration")
   extractedText  String?  @map("extracted_text")
+  ocrStatus      String   @default("ready") @map("ocr_status")
+  ocrConfidence  Float?   @map("ocr_confidence")
+  ocrProvider    String?  @map("ocr_provider")
+  ocrError       String?  @map("ocr_error")
+  ocrUsage       Json?    @map("ocr_usage")
+  matchCandidates Json?   @map("match_candidates")
   photoData      Bytes    @map("photo_data")
   photoMimeType  String   @map("photo_mime_type")
   photoSizeBytes Int      @map("photo_size_bytes")
@@ -710,6 +718,28 @@ model FragranceDraft {
 
   @@index([personId, createdAt])
   @@map("fragrance_drafts")
+}
+
+// Household-confirmed label aliases improve matching without sharing private bottle photos.
+model FragranceRecognitionMemory {
+  id                String   @id @default(cuid())
+  familyId          String   @map("family_id")
+  catalogEntryId    String?  @map("catalog_entry_id")
+  normalizedLabel   String   @map("normalized_label")
+  house             String
+  name              String
+  concentration     String?
+  confirmationCount Int      @default(1) @map("confirmation_count")
+  lastConfirmedAt   DateTime @default(now()) @map("last_confirmed_at")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  family       Family                 @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  catalogEntry FragranceCatalogEntry? @relation(fields: [catalogEntryId], references: [id], onDelete: SetNull)
+
+  @@unique([familyId, normalizedLabel])
+  @@index([familyId, house, name])
+  @@map("fragrance_recognition_memories")
 }
 
 model FragranceWearLog {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { fragranceCatalogSlug } from '@/lib/fragranceCatalog';
+import { recognitionLabelFromFields } from '@/lib/fragranceRecognition';
 import { requireFamilyAccess } from '@/lib/auth-utils';
 
 export const POST = requireFamilyAccess(async (request: NextRequest, context, authUser) => {
@@ -38,6 +39,33 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context, au
     },
     create: { personId: authUser.familyMemberId, catalogEntryId: catalogEntry.id, house, name, concentration, photoData: draft.photoData, photoMimeType: draft.photoMimeType, photoSizeBytes: draft.photoSizeBytes },
   });
+  const normalizedLabel = recognitionLabelFromFields({
+    extractedText: draft.extractedText,
+    house,
+    name,
+    concentration,
+  });
+  if (normalizedLabel) {
+    await prisma.fragranceRecognitionMemory.upsert({
+      where: { familyId_normalizedLabel: { familyId: authUser.familyId, normalizedLabel } },
+      update: {
+        catalogEntryId: catalogEntry.id,
+        house,
+        name,
+        concentration,
+        confirmationCount: { increment: 1 },
+        lastConfirmedAt: new Date(),
+      },
+      create: {
+        familyId: authUser.familyId,
+        catalogEntryId: catalogEntry.id,
+        normalizedLabel,
+        house,
+        name,
+        concentration,
+      },
+    });
+  }
   await prisma.fragranceDraft.update({ where: { id: draft.id }, data: { confirmedAt: new Date() } });
   return NextResponse.json({ ...fragrance, photoData: undefined, photoUrl: `/api/families/${authUser.familyId}/perfumes/${fragrance.id}/photo` }, { status: 201 });
 });

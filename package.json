@@ -33,6 +33,7 @@
     "db:migrate": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts",
     "catalog:seed": "tsx scripts/seed-fragrance-catalog.ts",
+    "catalog:import:wikidata": "tsx scripts/import-wikidata-fragrance-catalog.ts",
     "db:studio": "prisma studio"
   },
   "dependencies": {

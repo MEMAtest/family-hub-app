@@ -179,6 +179,7 @@ test('the catalogue search adds a verified release to the private collection', a
     isInCollection: false,
   };
   let collection: any[] = [];
+  const catalogQueries: string[] = [];
 
   await page.route('**/api/families/*/perfumes**', async (route) => {
     const url = new URL(route.request().url());
@@ -187,6 +188,7 @@ test('the catalogue search adds a verified release to the private collection', a
       return;
     }
     if (url.pathname.endsWith('/catalog')) {
+      catalogQueries.push(url.searchParams.get('q') || '');
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ ...catalogueEntry, isInCollection: collection.length > 0 }]) });
       return;
     }
@@ -220,11 +222,91 @@ test('the catalogue search adds a verified release to the private collection', a
   await expect(page.getByRole('heading', { name: 'Perfume Hub' })).toBeVisible({ timeout: 30_000 });
   await page.getByRole('button', { name: 'Browse catalogue' }).click();
   await expect(page.getByText('Source-aware library')).toBeVisible();
+  await page.getByLabel('Search catalogue').fill('Smoking');
+  await expect.poll(() => catalogQueries.some((query) => query === 'Smoking')).toBe(true);
   await page.getByRole('button', { name: 'Add bottle' }).click();
 
   await expect(page.getByText('Kilian Smoking Hot added to your private collection.')).toBeVisible();
   await expect(page.getByLabel('Log a wear test for Kilian Smoking Hot')).toBeVisible();
   await expect(page.getByText('Woody amber · smoke · apple · vanilla · 2023')).toBeVisible();
+});
+
+test('the bottle reader shows progress, extracts a label, and confirms a catalogue match', async ({ page }) => {
+  const collection: any[] = [];
+  const confirmationPayloads: Array<Record<string, unknown>> = [];
+
+  await page.route('**/api/families/*/perfumes**', async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname.endsWith('/recommendations')) {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ wearToday: [], buyNext: [] }) });
+      return;
+    }
+    if (url.pathname.endsWith('/photo-drafts') && route.request().method() === 'POST') {
+      expect(await route.request().headerValue('content-type')).toContain('multipart/form-data');
+      await new Promise((resolve) => setTimeout(resolve, 350));
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          id: 'draft-e2e-1',
+          suggestedHouse: 'KILIAN PARIS',
+          suggestedName: 'Smoking Hot',
+          suggestedConcentration: 'Eau de Parfum',
+          extractedText: 'KILIAN PARIS\nSMOKING HOT',
+          ocrStatus: 'ready',
+          ocrConfidence: 0.92,
+          ocrUsage: { inputTokens: 10_000, outputTokens: 200, estimatedUsd: 0.00052 },
+          matchCandidates: [{
+            id: 'catalogue-smoking-hot',
+            house: 'KILIAN PARIS',
+            name: 'Smoking Hot',
+            concentration: 'Eau de Parfum',
+            source: 'catalogue',
+          }],
+        }),
+      });
+      return;
+    }
+    if (url.pathname.endsWith('/photo-drafts/draft-e2e-1/confirm') && route.request().method() === 'POST') {
+      const payload = route.request().postDataJSON() as Record<string, unknown>;
+      confirmationPayloads.push(payload);
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({ id: 'saved-smoking-hot', ...payload, photoUrl: null, wearLogs: [] }),
+      });
+      return;
+    }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(collection) });
+  });
+
+  await page.goto('/?view=perfume');
+  await dismissSetupWizard(page);
+  await expect(page.getByRole('heading', { name: 'Perfume Hub' })).toBeVisible({ timeout: 30_000 });
+
+  await page.locator('input[type="file"][accept="image/*"]').first().setInputFiles({
+    name: 'smoking-hot-label.png',
+    mimeType: 'image/png',
+    buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLtaQAAAABJRU5ErkJggg==', 'base64'),
+  });
+
+  await expect(page.getByAltText('Bottle label selected for reading')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Reading bottle label...' })).toBeVisible();
+  await expect(page.getByText('Label text read')).toBeVisible();
+  await expect(page.getByText('Recognition confidence: 92%')).toBeVisible();
+  await expect(page.getByText('This scan used < $0.01 of vision processing.')).toBeVisible();
+  if (process.env.CAPTURE_PERFUME_E2E) {
+    await page.screenshot({ path: 'output/playwright/perfume-bottle-reader-e2e.png', fullPage: true });
+  }
+  await page.getByRole('button', { name: /Catalogue match KILIAN PARIS Smoking Hot Use match/ }).click();
+  await page.getByRole('button', { name: 'Confirm and save' }).click();
+
+  await expect(page.getByText('Fragrance saved to your private collection.')).toBeVisible();
+  expect(confirmationPayloads).toEqual([{
+    house: 'KILIAN PARIS',
+    name: 'Smoking Hot',
+    concentration: 'Eau de Parfum',
+  }]);
 });
 
 test('a collection perfume accepts a direct bottle photo', async ({ page }) => {

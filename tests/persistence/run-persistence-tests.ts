@@ -133,6 +133,7 @@ import {
 import { POST as fragrancePhotoPost } from '../../src/app/api/families/[familyId]/perfumes/[fragranceId]/photo/route';
 import { GET as fragranceCatalogGet } from '../../src/app/api/families/[familyId]/perfumes/catalog/route';
 import { POST as fragrancesPost } from '../../src/app/api/families/[familyId]/perfumes/route';
+import { POST as fragranceDraftPost } from '../../src/app/api/families/[familyId]/perfumes/photo-drafts/route';
 import { POST as fragranceDraftConfirmPost } from '../../src/app/api/families/[familyId]/perfumes/photo-drafts/[draftId]/confirm/route';
 import { fragranceCatalogSlug } from '../../src/lib/fragranceCatalog';
 
@@ -179,6 +180,7 @@ const createdIds = {
   cyclePeriods: [] as string[],
   fragrances: [] as string[],
   fragranceCatalogEntries: [] as string[],
+  fragranceRecognitionMemories: [] as string[],
 };
 
 let currentFamilyId = '';
@@ -265,6 +267,7 @@ const uniq = (ids: string[]) => Array.from(new Set(ids.filter(Boolean)));
 
 const cleanupCreatedRows = async () => {
   await prisma.fragrance.deleteMany({ where: { id: { in: uniq(createdIds.fragrances) } } });
+  await prisma.fragranceRecognitionMemory.deleteMany({ where: { id: { in: uniq(createdIds.fragranceRecognitionMemories) } } });
   await prisma.fragranceCatalogEntry.deleteMany({ where: { id: { in: uniq(createdIds.fragranceCatalogEntries) } } });
   await prisma.cyclePeriod.deleteMany({ where: { id: { in: uniq(createdIds.cyclePeriods) } } });
   await prisma.contractorAppointment.deleteMany({ where: { id: { in: uniq(createdIds.contractorAppointments) } } });
@@ -605,6 +608,86 @@ const runPersistenceChecks = async () => {
         ensure(catalogEntry?.catalogueStatus === 'profile-confirmed', 'Photo-confirmed fragrance did not create a profile-confirmed catalogue entry');
       }
     } finally {
+      if (previousMemberId) process.env.TEST_AUTH_FAMILY_MEMBER_ID = previousMemberId;
+      else delete process.env.TEST_AUTH_FAMILY_MEMBER_ID;
+    }
+  });
+
+  await runCheck('Vision bottle reading and household recognition memory', async () => {
+    const fragranceMember = await prisma.familyMember.create({
+      data: {
+        familyId: currentFamilyId,
+        name: `${runTag} Vision Member`,
+        role: 'Parent',
+        ageGroup: 'Adult',
+        color: '#147c72',
+        icon: 'P',
+      },
+    });
+    createdIds.familyMembers.push(fragranceMember.id);
+    const catalogEntry = await prisma.fragranceCatalogEntry.create({
+      data: {
+        slug: fragranceCatalogSlug('Vision House', `${runTag} Vision Bottle`, 'Eau de Parfum'),
+        house: 'Vision House',
+        name: `${runTag} Vision Bottle`,
+        concentration: 'Eau de Parfum',
+        sourceName: 'Persistence test source',
+        sourceKind: 'test',
+        catalogueStatus: 'verified',
+      },
+    });
+    createdIds.fragranceCatalogEntries.push(catalogEntry.id);
+
+    const previousMemberId = process.env.TEST_AUTH_FAMILY_MEMBER_ID;
+    const previousOpenRouterKey = process.env.OPENROUTER_API_KEY;
+    const previousFetch = global.fetch;
+    process.env.TEST_AUTH_FAMILY_MEMBER_ID = fragranceMember.id;
+    process.env.OPENROUTER_API_KEY = 'persistence-test-key';
+    global.fetch = (async () => new Response(JSON.stringify({
+      choices: [{ message: { content: JSON.stringify({
+        house: catalogEntry.house,
+        name: catalogEntry.name,
+        concentration: catalogEntry.concentration,
+        extractedText: `${catalogEntry.house}\n${catalogEntry.name}`,
+        confidence: 0.92,
+      }) } }],
+      usage: { prompt_tokens: 10_000, completion_tokens: 200 },
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } })) as typeof fetch;
+
+    try {
+      const payload = new FormData();
+      payload.set('file', new File([new Uint8Array([137, 80, 78, 71])], 'vision-bottle.png', { type: 'image/png' }));
+      const draft = await call(
+        fragranceDraftPost as Handler,
+        new NextRequest(`http://localhost/api/families/${currentFamilyId}/perfumes/photo-drafts`, { method: 'POST', body: payload }),
+        familyContext(),
+        'Read bottle label with vision'
+      );
+      const draftId = getId(draft, 'Vision draft');
+      ensure(getField(draft, 'ocrStatus') === 'ready', 'Vision draft did not reach a ready state');
+      ensure(getField(draft, 'ocrConfidence') === 0.92, 'Vision confidence did not persist');
+      ensure(Array.isArray(getField(draft, 'matchCandidates')), 'Vision draft did not return catalogue matches');
+
+      const created = await call(
+        fragranceDraftConfirmPost as Handler,
+        jsonRequest(`http://localhost/api/families/${currentFamilyId}/perfumes/photo-drafts/${draftId}/confirm`, 'POST', {
+          house: catalogEntry.house,
+          name: catalogEntry.name,
+          concentration: catalogEntry.concentration,
+        }),
+        familyContext({ draftId }),
+        'Confirm vision bottle label'
+      );
+      createdIds.fragrances.push(getId(created, 'Vision-confirmed fragrance'));
+      const memory = await prisma.fragranceRecognitionMemory.findFirst({
+        where: { familyId: currentFamilyId, catalogEntryId: catalogEntry.id },
+      });
+      ensure(memory?.confirmationCount === 1, 'Confirmed scan did not create household recognition memory');
+      if (memory) createdIds.fragranceRecognitionMemories.push(memory.id);
+    } finally {
+      global.fetch = previousFetch;
+      if (previousOpenRouterKey) process.env.OPENROUTER_API_KEY = previousOpenRouterKey;
+      else delete process.env.OPENROUTER_API_KEY;
       if (previousMemberId) process.env.TEST_AUTH_FAMILY_MEMBER_ID = previousMemberId;
       else delete process.env.TEST_AUTH_FAMILY_MEMBER_ID;
     }

@@ -1,7 +1,7 @@
 'use client';
 
-import { ChangeEvent, FormEvent, useEffect, useState } from 'react';
-import { BookOpen, Camera, FlaskConical, Plus, Search, Sparkles, Timer, X } from 'lucide-react';
+import { ChangeEvent, FormEvent, useCallback, useEffect, useRef, useState } from 'react';
+import { BookOpen, Camera, CheckCircle2, Circle, FlaskConical, LoaderCircle, Plus, Search, Sparkles, Timer, X } from 'lucide-react';
 import { useFamilyStore } from '@/store/familyStore';
 
 type CatalogSummary = {
@@ -43,7 +43,14 @@ type Draft = {
   suggestedName?: string | null;
   suggestedConcentration?: string | null;
   extractedText?: string | null;
+  ocrStatus?: 'ready' | 'needs_manual_review' | 'failed' | string;
+  ocrConfidence?: number | null;
+  ocrError?: string | null;
+  ocrUsage?: { inputTokens?: number; outputTokens?: number; estimatedUsd?: number } | null;
+  matchCandidates?: Array<{ id: string; house: string; name: string; concentration?: string | null; source: 'catalogue' | 'household' }> | null;
 };
+
+type ScanPhase = 'idle' | 'uploading' | 'reading' | 'matching' | 'ready';
 
 const MAX_BOTTLE_PHOTO_SIZE = 4 * 1024 * 1024;
 
@@ -54,7 +61,36 @@ const requestJson = async (url: string, options?: RequestInit) => {
   return body;
 };
 
+const requestJsonWithTimeout = async (url: string, options: RequestInit, timeoutMs: number) => {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await requestJson(url, { ...options, signal: controller.signal });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new Error('Bottle reading took too long. You can retry or enter the label manually.');
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
+  }
+};
+
 const detailText = (values: string[]) => values.slice(0, 4).join(' · ');
+
+const scanStages: Array<{ id: ScanPhase; label: string }> = [
+  { id: 'uploading', label: 'Photo uploaded' },
+  { id: 'reading', label: 'Reading label' },
+  { id: 'matching', label: 'Finding matches' },
+  { id: 'ready', label: 'Ready to confirm' },
+];
+
+const scanStageIndex = (phase: ScanPhase) => scanStages.findIndex((stage) => stage.id === phase);
+
+const formatUsd = (amount?: number | null) => {
+  if (!amount || amount <= 0) return null;
+  return amount < 0.01 ? '< $0.01' : `$${amount.toFixed(2)}`;
+};
 
 export const PerfumeView = () => {
   const familyId = useFamilyStore((state) => state.databaseStatus.familyId);
@@ -74,6 +110,9 @@ export const PerfumeView = () => {
   const [candidate, setCandidate] = useState({ house: '', name: '', sourceName: '', sourceUrl: '' });
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
+  const [scanPhase, setScanPhase] = useState<ScanPhase>('idle');
+  const [scanPreviewUrl, setScanPreviewUrl] = useState<string | null>(null);
+  const scanPreviewRef = useRef<string | null>(null);
 
   const load = async () => {
     if (!familyId) return;
@@ -89,7 +128,7 @@ export const PerfumeView = () => {
     }
   };
 
-  const loadCatalog = async (query = catalogQuery) => {
+  const loadCatalog = useCallback(async (query = catalogQuery) => {
     if (!familyId) return;
     setCatalogLoading(true);
     try {
@@ -102,15 +141,24 @@ export const PerfumeView = () => {
     } finally {
       setCatalogLoading(false);
     }
-  };
+  }, [catalogQuery, familyId]);
 
   useEffect(() => {
     void load();
   }, [familyId]);
 
+  useEffect(() => {
+    if (!showCatalog) return;
+    const timeout = window.setTimeout(() => void loadCatalog(catalogQuery), 250);
+    return () => window.clearTimeout(timeout);
+  }, [catalogQuery, loadCatalog, showCatalog]);
+
+  useEffect(() => () => {
+    if (scanPreviewRef.current) URL.revokeObjectURL(scanPreviewRef.current);
+  }, []);
+
   const openCatalog = () => {
     setShowCatalog(true);
-    void loadCatalog();
   };
 
   const addCatalogFragrance = async (entry: CatalogEntry) => {
@@ -145,9 +193,8 @@ export const PerfumeView = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
       });
-      setDraft(null);
       setForm({ house: '', name: '', concentration: '' });
-      setShowAdd(false);
+      closeAdd();
       setNotice('Fragrance saved to your private collection.');
       await load();
     } catch (reason) {
@@ -169,24 +216,48 @@ export const PerfumeView = () => {
     return true;
   };
 
+  const closeAdd = () => {
+    setShowAdd(false);
+    setDraft(null);
+    setScanPhase('idle');
+    if (scanPreviewRef.current) URL.revokeObjectURL(scanPreviewRef.current);
+    scanPreviewRef.current = null;
+    setScanPreviewUrl(null);
+  };
+
   const uploadBottle = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file || !familyId || !validateBottlePhoto(file)) return;
+    if (scanPreviewRef.current) URL.revokeObjectURL(scanPreviewRef.current);
+    const previewUrl = URL.createObjectURL(file);
+    scanPreviewRef.current = previewUrl;
+    setScanPreviewUrl(previewUrl);
+    setDraft(null);
+    setForm({ house: '', name: '', concentration: '' });
+    setShowAdd(true);
+    setScanPhase('uploading');
     setBusy(true);
     try {
       const payload = new FormData();
       payload.append('file', file);
-      const photoDraft = await requestJson(`/api/families/${familyId}/perfumes/photo-drafts`, { method: 'POST', body: payload });
+      setScanPhase('reading');
+      const photoDraft = await requestJsonWithTimeout(
+        `/api/families/${familyId}/perfumes/photo-drafts`,
+        { method: 'POST', body: payload },
+        28_000
+      ) as Draft;
+      setScanPhase('matching');
       setDraft(photoDraft);
       setForm({
         house: photoDraft.suggestedHouse || '',
         name: photoDraft.suggestedName || '',
         concentration: photoDraft.suggestedConcentration || '',
       });
-      setShowAdd(true);
+      setScanPhase('ready');
     } catch (reason) {
       setNotice(reason instanceof Error ? reason.message : 'Could not read that bottle photo.');
+      setScanPhase('ready');
     } finally {
       setBusy(false);
     }
@@ -276,10 +347,10 @@ export const PerfumeView = () => {
               <BookOpen className="h-4 w-4" />Browse catalogue
             </button>
             <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-md border border-[#c8d8ce] bg-white px-3 text-sm font-semibold text-[#147c72] hover:bg-[#ecf3ee] dark:border-slate-700 dark:bg-slate-900">
-              <Camera className="h-4 w-4" />{busy ? 'Reading...' : 'Read bottle label'}
+              <Camera className="h-4 w-4" />{scanPhase === 'reading' ? 'Reading bottle...' : 'Read bottle label'}
               <input type="file" accept="image/*" capture="environment" className="hidden" onChange={uploadBottle} />
             </label>
-            <button type="button" onClick={() => { setDraft(null); setForm({ house: '', name: '', concentration: '' }); setShowAdd(true); }} className="inline-flex h-10 items-center gap-2 rounded-md bg-[#147c72] px-3 text-sm font-semibold text-white hover:bg-[#0f625a]">
+            <button type="button" onClick={() => { closeAdd(); setForm({ house: '', name: '', concentration: '' }); setShowAdd(true); }} className="inline-flex h-10 items-center gap-2 rounded-md bg-[#147c72] px-3 text-sm font-semibold text-white hover:bg-[#0f625a]">
               <Plus className="h-4 w-4" />Add fragrance
             </button>
           </div>
@@ -326,9 +397,81 @@ export const PerfumeView = () => {
         </section>
       </div>
 
-      {showCatalog && <div className="fixed inset-0 z-50 flex items-end bg-black/40 p-0 sm:items-center sm:justify-center sm:p-6"><div role="dialog" aria-modal="true" aria-label="Fragrance catalogue" className="max-h-[92vh] w-full max-w-2xl overflow-y-auto bg-white p-5 dark:bg-slate-900"><div className="flex items-center justify-between"><div><p className="text-xs font-semibold text-[#147c72]">Source-aware library</p><h2 className="font-serif text-2xl">Browse catalogue</h2></div><button type="button" onClick={() => setShowCatalog(false)} aria-label="Close catalogue"><X className="h-5 w-5" /></button></div><form onSubmit={(event) => { event.preventDefault(); void loadCatalog(); }} className="mt-4 flex gap-2"><label className="sr-only" htmlFor="catalogue-search">Search catalogue</label><input id="catalogue-search" value={catalogQuery} onChange={(event) => setCatalogQuery(event.target.value)} placeholder="Search house, fragrance, concentration or family" className="h-11 min-w-0 flex-1 rounded-md border border-slate-300 px-3 text-sm dark:border-slate-700 dark:bg-slate-950" /><button type="submit" className="inline-flex h-11 items-center gap-2 rounded-md bg-[#147c72] px-3 text-sm font-semibold text-white"><Search className="h-4 w-4" />Search</button></form><div className="mt-5 divide-y divide-[#dfe7e0] border-y border-[#dfe7e0] dark:divide-slate-800 dark:border-slate-800">{catalogLoading && <p className="py-5 text-sm text-slate-500">Searching catalogue...</p>}{!catalogLoading && catalogEntries.map((entry) => <div key={entry.id} className="flex flex-wrap items-center justify-between gap-3 py-4"><div className="min-w-0"><p className="text-xs font-semibold text-[#147c72]">{entry.house}</p><p className="mt-1 text-sm font-semibold">{entry.name}{entry.concentration ? ` · ${entry.concentration}` : ''}</p><p className="mt-1 text-xs text-slate-500">{[entry.olfactiveFamily, detailText(entry.notes), entry.releaseYear ? String(entry.releaseYear) : ''].filter(Boolean).join(' · ') || 'Profile-confirmed catalogue entry'}</p>{entry.source.url && <a href={entry.source.url} target="_blank" rel="noreferrer" className="mt-1 inline-block text-xs text-[#147c72] underline">Source: {entry.source.name}</a>}</div><button type="button" disabled={busy || entry.isInCollection} onClick={() => void addCatalogFragrance(entry)} className="h-9 rounded-md border border-[#147c72] px-3 text-xs font-semibold text-[#147c72] disabled:cursor-default disabled:border-slate-300 disabled:text-slate-400">{entry.isInCollection ? 'In collection' : 'Add bottle'}</button></div>)}{!catalogLoading && catalogEntries.length === 0 && <p className="py-5 text-sm text-slate-500">No matching catalogue release yet. Add the bottle manually or photograph its label, then confirm it to grow your private library.</p>}</div></div></div>}
+      {showCatalog && (
+        <div className="fixed inset-0 z-50 flex items-end bg-black/40 p-0 sm:items-center sm:justify-center sm:p-6">
+          <div role="dialog" aria-modal="true" aria-label="Fragrance catalogue" className="max-h-[92vh] w-full max-w-2xl overflow-y-auto bg-white p-5 dark:bg-slate-900">
+            <div className="flex items-center justify-between gap-4">
+              <div><p className="text-xs font-semibold text-[#147c72]">Source-aware library</p><h2 className="font-serif text-2xl">Browse catalogue</h2></div>
+              <button type="button" onClick={() => setShowCatalog(false)} aria-label="Close catalogue"><X className="h-5 w-5" /></button>
+            </div>
+            <div className="relative mt-4">
+              <Search className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-slate-400" />
+              <label className="sr-only" htmlFor="catalogue-search">Search catalogue</label>
+              <input id="catalogue-search" value={catalogQuery} onChange={(event) => setCatalogQuery(event.target.value)} autoFocus placeholder="Type a house, fragrance, concentration or scent family" className="h-11 w-full rounded-md border border-slate-300 py-2 pl-9 pr-3 text-sm dark:border-slate-700 dark:bg-slate-950" />
+            </div>
+            <p aria-live="polite" className="mt-2 text-xs text-slate-500">{catalogLoading ? 'Searching catalogue...' : 'Results update as you type.'}</p>
+            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+              {!catalogLoading && catalogEntries.map((entry) => (
+                <div key={entry.id} className="flex min-h-32 gap-3 border border-[#dfe7e0] p-3 dark:border-slate-800">
+                  <div aria-hidden="true" className="mt-1 flex h-16 w-11 shrink-0 items-end justify-center rounded-b-[14px] rounded-t-md border-2 border-[#147c72] bg-[#e7f0e9] pb-2 text-xs font-bold text-[#147c72] dark:bg-slate-800">{entry.house.slice(0, 1)}</div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-semibold text-[#147c72]">{entry.house}</p>
+                    <p className="mt-1 text-sm font-semibold">{entry.name}{entry.concentration ? ` · ${entry.concentration}` : ''}</p>
+                    <p className="mt-1 line-clamp-2 text-xs text-slate-500">{[entry.olfactiveFamily, detailText(entry.notes), entry.releaseYear ? String(entry.releaseYear) : ''].filter(Boolean).join(' · ') || 'Source-attributed catalogue identity'}</p>
+                    {entry.source.url && <a href={entry.source.url} target="_blank" rel="noreferrer" className="mt-1 inline-block text-xs text-[#147c72] underline">{entry.source.name}</a>}
+                    <button type="button" disabled={busy || entry.isInCollection} onClick={() => void addCatalogFragrance(entry)} className="mt-2 h-8 border border-[#147c72] px-2 text-xs font-semibold text-[#147c72] disabled:cursor-default disabled:border-slate-300 disabled:text-slate-400">{entry.isInCollection ? 'In collection' : 'Add bottle'}</button>
+                  </div>
+                </div>
+              ))}
+              {!catalogLoading && catalogEntries.length === 0 && (
+                <div className="col-span-full border-y border-[#dfe7e0] py-6 text-center dark:border-slate-800">
+                  <p className="text-sm text-slate-500">No matching release found yet.</p>
+                  <button type="button" onClick={() => { setShowCatalog(false); closeAdd(); setForm({ house: '', name: catalogQuery.trim(), concentration: '' }); setShowAdd(true); }} className="mt-3 text-sm font-semibold text-[#147c72] underline">Add this bottle manually</button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
-      {showAdd && <div className="fixed inset-0 z-50 flex items-end bg-black/40 p-0 sm:items-center sm:justify-center sm:p-6"><form onSubmit={addFragrance} className="w-full max-w-md bg-white p-5 dark:bg-slate-900"><div className="flex items-center justify-between"><h2 className="font-serif text-2xl">{draft ? 'Confirm bottle label' : 'Add fragrance'}</h2><button type="button" onClick={() => setShowAdd(false)} aria-label="Close"><X className="h-5 w-5" /></button></div>{draft?.extractedText && <p className="mt-3 text-xs text-slate-500">Label text was read from the photo. Confirm the details before saving.</p>}<div className="mt-4 grid gap-3"><input required value={form.house} onChange={(event) => setForm({ ...form, house: event.target.value })} placeholder="House, e.g. Kilian" className="h-11 rounded-md border border-slate-300 px-3 dark:border-slate-700 dark:bg-slate-950" /><input required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="Fragrance name" className="h-11 rounded-md border border-slate-300 px-3 dark:border-slate-700 dark:bg-slate-950" /><input value={form.concentration} onChange={(event) => setForm({ ...form, concentration: event.target.value })} placeholder="Concentration, optional" className="h-11 rounded-md border border-slate-300 px-3 dark:border-slate-700 dark:bg-slate-950" /></div><button disabled={busy} className="mt-5 h-11 w-full rounded-md bg-[#147c72] text-sm font-semibold text-white disabled:opacity-60">{busy ? 'Saving...' : 'Confirm and save'}</button></form></div>}
+      {showAdd && (
+        <div className="fixed inset-0 z-50 flex items-end bg-black/40 p-0 sm:items-center sm:justify-center sm:p-6">
+          <form onSubmit={addFragrance} role="dialog" aria-modal="true" aria-label="Bottle reader" className="max-h-[92vh] w-full max-w-lg overflow-y-auto bg-white p-5 dark:bg-slate-900">
+            <div className="flex items-center justify-between gap-4">
+              <div><p className="text-xs font-semibold text-[#147c72]">{scanPreviewUrl ? 'Guided bottle scan' : 'Private collection'}</p><h2 className="font-serif text-2xl">{scanPreviewUrl ? 'Confirm bottle label' : 'Add fragrance'}</h2></div>
+              <button type="button" onClick={closeAdd} aria-label="Close bottle reader"><X className="h-5 w-5" /></button>
+            </div>
+
+            {scanPreviewUrl && (
+              <div className="mt-4 grid gap-4 border-y border-[#dfe7e0] py-4 dark:border-slate-800 sm:grid-cols-[120px_1fr]">
+                <img src={scanPreviewUrl} alt="Bottle label selected for reading" className="h-36 w-full object-contain" />
+                <div aria-live="polite" className="space-y-2">
+                  {scanStages.map((stage, index) => {
+                    const currentIndex = scanStageIndex(scanPhase);
+                    const complete = currentIndex > index || scanPhase === 'ready' && index < scanStages.length - 1;
+                    const current = scanPhase === stage.id && scanPhase !== 'ready';
+                    return <div key={stage.id} className="flex items-center gap-2 text-sm">{current ? <LoaderCircle className="h-4 w-4 animate-spin text-[#147c72]" /> : complete || scanPhase === 'ready' && stage.id === 'ready' ? <CheckCircle2 className="h-4 w-4 text-[#147c72]" /> : <Circle className="h-4 w-4 text-slate-300" />}<span className={current ? 'font-semibold text-[#18221f] dark:text-slate-100' : 'text-slate-500'}>{stage.label}</span></div>;
+                  })}
+                </div>
+              </div>
+            )}
+
+            {draft?.ocrError && <p className="mt-4 border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">{draft.ocrError} Your photo is kept privately so you can enter the label below.</p>}
+            {draft?.ocrStatus === 'needs_manual_review' && !draft.ocrError && <p className="mt-4 border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">The label was not clear enough to save automatically. Check the suggested details before confirming.</p>}
+            {draft?.extractedText && <div className="mt-4 border border-[#dfe7e0] p-3 text-sm dark:border-slate-800"><p className="text-xs font-semibold text-[#147c72]">Label text read</p><p className="mt-1 whitespace-pre-wrap text-slate-600 dark:text-slate-300">{draft.extractedText}</p>{draft.ocrConfidence != null && <p className="mt-2 text-xs text-slate-500">Recognition confidence: {Math.round(draft.ocrConfidence * 100)}%</p>}</div>}
+            {draft?.ocrUsage && formatUsd(draft.ocrUsage.estimatedUsd) && <p className="mt-3 text-xs text-slate-500">This scan used {formatUsd(draft.ocrUsage.estimatedUsd)} of vision processing.</p>}
+
+            {draft?.matchCandidates && draft.matchCandidates.length > 0 && <div className="mt-4"><p className="text-xs font-semibold text-[#147c72]">Possible matches</p><div className="mt-2 grid gap-2">{draft.matchCandidates.map((match) => <button key={`${match.id}-${match.house}-${match.name}`} type="button" onClick={() => setForm({ house: match.house, name: match.name, concentration: match.concentration || '' })} className="flex items-center justify-between border border-[#dfe7e0] p-3 text-left hover:bg-[#f3f7f2] dark:border-slate-800 dark:hover:bg-slate-800"><span><span className="block text-xs font-semibold text-[#147c72]">{match.source === 'household' ? 'Household recognition' : 'Catalogue match'}</span><span className="block text-sm font-semibold">{match.house} {match.name}</span></span><span className="text-xs text-slate-500">Use match</span></button>)}</div></div>}
+
+            <fieldset disabled={scanPreviewUrl !== null && scanPhase !== 'ready'} className="mt-5 grid gap-3 disabled:opacity-60">
+              <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">House<input aria-label="Fragrance house" required value={form.house} onChange={(event) => setForm({ ...form, house: event.target.value })} placeholder="e.g. Kilian" className="mt-1 h-11 w-full rounded-md border border-slate-300 px-3 text-sm dark:border-slate-700 dark:bg-slate-950" /></label>
+              <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">Fragrance name<input aria-label="Fragrance name" required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="Fragrance name" className="mt-1 h-11 w-full rounded-md border border-slate-300 px-3 text-sm dark:border-slate-700 dark:bg-slate-950" /></label>
+              <label className="text-xs font-semibold text-slate-600 dark:text-slate-300">Concentration<input aria-label="Fragrance concentration" value={form.concentration} onChange={(event) => setForm({ ...form, concentration: event.target.value })} placeholder="Optional, e.g. Eau de Parfum" className="mt-1 h-11 w-full rounded-md border border-slate-300 px-3 text-sm dark:border-slate-700 dark:bg-slate-950" /></label>
+            </fieldset>
+            <button disabled={busy || scanPreviewUrl !== null && scanPhase !== 'ready'} className="mt-5 h-11 w-full rounded-md bg-[#147c72] text-sm font-semibold text-white disabled:opacity-60">{busy && scanPhase === 'ready' ? 'Saving...' : scanPreviewUrl !== null && scanPhase !== 'ready' ? 'Reading bottle label...' : 'Confirm and save'}</button>
+          </form>
+        </div>
+      )}
 
       {showLog && selected && <div className="fixed inset-0 z-50 flex items-end bg-black/40 p-0 sm:items-center sm:justify-center sm:p-6"><form onSubmit={logWear} className="w-full max-w-md bg-white p-5 dark:bg-slate-900"><div className="flex items-center justify-between"><div><p className="text-xs font-semibold text-[#147c72]">Wear test</p><h2 className="font-serif text-2xl">{selected.name}</h2></div><button type="button" onClick={() => setShowLog(false)} aria-label="Close"><X className="h-5 w-5" /></button></div><div className="mt-4 grid grid-cols-3 gap-3"><label className="text-xs">Enjoyment<input name="overallRating" type="number" min="1" max="5" defaultValue="4" className="mt-1 h-10 w-full rounded-md border border-slate-300 px-2 dark:border-slate-700 dark:bg-slate-950" /></label><label className="text-xs">Hours<input name="longevityHours" type="number" min="0" step="0.5" defaultValue="6" className="mt-1 h-10 w-full rounded-md border border-slate-300 px-2 dark:border-slate-700 dark:bg-slate-950" /></label><label className="text-xs">Projection<input name="projectionRating" type="number" min="1" max="5" defaultValue="3" className="mt-1 h-10 w-full rounded-md border border-slate-300 px-2 dark:border-slate-700 dark:bg-slate-950" /></label></div><button type="button" onClick={() => setDetailedLog(!detailedLog)} className="mt-4 text-xs font-semibold text-[#147c72]">{detailedLog ? 'Quick log' : 'Add detail'}</button>{detailedLog && <div className="mt-3 grid grid-cols-3 gap-2"><input name="sprays" placeholder="Sprays" className="h-10 rounded-md border border-slate-300 px-2 text-xs dark:border-slate-700 dark:bg-slate-950" /><input name="occasion" placeholder="Occasion" className="h-10 rounded-md border border-slate-300 px-2 text-xs dark:border-slate-700 dark:bg-slate-950" /><input name="weather" placeholder="Weather" className="h-10 rounded-md border border-slate-300 px-2 text-xs dark:border-slate-700 dark:bg-slate-950" /></div>}<textarea name="notes" className="mt-3 min-h-20 w-full rounded-md border border-slate-300 p-2 text-sm dark:border-slate-700 dark:bg-slate-950" placeholder="Anything worth remembering?" /><button disabled={busy} className="mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-md bg-[#147c72] text-sm font-semibold text-white"><Timer className="h-4 w-4" />Save wear test</button></form></div>}
 
