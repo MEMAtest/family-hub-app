@@ -502,3 +502,53 @@ test('Angela can save a private wellbeing check-in and reminder without fertilit
   expect(posts[0]).toMatchObject({ action: 'daily-log', flow: 'Light', mood: 'Good', energy: 5, painLevel: 1, sleepHours: 8, medication: 'Magnesium', symptoms: ['Cramps'], notes: 'Quiet day, manageable symptoms.' });
   expect(posts[1]).toEqual({ action: 'reminder', reminderType: 'period', enabled: true, daysBefore: 2, timeOfDay: '19:30' });
 });
+
+test('Perfume and Cycle remain usable at iPhone width', async ({ page }) => {
+  const noOverflow = async (view: string) => {
+    const metrics = await page.evaluate(() => ({ viewport: window.innerWidth, document: document.documentElement.scrollWidth, body: document.body.scrollWidth }));
+    expect(metrics.document, `${view} document width`).toBeLessThanOrEqual(metrics.viewport + 1);
+    expect(metrics.body, `${view} body width`).toBeLessThanOrEqual(metrics.viewport + 1);
+  };
+
+  await page.route('**/api/families/*/perfumes**', async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname.endsWith('/recommendations')) {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ wearToday: [], buyNext: [] }) });
+      return;
+    }
+    if (url.pathname.endsWith('/catalog')) {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{
+        id: 'mobile-catalogue-smoking-hot', house: 'Kilian', name: 'Smoking Hot', concentration: 'Eau de Parfum', notes: ['vanilla'], accords: ['smoky'], source: { name: 'Official source', url: null, kind: 'official-house', status: 'source-attributed' }, isInCollection: false,
+      }]) });
+      return;
+    }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
+  });
+  await page.route('**/api/families/*/cycles**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ profile: { reminderEnabled: true, reminderTime: '20:00', personalCalendarEnabled: false }, periods: [], logs: [], reminders: [], calendarConnection: null, insights: { averageCycleLength: null, averagePeriodLength: null, predictedNextPeriod: null, confidence: 'low', irregular: false, loggedCycles: 0 } }),
+    });
+  });
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/?view=perfume');
+  await dismissSetupWizard(page);
+  await expect(page.getByRole('heading', { name: 'Perfume Hub' })).toBeVisible({ timeout: 30_000 });
+  await noOverflow('Perfume Hub');
+  await page.getByRole('button', { name: 'Browse catalogue' }).click();
+  await expect(page.getByRole('dialog', { name: 'Fragrance catalogue' })).toBeVisible();
+  await expect(page.getByLabel('Search catalogue')).toBeVisible();
+  await noOverflow('Perfume catalogue');
+  await page.getByRole('button', { name: 'Close catalogue' }).click();
+
+  await page.goto('/?view=cycle');
+  await expect(page.getByRole('heading', { name: 'Health & Cycle' })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByLabel('Energy')).toBeVisible();
+  await noOverflow('Health & Cycle');
+  await page.getByRole('button', { name: 'Log period' }).click();
+  await expect(page.getByRole('heading', { name: 'Log a period' })).toBeVisible();
+  await expect(page.getByLabel('Start date')).toBeVisible();
+  await noOverflow('Period form');
+});
