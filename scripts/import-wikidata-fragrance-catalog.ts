@@ -23,6 +23,35 @@ type CuratedEntry = {
   sourceUrl: string;
 };
 
+const attributeValue = (tag: string, name: string) => {
+  const match = tag.match(new RegExp(`\\b${name}\\s*=\\s*(["'])(.*?)\\1`, 'i'));
+  return match?.[2]?.trim() || null;
+};
+
+// We retain only a link exposed by the named official page. Personal bottle
+// photos remain private and always take priority in the product UI.
+const officialImageFromPage = async (sourceUrl: string) => {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8_000);
+  try {
+    const response = await fetch(sourceUrl, {
+      headers: { Accept: 'text/html,application/xhtml+xml', 'User-Agent': 'Family-Hub-Fragrance-Catalog/1.0' },
+      signal: controller.signal,
+    });
+    if (!response.ok || !response.headers.get('content-type')?.includes('text/html')) return null;
+    const tags = (await response.text()).match(/<meta\b[^>]*>/gi) || [];
+    const imageTag = tags.find((tag) => attributeValue(tag, 'property')?.toLowerCase() === 'og:image');
+    const image = imageTag ? attributeValue(imageTag, 'content') : null;
+    if (!image) return null;
+    const resolved = new URL(image, sourceUrl);
+    return resolved.protocol === 'https:' ? resolved.toString() : null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
 // These records make the initial library useful for this household. Each comes
 // from the named house's public product or catalogue material; no product media
 // or third-party review data is copied into Family Hub.
@@ -54,29 +83,35 @@ const curatedStarterEntries: CuratedEntry[] = [
   },
 ];
 
-const upsertStarterEntry = async (entry: CuratedEntry) => prisma.fragranceCatalogEntry.upsert({
-  where: { slug: fragranceCatalogSlug(entry.house, entry.name, entry.concentration) },
-  update: {
-    olfactiveFamily: entry.olfactiveFamily || null,
-    notes: entry.notes || [],
-    sourceName: entry.sourceName,
-    sourceUrl: entry.sourceUrl,
-    sourceKind: 'official-house',
-    catalogueStatus: 'source-attributed',
-  },
-  create: {
-    slug: fragranceCatalogSlug(entry.house, entry.name, entry.concentration),
-    house: entry.house,
-    name: entry.name,
-    concentration: entry.concentration || null,
-    olfactiveFamily: entry.olfactiveFamily || null,
-    notes: entry.notes || [],
-    sourceName: entry.sourceName,
-    sourceUrl: entry.sourceUrl,
-    sourceKind: 'official-house',
-    catalogueStatus: 'source-attributed',
-  },
-});
+const upsertStarterEntry = async (entry: CuratedEntry) => {
+  const imageUrl = await officialImageFromPage(entry.sourceUrl);
+  await prisma.fragranceCatalogEntry.upsert({
+    where: { slug: fragranceCatalogSlug(entry.house, entry.name, entry.concentration) },
+    update: {
+      olfactiveFamily: entry.olfactiveFamily || null,
+      notes: entry.notes || [],
+      imageUrl: imageUrl || undefined,
+      sourceName: entry.sourceName,
+      sourceUrl: entry.sourceUrl,
+      sourceKind: 'official-house',
+      catalogueStatus: 'source-attributed',
+    },
+    create: {
+      slug: fragranceCatalogSlug(entry.house, entry.name, entry.concentration),
+      house: entry.house,
+      name: entry.name,
+      concentration: entry.concentration || null,
+      olfactiveFamily: entry.olfactiveFamily || null,
+      notes: entry.notes || [],
+      imageUrl,
+      sourceName: entry.sourceName,
+      sourceUrl: entry.sourceUrl,
+      sourceKind: 'official-house',
+      catalogueStatus: 'source-attributed',
+    },
+  });
+  return Boolean(imageUrl);
+};
 
 const main = async () => {
   const response = await fetch(`https://query.wikidata.org/sparql?${new URLSearchParams({
@@ -117,8 +152,8 @@ const main = async () => {
     });
     imported += 1;
   }
-  await Promise.all(curatedStarterEntries.map(upsertStarterEntry));
-  console.log(`Imported or refreshed ${imported} Wikidata releases and ${curatedStarterEntries.length} official starter records.`);
+  const sourcedImageCount = (await Promise.all(curatedStarterEntries.map(upsertStarterEntry))).filter(Boolean).length;
+  console.log(`Imported or refreshed ${imported} Wikidata releases and ${curatedStarterEntries.length} official starter records (${sourcedImageCount} official image links found).`);
 };
 
 main()

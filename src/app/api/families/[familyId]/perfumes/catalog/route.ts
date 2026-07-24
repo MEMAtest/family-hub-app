@@ -6,7 +6,7 @@ import { requireFamilyAccess } from '@/lib/auth-utils';
 const resultLimit = (value: string | null) => {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return 20;
-  return Math.max(1, Math.min(50, Math.round(parsed)));
+  return Math.max(1, Math.min(250, Math.round(parsed)));
 };
 
 export const GET = requireFamilyAccess(async (request: NextRequest, _context, authUser) => {

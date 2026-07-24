@@ -48,3 +48,13 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context, au
     return NextResponse.json({ error: 'Could not save that bottle photo.' }, { status: 500 });
   }
 });
+
+export const DELETE = requireFamilyAccess(async (_request: NextRequest, context, authUser) => {
+  const { fragranceId } = await context.params;
+  const fragrance = await prisma.fragrance.updateMany({
+    where: { id: fragranceId, personId: authUser.familyMemberId },
+    data: { photoData: null, photoMimeType: null, photoSizeBytes: null },
+  });
+  if (!fragrance.count) return NextResponse.json({ error: 'Fragrance not found in your private collection.' }, { status: 404 });
+  return NextResponse.json({ success: true });
+});

@@ -23,14 +23,8 @@ const cycleInsights = (periods: Array<{ startDate: Date; endDate: Date | null }>
   const predictedNextPeriod = lastPeriod && averageCycleLength
     ? new Date(lastPeriod.startDate.getTime() + averageCycleLength * 86_400_000)
     : null;
-  const fertileWindow = predictedNextPeriod
-    ? {
-        start: new Date(predictedNextPeriod.getTime() - 19 * 86_400_000),
-        end: new Date(predictedNextPeriod.getTime() - 14 * 86_400_000),
-      }
-    : null;
   const confidence = intervals.length >= 5 && variance <= 5 ? 'high' : intervals.length >= 3 ? 'medium' : 'low';
-  return { averageCycleLength, averagePeriodLength, predictedNextPeriod, fertileWindow, confidence, irregular: intervals.length > 2 && variance > 7, loggedCycles: ordered.length };
+  return { averageCycleLength, averagePeriodLength, predictedNextPeriod, confidence, irregular: intervals.length > 2 && variance > 7, loggedCycles: ordered.length };
 };
 
 export const GET = requireFamilyAccess(async (request: NextRequest, _context, authUser) => {

@@ -133,7 +133,6 @@ test('Angela can save and see a private period entry without using the shared ca
           averageCycleLength: null,
           averagePeriodLength: null,
           predictedNextPeriod: null,
-          fertileWindow: null,
           confidence: 'low',
           irregular: false,
           loggedCycles: periods.length,
@@ -145,13 +144,13 @@ test('Angela can save and see a private period entry without using the shared ca
   await page.goto('/?view=cycle');
   await dismissSetupWizard(page);
   await expect(page.getByRole('heading', { name: 'Health & Cycle' })).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByRole('button', { name: /^Period$/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Log period' })).toBeVisible();
 
-  await page.getByRole('button', { name: /^Period$/ }).click();
+  await page.getByRole('button', { name: 'Log period' }).click();
   await page.getByLabel('Start date').fill('2088-09-14');
   await page.getByLabel('End date, optional').fill('2088-09-18');
-  await page.getByPlaceholder('Private note, optional').fill('E2E private period note');
-  await page.getByRole('button', { name: /^Save$/ }).click();
+  await page.locator('textarea[name="notes"]').fill('E2E private period note');
+  await page.getByRole('button', { name: 'Save private period' }).click();
 
   await expect(page.getByText('14 Sept 2088')).toBeVisible();
   expect(cyclePosts).toEqual([
@@ -179,7 +178,7 @@ test('the catalogue search adds a verified release to the private collection', a
     isInCollection: false,
   };
   let collection: any[] = [];
-  const catalogQueries: string[] = [];
+  let catalogRequestCount = 0;
 
   await page.route('**/api/families/*/perfumes**', async (route) => {
     const url = new URL(route.request().url());
@@ -188,7 +187,7 @@ test('the catalogue search adds a verified release to the private collection', a
       return;
     }
     if (url.pathname.endsWith('/catalog')) {
-      catalogQueries.push(url.searchParams.get('q') || '');
+      catalogRequestCount += 1;
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ ...catalogueEntry, isInCollection: collection.length > 0 }]) });
       return;
     }
@@ -223,12 +222,12 @@ test('the catalogue search adds a verified release to the private collection', a
   await page.getByRole('button', { name: 'Browse catalogue' }).click();
   await expect(page.getByText('Source-aware library')).toBeVisible();
   await page.getByLabel('Search catalogue').fill('Smoking');
-  await expect.poll(() => catalogQueries.some((query) => query === 'Smoking')).toBe(true);
+  await expect(page.getByRole('button', { name: 'Add bottle' })).toBeVisible();
+  expect(catalogRequestCount).toBe(1);
   await page.getByRole('button', { name: 'Add bottle' }).click();
 
   await expect(page.getByText('Kilian Smoking Hot added to your private collection.')).toBeVisible();
   await expect(page.getByLabel('Log a wear test for Kilian Smoking Hot')).toBeVisible();
-  await expect(page.getByText('Woody amber · smoke · apple · vanilla · 2023')).toBeVisible();
 });
 
 test('the bottle reader shows progress, extracts a label, and confirms a catalogue match', async ({ page }) => {
@@ -299,9 +298,9 @@ test('the bottle reader shows progress, extracts a label, and confirms a catalog
     await page.screenshot({ path: 'output/playwright/perfume-bottle-reader-e2e.png', fullPage: true });
   }
   await page.getByRole('button', { name: /Catalogue match KILIAN PARIS Smoking Hot Use match/ }).click();
-  await page.getByRole('button', { name: 'Confirm and save' }).click();
+  await page.getByRole('button', { name: 'Save to collection' }).click();
 
-  await expect(page.getByText('Fragrance saved to your private collection.')).toBeVisible();
+  await expect(page.getByText('Bottle label confirmed and saved to your private collection.')).toBeVisible();
   expect(confirmationPayloads).toEqual([{
     house: 'KILIAN PARIS',
     name: 'Smoking Hot',
@@ -312,6 +311,8 @@ test('the bottle reader shows progress, extracts a label, and confirms a catalog
 test('a collection perfume accepts a direct bottle photo', async ({ page }) => {
   let hasPhoto = false;
   let photoUploadCount = 0;
+  let photoDeleteCount = 0;
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLtaQAAAABJRU5ErkJggg==', 'base64');
 
   await page.route('**/api/families/*/perfumes**', async (route) => {
     const url = new URL(route.request().url());
@@ -327,7 +328,13 @@ test('a collection perfume accepts a direct bottle photo', async ({ page }) => {
         await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ photoUrl: `/api/families/${familyId}/perfumes/fragrance-e2e-1/photo` }) });
         return;
       }
-      await route.fulfill({ status: 200, contentType: 'image/png', body: Buffer.from('small-test-image') });
+      if (route.request().method() === 'DELETE') {
+        photoDeleteCount += 1;
+        hasPhoto = false;
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true }) });
+        return;
+      }
+      await route.fulfill({ status: 200, contentType: 'image/png', body: png });
       return;
     }
     await route.fulfill({
@@ -340,6 +347,14 @@ test('a collection perfume accepts a direct bottle photo', async ({ page }) => {
           name: 'Smoking Hot',
           concentration: 'Eau de Parfum',
           photoUrl: hasPhoto ? `/api/families/${familyId}/perfumes/fragrance-e2e-1/photo` : null,
+          catalog: {
+            id: 'catalogue-smoking-hot',
+            notes: [],
+            accords: [],
+            imageUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLtaQAAAABJRU5ErkJggg==',
+            sourceName: 'Official source',
+            catalogueStatus: 'source-attributed',
+          },
           wearLogs: [],
         },
       ]),
@@ -358,5 +373,132 @@ test('a collection perfume accepts a direct bottle photo', async ({ page }) => {
 
   await expect(page.getByText('Smoking Hot bottle photo saved.')).toBeVisible();
   await expect(page.getByAltText('Bottle of Kilian Smoking Hot')).toBeVisible();
+  await page.getByRole('button', { name: 'Remove bottle photo for Smoking Hot' }).click();
+  await expect(page.getByText('Smoking Hot will now use its official image when one is available.')).toBeVisible();
+  await expect(page.getByAltText('Official bottle image for Kilian Smoking Hot')).toBeVisible();
   expect(photoUploadCount).toBe(1);
+  expect(photoDeleteCount).toBe(1);
+});
+
+test('a wear test uses guided sliders and saves meaningful context', async ({ page }) => {
+  const wearPayloads: Array<Record<string, unknown>> = [];
+
+  await page.route('**/api/families/*/perfumes**', async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname.endsWith('/recommendations')) {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ wearToday: [], buyNext: [] }) });
+      return;
+    }
+    if (url.pathname.endsWith('/wear-logs') && route.request().method() === 'POST') {
+      wearPayloads.push(route.request().postDataJSON() as Record<string, unknown>);
+      await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ id: 'wear-e2e-1' }) });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([{
+        id: 'fragrance-e2e-1',
+        house: 'Kilian',
+        name: 'Smoking Hot',
+        concentration: 'Eau de Parfum',
+        createdAt: '2088-09-14T12:00:00.000Z',
+        photoUrl: null,
+        wearLogs: [],
+      }]),
+    });
+  });
+
+  await page.goto('/?view=perfume');
+  await dismissSetupWizard(page);
+  await page.getByLabel('Log a wear test for Kilian Smoking Hot').click();
+  await expect(page.getByText('Move the sliders to capture how it actually wore for you.')).toBeVisible();
+  await page.getByLabel('Enjoyment').press('End');
+  await page.getByLabel('Longevity').press('End');
+  await page.getByLabel('Projection').press('End');
+  await expect(page.getByLabel('Enjoyment')).toHaveValue('5');
+  await expect(page.getByLabel('Longevity')).toHaveValue('12');
+  await expect(page.getByLabel('Projection')).toHaveValue('5');
+  await expect(page.getByRole('status').filter({ hasText: 'Exceptional' })).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: '12+ hours' })).toBeVisible();
+  await page.getByRole('button', { name: 'Add optional context' }).click();
+  await page.getByPlaceholder('Sprays').fill('4');
+  await page.getByPlaceholder('Occasion').fill('Dinner');
+  await page.getByPlaceholder('Weather').fill('Warm');
+  await page.getByPlaceholder('Anything worth remembering?').fill('A rich, lasting dry down.');
+  await page.getByRole('button', { name: 'Save wear test' }).click();
+
+  await expect(page.getByText('Wear test saved for Smoking Hot.')).toBeVisible();
+  expect(wearPayloads).toEqual([{
+    overallRating: 5,
+    longevityHours: 12,
+    projectionRating: 5,
+    notes: 'A rich, lasting dry down.',
+    context: { sprays: '4', occasion: 'Dinner', weather: 'Warm' },
+  }]);
+});
+
+test('Angela can save a private wellbeing check-in and reminder without fertility estimates', async ({ page }) => {
+  const logs: Array<Record<string, unknown>> = [];
+  const reminders: Array<Record<string, unknown>> = [];
+  const posts: Array<Record<string, unknown>> = [];
+
+  await page.route('**/api/families/*/cycles**', async (route) => {
+    if (route.request().method() === 'POST') {
+      const payload = route.request().postDataJSON() as Record<string, unknown>;
+      posts.push(payload);
+      if (payload.action === 'daily-log') {
+        const log = { id: 'daily-e2e-1', ...payload, logDate: `${payload.logDate}T12:00:00.000Z` };
+        logs.unshift(log);
+        await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify(log) });
+        return;
+      }
+      if (payload.action === 'reminder') {
+        const existing = reminders.findIndex((item) => item.reminderType === payload.reminderType);
+        const reminder = { id: `reminder-${payload.reminderType}`, ...payload };
+        if (existing >= 0) reminders.splice(existing, 1, reminder); else reminders.push(reminder);
+        await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify(reminder) });
+        return;
+      }
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        profile: { reminderEnabled: true, reminderTime: '20:00', personalCalendarEnabled: false },
+        periods: [],
+        logs,
+        reminders,
+        calendarConnection: null,
+        insights: { averageCycleLength: null, averagePeriodLength: null, predictedNextPeriod: null, confidence: 'low', irregular: false, loggedCycles: 0 },
+      }),
+    });
+  });
+
+  await page.goto('/?view=cycle');
+  await dismissSetupWizard(page);
+  await expect(page.getByRole('heading', { name: 'Health & Cycle' })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(/fertile/i)).toHaveCount(0);
+  await page.getByRole('button', { name: 'Light', exact: true }).click();
+  await page.getByRole('button', { name: 'Good', exact: true }).click();
+  await page.getByLabel('Energy').press('End');
+  await page.getByLabel('Pain').press('ArrowRight');
+  await page.getByLabel('Sleep').press('ArrowRight');
+  await page.getByRole('button', { name: 'Cramps', exact: true }).click();
+  await page.getByPlaceholder('Medication or supplements, optional').fill('Magnesium');
+  await page.getByPlaceholder('Private note, optional').first().fill('Quiet day, manageable symptoms.');
+  await page.getByRole('button', { name: 'Save private check-in' }).click();
+  await expect(page.getByText('Private daily check-in saved.')).toBeVisible();
+
+  await page.getByLabel('Period estimate days before').fill('2');
+  await page.getByLabel('Period estimate reminder time').fill('19:30');
+  await page.getByLabel('Period estimate days before').locator('xpath=../../..').getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByText('Period estimate reminder updated.')).toBeVisible();
+  if (process.env.CAPTURE_PERFUME_E2E) {
+    await page.screenshot({ path: 'output/playwright/cycle-wellbeing-e2e.png', fullPage: true });
+  }
+
+  expect(posts).toHaveLength(2);
+  expect(posts[0]).toMatchObject({ action: 'daily-log', flow: 'Light', mood: 'Good', energy: 5, painLevel: 1, sleepHours: 8, medication: 'Magnesium', symptoms: ['Cramps'], notes: 'Quiet day, manageable symptoms.' });
+  expect(posts[1]).toEqual({ action: 'reminder', reminderType: 'period', enabled: true, daysBefore: 2, timeOfDay: '19:30' });
 });

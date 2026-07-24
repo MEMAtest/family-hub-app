@@ -23,6 +23,7 @@ export const GET = requireFamilyAccess(async (_request: NextRequest, _context, a
       olfactiveFamily: catalogEntry.olfactiveFamily,
       notes: catalogTextList(catalogEntry.notes),
       accords: catalogTextList(catalogEntry.accords),
+      imageUrl: catalogEntry.imageUrl,
       sourceName: catalogEntry.sourceName,
       sourceUrl: catalogEntry.sourceUrl,
       catalogueStatus: catalogEntry.catalogueStatus,
