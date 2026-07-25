@@ -1,8 +1,8 @@
 // Family Hub Service Worker – offline caching, install promotion helpers, push notifications
 
-const APP_SHELL_CACHE = 'family-hub-app-shell-v2';
-const RUNTIME_CACHE = 'family-hub-runtime-v2';
-const MEDIA_CACHE = 'family-hub-media-v2';
+const APP_SHELL_CACHE = 'family-hub-app-shell-v3';
+const RUNTIME_CACHE = 'family-hub-runtime-v3';
+const MEDIA_CACHE = 'family-hub-media-v3';
 const OFFLINE_URL = '/offline.html';
 
 const PRECACHE_ASSETS = [

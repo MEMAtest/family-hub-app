@@ -61,7 +61,7 @@ const rangeField = (label: string, value: number, min: number, max: number, onCh
 export const CycleView = () => {
   const familyId = useFamilyStore((state) => state.databaseStatus.familyId);
   const [data, setData] = useState<CycleData | null>(null);
-  const [hasCycleAccess, setHasCycleAccess] = useState<boolean | null>(null);
+  const [cycleAccess, setCycleAccess] = useState<'loading' | 'granted' | 'private' | 'signed-out' | 'error'>('loading');
   const [notice, setNotice] = useState('');
   const [showPeriod, setShowPeriod] = useState(false);
   const [editingPeriod, setEditingPeriod] = useState<CyclePeriod | null>(null);
@@ -74,16 +74,21 @@ export const CycleView = () => {
   const load = async () => {
     if (!familyId) return;
     try {
-      const [authResponse, cycleResponse] = await Promise.all([fetch('/api/auth/me'), fetch(`/api/families/${familyId}/cycles`)]);
-      const auth = await authResponse.json();
-      const canAccessCycle = Boolean(auth?.familyMember?.privateCycleAccess);
-      setHasCycleAccess(canAccessCycle);
-      if (!canAccessCycle) {
+      const cycleResponse = await fetch(`/api/families/${familyId}/cycles`);
+      const payload = await cycleResponse.json().catch(() => null) as { error?: string; privateArea?: boolean } | CycleData | null;
+      if (cycleResponse.status === 404 && payload && 'privateArea' in payload && payload.privateArea) {
+        setCycleAccess('private');
         setData(null);
         return;
       }
-      if (!cycleResponse.ok) throw new Error((await cycleResponse.json()).error || 'Could not load private cycle data.');
-      const nextData = await cycleResponse.json() as CycleData;
+      if (cycleResponse.status === 401) {
+        setCycleAccess('signed-out');
+        setData(null);
+        return;
+      }
+      if (!cycleResponse.ok) throw new Error((payload && 'error' in payload && payload.error) || 'Could not load private cycle data.');
+      const nextData = payload as CycleData;
+      setCycleAccess('granted');
       setData(nextData);
       setDaily((current) => {
         const selectedDate = current.logDate || todayKey();
@@ -95,6 +100,7 @@ export const CycleView = () => {
       }));
       setReminders(reminderMap);
     } catch (reason) {
+      setCycleAccess('error');
       setNotice(reason instanceof Error ? reason.message : 'Could not load private cycle data.');
     }
   };
@@ -275,8 +281,10 @@ export const CycleView = () => {
   const toggleSymptom = (symptom: string) => setDaily((current) => ({ ...current, symptoms: current.symptoms.includes(symptom) ? current.symptoms.filter((item) => item !== symptom) : [...current.symptoms, symptom] }));
 
   if (!familyId) return <div className="p-6 text-sm text-slate-500">Loading private health area...</div>;
-  if (hasCycleAccess === null && !data) return <div className="p-6 text-sm text-slate-500">Loading private health area...</div>;
-  if (!hasCycleAccess) return <div className="flex min-h-[60vh] items-center justify-center bg-[#f6f7f3] p-6 dark:bg-slate-950"><div className="max-w-sm text-center"><ShieldCheck className="mx-auto h-8 w-8 text-[#d8527d]" /><h1 className="mt-4 font-serif text-3xl">This is another profile&apos;s private area.</h1><p className="mt-3 text-sm text-slate-600 dark:text-slate-300">Health and cycle details stay with the profile they belong to.</p></div></div>;
+  if (cycleAccess === 'loading' && !data) return <div className="p-6 text-sm text-slate-500">Loading private health area...</div>;
+  if (cycleAccess === 'private') return <div className="flex min-h-[60vh] items-center justify-center bg-[#f6f7f3] p-6 dark:bg-slate-950"><div className="max-w-sm text-center"><ShieldCheck className="mx-auto h-8 w-8 text-[#d8527d]" /><h1 className="mt-4 font-serif text-3xl">This is another profile&apos;s private area.</h1><p className="mt-3 text-sm text-slate-600 dark:text-slate-300">Health and cycle details stay with the profile they belong to.</p></div></div>;
+  if (cycleAccess === 'signed-out') return <div className="flex min-h-[60vh] items-center justify-center bg-[#f6f7f3] p-6 text-center dark:bg-slate-950"><div className="max-w-sm"><ShieldCheck className="mx-auto h-8 w-8 text-[#d8527d]" /><h1 className="mt-4 font-serif text-3xl">Sign in to open your private area.</h1></div></div>;
+  if (cycleAccess === 'error') return <div className="flex min-h-[60vh] items-center justify-center bg-[#f6f7f3] p-6 text-center dark:bg-slate-950"><div className="max-w-sm"><ShieldCheck className="mx-auto h-8 w-8 text-[#d8527d]" /><h1 className="mt-4 font-serif text-3xl">Private area unavailable.</h1><p className="mt-3 text-sm text-slate-600 dark:text-slate-300">{notice || 'Please try again shortly.'}</p></div></div>;
 
   return <div className="min-h-full bg-[#fbf7f8] px-4 py-5 dark:bg-slate-950 sm:px-6 lg:px-8"><div className="mx-auto max-w-6xl">
     <header className="flex flex-wrap items-end justify-between gap-4 border-b border-[#eddde3] pb-5 dark:border-slate-800"><div><p className="text-sm font-semibold text-[#d8527d]">Private health area</p><h1 className="mt-1 font-serif text-3xl">Health &amp; Cycle</h1><p className="mt-2 max-w-xl text-sm text-slate-600 dark:text-slate-300">A calm private timeline, gentle reminders, and your own wellbeing patterns.</p></div><button type="button" onClick={() => openPeriodForm()} className="inline-flex h-10 items-center gap-2 rounded-md bg-[#d8527d] px-3 text-sm font-semibold text-white hover:bg-[#bb3d65]"><Plus className="h-4 w-4" />Log period</button></header>

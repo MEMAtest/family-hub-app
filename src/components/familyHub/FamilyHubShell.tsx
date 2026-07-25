@@ -90,7 +90,6 @@ export const FamilyHubShell = () => {
   const appliedViewParam = useRef(false);
   const mainRef = useRef<HTMLElement | null>(null);
   const [showBackToTop, setShowBackToTop] = useState(false);
-  const [hasCycleAccess, setHasCycleAccess] = useState(false);
 
   const { openCreateForm } = useCalendarContext();
   const { openForm: openBudgetForm } = useBudgetContext();
@@ -125,23 +124,9 @@ export const FamilyHubShell = () => {
     }
   }, []);
 
-  useEffect(() => {
-    let active = true;
-    fetch('/api/auth/me')
-      .then((response) => response.ok ? response.json() : null)
-      .then((data) => {
-        if (active) setHasCycleAccess(Boolean(data?.familyMember?.privateCycleAccess));
-      })
-      .catch(() => {
-        if (active) setHasCycleAccess(false);
-      });
-    return () => { active = false; };
-  }, []);
-
-  const navItems = useMemo(
-    () => NAV_ITEMS.filter((item) => item.id !== 'cycle' || hasCycleAccess),
-    [hasCycleAccess]
-  );
+  // Keep personal destinations discoverable. Each private view verifies access against
+  // its protected endpoint, rather than relying on a second, potentially stale client check.
+  const navItems = NAV_ITEMS;
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
