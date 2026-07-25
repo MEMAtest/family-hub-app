@@ -225,6 +225,14 @@ export function privateAreaResponse(ownerName?: string) {
   );
 }
 
+export async function requirePrivateCycleAccess(authUser: AuthenticatedUser) {
+  const member = await prisma.familyMember.findUnique({
+    where: { id: authUser.familyMemberId },
+    select: { privateCycleAccess: true },
+  });
+  return member?.privateCycleAccess ? null : privateAreaResponse();
+}
+
 export async function requireOwnProfile(authUser: AuthenticatedUser, personId: string) {
   if (authUser.familyMemberId === personId) return true;
   return false;

@@ -12,6 +12,7 @@ export const DEFAULT_FAMILY_MEMBERS = [
     ageGroup: 'Adult',
     color: '#147c72',
     icon: 'AO',
+    privateCycleAccess: false,
   },
   {
     id: 'member-angela',
@@ -22,6 +23,7 @@ export const DEFAULT_FAMILY_MEMBERS = [
     ageGroup: 'Adult',
     color: '#d8527d',
     icon: 'AN',
+    privateCycleAccess: true,
   },
 ] as const;
 

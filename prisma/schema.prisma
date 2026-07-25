@@ -84,6 +84,7 @@ model FamilyMember {
   color        String   // Hex color code
   icon         String   // Emoji icon
   fitnessGoals Json?    @map("fitness_goals")
+  privateCycleAccess Boolean @default(false) @map("private_cycle_access")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 

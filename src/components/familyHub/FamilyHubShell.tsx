@@ -90,7 +90,7 @@ export const FamilyHubShell = () => {
   const appliedViewParam = useRef(false);
   const mainRef = useRef<HTMLElement | null>(null);
   const [showBackToTop, setShowBackToTop] = useState(false);
-  const [currentProfileName, setCurrentProfileName] = useState('');
+  const [hasCycleAccess, setHasCycleAccess] = useState(false);
 
   const { openCreateForm } = useCalendarContext();
   const { openForm: openBudgetForm } = useBudgetContext();
@@ -130,17 +130,17 @@ export const FamilyHubShell = () => {
     fetch('/api/auth/me')
       .then((response) => response.ok ? response.json() : null)
       .then((data) => {
-        if (active) setCurrentProfileName(data?.familyMember?.name || '');
+        if (active) setHasCycleAccess(Boolean(data?.familyMember?.privateCycleAccess));
       })
       .catch(() => {
-        if (active) setCurrentProfileName('');
+        if (active) setHasCycleAccess(false);
       });
     return () => { active = false; };
   }, []);
 
   const navItems = useMemo(
-    () => NAV_ITEMS.filter((item) => item.id !== 'cycle' || currentProfileName.trim().toLowerCase() === 'angela'),
-    [currentProfileName]
+    () => NAV_ITEMS.filter((item) => item.id !== 'cycle' || hasCycleAccess),
+    [hasCycleAccess]
   );
 
   useEffect(() => {

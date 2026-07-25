@@ -30,7 +30,7 @@ const mockAngelaSession = async (page: Page, isOwner = false) => {
       body: JSON.stringify({
         user: { id: 'personal-hubs-e2e-user', email: 'angela@example.test', displayName: 'Angela' },
         family: { id: familyId, familyName: 'E2E household' },
-        familyMember: { id: memberId, name: 'Angela' },
+        familyMember: { id: memberId, name: 'Angela', privateCycleAccess: true },
         isOwner,
         needsOnboarding: false,
       }),
@@ -164,6 +164,57 @@ test('Angela can save and see a private period entry without using the shared ca
   expect(page.url()).not.toContain('calendar');
 });
 
+test('period and check-in history load safely before edits are saved', async ({ page }) => {
+  const periods: Array<{ id: string; startDate: string; endDate: string | null; notes: string | null }> = [{ id: 'period-history-1', startDate: '2088-09-14T12:00:00.000Z', endDate: '2088-09-18T12:00:00.000Z', notes: 'Original period note' }];
+  const logs = [{ id: 'checkin-history-1', logDate: '2088-09-15T12:00:00.000Z', flow: 'Light', mood: 'Good', energy: 4, painLevel: 2, sleepHours: 8, medication: 'Magnesium', notes: 'Original check-in note', symptoms: ['Cramps'] }];
+  const posts: Array<Record<string, unknown>> = [];
+
+  await page.route('**/api/families/*/cycles**', async (route) => {
+    if (route.request().method() === 'POST') {
+      const payload = route.request().postDataJSON() as Record<string, unknown>;
+      posts.push(payload);
+      if (payload.action === 'update-period') {
+        periods[0] = { id: 'period-history-1', startDate: `${payload.startDate}T12:00:00.000Z`, endDate: payload.endDate ? `${payload.endDate}T12:00:00.000Z` : null, notes: String(payload.notes || '') };
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(periods[0]) });
+        return;
+      }
+      if (payload.action === 'daily-log') {
+        logs[0] = { id: 'checkin-history-1', ...payload, logDate: `${payload.logDate}T12:00:00.000Z` } as typeof logs[number];
+        await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify(logs[0]) });
+        return;
+      }
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ profile: null, periods, logs, reminders: [], calendarConnection: null, insights: { averageCycleLength: null, averagePeriodLength: null, predictedNextPeriod: null, confidence: 'low', irregular: false, loggedCycles: periods.length } }),
+    });
+  });
+
+  await page.goto('/?view=cycle');
+  await dismissSetupWizard(page);
+  await expect(page.getByRole('button', { name: 'Edit period starting 14 Sept 2088' })).toBeVisible({ timeout: 30_000 });
+  await page.getByRole('button', { name: 'Edit period starting 14 Sept 2088' }).click();
+  await expect(page.getByRole('heading', { name: 'Edit period' })).toBeVisible();
+  await expect(page.getByLabel('Start date')).toHaveValue('2088-09-14');
+  await page.locator('textarea[name="notes"]').fill('Corrected period note');
+  await page.getByRole('button', { name: 'Save period changes' }).click();
+  await expect(page.getByText('Private period updated.')).toBeVisible();
+
+  await page.getByLabel('Check-in date').fill('2088-09-15');
+  await expect(page.getByRole('button', { name: 'Light', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('button', { name: 'Good', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByPlaceholder('Private note, optional').first()).toHaveValue('Original check-in note');
+  await page.getByPlaceholder('Private note, optional').first().fill('Corrected check-in note');
+  await page.getByRole('button', { name: 'Save private check-in' }).click();
+  await expect(page.getByText('Private daily check-in saved.')).toBeVisible();
+
+  expect(posts).toEqual([
+    { action: 'update-period', id: 'period-history-1', startDate: '2088-09-14', endDate: '2088-09-18', notes: 'Corrected period note' },
+    { action: 'daily-log', logDate: '2088-09-15', flow: 'Light', mood: 'Good', energy: 4, painLevel: 2, sleepHours: 8, medication: 'Magnesium', notes: 'Corrected check-in note', symptoms: ['Cramps'] },
+  ]);
+});
+
 test('the catalogue search adds a verified release to the private collection', async ({ page }) => {
   const catalogueEntry = {
     id: 'catalogue-smoking-hot',
@@ -178,7 +229,7 @@ test('the catalogue search adds a verified release to the private collection', a
     isInCollection: false,
   };
   let collection: any[] = [];
-  let catalogRequestCount = 0;
+  const catalogRequests: string[] = [];
 
   await page.route('**/api/families/*/perfumes**', async (route) => {
     const url = new URL(route.request().url());
@@ -187,7 +238,7 @@ test('the catalogue search adds a verified release to the private collection', a
       return;
     }
     if (url.pathname.endsWith('/catalog')) {
-      catalogRequestCount += 1;
+      catalogRequests.push(route.request().url());
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ ...catalogueEntry, isInCollection: collection.length > 0 }]) });
       return;
     }
@@ -222,8 +273,10 @@ test('the catalogue search adds a verified release to the private collection', a
   await page.getByRole('button', { name: 'Browse catalogue' }).click();
   await expect(page.getByText('Source-aware library')).toBeVisible();
   await page.getByLabel('Search catalogue').fill('Smoking');
+  await expect.poll(() => catalogRequests.length).toBe(2);
+  expect(catalogRequests[1]).toContain('q=Smoking');
+  expect(catalogRequests[1]).toContain('limit=20');
   await expect(page.getByRole('button', { name: 'Add bottle' })).toBeVisible();
-  expect(catalogRequestCount).toBe(1);
   await page.getByRole('button', { name: 'Add bottle' }).click();
 
   await expect(page.getByText('Kilian Smoking Hot added to your private collection.')).toBeVisible();
@@ -429,12 +482,67 @@ test('a wear test uses guided sliders and saves meaningful context', async ({ pa
   await page.getByRole('button', { name: 'Save wear test' }).click();
 
   await expect(page.getByText('Wear test saved for Smoking Hot.')).toBeVisible();
-  expect(wearPayloads).toEqual([{
+  expect(wearPayloads).toHaveLength(1);
+  expect(wearPayloads[0]).toMatchObject({
     overallRating: 5,
     longevityHours: 12,
     projectionRating: 5,
     notes: 'A rich, lasting dry down.',
     context: { sprays: '4', occasion: 'Dinner', weather: 'Warm' },
+  });
+  expect(wearPayloads[0].wornAt).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+});
+
+test('a fragrance wear history can correct a dated test and its longevity follow-up', async ({ page }) => {
+  const updates: Array<Record<string, unknown>> = [];
+  const fragrance = {
+    id: 'fragrance-history-1',
+    house: 'Kilian',
+    name: 'Smoking Hot',
+    concentration: 'Eau de Parfum',
+    photoUrl: null,
+    wearLogs: [{
+      id: 'wear-history-1',
+      wornAt: '2088-09-14T12:00:00.000Z',
+      overallRating: 4,
+      longevityHours: 7,
+      projectionRating: 3,
+      context: { sprays: '3', occasion: 'Dinner', weather: 'Warm' },
+      notes: 'Original dry down.',
+    }],
+  };
+
+  await page.route('**/api/families/*/perfumes**', async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname.endsWith('/recommendations')) {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ wearToday: [], buyNext: [] }) });
+      return;
+    }
+    if (url.pathname.endsWith('/wear-logs/wear-history-1') && route.request().method() === 'PUT') {
+      updates.push(route.request().postDataJSON() as Record<string, unknown>);
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: 'wear-history-1' }) });
+      return;
+    }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([fragrance]) });
+  });
+
+  await page.goto('/?view=perfume');
+  await dismissSetupWizard(page);
+  await page.getByRole('button', { name: 'View wear history for Smoking Hot' }).click();
+  await expect(page.getByRole('dialog', { name: 'Wear history for Kilian Smoking Hot' })).toBeVisible();
+  await expect(page.getByText('Weather: Warm', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Edit wear test from 14 Sept 2088' }).click();
+  await expect(page.getByLabel('Date worn')).toHaveValue('2088-09-14');
+  await page.getByLabel('Longevity').press('End');
+  await page.getByRole('button', { name: 'Save wear test changes' }).click();
+  await expect(page.getByText('Wear test updated for Smoking Hot.')).toBeVisible();
+  expect(updates).toEqual([{
+    wornAt: '2088-09-14',
+    overallRating: 4,
+    longevityHours: 12,
+    projectionRating: 3,
+    notes: 'Original dry down.',
+    context: { sprays: '3', occasion: 'Dinner', weather: 'Warm' },
   }]);
 });
 

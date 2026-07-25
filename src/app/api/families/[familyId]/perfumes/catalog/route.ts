@@ -6,7 +6,13 @@ import { requireFamilyAccess } from '@/lib/auth-utils';
 const resultLimit = (value: string | null) => {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return 20;
-  return Math.max(1, Math.min(250, Math.round(parsed)));
+  return Math.max(1, Math.min(50, Math.round(parsed)));
+};
+
+const resultOffset = (value: string | null) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.max(0, Math.min(10_000, Math.round(parsed)));
 };
 
 export const GET = requireFamilyAccess(async (request: NextRequest, _context, authUser) => {
@@ -30,7 +36,8 @@ export const GET = requireFamilyAccess(async (request: NextRequest, _context, au
           })),
         }
       : undefined,
-    orderBy: [{ house: 'asc' }, { name: 'asc' }],
+    orderBy: [{ house: 'asc' }, { name: 'asc' }, { id: 'asc' }],
+    skip: resultOffset(searchParams.get('offset')),
     take: resultLimit(searchParams.get('limit')),
   });
   const ownedIds = new Set((await prisma.fragrance.findMany({

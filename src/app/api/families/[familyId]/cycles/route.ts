@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
-import { requireFamilyAccess } from '@/lib/auth-utils';
+import { requireFamilyAccess, requirePrivateCycleAccess } from '@/lib/auth-utils';
 import { syncPrivateCyclePeriod } from '@/lib/googleCalendarServer';
 
 const asDate = (value: unknown) => {
@@ -27,9 +27,29 @@ const cycleInsights = (periods: Array<{ startDate: Date; endDate: Date | null }>
   return { averageCycleLength, averagePeriodLength, predictedNextPeriod, confidence, irregular: intervals.length > 2 && variance > 7, loggedCycles: ordered.length };
 };
 
+const savePrivatePeriodCalendarEvent = async (personId: string, period: { id: string; personId: string; startDate: Date; endDate: Date | null; notes: string | null; calendarEventId: string | null }) => {
+  const profile = await prisma.cycleProfile.findUnique({ where: { personId }, select: { personalCalendarEnabled: true } });
+  if (!profile?.personalCalendarEnabled) return;
+  try {
+    await syncPrivateCyclePeriod(personId, period);
+  } catch (error) {
+    console.warn('Private cycle calendar sync deferred:', error);
+  }
+};
+
 export const GET = requireFamilyAccess(async (request: NextRequest, _context, authUser) => {
   try {
+    const accessDenied = await requirePrivateCycleAccess(authUser);
+    if (accessDenied) return accessDenied;
     const url = new URL(request.url);
+    if (url.searchParams.has('logDate')) {
+      const logDate = asDate(url.searchParams.get('logDate'));
+      if (!logDate) return NextResponse.json({ error: 'Enter a valid log date.' }, { status: 400 });
+      const dailyLog = await prisma.cycleDailyLog.findUnique({
+        where: { personId_logDate: { personId: authUser.familyMemberId, logDate } },
+      });
+      return NextResponse.json({ dailyLog });
+    }
     const [profile, periods, logs, reminders, calendarConnection] = await Promise.all([
       prisma.cycleProfile.findUnique({ where: { personId: authUser.familyMemberId } }),
       prisma.cyclePeriod.findMany({ where: { personId: authUser.familyMemberId }, orderBy: { startDate: 'desc' } }),
@@ -52,6 +72,8 @@ export const GET = requireFamilyAccess(async (request: NextRequest, _context, au
 
 export const POST = requireFamilyAccess(async (request: NextRequest, _context, authUser) => {
   try {
+    const accessDenied = await requirePrivateCycleAccess(authUser);
+    if (accessDenied) return accessDenied;
     const body = await request.json();
     const action = body.action;
     if (action === 'settings') {
@@ -82,15 +104,29 @@ export const POST = requireFamilyAccess(async (request: NextRequest, _context, a
         update: { endDate, notes: typeof body.notes === 'string' ? body.notes : undefined },
         create: { personId: authUser.familyMemberId, startDate, endDate, notes: typeof body.notes === 'string' ? body.notes : null },
       });
-      const profile = await prisma.cycleProfile.findUnique({ where: { personId: authUser.familyMemberId }, select: { personalCalendarEnabled: true } });
-      if (profile?.personalCalendarEnabled) {
-        try {
-          await syncPrivateCyclePeriod(authUser.familyMemberId, period);
-        } catch (error) {
-          console.warn('Private cycle calendar sync deferred:', error);
-        }
-      }
+      await savePrivatePeriodCalendarEvent(authUser.familyMemberId, period);
       return NextResponse.json(period, { status: 201 });
+    }
+    if (action === 'update-period') {
+      const id = typeof body.id === 'string' ? body.id : '';
+      const startDate = asDate(body.startDate);
+      const endDate = body.endDate ? asDate(body.endDate) : null;
+      if (!id || !startDate || (body.endDate && !endDate) || (endDate && endDate < startDate)) {
+        return NextResponse.json({ error: 'Enter valid period start and end dates.' }, { status: 400 });
+      }
+      const existing = await prisma.cyclePeriod.findFirst({ where: { id, personId: authUser.familyMemberId } });
+      if (!existing) return NextResponse.json({ error: 'That private period is unavailable.' }, { status: 404 });
+      const duplicate = await prisma.cyclePeriod.findFirst({
+        where: { personId: authUser.familyMemberId, startDate, id: { not: id } },
+        select: { id: true },
+      });
+      if (duplicate) return NextResponse.json({ error: 'A private period already starts on that date.' }, { status: 409 });
+      const period = await prisma.cyclePeriod.update({
+        where: { id },
+        data: { startDate, endDate, notes: typeof body.notes === 'string' ? body.notes : null },
+      });
+      await savePrivatePeriodCalendarEvent(authUser.familyMemberId, period);
+      return NextResponse.json(period);
     }
     if (action === 'daily-log') {
       const logDate = asDate(body.logDate);
@@ -143,6 +179,8 @@ export const POST = requireFamilyAccess(async (request: NextRequest, _context, a
 
 export const DELETE = requireFamilyAccess(async (request: NextRequest, _context, authUser) => {
   try {
+    const accessDenied = await requirePrivateCycleAccess(authUser);
+    if (accessDenied) return accessDenied;
     const { searchParams } = new URL(request.url);
     const resource = searchParams.get('resource');
     const id = searchParams.get('id');

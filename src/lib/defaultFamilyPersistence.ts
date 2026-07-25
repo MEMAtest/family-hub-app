@@ -11,7 +11,7 @@ const normaliseName = (value: string) => value.trim().toLowerCase();
 export const ensureDefaultMembers = async (familyId: string) => {
   const existingMembers = await prisma.familyMember.findMany({
     where: { familyId },
-    select: { id: true, name: true, userId: true },
+    select: { id: true, name: true, userId: true, privateCycleAccess: true },
   });
   const existingByName = new Map(existingMembers.map((member) => [normaliseName(member.name), member]));
 
@@ -19,6 +19,12 @@ export const ensureDefaultMembers = async (familyId: string) => {
     const existing = existingByName.get(normaliseName(profile.name));
 
     if (existing?.userId) {
+      if (existing.privateCycleAccess !== profile.privateCycleAccess) {
+        await prisma.familyMember.update({
+          where: { id: existing.id },
+          data: { privateCycleAccess: profile.privateCycleAccess },
+        });
+      }
       continue;
     }
 
@@ -43,6 +49,7 @@ export const ensureDefaultMembers = async (familyId: string) => {
           userId: user.id,
           color: profile.color,
           icon: profile.icon,
+          privateCycleAccess: profile.privateCycleAccess,
         },
       });
       continue;
@@ -58,6 +65,7 @@ export const ensureDefaultMembers = async (familyId: string) => {
         ageGroup: profile.ageGroup,
         color: profile.color,
         icon: profile.icon,
+        privateCycleAccess: profile.privateCycleAccess,
         fitnessGoals: { steps: 8000, workouts: 3 },
       },
     });

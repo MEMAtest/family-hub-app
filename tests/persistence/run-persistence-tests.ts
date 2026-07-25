@@ -401,6 +401,7 @@ const runPersistenceChecks = async () => {
         ageGroup: 'Adult',
         color: '#d8527d',
         icon: 'P',
+        privateCycleAccess: true,
       },
     });
     createdIds.familyMembers.push(cycleMember.id);
@@ -433,6 +434,45 @@ const runPersistenceChecks = async () => {
         await prisma.calendarEvent.count({ where: { familyId: currentFamilyId } }) === sharedCalendarCount,
         'Private period changed the shared calendar'
       );
+
+      await call(
+        cyclesPost as Handler,
+        jsonRequest(`http://localhost/api/families/${currentFamilyId}/cycles`, 'POST', {
+          action: 'update-period',
+          id: periodId,
+          startDate: '2088-09-15',
+          endDate,
+          notes: `${runTag} corrected private period`,
+        }),
+        familyContext(),
+        'Edit private period'
+      );
+      const corrected = await prisma.cyclePeriod.findUnique({ where: { id: periodId } });
+      ensure(corrected?.startDate.toISOString().slice(0, 10) === '2088-09-15', 'Private period start date did not update');
+      ensure(corrected?.notes === `${runTag} corrected private period`, 'Private period notes did not update');
+
+      await call(
+        cyclesPost as Handler,
+        jsonRequest(`http://localhost/api/families/${currentFamilyId}/cycles`, 'POST', {
+          action: 'daily-log',
+          logDate: '2087-01-02',
+          flow: 'Light',
+          mood: 'Good',
+          energy: 4,
+          painLevel: 2,
+          sleepHours: 8,
+          symptoms: ['Cramps'],
+        }),
+        familyContext(),
+        'Save historic private check-in'
+      );
+      const historicCheckIn = await call(
+        cyclesGet as Handler,
+        jsonRequest(`http://localhost/api/families/${currentFamilyId}/cycles?logDate=2087-01-02`, 'GET'),
+        familyContext(),
+        'Load exact historic private check-in'
+      );
+      ensure(getField(historicCheckIn, 'dailyLog')?.mood === 'Good', 'Historic private check-in was not loaded exactly');
 
       const list = await call(
         cyclesGet as Handler,

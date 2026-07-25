@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
     });
     const familyMember = await prisma.familyMember.findUnique({
       where: { id: authUser.familyMemberId },
-      select: { id: true, name: true, role: true, ageGroup: true, color: true, icon: true },
+      select: { id: true, name: true, role: true, ageGroup: true, color: true, icon: true, privateCycleAccess: true },
     });
 
     return NextResponse.json({
