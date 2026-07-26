@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useMemo, useCallback, useEffect } from 'react'
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { Calendar, momentLocalizer, View, Views } from 'react-big-calendar'
 
 type ExtendedView = View | 'YEAR';
@@ -174,6 +174,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
   const [showWorkStatusManager, setShowWorkStatusManager] = useState(false)
   const [showMobileMenu, setShowMobileMenu] = useState(false)
   const [selectedAgendaDate, setSelectedAgendaDate] = useState(() => moment(currentDate).format('YYYY-MM-DD'))
+  const dayAgendaRef = useRef<HTMLElement>(null)
   const [isAIConflictOpen, setIsAIConflictOpen] = useState(false)
   const [isAIScheduleOpen, setIsAIScheduleOpen] = useState(false)
   const [aiConflictForm, setAiConflictForm] = useState({
@@ -578,6 +579,17 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
     setSelectedAgendaDate(moment(date).format('YYYY-MM-DD'))
     onDateChange(date)
   }, [onDateChange])
+
+  const handleShowMore = useCallback((_events: object[], date: Date) => {
+    setSelectedAgendaDate(moment(date).format('YYYY-MM-DD'))
+
+    if (!isMobile) return
+
+    window.requestAnimationFrame(() => {
+      dayAgendaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      dayAgendaRef.current?.focus({ preventScroll: true })
+    })
+  }, [isMobile])
 
   // Toggle person filter
   const togglePersonFilter = (personId: string) => {
@@ -1692,6 +1704,8 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
             eventPropGetter={eventStyleGetter}
             popup={!isMobile}
             popupOffset={isMobile ? 0 : 30}
+            doShowMoreDrillDown={!isMobile}
+            onShowMore={handleShowMore}
             toolbar={false}
             className={`family-hub-calendar ${isMobile ? 'mobile-calendar' : ''}`}
             formats={{
@@ -1738,7 +1752,12 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
           )}
 
           {view !== 'YEAR' && (
-            <section className="mt-4 rounded-lg border border-gray-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-4">
+            <section
+              ref={dayAgendaRef}
+              data-testid="selected-day-agenda"
+              tabIndex={-1}
+              className="mt-4 scroll-mt-4 rounded-lg border border-gray-200 bg-white p-3 shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-[#147c72] dark:border-slate-800 dark:bg-slate-900 sm:p-4"
+            >
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <h2 className="text-sm font-semibold text-gray-900 dark:text-slate-100">

@@ -55,6 +55,54 @@ test('desktop daily flow is compact, navigable and review-first', async ({ page 
   await expectNoHorizontalOverflow(page);
 });
 
+test('iPhone month overflow reveals every event in the selected day agenda', async ({ page }) => {
+  const eventDate = new Date().toISOString().slice(0, 10);
+  const eventTitles = [
+    'Breakfast club',
+    'Dentist appointment',
+    'School pickup',
+    'Running session',
+    'Family dinner',
+  ];
+
+  await page.addInitScript(({ date, titles }) => {
+    const now = new Date().toISOString();
+    localStorage.setItem('calendarEvents', JSON.stringify(titles.map((title, index) => ({
+      id: `same-day-${index}`,
+      title,
+      person: '',
+      date,
+      time: `${String(8 + index * 2).padStart(2, '0')}:00`,
+      duration: 60,
+      recurring: 'none',
+      cost: 0,
+      type: 'family',
+      isRecurring: false,
+      priority: 'medium',
+      status: 'confirmed',
+      createdAt: now,
+      updatedAt: now,
+    }))));
+  }, { date: eventDate, titles: eventTitles });
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/?view=calendar');
+  await waitForHub(page);
+
+  await expect(page.getByText(eventTitles[0], { exact: true }).first()).toBeVisible();
+  const showMore = page.getByText(/\+\d+ more/).first();
+  await expect(showMore).toBeVisible();
+  await showMore.click();
+
+  const agenda = page.getByTestId('selected-day-agenda');
+  await expect(agenda).toBeFocused();
+  await expect(agenda).toContainText('5 events on this date');
+  for (const title of eventTitles) {
+    await expect(agenda.getByText(title, { exact: true })).toBeVisible();
+  }
+  await expectNoHorizontalOverflow(page);
+});
+
 for (const viewport of [
   { name: 'tablet', width: 820, height: 1180 },
   { name: 'iPhone', width: 390, height: 844 },

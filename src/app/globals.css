@@ -1057,7 +1057,13 @@ html.dark .family-hub-calendar .rbc-timeslot-group {
     @apply min-h-[40px] min-w-[40px] touch-manipulation;
   }
 
-  .mobile-calendar .rbc-event {
+  .mobile-calendar .rbc-month-view .rbc-event {
+    min-height: 18px;
+    @apply touch-manipulation;
+  }
+
+  .mobile-calendar .rbc-time-view .rbc-event,
+  .mobile-calendar .rbc-agenda-view .rbc-event {
     @apply min-h-[32px] touch-manipulation;
   }
 
