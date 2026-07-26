@@ -3,6 +3,12 @@ import { CalendarEvent, Person } from '@/types/calendar.types';
 
 const API_BASE = '/api/families';
 
+export interface DatabaseBootstrapFamily {
+  id: string;
+  familyName?: string;
+  members?: any[];
+}
+
 const inferEndDate = (date: string, time: string, durationMinutes?: number | null) => {
   if (!durationMinutes || durationMinutes <= 0) return undefined;
   const start = new Date(`${date}T${time}:00Z`);
@@ -135,10 +141,13 @@ class DatabaseService {
     return nextMembers[index];
   }
 
-  async initialize() {
+  async initialize(bootstrapFamily?: DatabaseBootstrapFamily | null) {
     try {
-      // Get or create family with retries to tolerate cold-start route compilation.
-      const families = await this.fetchFamiliesWithRetry(3);
+      // The protected auth bootstrap already resolved the active household. Keep
+      // the API fallback for recovery and tests that enter without that payload.
+      const families = bootstrapFamily
+        ? [bootstrapFamily]
+        : await this.fetchFamiliesWithRetry(3);
       console.log('Fetched families:', families);
 
       if (families && families.length > 0) {
@@ -159,18 +168,6 @@ class DatabaseService {
         // Store family members in localStorage
         if (activeFamily.members && typeof window !== 'undefined') {
           localStorage.setItem('familyMembers', JSON.stringify(activeFamily.members));
-        }
-
-        // Sync initial data from database with timeout
-        try {
-          await Promise.race([
-            this.syncFromDatabase(),
-            new Promise((_, reject) =>
-              setTimeout(() => reject(new Error('Database sync timeout')), 3000)
-            )
-          ]);
-        } catch (syncError) {
-          console.warn('Database sync failed, continuing with localStorage:', syncError);
         }
 
         this.syncEnabled = true;

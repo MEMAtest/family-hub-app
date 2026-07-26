@@ -4,20 +4,25 @@ import { FamilyHubProviders } from '@/contexts/familyHub/FamilyHubProviders';
 import { FamilyHubShell } from './familyHub/FamilyHubShell';
 import { useHydration } from '@/hooks/useHydration';
 import { useDatabaseSync } from '@/hooks/useDatabaseSync';
+import type { DatabaseBootstrapFamily } from '@/services/databaseService';
 
-const FamilyHubAppContent = () => {
+interface FamilyHubAppProps {
+  bootstrapFamily?: DatabaseBootstrapFamily | null;
+}
+
+const FamilyHubAppContent = ({ bootstrapFamily }: FamilyHubAppProps) => {
   // Hydrate the store with current date on mount
   useHydration();
   // Sync data from database
-  useDatabaseSync();
+  useDatabaseSync(bootstrapFamily);
 
   return <FamilyHubShell />;
 };
 
-const FamilyHubApp = () => {
+const FamilyHubApp = ({ bootstrapFamily }: FamilyHubAppProps) => {
   return (
     <FamilyHubProviders>
-      <FamilyHubAppContent />
+      <FamilyHubAppContent bootstrapFamily={bootstrapFamily} />
     </FamilyHubProviders>
   );
 };

@@ -134,6 +134,7 @@ export const FamilyHubShell = () => {
     const storedName = localStorage.getItem('familyName');
     if (storedName) {
       setFamilyName(storedName);
+      return;
     }
 
     if (!databaseStatus.familyId) return;

@@ -1706,6 +1706,8 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
             popupOffset={isMobile ? 0 : 30}
             doShowMoreDrillDown={!isMobile}
             onShowMore={handleShowMore}
+            showAllEvents={isMobile && view === Views.MONTH}
+            style={isMobile && view === Views.MONTH ? { height: 560 } : undefined}
             toolbar={false}
             className={`family-hub-calendar ${isMobile ? 'mobile-calendar' : ''}`}
             formats={{

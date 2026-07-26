@@ -373,21 +373,6 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
     };
   }, [databaseStatus.connected, refreshEventsFromDatabase]);
 
-  useEffect(() => {
-    if (!databaseStatus.connected) return;
-
-    const refreshDelays = [750, 2500, 6000];
-    const timeoutIds = refreshDelays.map((delay) =>
-      window.setTimeout(() => {
-        void refreshEventsFromDatabase();
-      }, delay)
-    );
-
-    return () => {
-      timeoutIds.forEach((timeoutId) => window.clearTimeout(timeoutId));
-    };
-  }, [databaseStatus.connected, databaseStatus.familyId, refreshEventsFromDatabase]);
-
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [defaultSlot, setDefaultSlot] = useState<{ start: Date; end: Date } | null>(null);
   const [isEventFormOpen, setIsEventFormOpen] = useState(false);

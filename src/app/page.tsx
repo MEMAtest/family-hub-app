@@ -3,6 +3,7 @@
 import dynamic from 'next/dynamic'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import type { DatabaseBootstrapFamily } from '@/services/databaseService'
 
 // Import the component with SSR disabled
 const OmosanyaFamilyHub = dynamic(
@@ -23,6 +24,7 @@ const OmosanyaFamilyHub = dynamic(
 export default function HomePage() {
   const router = useRouter()
   const [isBootstrapping, setIsBootstrapping] = useState(true)
+  const [bootstrapFamily, setBootstrapFamily] = useState<DatabaseBootstrapFamily | null>(null)
 
   useEffect(() => {
     let mounted = true
@@ -52,6 +54,13 @@ export default function HomePage() {
         if (data?.accessPending) {
           router.replace('/auth/join')
           return
+        }
+        if (data?.family?.id) {
+          setBootstrapFamily({
+            id: data.family.id,
+            familyName: data.family.familyName,
+            members: Array.isArray(data.family.members) ? data.family.members : [],
+          })
         }
         canRenderApp = true
       } catch {
@@ -86,5 +95,5 @@ export default function HomePage() {
     )
   }
 
-  return <OmosanyaFamilyHub />
+  return <OmosanyaFamilyHub bootstrapFamily={bootstrapFamily} />
 }

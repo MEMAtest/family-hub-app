@@ -43,7 +43,14 @@ export async function GET(request: NextRequest) {
 
     const familyRecord = await prisma.family.findUnique({
       where: { id: authUser.familyId },
-      select: { id: true, familyName: true, familyCode: true, createdAt: true, ownerId: true },
+      select: {
+        id: true,
+        familyName: true,
+        familyCode: true,
+        createdAt: true,
+        ownerId: true,
+        members: { orderBy: { createdAt: 'asc' } },
+      },
     });
     const familyMember = await prisma.familyMember.findUnique({
       where: { id: authUser.familyMemberId },
@@ -55,7 +62,13 @@ export async function GET(request: NextRequest) {
         ...authUser.dbUser,
         avatarUrl: identity.image,
       },
-      family: familyRecord ? { id: familyRecord.id, familyName: familyRecord.familyName, familyCode: familyRecord.familyCode, createdAt: familyRecord.createdAt } : null,
+      family: familyRecord ? {
+        id: familyRecord.id,
+        familyName: familyRecord.familyName,
+        familyCode: familyRecord.familyCode,
+        createdAt: familyRecord.createdAt,
+        members: familyRecord.members,
+      } : null,
       familyMember,
       accessPending: false,
       isOwner: familyRecord?.ownerId === authUser.dbUser.id,

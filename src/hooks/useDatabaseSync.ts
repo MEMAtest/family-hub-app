@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { useFamilyStore, FamilyState, BudgetData, MealPlanning, ShoppingList, GoalsData } from '@/store/familyStore';
 import databaseService from '@/services/databaseService';
+import type { DatabaseBootstrapFamily } from '@/services/databaseService';
 import { createId } from '@/utils/id';
 import {
   DEFAULT_FAMILY_ID,
@@ -368,7 +369,7 @@ const buildGoalsData = (goals: any[], achievements: any[] = []): GoalsData => {
   };
 };
 
-export const useDatabaseSync = () => {
+export const useDatabaseSync = (bootstrapFamily?: DatabaseBootstrapFamily | null) => {
   const setDatabaseStatus = useFamilyStore((state: FamilyState) => state.setDatabaseStatus);
   const setPeople = useFamilyStore((state: FamilyState) => state.setPeople);
   const setFamilyMilestones = useFamilyStore((state: FamilyState) => state.setFamilyMilestones);
@@ -599,7 +600,7 @@ export const useDatabaseSync = () => {
       let resolvedFamilyId: string | undefined = localFamilyId;
 
       try {
-        connected = await databaseService.initialize();
+        connected = await databaseService.initialize(bootstrapFamily);
         const status = databaseService.getStatus();
         resolvedFamilyId = status.familyId ?? undefined;
 
@@ -635,5 +636,5 @@ export const useDatabaseSync = () => {
     };
 
     initDatabase();
-  }, [setDatabaseStatus]);
+  }, [bootstrapFamily, setDatabaseStatus]);
 };

@@ -1021,11 +1021,6 @@ html.dark .family-hub-calendar .rbc-timeslot-group {
     @apply bg-opacity-80;
   }
 
-  /* Override react-big-calendar mobile issues */
-  .mobile-calendar .rbc-month-view .rbc-row {
-    min-height: 60px;
-  }
-
   .mobile-calendar .rbc-week-view .rbc-time-slot {
     min-height: 40px;
   }
@@ -1053,13 +1048,18 @@ html.dark .family-hub-calendar .rbc-timeslot-group {
   }
 
   /* Improved touch targets for mobile calendar */
-  .mobile-calendar .rbc-date-cell button {
-    @apply min-h-[40px] min-w-[40px] touch-manipulation;
+  .mobile-calendar .rbc-month-view .rbc-date-cell button {
+    @apply min-h-[28px] min-w-[28px] touch-manipulation;
   }
 
   .mobile-calendar .rbc-month-view .rbc-event {
     min-height: 18px;
     @apply touch-manipulation;
+  }
+
+  .mobile-calendar .rbc-month-view .mobile-event.touch-target {
+    min-height: 0;
+    min-width: 0;
   }
 
   .mobile-calendar .rbc-time-view .rbc-event,
