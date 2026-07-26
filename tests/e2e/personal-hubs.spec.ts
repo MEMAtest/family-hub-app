@@ -651,6 +651,14 @@ test('Perfume and Cycle remain usable at iPhone width', async ({ page }) => {
   await page.getByRole('button', { name: 'Health & Cycle' }).click();
   await expect(page.getByRole('heading', { name: 'Health & Cycle' })).toBeVisible({ timeout: 30_000 });
   await page.getByRole('button', { name: 'Open personal areas' }).click();
+  const closePersonalMenu = page.getByRole('button', { name: 'Close personal menu' });
+  const personalCloseBounds = await closePersonalMenu.boundingBox();
+  expect(personalCloseBounds?.width, 'Personal menu close button width').toBeGreaterThanOrEqual(44);
+  expect(personalCloseBounds?.height, 'Personal menu close button height').toBeGreaterThanOrEqual(44);
+  await closePersonalMenu.click();
+  await expect(page.getByRole('button', { name: 'Close personal menu' })).toBeHidden();
+  await expect(page.getByRole('heading', { name: 'Health & Cycle' })).toBeVisible();
+  await page.getByRole('button', { name: 'Open personal areas' }).click();
   await page.getByRole('button', { name: 'Perfume', exact: true }).click();
   await page.getByRole('button', { name: 'Browse catalogue' }).click();
   await expect(page.getByRole('dialog', { name: 'Fragrance catalogue' })).toBeVisible();
@@ -666,4 +674,11 @@ test('Perfume and Cycle remain usable at iPhone width', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Log a period' })).toBeVisible();
   await expect(page.getByLabel('Start date')).toBeVisible();
   await noOverflow('Period form');
+  const closePeriodForm = page.getByRole('button', { name: 'Close period form' });
+  const closeBounds = await closePeriodForm.boundingBox();
+  expect(closeBounds?.width, 'Period close button width').toBeGreaterThanOrEqual(44);
+  expect(closeBounds?.height, 'Period close button height').toBeGreaterThanOrEqual(44);
+  await closePeriodForm.click();
+  await expect(page.getByRole('heading', { name: 'Log a period' })).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Log period' })).toBeVisible();
 });

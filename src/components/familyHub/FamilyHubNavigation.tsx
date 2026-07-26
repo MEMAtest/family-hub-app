@@ -170,7 +170,12 @@ export const FamilyHubNavigation = ({
                       <h2 className="text-lg font-semibold text-[#18221f] dark:text-slate-100">Navigation</h2>
                     </div>
                   </div>
-                  <button onClick={onCloseMobile} className="rounded-lg p-2 text-[#5f6a64] hover:bg-[#eaf1e7] dark:text-slate-300 dark:hover:bg-slate-800">
+                  <button
+                    type="button"
+                    onClick={onCloseMobile}
+                    aria-label="Close personal menu"
+                    className="inline-flex h-11 w-11 shrink-0 touch-manipulation items-center justify-center rounded-lg text-[#5f6a64] hover:bg-[#eaf1e7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#147c72] dark:text-slate-300 dark:hover:bg-slate-800"
+                  >
                     <X className="h-5 w-5" />
                   </button>
                 </div>
