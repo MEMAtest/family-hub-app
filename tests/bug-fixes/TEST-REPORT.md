@@ -237,7 +237,7 @@ Users now experience:
 
 **Database Connection:**
 ```
-postgresql://neondb_owner:npg_FfSTB5lXxPU4@ep-bold-pine-abqy8czb-pooler.eu-west-2.aws.neon.tech/neondb?sslmode=require
+Set TEST_DATABASE_URL to a dedicated non-production database.
 ```
 
 **Test Family ID:**

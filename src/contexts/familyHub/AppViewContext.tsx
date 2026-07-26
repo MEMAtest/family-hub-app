@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, PropsWithChildren, useContext, useMemo, useState } from 'react';
+import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useFamilyStore } from '@/store/familyStore';
 
 export type AppView = 'dashboard' | 'property' | 'calendar' | 'budget' | 'meals' | 'shopping' |
@@ -41,13 +41,42 @@ export const AppViewProvider = ({ children }: PropsWithChildren) => {
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
+  const setView = useCallback((view: AppView) => {
+    setCurrentView(view);
+    if (typeof window === 'undefined') return;
+
+    const url = new URL(window.location.href);
+    if (view === 'dashboard') {
+      url.searchParams.delete('view');
+    } else {
+      url.searchParams.set('view', view);
+    }
+
+    const nextLocation = `${url.pathname}${url.search}${url.hash}`;
+    const currentLocation = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    if (nextLocation !== currentLocation) {
+      window.history.pushState({ view }, '', nextLocation);
+    }
+  }, [setCurrentView]);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      const view = new URL(window.location.href).searchParams.get('view') || 'dashboard';
+      setCurrentView(view);
+      setCurrentSubView('');
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [setCurrentSubView, setCurrentView]);
+
   const value = useMemo<AppViewContextValue>(() => ({
     currentView,
     currentSubView,
     calendarView,
     currentDate: currentDate ?? new Date(), // Fallback to current date if not hydrated yet
     selectedPerson,
-    setView: (view: AppView) => setCurrentView(view),
+    setView,
     setSubView: setCurrentSubView,
     setCalendarView: setCalendarViewStore,
     setCurrentDate: setCurrentDateStore,
@@ -65,7 +94,7 @@ export const AppViewProvider = ({ children }: PropsWithChildren) => {
     setCalendarViewStore,
     setCurrentDateStore,
     setCurrentSubView,
-    setCurrentView,
+    setView,
     setSelectedPersonStore,
   ]);
 

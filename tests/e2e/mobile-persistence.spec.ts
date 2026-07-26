@@ -1,12 +1,13 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { PrismaClient } from '@prisma/client';
+import {
+  createTestPrisma,
+  hasTestDatabase,
+  TEST_DATABASE_REQUIRED,
+} from './test-database';
 
-if (!process.env.DATABASE_URL) {
-  process.env.DATABASE_URL =
-    'postgresql://neondb_owner:npg_FfSTB5lXxPU4@ep-bold-pine-abqy8czb-pooler.eu-west-2.aws.neon.tech/neondb?sslmode=require';
-}
+test.skip(!hasTestDatabase, TEST_DATABASE_REQUIRED);
 
-const prisma = new PrismaClient();
+const prisma = createTestPrisma();
 const createdFitnessIds = new Set<string>();
 let familyId = '';
 let memberId = '';

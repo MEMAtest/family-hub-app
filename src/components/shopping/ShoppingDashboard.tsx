@@ -5,7 +5,6 @@ import {
   ShoppingCart,
   Plus,
   TrendingUp,
-  TrendingDown,
   MapPin,
   Clock,
   DollarSign,
@@ -16,7 +15,6 @@ import {
   Calendar,
   BarChart3,
   List,
-  Bell,
   Menu,
   X,
   RefreshCw
@@ -38,7 +36,7 @@ const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose, onSubVie
   const isMobile = useMediaQuery('(max-width: 1023px)');
   const familyId = useFamilyStore((state) => state.databaseStatus.familyId);
   const { lists } = useShoppingContext();
-  const [activeView, setActiveView] = useState<'dashboard' | 'lists' | 'analytics'>('dashboard');
+  const [activeView, setActiveView] = useState<'dashboard' | 'lists' | 'analytics'>('lists');
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [aiSuggestions, setAiSuggestions] = useState<AIShoppingSavings | null>(null);
   const [isGeneratingSuggestions, setIsGeneratingSuggestions] = useState(false);
@@ -47,7 +45,7 @@ const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose, onSubVie
   // Sync with parent's subView
   React.useEffect(() => {
     if (currentSubView === '') {
-      setActiveView('dashboard');
+      setActiveView('lists');
     } else if (currentSubView && ['lists', 'analytics'].includes(currentSubView)) {
       setActiveView(currentSubView as any);
     }
@@ -117,21 +115,10 @@ const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose, onSubVie
       });
     });
 
-    const totalSavings = listArray.reduce((sum, list) => {
-      const estimated = Number(list?.estimatedTotal ?? 0);
-      const actual = Number(list?.total ?? 0);
-      return sum + (estimated - actual);
-    }, 0);
-
-    const avgSavings = listArray.length ? totalSavings / listArray.length : 0;
-
     return {
       totalSpent: Math.round(totalSpent * 100) / 100,
-      budgetRemaining: 0,
       listsCompleted,
       totalLists: listArray.length,
-      avgSavings: Math.round(avgSavings * 100) / 100,
-      priceAlerts: 0,
     };
   }, [lists]);
 
@@ -185,16 +172,6 @@ const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose, onSubVie
     activities.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
     return activities.slice(0, 8);
   }, [lists]);
-
-  const priceAlerts = useMemo(() => [] as Array<{
-    id: string;
-    item: string;
-    currentPrice: number;
-    targetPrice: number;
-    store: string;
-    savings: number;
-    type: 'price_drop';
-  }>, []);
 
   const handleGenerateSuggestions = async () => {
     if (!familyId) {
@@ -268,7 +245,6 @@ const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose, onSubVie
   const getActivityIcon = (type: string) => {
     switch (type) {
       case 'list_completed': return <ShoppingCart className="w-4 h-4 text-green-500" />;
-      case 'price_alert': return <TrendingDown className="w-4 h-4 text-orange-500" />;
       case 'item_added': return <Plus className="w-4 h-4 text-blue-500" />;
       default: return <AlertCircle className="w-4 h-4 text-gray-500" />;
     }
@@ -398,7 +374,7 @@ const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose, onSubVie
     <div className={isMobile ? 'space-y-6' : 'space-y-8'}>
       {/* Overview Stats */}
       <div className={`grid gap-4 ${
-        isMobile ? 'grid-cols-2' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4'
+        isMobile ? 'grid-cols-2' : 'grid-cols-1 sm:grid-cols-2'
       }`}>
         <div className={`bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg ${
           isMobile ? 'p-3' : 'p-3 sm:p-4 md:p-6'
@@ -416,13 +392,7 @@ const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose, onSubVie
               isMobile ? 'w-6 h-6' : 'w-8 h-8'
             }`} />
           </div>
-          {!isMobile && (
-            <div className="mt-2">
-              <span className="text-sm text-gray-500">
-                £{weeklyStats.budgetRemaining} remaining
-              </span>
-            </div>
-          )}
+          {!isMobile && <p className="mt-2 text-sm text-gray-500">Completed items with recorded prices</p>}
         </div>
 
         <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg p-3 sm:p-4 md:p-6">
@@ -440,35 +410,6 @@ const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose, onSubVie
           </div>
         </div>
 
-        <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg p-3 sm:p-4 md:p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Avg Savings</p>
-              <p className="text-xl md:text-2xl font-bold text-gray-900 dark:text-slate-100">£{weeklyStats.avgSavings}</p>
-            </div>
-            <TrendingDown className="w-8 h-8 text-orange-500" />
-          </div>
-          <div className="mt-2">
-            <span className="text-sm text-green-600">
-              12% vs last week
-            </span>
-          </div>
-        </div>
-
-        <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg p-3 sm:p-4 md:p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Price Alerts</p>
-              <p className="text-xl md:text-2xl font-bold text-gray-900 dark:text-slate-100">{weeklyStats.priceAlerts}</p>
-            </div>
-            <Bell className="w-8 h-8 text-red-500" />
-          </div>
-          <div className="mt-2">
-            <span className="text-sm text-red-600">
-              Action required
-            </span>
-          </div>
-        </div>
       </div>
 
       {/* Active Shopping Lists */}
@@ -660,40 +601,6 @@ const ShoppingDashboard: React.FC<ShoppingDashboardProps> = ({ onClose, onSubVie
           )}
         </div>
 
-        {/* Price Alerts */}
-        <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg p-3 sm:p-4 md:p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-100">Price Alerts</h2>
-          </div>
-
-          {priceAlerts.length === 0 ? (
-            <div className="text-center py-8">
-              <Bell className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-              <p className="text-gray-600 mb-1">No price alerts</p>
-              <p className="text-sm text-gray-500">Price tracking is coming soon.</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {priceAlerts.map((alert) => (
-                <div key={alert.id} className="flex items-center justify-between p-3 bg-orange-50 border border-orange-200 rounded-lg">
-                  <div>
-                    <h3 className="font-medium text-gray-900">{alert.item}</h3>
-                    <div className="flex items-center space-x-2 text-sm text-gray-600">
-                      <span>£{alert.currentPrice}</span>
-                      <span>at {alert.store}</span>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-medium text-green-600">
-                      Save £{alert.savings}
-                    </p>
-                    <p className="text-xs text-gray-500">Target: £{alert.targetPrice}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
       </div>
 
       {/* Recent Activity */}

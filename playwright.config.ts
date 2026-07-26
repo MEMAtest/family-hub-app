@@ -4,6 +4,9 @@ const PORT = process.env.PLAYWRIGHT_PORT ? Number(process.env.PLAYWRIGHT_PORT) :
 const HOST = process.env.PLAYWRIGHT_HOST || '127.0.0.1';
 const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || `http://${HOST}:${PORT}`;
 const WEB_SERVER_COMMAND = `node --require ./tests/e2e/node-runtime-fixes.cjs ./node_modules/next/dist/bin/next dev --hostname ${HOST} --port ${PORT}`;
+const TEST_DATABASE_URL =
+  process.env.TEST_DATABASE_URL ||
+  'postgresql://playwright:playwright@127.0.0.1:5432/family_hub_test';
 
 const config: PlaywrightTestConfig = {
   testDir: 'tests/e2e',
@@ -27,6 +30,7 @@ const config: PlaywrightTestConfig = {
       ...process.env,
       PORT: String(PORT),
       HOST,
+      DATABASE_URL: TEST_DATABASE_URL,
       NEXT_PUBLIC_E2E: 'true',
       NEXT_PUBLIC_E2E_SEED: 'true',
       NEXT_PUBLIC_SKIP_SETUP: 'true',

@@ -43,6 +43,9 @@ export function ActualCashFlowPanel({ familyId, month }: { familyId: string | nu
   useEffect(() => { void refresh(); }, [familyId, month]);
 
   const hasMismatch = useMemo(() => data?.reconciliations.some((item) => item.reconciled === false) ?? false, [data]);
+  const hasActualTransactions = Boolean(
+    data && (data.summary.actualIncome !== 0 || data.summary.actualSpend !== 0)
+  );
 
   if (!familyId) return null;
   return (
@@ -61,10 +64,15 @@ export function ActualCashFlowPanel({ familyId, month }: { familyId: string | nu
             {[
               ['Actual in', data.summary.actualIncome, 'text-[#147c72]'],
               ['Actual out', data.summary.actualSpend, 'text-rose-700'],
-              ['Planned remaining', data.summary.plannedExpenses - data.summary.plannedIncome, 'text-slate-700 dark:text-slate-200'],
+              ['Planned remaining', data.summary.plannedIncome - data.summary.plannedExpenses, 'text-slate-700 dark:text-slate-200'],
               ['Month-end forecast', data.summary.forecastNet, data.summary.forecastNet >= 0 ? 'text-[#147c72]' : 'text-rose-700'],
             ].map(([label, value, colour]) => <div key={String(label)} className="bg-white p-3 dark:bg-slate-900"><p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">{label}</p><p className={`mt-1 text-lg font-semibold ${colour}`}>{formatMoney(Number(value))}</p></div>)}
           </div>
+          {!hasActualTransactions && (
+            <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
+              No statement transactions have been imported for this month. Planned figures remain available below.
+            </p>
+          )}
           {(data.categorySpend.length > 0 || data.reconciliations.length > 0) && <div className="mt-4 grid gap-4 lg:grid-cols-2">
             <div><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Actual spending</p><div className="mt-2 space-y-2">{data.categorySpend.slice(0, 5).map((item) => <div key={item.category} className="flex justify-between text-sm"><span>{item.category}</span><span className="font-medium">{formatMoney(item.amount)}</span></div>)}{data.categorySpend.length === 0 && <p className="text-sm text-slate-500">No statement transactions for this month yet.</p>}</div></div>
             <div><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Account reconciliation</p><div className="mt-2 space-y-2">{data.reconciliations.map((item) => <div key={item.accountId} className="flex items-center justify-between gap-3 text-sm"><span className="inline-flex items-center gap-1.5"><Landmark className="h-3.5 w-3.5 text-slate-400" />{item.accountName}</span><span className={item.reconciled === false ? 'font-medium text-amber-700 dark:text-amber-300' : 'text-slate-500'}>{item.reconciled === false ? `${formatMoney(Math.abs(item.mismatch || 0))} to check` : item.reconciled ? 'Matched' : 'Balance unavailable'}</span></div>)}</div></div>

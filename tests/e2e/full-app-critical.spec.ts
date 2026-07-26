@@ -1,12 +1,13 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { PrismaClient } from '@prisma/client';
+import {
+  createTestPrisma,
+  hasTestDatabase,
+  TEST_DATABASE_REQUIRED,
+} from './test-database';
 
-if (!process.env.DATABASE_URL) {
-  process.env.DATABASE_URL =
-    'postgresql://neondb_owner:npg_FfSTB5lXxPU4@ep-bold-pine-abqy8czb-pooler.eu-west-2.aws.neon.tech/neondb?sslmode=require';
-}
+test.skip(!hasTestDatabase, TEST_DATABASE_REQUIRED);
 
-const prisma = new PrismaClient();
+const prisma = createTestPrisma();
 const runTag = `E2E-FULL-${Date.now()}`;
 
 const createdIds = {
@@ -431,7 +432,7 @@ test('all primary sections render and stay connected', async ({ page }) => {
     {
       view: 'Shopping',
       assert: async () => {
-        await expect(page.getByRole('heading', { name: 'Active Shopping Lists' })).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Shopping Lists' }).first()).toBeVisible();
       },
     },
     {
@@ -566,6 +567,7 @@ test('calendar assistant imports a timed holiday club range as daily sessions', 
   await waitForHubShell(page);
   await dismissSetupWizard(page);
   await switchToView(page, 'Calendar');
+  await page.getByRole('button', { name: 'Add or import' }).click();
 
   const commandInput = page.getByPlaceholder('Find summer holidays, or create swimming lesson next Tuesday at 5pm');
   await expect(commandInput).toBeVisible({ timeout: 20_000 });
@@ -638,15 +640,6 @@ test('shopping list and item flows are accessible in UI', async ({ page }) => {
   await dismissSetupWizard(page);
   await switchToView(page, 'Shopping');
 
-  try {
-    await clickVisibleButton(
-      page.getByRole('button', { name: /^Create New List$/ }),
-      'shopping quick action create list'
-    );
-  } catch {
-    await clickVisibleButton(page.getByRole('button', { name: /^Lists$/ }), 'shopping list tab');
-  }
-
   await expect(page.getByPlaceholder('Search shopping lists...')).toBeVisible({ timeout: 20_000 });
   await clickVisibleButton(page.getByRole('button', { name: /^New List$/ }), 'shopping new list');
   await expect(page.getByRole('heading', { name: 'Create New List' })).toBeVisible({ timeout: 20_000 });
@@ -698,12 +691,6 @@ test('contractor quick appointment persists', async ({ page }) => {
   await page.getByRole('button', { name: 'Add Appointment' }).click();
 
   await expect(page.getByRole('heading', { name: 'Quick Appointment' })).toBeHidden({ timeout: 20_000 });
-
-  const databaseConnected = await isDatabaseConnected(page);
-  if (!databaseConnected) {
-    await expect(page.getByText(purpose).first()).toBeVisible({ timeout: 20_000 });
-    return;
-  }
 
   const createdContractor = await waitForRecord(
     () =>

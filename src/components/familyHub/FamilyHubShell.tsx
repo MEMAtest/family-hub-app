@@ -323,7 +323,7 @@ export const FamilyHubShell = () => {
       perfume: 'Perfume Hub',
       cycle: 'Health & Cycle',
       contractors: 'Contractors',
-      goals: 'Quests',
+      goals: 'Goals',
       brain: 'Project Brain',
       family: 'Family',
       news: 'News',

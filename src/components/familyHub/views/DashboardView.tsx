@@ -390,8 +390,15 @@ export const DashboardView = () => {
 
   const upcomingMeals = useMemo(() => {
     if (!mealPlanning) return [] as Array<{ date: string; name: string }>;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
     return Object.entries(mealPlanning.planned || {})
       .map(([date, meal]) => ({ date, name: (meal as any).name || `${(meal as any).protein ?? ''} ${(meal as any).carb ?? ''}` }))
+      .filter((meal) => {
+        const mealDate = new Date(`${meal.date}T00:00:00`);
+        return !Number.isNaN(mealDate.getTime()) && mealDate >= today;
+      })
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
       .slice(0, 4);
   }, [mealPlanning]);
@@ -525,19 +532,18 @@ export const DashboardView = () => {
 
   return (
     <div className="space-y-4 overflow-x-hidden p-3 sm:space-y-6 sm:p-4 lg:p-8">
-      <div className="kinboard-soft-card overflow-hidden p-5 sm:p-6 lg:p-8">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-          <div className="max-w-3xl">
-            <p className="kinboard-label">Today · family board</p>
-            <h2 className="kinboard-serif mt-2 text-4xl leading-[0.95] text-[#18221f] dark:text-slate-100 sm:text-5xl">
-              The omosanyas<br />
-              <span className="italic text-[#147c72]">are in sync.</span>
+      <div className="kinboard-soft-card overflow-hidden p-4 sm:p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="max-w-xl">
+            <p className="kinboard-label">Today · {formatDateLong(new Date())}</p>
+            <h2 className="kinboard-serif mt-1 text-2xl leading-tight text-[#18221f] dark:text-slate-100 sm:text-3xl">
+              Omosanya family overview
             </h2>
-            <p className="mt-4 max-w-2xl text-sm leading-6 text-[#5f6a64] dark:text-slate-400">
-              Plans, spending, meals, shopping and family goals are pulled into one calm command centre.
+            <p className="mt-2 text-sm text-[#5f6a64] dark:text-slate-400">
+              The next plans and actions that need attention.
             </p>
           </div>
-          <div className="grid min-w-[220px] gap-2 text-sm text-[#18221f] sm:grid-cols-3 lg:grid-cols-1">
+          <div className="grid min-w-[220px] gap-2 text-sm text-[#18221f] sm:grid-cols-3">
             <div className="rounded-lg border border-[#dde5e0] bg-white/75 p-3">
               <p className="kinboard-label">Next</p>
               <p className="mt-1 font-semibold">{nextEvent?.title ?? 'No events queued'}</p>
@@ -549,7 +555,7 @@ export const DashboardView = () => {
               <p className="text-xs text-[#5f6a64]">Estimated shopping total</p>
             </div>
             <div className="rounded-lg border border-[#dde5e0] bg-white/75 p-3">
-              <p className="kinboard-label">Quests</p>
+              <p className="kinboard-label">Goals</p>
               <p className="mt-1 font-semibold">{totalGoals} active · {avgGoalProgress}%</p>
               <p className="text-xs text-[#5f6a64]">Average progress</p>
             </div>
@@ -559,8 +565,8 @@ export const DashboardView = () => {
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="kinboard-serif text-2xl text-[#18221f] dark:text-slate-100">Today</h2>
-          <p className="text-sm text-[#5f6a64] dark:text-slate-400">Choose what appears here and keep sensitive numbers private.</p>
+          <h2 className="kinboard-serif text-xl text-[#18221f] dark:text-slate-100">Your day</h2>
+          <p className="text-sm text-[#5f6a64] dark:text-slate-400">Open a card to act on it.</p>
         </div>
         <button
           type="button"

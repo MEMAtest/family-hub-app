@@ -69,6 +69,8 @@ const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
   const [aiMealPlan, setAiMealPlan] = useState<AIMealPlan | null>(null);
   const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
   const [planError, setPlanError] = useState<string | null>(null);
+  const [pendingShoppingItems, setPendingShoppingItems] = useState<string[]>([]);
+  const [isCreatingShoppingList, setIsCreatingShoppingList] = useState(false);
   const [formData, setFormData] = useState<QuickMealLog>({
     mealName: '',
     mealType: 'Dinner',
@@ -212,6 +214,7 @@ const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
     lunch: recentMeals.find(m => m.mealDate === new Date().toISOString().split('T')[0] && m.mealName.toLowerCase().includes('lunch')),
     dinner: recentMeals.find(m => m.mealDate === new Date().toISOString().split('T')[0] && (m.mealName.toLowerCase().includes('dinner') || m.mealName.toLowerCase().includes('supper')))
   };
+  const hasTodaysMeals = Object.values(todaysMeals).some(Boolean);
 
   // Calculate week stats from actual meal data
   const today = new Date();
@@ -231,6 +234,88 @@ const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
     avgNutritionScore: 0, // Will be calculated from nutrition tracking when implemented
     estimatedCost: weekMeals.reduce((sum, meal) => sum + (meal.estimatedCost || 0), 0),
     prepTimeTotal: weekMeals.reduce((sum, meal) => sum + (meal.prepTime || 0), 0)
+  };
+
+  const previewMealPlanShoppingList = () => {
+    const items = new Set<string>();
+    const addItem = (value: unknown) => {
+      if (typeof value !== 'string') return;
+      const trimmed = value.trim();
+      if (trimmed) items.add(trimmed);
+    };
+
+    if (aiMealPlan?.shoppingList?.length) {
+      aiMealPlan.shoppingList.forEach((entry) => addItem(entry.item));
+    } else {
+      const start = new Date();
+      for (let index = 0; index < 7; index += 1) {
+        const date = new Date(start);
+        date.setDate(date.getDate() + index);
+        const key = date.toISOString().split('T')[0];
+        const entry: any =
+          (mealPlanning as any)?.planned?.[key] ??
+          (mealPlanning as any)?.eaten?.[key];
+        if (!entry) continue;
+        addItem(entry.protein);
+        addItem(entry.carb);
+        addItem(entry.veg);
+      }
+    }
+
+    if (items.size === 0) {
+      toast.error('No meal plan items found. Plan meals first, then create a list.');
+      return;
+    }
+
+    setPendingShoppingItems(Array.from(items).slice(0, 50));
+  };
+
+  const confirmMealPlanShoppingList = async () => {
+    if (!familyId || pendingShoppingItems.length === 0) return;
+
+    setIsCreatingShoppingList(true);
+    try {
+      const startDate = new Date().toISOString().split('T')[0];
+      const endDate = (() => {
+        const date = new Date();
+        date.setDate(date.getDate() + 6);
+        return date.toISOString().split('T')[0];
+      })();
+
+      const listResponse = await fetch(`/api/families/${familyId}/shopping-lists`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          listName: `Meal Plan (${startDate} to ${endDate})`,
+          category: 'Food',
+        }),
+      });
+      const listPayload = await listResponse.json().catch(() => null);
+      if (!listResponse.ok) {
+        throw new Error(listPayload?.error || 'Failed to create shopping list');
+      }
+
+      const listId = listPayload?.id as string | undefined;
+      if (!listId) throw new Error('Shopping list created without an id');
+
+      await Promise.all(pendingShoppingItems.map(async (name) => {
+        const response = await fetch(`/api/families/${familyId}/shopping-lists/${listId}/items`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ itemName: name, category: 'Food' }),
+        });
+        if (!response.ok) throw new Error(`Failed to add item "${name}"`);
+      }));
+
+      toast.success(`Shopping list created (${pendingShoppingItems.length} items)`);
+      setPendingShoppingItems([]);
+      setView('shopping');
+    } catch (error) {
+      console.error('Failed to create shopping list:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to create shopping list');
+    } finally {
+      setIsCreatingShoppingList(false);
+    }
   };
 
   const quickActions = [
@@ -262,90 +347,14 @@ const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
     {
       id: 'shopping-list',
       title: 'Generate Shopping List',
-      description: 'Create list from meal plan',
+      description: 'Preview ingredients, then confirm',
       icon: <ShoppingCart className="w-6 h-6 text-purple-500" />,
-      onClick: async () => {
+      onClick: () => {
         if (!familyId) {
           toast.error('Family ID not available yet. Please try again.');
           return;
         }
-
-        const items = new Set<string>();
-        const addItem = (value: unknown) => {
-          if (typeof value !== 'string') return;
-          const trimmed = value.trim();
-          if (!trimmed) return;
-          items.add(trimmed);
-        };
-
-        if (aiMealPlan?.shoppingList?.length) {
-          aiMealPlan.shoppingList.forEach((entry) => addItem(entry.item));
-        } else {
-          const start = new Date();
-          for (let i = 0; i < 7; i++) {
-            const d = new Date(start);
-            d.setDate(d.getDate() + i);
-            const key = d.toISOString().split('T')[0];
-            const entry: any =
-              (mealPlanning as any)?.planned?.[key] ??
-              (mealPlanning as any)?.eaten?.[key];
-            if (!entry) continue;
-            addItem(entry.protein);
-            addItem(entry.carb);
-            addItem(entry.veg);
-          }
-        }
-
-        if (items.size === 0) {
-          toast.error('No meal plan items found. Plan meals first, then generate a list.');
-          return;
-        }
-
-        try {
-          const startDate = new Date().toISOString().split('T')[0];
-          const endDate = (() => {
-            const d = new Date();
-            d.setDate(d.getDate() + 6);
-            return d.toISOString().split('T')[0];
-          })();
-
-          const listResponse = await fetch(`/api/families/${familyId}/shopping-lists`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              listName: `Meal Plan (${startDate} to ${endDate})`,
-              category: 'Food',
-            }),
-          });
-
-          const listPayload = await listResponse.json().catch(() => null);
-          if (!listResponse.ok) {
-            throw new Error(listPayload?.error || 'Failed to create shopping list');
-          }
-
-          const listId = listPayload?.id as string | undefined;
-          if (!listId) {
-            throw new Error('Shopping list created without an id');
-          }
-
-          const itemArray = Array.from(items).slice(0, 50);
-          await Promise.all(itemArray.map(async (name) => {
-            const response = await fetch(`/api/families/${familyId}/shopping-lists/${listId}/items`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ itemName: name, category: 'Food' }),
-            });
-            if (!response.ok) {
-              throw new Error(`Failed to add item "${name}"`);
-            }
-          }));
-
-          toast.success(`Shopping list created (${Math.min(items.size, 50)} items)`);
-          setView('shopping');
-        } catch (error) {
-          console.error('Failed to generate shopping list:', error);
-          toast.error(error instanceof Error ? error.message : 'Failed to generate shopping list');
-        }
+        previewMealPlanShoppingList();
       }
     }
   ];
@@ -494,10 +503,25 @@ const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
           </button>
         </div>
 
-        <div className={`grid gap-4 ${
-          isMobile ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-3'
-        }`}>
-          {Object.entries(todaysMeals).map(([mealType, meal]) => (
+        {!hasTodaysMeals ? (
+          <div className="rounded-lg border border-dashed border-gray-300 px-4 py-8 text-center dark:border-slate-700">
+            <ChefHat className="mx-auto h-8 w-8 text-gray-400" />
+            <p className="mt-3 font-medium text-gray-900 dark:text-slate-100">Nothing planned for today</p>
+            <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">Start with one meal. You can build the rest of the week later.</p>
+            <button
+              type="button"
+              onClick={() => openMealForm(new Date().toISOString().split('T')[0])}
+              className="mt-4 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+            >
+              <Plus className="h-4 w-4" />
+              Plan a meal
+            </button>
+          </div>
+        ) : (
+          <div className={`grid gap-4 ${
+            isMobile ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-3'
+          }`}>
+            {Object.entries(todaysMeals).map(([mealType, meal]) => (
             <div key={mealType} className={`border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg ${
               isMobile ? 'p-3' : 'p-4'
             }`}>
@@ -531,8 +555,9 @@ const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
                 </div>
               )}
             </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Week Overview */}
@@ -946,6 +971,54 @@ const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
 
       {/* Mobile Menu Overlay */}
       {renderMobileMenu()}
+
+      {pendingShoppingItems.length > 0 && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-labelledby="shopping-preview-title">
+          <div className="w-full max-w-lg rounded-lg bg-white p-5 shadow-xl dark:bg-slate-900 sm:p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 id="shopping-preview-title" className="text-lg font-semibold text-gray-900 dark:text-slate-100">Review shopping list</h2>
+                <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">Nothing is added until you confirm.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPendingShoppingItems([])}
+                className="rounded-md p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-800"
+                aria-label="Close shopping list preview"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <ul className="mt-4 max-h-64 space-y-2 overflow-y-auto rounded-lg border border-gray-200 p-3 dark:border-slate-700">
+              {pendingShoppingItems.map((item) => (
+                <li key={item} className="flex items-center gap-2 text-sm text-gray-700 dark:text-slate-300">
+                  <Check className="h-4 w-4 text-green-600" />
+                  {item}
+                </li>
+              ))}
+            </ul>
+            <div className="mt-5 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setPendingShoppingItems([])}
+                disabled={isCreatingShoppingList}
+                className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmMealPlanShoppingList}
+                disabled={isCreatingShoppingList}
+                className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400"
+              >
+                {isCreatingShoppingList && <RefreshCw className="h-4 w-4 animate-spin" />}
+                Add {pendingShoppingItems.length} items
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Quick Log Meal Modal */}
       {showQuickLogModal && (

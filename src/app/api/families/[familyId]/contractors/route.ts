@@ -53,20 +53,28 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context, _a
     const raw = await request.json();
     const body = createContractorSchema.parse(raw);
 
-    const contractor = await prisma.contractor.create({
-      data: {
-        ...(body.id ? { id: body.id } : {}),
-        familyId,
-        name: body.name,
-        company: body.company,
-        phone: body.phone,
-        email: body.email,
-        address: body.address,
-        specialty: body.specialty,
-        notes: body.notes,
-        rating: body.rating,
-      },
-    });
+    const data = {
+      familyId,
+      name: body.name,
+      company: body.company,
+      phone: body.phone,
+      email: body.email,
+      address: body.address,
+      specialty: body.specialty,
+      notes: body.notes,
+      rating: body.rating,
+    };
+    const contractor = body.id
+      ? await prisma.contractor.upsert({
+          where: { id: body.id },
+          update: {},
+          create: { id: body.id, ...data },
+        })
+      : await prisma.contractor.create({ data });
+
+    if (contractor.familyId !== familyId) {
+      return NextResponse.json({ error: 'Contractor id is already in use' }, { status: 409 });
+    }
 
     return NextResponse.json(contractor, { status: 201 });
   } catch (error) {
