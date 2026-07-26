@@ -153,6 +153,9 @@ test('Angela can save and see a private period entry without using the shared ca
   await page.getByRole('button', { name: 'Save private period' }).click();
 
   await expect(page.getByText('14 Sept 2088')).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Health & Cycle' })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText('14 Sept 2088')).toBeVisible();
   expect(cyclePosts).toEqual([
     {
       action: 'period',
@@ -612,6 +615,7 @@ test('Angela can save a private wellbeing check-in and reminder without fertilit
 });
 
 test('Perfume and Cycle remain usable at iPhone width', async ({ page }) => {
+  let cycleWrites = 0;
   const noOverflow = async (view: string) => {
     const metrics = await page.evaluate(() => ({ viewport: window.innerWidth, document: document.documentElement.scrollWidth, body: document.body.scrollWidth }));
     expect(metrics.document, `${view} document width`).toBeLessThanOrEqual(metrics.viewport + 1);
@@ -633,6 +637,7 @@ test('Perfume and Cycle remain usable at iPhone width', async ({ page }) => {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
   });
   await page.route('**/api/families/*/cycles**', async (route) => {
+    if (route.request().method() !== 'GET') cycleWrites += 1;
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -681,4 +686,5 @@ test('Perfume and Cycle remain usable at iPhone width', async ({ page }) => {
   await closePeriodForm.click();
   await expect(page.getByRole('heading', { name: 'Log a period' })).toBeHidden();
   await expect(page.getByRole('button', { name: 'Log period' })).toBeVisible();
+  expect(cycleWrites).toBe(0);
 });

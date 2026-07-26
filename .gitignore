@@ -66,3 +66,6 @@ prisma/generated/
 .jest-temp
 coverage/
 .playwright-cli/
+journey-report/
+playwright-report/
+test-results/

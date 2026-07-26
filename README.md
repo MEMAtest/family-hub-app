@@ -13,6 +13,7 @@ A comprehensive family management application with calendar, budget tracking, me
 - `npm run test` – Jest unit tests.
 - `npm run test:bugfixes` – Regression suite verifying recent hotfixes (calendar events, budget modals, chart visuals). Requires a configured `DATABASE_URL`.
 - `npm run test:smoke` – AI budget smoke checks covering insights, UK benchmarking, and forecasting. Uses local Prisma data and stubs Anthropic responses; safe for CI or local runs without external API calls.
-- `npm run test:e2e` – Playwright end-to-end tests that open the Budget view, drive the search/receipt filters, and require browsers installed via `npx playwright install --with-deps`.
+- `npm run test:e2e` – the complete Playwright end-to-end suite.
+- `npm run test:e2e:user-journeys` – the serial, on-screen release gate used by the independent reviewer. It retains screenshots, traces and video for failures and writes an HTML report to `journey-report/`.
 
-_CI:_ A GitHub Actions workflow (`.github/workflows/ci.yml`) runs the unit tests, smoke suite, Playwright end-to-end suite, and bugfix regression on every push/PR. Provide `DATABASE_URL` (and optionally `ANTHROPIC_API_KEY`) as repository secrets so Prisma can connect during the run.
+_CI:_ `.github/workflows/ci.yml` runs unit and smoke checks. `.github/workflows/user-journey-review.yml` runs the independent browser journey gate against an isolated PostgreSQL service on pushes and pull requests to `main`, and can also be started manually. See `docs/user-journey-reviewer.md` for the reviewer contract and evidence rules.
