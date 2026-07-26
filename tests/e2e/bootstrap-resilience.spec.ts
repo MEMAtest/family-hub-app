@@ -30,8 +30,40 @@ const assertNoHorizontalOverflow = async (page: Page, view: string) => {
   ).toBeLessThanOrEqual(metrics.viewport + 1);
 };
 
+const mockFallbackHousehold = async (page: Page) => {
+  const member = {
+    id: 'bootstrap-resilience-adult',
+    familyId: 'bootstrap-resilience-family',
+    name: 'Test Adult',
+    role: 'Parent',
+    ageGroup: 'Adult',
+    color: '#147c72',
+    icon: 'TA',
+  };
+
+  await page.route('**/api/families', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([{
+        id: 'bootstrap-resilience-family',
+        familyName: 'Recovery household',
+        members: [member],
+      }]),
+    });
+  });
+  await page.route('**/api/families/*/members', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([member]),
+    });
+  });
+};
+
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(skipSetupWizard);
+  await mockFallbackHousehold(page);
 });
 
 test('app exits loading state when auth probe stalls', async ({ page }) => {

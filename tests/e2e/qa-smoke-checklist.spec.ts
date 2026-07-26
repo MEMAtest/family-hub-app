@@ -19,6 +19,9 @@ const dismissSetupWizard = async (page: Page) => {
 const preparePage = async (page: Page) => {
   await page.waitForLoadState('networkidle');
   await dismissSetupWizard(page);
+  await expect(page.getByRole('button', { name: /^Dashboard$/ }).first()).toBeVisible({
+    timeout: 60_000,
+  });
 };
 
 test.beforeEach(async ({ page }) => {
