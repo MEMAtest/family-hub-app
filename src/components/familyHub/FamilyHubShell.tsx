@@ -361,7 +361,12 @@ export const FamilyHubShell = () => {
           rightContent={rightContent}
           databaseStatus={databaseStatus}
         />
-        <main ref={mainRef} className="kinboard-main min-h-0 flex-1 overflow-y-auto overflow-x-hidden pb-20 sm:pb-24 lg:pb-0">
+        <main
+          ref={mainRef}
+          className={`kinboard-main min-h-0 flex-1 overflow-y-auto overflow-x-hidden lg:pb-0 ${
+            currentView === 'calendar' ? 'pb-40 sm:pb-44' : 'pb-24 sm:pb-28'
+          }`}
+        >
           {currentView !== 'dashboard' && breadcrumbItems.length > 0 && (
             <div className="px-3 pt-3 sm:px-4 sm:pt-4 lg:px-8">
               <Breadcrumb

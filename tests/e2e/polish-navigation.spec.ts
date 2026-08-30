@@ -68,8 +68,10 @@ test('startup reuses the authenticated household bootstrap', async ({ page }) =>
   expect(redundantFamilyRequests).toBe(0);
 });
 
-test('iPhone August month shows same-day events before any tap', async ({ page }) => {
-  const eventDate = '2026-08-06';
+test('iPhone month shows same-day events before any tap', async ({ page }) => {
+  const nextMonth = new Date();
+  nextMonth.setMonth(nextMonth.getMonth() + 1, 6);
+  const eventDate = `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, '0')}-06`;
   const eventTitles = [
     'Breakfast club',
     'Dentist appointment',

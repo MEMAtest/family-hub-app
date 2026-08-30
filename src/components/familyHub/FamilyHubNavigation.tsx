@@ -86,7 +86,7 @@ export const FamilyHubNavigation = ({
   );
 
   const renderBottomNav = () => (
-      <nav aria-label="Primary mobile navigation" className="fixed inset-x-2 bottom-2 z-40 rounded-2xl border border-[#dde5e0] bg-white/90 py-2 shadow-[0_12px_28px_rgba(35,61,55,.15)] backdrop-blur lg:hidden dark:border-slate-800 dark:bg-slate-900/95 pwa-safe-bottom">
+      <nav aria-label="Primary mobile navigation" className="fixed inset-x-2 bottom-2 z-[60] rounded-2xl border border-[#dde5e0] bg-white/90 py-2 shadow-[0_12px_28px_rgba(35,61,55,.15)] backdrop-blur lg:hidden dark:border-slate-800 dark:bg-slate-900/95 pwa-safe-bottom">
         <div className="flex w-full items-center justify-around gap-0.5 px-1.5 sm:gap-1 sm:px-2">
           {primaryMobileItems.map(({ id, label, mobileLabel, icon: Icon }) => {
             const isActive = activeId === id;
