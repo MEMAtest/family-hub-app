@@ -567,7 +567,7 @@ test('calendar assistant imports a timed holiday club range as daily sessions', 
   await waitForHubShell(page);
   await dismissSetupWizard(page);
   await switchToView(page, 'Calendar');
-  await page.getByRole('button', { name: 'Add or import' }).click();
+  await expect(page.getByRole('button', { name: 'Quick add & import' })).toBeVisible();
 
   const commandInput = page.getByPlaceholder('Find summer holidays, or create swimming lesson next Tuesday at 5pm');
   await expect(commandInput).toBeVisible({ timeout: 20_000 });

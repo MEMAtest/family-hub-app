@@ -71,6 +71,7 @@ const mapMembersToPeople = (members: ReturnType<typeof useFamilyStore.getState>[
         typeof memberRecord.role === 'object' && memberRecord.role !== null
           ? memberRecord.role.name ?? 'Family Member'
           : (memberRecord.role as string) || 'Family Member',
+      ageGroup: memberRecord.ageGroup,
     };
   });
 };

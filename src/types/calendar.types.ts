@@ -181,4 +181,5 @@ export interface Person {
   color: string;
   icon: string;
   role: string;
+  ageGroup?: string;
 }

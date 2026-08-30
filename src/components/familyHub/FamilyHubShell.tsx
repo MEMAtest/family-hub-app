@@ -387,6 +387,19 @@ export const FamilyHubShell = () => {
       )}
 
       <FamilyHubModals />
+
+      {currentView === 'calendar' && (
+        <button
+          type="button"
+          onClick={openHeaderEventForm}
+          className="fixed bottom-24 right-4 z-40 inline-flex h-12 items-center gap-2 rounded-full bg-[#147c72] px-4 text-sm font-semibold text-white shadow-lg shadow-[#147c72]/20 transition hover:bg-[#0f625a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#147c72]/30 lg:hidden"
+          aria-label="Quick add calendar event"
+        >
+          <Plus className="h-5 w-5" />
+          Quick add
+        </button>
+      )}
+
       {process.env.NEXT_PUBLIC_SHOW_DEBUG_PANEL === 'true' && <DebugPanel />}
       <PWAInstallPrompt />
 

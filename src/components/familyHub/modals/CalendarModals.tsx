@@ -43,6 +43,7 @@ export const CalendarModals = () => {
     icon: member.icon,
     color: member.color,
     role: member.role,
+    ageGroup: member.ageGroup,
   })), [members]);
 
   return (

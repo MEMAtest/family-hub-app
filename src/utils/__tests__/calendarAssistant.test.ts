@@ -3,6 +3,7 @@ import type { CalendarEvent, Person } from '@/types/calendar.types';
 
 const people: Person[] = [
   { id: 'child-1', name: 'Angela', color: '#147c72', icon: '👧', role: 'Child' },
+  { id: 'child-2', name: 'Askia', color: '#3855c8', icon: '🧒', role: 'Child' },
 ];
 
 const event: CalendarEvent = {
@@ -73,5 +74,60 @@ describe('calendar assistant parser', () => {
     ]);
     expect(response.drafts?.every((draft) => draft.time === '09:00' && draft.duration === 360)).toBe(true);
     expect(response.warnings).not.toContain('I could not confidently find a date, so I used today.');
+  });
+
+  it('creates weekly after-school club drafts with the named child and useful defaults', () => {
+    const response = runCalendarAssistant({
+      command: 'add after-school club every Monday at 3:30pm for Askia',
+      events: [],
+      people,
+      today: new Date('2026-07-06T09:00:00Z'),
+    });
+
+    expect(response.action).toBe('create');
+    expect(response.draft).toMatchObject({
+      title: 'After School Club',
+      person: 'child-2',
+      date: '2026-07-13',
+      time: '15:30',
+      duration: 90,
+      recurring: 'weekly',
+      isRecurring: true,
+      type: 'education',
+      priority: 'high',
+    });
+  });
+
+  it('warns when a multi-child event uses the default assignee', () => {
+    const response = runCalendarAssistant({
+      command: 'create swimming lesson next Tuesday at 5pm',
+      events: [],
+      people,
+      today: new Date('2026-07-06T09:00:00Z'),
+    });
+
+    expect(response.draft?.person).toBe('child-1');
+    expect(response.warnings).toContain('No child was named, so I assigned this to Angela.');
+  });
+
+  it('creates gym drafts as quick fitness events', () => {
+    const response = runCalendarAssistant({
+      command: 'add gyming tomorrow at 6:30am for Angela',
+      events: [],
+      people,
+      today: new Date('2026-07-06T09:00:00Z'),
+    });
+
+    expect(response.action).toBe('create');
+    expect(response.draft).toMatchObject({
+      title: 'Gyming',
+      person: 'child-1',
+      date: '2026-07-07',
+      time: '06:30',
+      duration: 60,
+      recurring: 'none',
+      isRecurring: false,
+      type: 'fitness',
+    });
   });
 });

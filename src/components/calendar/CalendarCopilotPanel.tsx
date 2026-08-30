@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { CalendarPlus, CheckCircle2, FileUp, Loader2, Search, Sparkles, XCircle } from 'lucide-react';
+import { CalendarPlus, CheckCircle2, Clock, FileUp, Loader2, MapPin, Search, Sparkles, XCircle } from 'lucide-react';
 import type { CalendarEvent, Person } from '@/types/calendar.types';
 import { useFamilyStore } from '@/store/familyStore';
 import {
@@ -27,6 +27,26 @@ const statusLabel: Record<CalendarImportDraft['importStatus'], string> = {
   conflict: 'Conflict',
   needs_review: 'Review',
 };
+
+const quickSchedulePromptTemplates = [
+  'Add after-school club every Monday at 3:30pm',
+  'Add football club every Tuesday at 4pm',
+  'Add swimming lesson every Thursday at 5:30pm',
+  'Add tutoring every Wednesday at 5pm',
+  'Add gyming tomorrow at 6:30am',
+];
+
+const toDateKey = (date: Date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
+const timeToMinutes = (time: string) => {
+  const [hours = '0', minutes = '0'] = time.split(':');
+  return Number(hours) * 60 + Number(minutes);
+};
+
+const isChildProfile = (person: Person) =>
+  /child|kid|son|daughter|student/i.test(person.role) ||
+  /toddler|preschool|child|teen/i.test(person.ageGroup || '');
 
 const extractForwardedEmailFields = (text: string) => {
   const subject = text.match(/^\s*Subject:\s*(.+)$/im)?.[1]?.trim();
@@ -74,6 +94,43 @@ const CalendarCopilotPanel = ({
     [importDrafts, selectedDraftIds]
   );
   const assistantDrafts = assistantResult?.drafts ?? (assistantResult?.draft ? [assistantResult.draft] : []);
+  const personNameById = useMemo(
+    () => new Map(people.map((person) => [person.id, person.name])),
+    [people]
+  );
+  const primaryPersonName = (people.find(isChildProfile) ?? people[0])?.name?.split(' ')[0];
+  const quickSchedulePrompts = useMemo(
+    () => quickSchedulePromptTemplates.map((prompt) => (
+      primaryPersonName ? `${prompt} for ${primaryPersonName}` : prompt
+    )),
+    [primaryPersonName]
+  );
+  const peopleForWhereabouts = useMemo(() => {
+    const children = people.filter(isChildProfile);
+    return children.length > 0 ? children : people;
+  }, [people]);
+  const todaysEventsByPerson = useMemo(() => {
+    const dateKey = toDateKey(currentDate);
+    const grouped = new Map<string, CalendarEvent[]>();
+    events
+      .filter((event) => {
+        if (event.status === 'cancelled') return false;
+        const endDate = event.endDate || event.date;
+        return event.date <= dateKey && endDate >= dateKey;
+      })
+      .sort((a, b) => timeToMinutes(a.time) - timeToMinutes(b.time))
+      .forEach((event) => {
+        const existing = grouped.get(event.person) ?? [];
+        grouped.set(event.person, [...existing, event]);
+      });
+    return grouped;
+  }, [currentDate, events]);
+
+  const runQuickPrompt = (prompt: string) => {
+    setCommand(prompt);
+    setAssistantResult(null);
+    setAssistantError(null);
+  };
 
   const runAssistant = async () => {
     if (!command.trim()) return;
@@ -333,6 +390,65 @@ const CalendarCopilotPanel = ({
           <Sparkles className="h-4 w-4 text-[#147c72]" />
           <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-100">Ask Family Hub</h3>
         </div>
+        {peopleForWhereabouts.length > 0 && (
+          <div className="mb-3">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">
+              Where everyone is today
+            </p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {peopleForWhereabouts.map((person) => {
+                const personEvents = todaysEventsByPerson.get(person.id) ?? [];
+                const nextEvent = personEvents[0];
+                return (
+                  <div
+                    key={person.id}
+                    className="rounded-md border border-[#dde5e0] bg-[#fbfdfb] px-3 py-2 dark:border-slate-700 dark:bg-slate-950"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="truncate text-xs font-semibold text-gray-900 dark:text-slate-100">
+                        {person.icon ? `${person.icon} ` : ''}{person.name}
+                      </p>
+                      <span className="shrink-0 text-[11px] font-medium text-[#147c72] dark:text-[#56c6b8]">
+                        {personEvents.length === 0 ? 'Free' : `${personEvents.length} today`}
+                      </span>
+                    </div>
+                    {nextEvent ? (
+                      <div className="mt-1 space-y-0.5 text-[11px] text-gray-600 dark:text-slate-300">
+                        <p className="truncate font-medium text-gray-800 dark:text-slate-200">{nextEvent.title}</p>
+                        <p className="flex items-center gap-1 truncate">
+                          <Clock className="h-3 w-3 shrink-0" />
+                          {nextEvent.time}
+                          {nextEvent.location ? (
+                            <>
+                              <MapPin className="ml-1 h-3 w-3 shrink-0" />
+                              <span className="truncate">{nextEvent.location}</span>
+                            </>
+                          ) : (
+                            <span className="text-gray-400 dark:text-slate-500">No location</span>
+                          )}
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="mt-1 text-[11px] text-gray-500 dark:text-slate-400">No calendar location today</p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+        <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
+          {quickSchedulePrompts.map((prompt) => (
+            <button
+              key={prompt}
+              type="button"
+              onClick={() => runQuickPrompt(prompt)}
+              className="shrink-0 rounded-full border border-[#dde5e0] bg-[#f7fbf8] px-3 py-1.5 text-xs font-medium text-[#38534d] hover:border-[#147c72] hover:bg-[#eef7f3] dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300 dark:hover:border-[#56c6b8]"
+            >
+              {prompt.replace(/^Add /, '')}
+            </button>
+          ))}
+        </div>
         <div className="flex gap-2">
           <input
             value={command}
@@ -371,7 +487,14 @@ const CalendarCopilotPanel = ({
                 <div className="max-h-32 space-y-1 overflow-y-auto">
                   {assistantDrafts.map((draft, index) => (
                     <div key={`${draft.date}-${draft.time}-${index}`} className="flex items-baseline justify-between gap-3 py-1 text-xs">
-                      <p className="min-w-0 truncate font-semibold text-gray-900 dark:text-slate-100">{draft.title}</p>
+                      <p className="min-w-0 truncate font-semibold text-gray-900 dark:text-slate-100">
+                        {draft.title}
+                        {personNameById.get(draft.person) ? (
+                          <span className="ml-1 font-normal text-gray-500 dark:text-slate-400">
+                            for {personNameById.get(draft.person)}
+                          </span>
+                        ) : null}
+                      </p>
                       <p className="shrink-0 text-gray-500 dark:text-slate-400">{draft.date} at {draft.time}</p>
                     </div>
                   ))}

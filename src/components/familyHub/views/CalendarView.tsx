@@ -22,7 +22,7 @@ export const CalendarView = () => {
   } = useCalendarContext();
   const { members } = useFamilyContext();
   const { currentDate, setCurrentDate } = useAppView();
-  const [showAddOrImport, setShowAddOrImport] = useState(false);
+  const [showAddOrImport, setShowAddOrImport] = useState(true);
 
   const people = useMemo(() => members.map((member) => ({
     id: member.id,
@@ -30,6 +30,7 @@ export const CalendarView = () => {
     icon: member.icon,
     color: member.color,
     role: member.role,
+    ageGroup: member.ageGroup,
   })), [members]);
 
   const handleEventsSync = useCallback(async (importedEvents: CalendarEvent[]) => {
@@ -89,7 +90,7 @@ export const CalendarView = () => {
         >
           <span className="inline-flex items-center gap-2">
             <Import className="h-4 w-4" />
-            Add or import
+            Quick add & import
           </span>
           {showAddOrImport ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
         </button>

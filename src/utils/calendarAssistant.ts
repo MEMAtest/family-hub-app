@@ -39,6 +39,7 @@ const normaliseText = (value: string) =>
 
 const titleCase = (value: string) =>
   value
+    .replace(/[_-]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
     .replace(/\b\w/g, (match) => match.toUpperCase());
@@ -63,6 +64,16 @@ const parseNaturalDate = (command: string, today: Date): string | undefined => {
     return toDateKey(addDays(today, daysUntil));
   }
 
+  const recurringWeekday = Object.entries(weekdayLookup).find(([name]) =>
+    text.includes(`every ${name}`) || text.includes(`weekly ${name}`) || text.includes(`on ${name}s`)
+  );
+  if (recurringWeekday) {
+    const current = today.getDay();
+    const target = recurringWeekday[1];
+    const daysUntil = ((target - current + 7) % 7) || 7;
+    return toDateKey(addDays(today, daysUntil));
+  }
+
   return undefined;
 };
 
@@ -83,21 +94,57 @@ const parseTime = (command: string) => {
 
 const inferType = (text: string): CalendarEvent['type'] => {
   const lower = text.toLowerCase();
-  if (/swim|football|gym|sport|training/.test(lower)) return 'sport';
-  if (/school|term|holiday|inset|parents|exam|lesson|club/.test(lower)) return 'education';
+  if (/gym|gyming|workout|exercise|fitness|run\b|running/.test(lower)) return 'fitness';
+  if (/swim|football|sport|training|rugby|tennis|cricket|netball/.test(lower)) return 'sport';
+  if (/school|term|holiday|inset|parents|exam|lesson|club|tutor|tuition|music|piano|drama|choir/.test(lower)) return 'education';
   if (/doctor|dentist|appointment/.test(lower)) return 'appointment';
   if (/meal|dinner|lunch/.test(lower)) return 'family';
   if (/meeting|review/.test(lower)) return 'meeting';
   return 'family';
 };
 
+const inferDuration = (text: string) => {
+  const lower = text.toLowerCase();
+  if (/pickup|pick up|collection|collect/.test(lower)) return 15;
+  if (/after[-\s]*school|wraparound/.test(lower)) return 90;
+  if (/football|rugby|netball|cricket|training/.test(lower)) return 90;
+  if (/gym|gyming|workout|exercise|fitness|run\b|running/.test(lower)) return 60;
+  if (/swim|lesson|tutor|tuition|music|piano|drama|choir/.test(lower)) return 60;
+  return 60;
+};
+
+const inferRecurring = (text: string): CalendarEvent['recurring'] => {
+  const lower = text.toLowerCase();
+  if (/\b(every|weekly|each)\b/.test(lower)) return 'weekly';
+  return 'none';
+};
+
+const findMentionedPerson = (command: string, people: Person[]) => {
+  const text = normaliseText(command);
+  const exact = people.find((person) => {
+    const name = normaliseText(person.name);
+    return name && new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(text);
+  });
+
+  if (exact) return exact;
+
+  const firstName = people.find((person) => {
+    const first = normaliseText(person.name).split(' ')[0];
+    return first && first.length > 2 && new RegExp(`\\b${first.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(text);
+  });
+
+  return firstName;
+};
+
 const extractTitle = (command: string) => {
   let text = command
     .replace(/\b(add|create|book|schedule|put|make)\b/gi, '')
     .replace(/\b(today|tomorrow|next\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday))\b/gi, '')
+    .replace(/\b(every|weekly|each|on)\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)s?\b/gi, '')
     .replace(/\b(on|at|for)\b\s*\d{1,2}([:.]\d{2})?\s*(am|pm)?\b/gi, '')
     .replace(/\b\d{1,2}\/\d{1,2}\/20\d{2}\b/g, '')
     .replace(/\b20\d{2}-\d{1,2}-\d{1,2}\b/g, '')
+    .replace(/\bfor\s+[a-z][a-z -]{1,40}$/gi, '')
     .replace(/\s+/g, ' ')
     .trim();
 
@@ -202,18 +249,27 @@ export const runCalendarAssistant = ({
     const warnings: string[] = [];
     if (!date) warnings.push('I could not confidently find a date, so I used today.');
 
+    const eventType = inferType(trimmed);
+    const recurring = inferRecurring(trimmed);
+    const mentionedPerson = findMentionedPerson(trimmed, people);
+    const defaultPerson = people[0];
+    if (!mentionedPerson && people.length > 1 && defaultPerson) {
+      warnings.push(`No child was named, so I assigned this to ${defaultPerson.name}.`);
+    }
     const draft: Omit<CalendarEvent, 'id' | 'createdAt' | 'updatedAt'> = {
       title: extractTitle(trimmed),
-      person: people[0]?.id ?? '',
+      person: mentionedPerson?.id ?? defaultPerson?.id ?? '',
       date: date ?? toDateKey(today),
       time: parseTime(trimmed),
-      duration: 60,
-      recurring: 'none',
+      duration: inferDuration(trimmed),
+      recurring,
       cost: 0,
-      type: inferType(trimmed),
-      notes: `Created from assistant request: ${trimmed}`,
-      isRecurring: false,
-      priority: inferType(trimmed) === 'education' ? 'high' : 'medium',
+      type: eventType,
+      notes: recurring === 'weekly'
+        ? `Weekly family schedule item created from assistant request: ${trimmed}`
+        : `Created from assistant request: ${trimmed}`,
+      isRecurring: recurring !== 'none',
+      priority: eventType === 'education' ? 'high' : 'medium',
       status: warnings.length > 0 ? 'tentative' : 'confirmed',
       reminders: [
         { id: 'assistant-reminder-1-day', type: 'notification', time: 1440, enabled: true },
@@ -224,7 +280,7 @@ export const runCalendarAssistant = ({
 
     return {
       action: 'create',
-      summary: `Review this event before I add it: ${draft.title} on ${draft.date} at ${draft.time}.`,
+      summary: `Review this ${draft.isRecurring ? 'weekly ' : ''}event before I add it: ${draft.title} on ${draft.date} at ${draft.time}.`,
       draft,
       warnings,
     };

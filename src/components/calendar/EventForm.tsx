@@ -64,6 +64,118 @@ const calculateMultiDayDuration = (date?: string, time?: string, endDate?: strin
   return Number.isFinite(minutes) ? Math.max(5, minutes) : fallbackDuration;
 };
 
+type QuickEventPreset = {
+  id: string
+  label: string
+  hint: string
+  title: string
+  time: string
+  duration: number
+  type: CalendarEvent['type']
+  recurring: CalendarEvent['recurring']
+  priority: CalendarEvent['priority']
+  location?: string
+  notes: string
+  reminders: Reminder[]
+}
+
+const quickEventPresets: QuickEventPreset[] = [
+  {
+    id: 'after-school',
+    label: 'After-school club',
+    hint: 'Weekly, 15:30',
+    title: 'After-school club',
+    time: '15:30',
+    duration: 90,
+    type: 'education',
+    recurring: 'weekly',
+    priority: 'high',
+    notes: 'Weekly after-school club. Confirm collection arrangements.',
+    reminders: [
+      { id: 'club-reminder-1-day', type: 'notification', time: 1440, enabled: true },
+      { id: 'club-reminder-pickup', type: 'notification', time: 30, enabled: true },
+    ],
+  },
+  {
+    id: 'sports-club',
+    label: 'Sports club',
+    hint: 'Weekly, 16:00',
+    title: 'Sports club',
+    time: '16:00',
+    duration: 90,
+    type: 'sport',
+    recurring: 'weekly',
+    priority: 'medium',
+    notes: 'Weekly sports club. Add kit, pickup, and location details if needed.',
+    reminders: [
+      { id: 'sport-reminder-1-day', type: 'notification', time: 1440, enabled: true },
+      { id: 'sport-reminder-1-hour', type: 'notification', time: 60, enabled: true },
+    ],
+  },
+  {
+    id: 'tutoring',
+    label: 'Tutoring',
+    hint: 'Weekly, 17:00',
+    title: 'Tutoring',
+    time: '17:00',
+    duration: 60,
+    type: 'education',
+    recurring: 'weekly',
+    priority: 'high',
+    notes: 'Weekly tutoring session.',
+    reminders: [
+      { id: 'tutoring-reminder-1-day', type: 'notification', time: 1440, enabled: true },
+      { id: 'tutoring-reminder-1-hour', type: 'notification', time: 60, enabled: true },
+    ],
+  },
+  {
+    id: 'swimming',
+    label: 'Swimming',
+    hint: 'Weekly, 17:30',
+    title: 'Swimming lesson',
+    time: '17:30',
+    duration: 45,
+    type: 'sport',
+    recurring: 'weekly',
+    priority: 'medium',
+    notes: 'Weekly swimming lesson. Bring kit and towel.',
+    reminders: [
+      { id: 'swim-reminder-1-day', type: 'notification', time: 1440, enabled: true },
+      { id: 'swim-reminder-1-hour', type: 'notification', time: 60, enabled: true },
+    ],
+  },
+  {
+    id: 'pickup',
+    label: 'Pickup',
+    hint: 'Today, 15:15',
+    title: 'School pickup',
+    time: '15:15',
+    duration: 15,
+    type: 'family',
+    recurring: 'none',
+    priority: 'high',
+    notes: 'Pickup reminder.',
+    reminders: [
+      { id: 'pickup-reminder-30', type: 'notification', time: 30, enabled: true },
+    ],
+  },
+  {
+    id: 'gym',
+    label: 'Gym',
+    hint: 'Today, 06:30',
+    title: 'Gym session',
+    time: '06:30',
+    duration: 60,
+    type: 'fitness',
+    recurring: 'none',
+    priority: 'medium',
+    notes: 'Gym session.',
+    reminders: [
+      { id: 'gym-reminder-30', type: 'notification', time: 30, enabled: true },
+    ],
+  },
+]
+
 interface EventFormProps {
   event?: CalendarEvent
   isOpen: boolean
@@ -175,6 +287,24 @@ const EventForm: React.FC<EventFormProps> = ({
         reminders: template.defaultReminders
       }))
     }
+  }
+
+  const applyQuickPreset = (preset: QuickEventPreset) => {
+    setFormData(prev => ({
+      ...prev,
+      title: preset.title,
+      time: preset.time,
+      duration: preset.duration,
+      location: preset.location ?? prev.location ?? '',
+      type: preset.type,
+      notes: preset.notes,
+      recurring: preset.recurring,
+      isRecurring: preset.recurring !== 'none',
+      priority: preset.priority,
+      reminders: preset.reminders,
+    }))
+    setShowRecurring(preset.recurring !== 'none')
+    setShowAdvanced(true)
   }
 
   const enhanceTitle = async () => {
@@ -334,6 +464,31 @@ const EventForm: React.FC<EventFormProps> = ({
         </div>
 
         <div className="p-6">
+          {!event && (
+            <div className="mb-6 rounded-lg border border-[#dde5e0] bg-[#f7fbf8] p-3 dark:border-slate-800 dark:bg-slate-950">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-100">Quick schedule</h3>
+                  <p className="text-xs text-gray-500 dark:text-slate-400">Clubs, lessons, pickups.</p>
+                </div>
+                <Clock className="h-4 w-4 shrink-0 text-[#147c72] dark:text-[#56c6b8]" />
+              </div>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {quickEventPresets.map((preset) => (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    onClick={() => applyQuickPreset(preset)}
+                    className="rounded-md border border-[#dde5e0] bg-white px-3 py-2 text-left transition hover:border-[#147c72] hover:bg-[#eef7f3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#147c72]/25 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-[#56c6b8] dark:hover:bg-slate-800"
+                  >
+                    <span className="block text-sm font-semibold text-gray-900 dark:text-slate-100">{preset.label}</span>
+                    <span className="block text-xs text-gray-500 dark:text-slate-400">{preset.hint}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Template Selection */}
           {!event && templates.length > 0 && (
             <div className="mb-6">
