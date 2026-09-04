@@ -19,6 +19,9 @@ const instrumentSerif = Instrument_Serif({
   preload: false
 })
 
+const enableOwnedAnalytics =
+  process.env.NODE_ENV === 'production' && process.env.NEXT_PUBLIC_E2E !== 'true'
+
 export const metadata: Metadata = {
   title: 'Omosanya Home',
   description: 'A family command centre for plans, money, meals, shopping, goals, and household moments.',
@@ -143,11 +146,13 @@ export default function RootLayout({
           {children}
         </AppProviders>
         <Analytics />
-        <Script
-          src="https://owned-portfolio-analytics.mema-consultants.workers.dev/tracker.js"
-          data-project="family-hub-app"
-          strategy="afterInteractive"
-        />
+        {enableOwnedAnalytics && (
+          <Script
+            src="https://owned-portfolio-analytics.mema-consultants.workers.dev/tracker.js"
+            data-project="family-hub-app"
+            strategy="afterInteractive"
+          />
+        )}
       </body>
     </html>
   )

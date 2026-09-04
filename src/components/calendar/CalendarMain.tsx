@@ -714,7 +714,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
 
   // Mobile Calendar Header Component
   const renderMobileHeader = () => (
-    <div className="lg:hidden bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 px-4 py-3 sticky top-0 z-40 pwa-safe-top">
+    <div className="relative z-10 border-b border-gray-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900 lg:hidden">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-3">
           <CalendarDays className="w-6 h-6 text-blue-600" />
@@ -893,7 +893,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                     type="text"
                     value={aiConflictForm.title}
                     onChange={(event) => setAiConflictForm((prev) => ({ ...prev, title: event.target.value }))}
-                    className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-purple-500 focus:ring-purple-500"
+                    className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-purple-500 focus:ring-purple-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500"
                     placeholder="e.g., Piano lesson"
                   />
                 </div>
@@ -904,7 +904,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                       type="date"
                       value={aiConflictForm.date}
                       onChange={(event) => setAiConflictForm((prev) => ({ ...prev, date: event.target.value }))}
-                      className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-purple-500 focus:ring-purple-500"
+                      className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-purple-500 focus:ring-purple-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                     />
                   </div>
                   <div>
@@ -913,7 +913,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                       type="time"
                       value={aiConflictForm.time}
                       onChange={(event) => setAiConflictForm((prev) => ({ ...prev, time: event.target.value }))}
-                      className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-purple-500 focus:ring-purple-500"
+                      className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-purple-500 focus:ring-purple-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                     />
                   </div>
                   <div>
@@ -924,7 +924,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                       step={15}
                       value={aiConflictForm.durationMinutes}
                       onChange={(event) => setAiConflictForm((prev) => ({ ...prev, durationMinutes: Number(event.target.value) }))}
-                      className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-purple-500 focus:ring-purple-500"
+                      className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-purple-500 focus:ring-purple-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                     />
                   </div>
                   <div>
@@ -932,7 +932,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                     <select
                       value={aiConflictForm.personId}
                       onChange={(event) => setAiConflictForm((prev) => ({ ...prev, personId: event.target.value }))}
-                      className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-purple-500 focus:ring-purple-500"
+                      className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-purple-500 focus:ring-purple-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                     >
                       {people.map((person) => (
                         <option key={person.id} value={person.id}>{person.name}</option>
@@ -946,7 +946,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                     type="text"
                     value={aiConflictForm.location}
                     onChange={(event) => setAiConflictForm((prev) => ({ ...prev, location: event.target.value }))}
-                    className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-purple-500 focus:ring-purple-500"
+                    className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-purple-500 focus:ring-purple-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500"
                     placeholder="Home, school, etc."
                   />
                 </div>
@@ -1053,7 +1053,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                     type="text"
                     value={aiScheduleForm.title}
                     onChange={(event) => setAiScheduleForm((prev) => ({ ...prev, title: event.target.value }))}
-                    className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500"
+                    className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                     placeholder="e.g., Family budget review"
                   />
                 </div>
@@ -1066,7 +1066,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                       step={15}
                       value={aiScheduleForm.durationMinutes}
                       onChange={(event) => setAiScheduleForm((prev) => ({ ...prev, durationMinutes: Number(event.target.value) }))}
-                      className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500"
+                      className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                     />
                   </div>
                   <div>
@@ -1076,12 +1076,12 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                         type="date"
                         value={aiScheduleForm.dateInput}
                         onChange={(event) => setAiScheduleForm((prev) => ({ ...prev, dateInput: event.target.value }))}
-                        className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500"
+                        className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                       />
                       <button
                         type="button"
                         onClick={addPreferredDate}
-                        className="inline-flex items-center justify-center rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:bg-slate-800"
+                        className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
                       >
                         Add
                       </button>
@@ -1666,8 +1666,8 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
       )}
 
       {/* Calendar Component */}
-      <div className={`flex-1 ${isMobile ? 'p-2 pb-28 pwa-safe-bottom' : 'p-6'}`}>
-        <div className={`relative min-h-[640px] ${isMobile ? 'mobile-calendar-container' : ''}`}>
+      <div className={`flex-1 ${isMobile ? 'p-2 pb-[calc(env(safe-area-inset-bottom)+8rem)]' : 'p-6'}`}>
+        <div className={`relative ${isMobile ? 'mobile-calendar-container min-h-[calc(100dvh-10rem)]' : 'min-h-[640px]'}`}>
           {view === 'YEAR' ? (
             <YearView
               events={events}
@@ -1707,7 +1707,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
             doShowMoreDrillDown={!isMobile}
             onShowMore={handleShowMore}
             showAllEvents={isMobile && view === Views.MONTH}
-            style={isMobile && view === Views.MONTH ? { height: 560 } : undefined}
+            style={isMobile && view === Views.MONTH ? { height: 'max(620px, calc(100dvh - 12rem))' } : undefined}
             toolbar={false}
             className={`family-hub-calendar ${isMobile ? 'mobile-calendar' : ''}`}
             formats={{

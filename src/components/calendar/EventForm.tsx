@@ -210,6 +210,10 @@ const EventForm: React.FC<EventFormProps> = ({
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [enhancingTitle, setEnhancingTitle] = useState(false)
 
+  const fieldClass = (hasError = false) => `w-full rounded-md border bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#147c72]/30 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500 ${
+    hasError ? 'border-red-300 focus:border-red-500 dark:border-red-700' : 'border-gray-300 focus:border-[#147c72] dark:border-slate-700'
+  }`
+
   // Initialize form data
   useEffect(() => {
     if (!isOpen) {
@@ -273,6 +277,22 @@ const EventForm: React.FC<EventFormProps> = ({
     setFormData(prev => (prev.person ? prev : { ...prev, person: defaultPersonId }))
   }, [defaultPersonId, event, isOpen])
 
+  useEffect(() => {
+    if (!isOpen) return
+
+    const handleKeyDown = (keyboardEvent: KeyboardEvent) => {
+      if (keyboardEvent.key === 'Escape') onClose()
+    }
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    window.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      document.body.style.overflow = previousOverflow
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isOpen, onClose])
+
   // Apply template
   const applyTemplate = (templateId: string) => {
     const template = templates.find(t => t.id === templateId)
@@ -304,7 +324,7 @@ const EventForm: React.FC<EventFormProps> = ({
       reminders: preset.reminders,
     }))
     setShowRecurring(preset.recurring !== 'none')
-    setShowAdvanced(true)
+    setShowAdvanced(false)
   }
 
   const enhanceTitle = async () => {
@@ -445,25 +465,37 @@ const EventForm: React.FC<EventFormProps> = ({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto text-gray-900 dark:bg-slate-900 dark:text-slate-100">
+    <div
+      className="fixed inset-0 z-[80] flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4"
+      onMouseDown={(mouseEvent) => {
+        if (mouseEvent.target === mouseEvent.currentTarget) onClose()
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="event-form-title"
+        className="flex max-h-[calc(100dvh-0.75rem)] w-full max-w-2xl flex-col overflow-hidden rounded-t-xl bg-white text-gray-900 shadow-xl dark:bg-slate-900 dark:text-slate-100 sm:max-h-[90vh] sm:rounded-xl"
+      >
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-slate-800">
+        <div className="flex shrink-0 items-center justify-between border-b border-gray-200 p-4 dark:border-slate-800 sm:p-6">
           <div className="flex items-center space-x-3">
             <Calendar className="w-6 h-6 text-[#147c72] dark:text-[#56c6b8]" />
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-100">
+            <h2 id="event-form-title" className="text-xl font-semibold text-gray-900 dark:text-slate-100">
               {event ? 'Edit Event' : 'New Event'}
             </h2>
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-800 rounded-md transition-colors dark:text-slate-500 dark:hover:bg-slate-800 dark:hover:text-slate-100"
+            aria-label="Close event form"
+            className="inline-flex h-11 w-11 shrink-0 touch-manipulation items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#147c72]/30 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="p-6">
+        <div className="overflow-y-auto p-4 pb-0 sm:p-6 sm:pb-0">
           {!event && (
             <div className="mb-6 rounded-lg border border-[#dde5e0] bg-[#f7fbf8] p-3 dark:border-slate-800 dark:bg-slate-950">
               <div className="mb-3 flex items-center justify-between gap-3">
@@ -501,7 +533,7 @@ const EventForm: React.FC<EventFormProps> = ({
                   setSelectedTemplate(e.target.value)
                   if (e.target.value) applyTemplate(e.target.value)
                 }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className={fieldClass()}
               >
                 <option value="">Custom event...</option>
                 {templates.map(template => (
@@ -529,9 +561,7 @@ const EventForm: React.FC<EventFormProps> = ({
                     placeholder="Enter event title"
                     spellCheck
                     lang="en-GB"
-                    className={`w-full px-3 py-2 pr-12 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                      errors.title ? 'border-red-300' : 'border-gray-300'
-                    }`}
+                    className={`${fieldClass(Boolean(errors.title))} pr-12`}
                   />
                   <button
                     type="button"
@@ -564,9 +594,7 @@ const EventForm: React.FC<EventFormProps> = ({
                   <select
                     value={formData.person || ''}
                     onChange={(e) => setFormData(prev => ({ ...prev, person: e.target.value }))}
-                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                      errors.person ? 'border-red-300' : 'border-gray-300'
-                    }`}
+                    className={fieldClass(Boolean(errors.person))}
                   >
                     <option value="">Select person</option>
                     {people.map(person => (
@@ -595,9 +623,7 @@ const EventForm: React.FC<EventFormProps> = ({
                       date: e.target.value,
                       endDate: prev.endDate && prev.endDate < e.target.value ? e.target.value : prev.endDate
                     }))}
-                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                      errors.date ? 'border-red-300' : 'border-gray-300'
-                    }`}
+                    className={fieldClass(Boolean(errors.date))}
                   />
                   {errors.date && (
                     <p className="mt-1 text-sm text-red-600">{errors.date}</p>
@@ -612,9 +638,7 @@ const EventForm: React.FC<EventFormProps> = ({
                     type="time"
                     value={formData.time || ''}
                     onChange={(e) => setFormData(prev => ({ ...prev, time: e.target.value }))}
-                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                      errors.time ? 'border-red-300' : 'border-gray-300'
-                    }`}
+                    className={fieldClass(Boolean(errors.time))}
                   />
                   {errors.time && (
                     <p className="mt-1 text-sm text-red-600">{errors.time}</p>
@@ -649,9 +673,7 @@ const EventForm: React.FC<EventFormProps> = ({
                     value={formData.endDate || formData.date || ''}
                     min={formData.date || undefined}
                     onChange={(e) => setFormData(prev => ({ ...prev, endDate: e.target.value }))}
-                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                      errors.endDate ? 'border-red-300' : 'border-gray-300'
-                    }`}
+                    className={fieldClass(Boolean(errors.endDate))}
                   />
                   {errors.endDate && (
                     <p className="mt-1 text-sm text-red-600">{errors.endDate}</p>
@@ -672,7 +694,7 @@ const EventForm: React.FC<EventFormProps> = ({
                       step="5"
                       value={formData.duration || 60}
                       onChange={(e) => setFormData(prev => ({ ...prev, duration: parseInt(e.target.value) }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className={fieldClass(Boolean(errors.duration))}
                     />
                   </div>
                 ) : (
@@ -688,7 +710,7 @@ const EventForm: React.FC<EventFormProps> = ({
                   <select
                     value={formData.type || 'other'}
                     onChange={(e) => setFormData(prev => ({ ...prev, type: e.target.value as CalendarEvent['type'] }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className={fieldClass()}
                   >
                     <option value="work">Work</option>
                     <option value="personal">Personal</option>
@@ -715,7 +737,7 @@ const EventForm: React.FC<EventFormProps> = ({
                   onChange={(value) => setFormData(prev => ({ ...prev, location: value }))}
                   multiline={false}
                   context="Calendar event location"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className={fieldClass()}
                   placeholder="Enter location"
                 />
               </div>
@@ -742,7 +764,7 @@ const EventForm: React.FC<EventFormProps> = ({
                     <select
                       value={formData.priority || 'medium'}
                       onChange={(e) => setFormData(prev => ({ ...prev, priority: e.target.value as 'low' | 'medium' | 'high' }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className={fieldClass()}
                     >
                       <option value="low">Low</option>
                       <option value="medium">Medium</option>
@@ -757,7 +779,7 @@ const EventForm: React.FC<EventFormProps> = ({
                     <select
                       value={formData.status || 'confirmed'}
                       onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value as 'confirmed' | 'tentative' | 'cancelled' }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className={fieldClass()}
                     >
                       <option value="confirmed">Confirmed</option>
                       <option value="tentative">Tentative</option>
@@ -778,7 +800,7 @@ const EventForm: React.FC<EventFormProps> = ({
                     step="0.01"
                     value={formData.cost || 0}
                     onChange={(e) => setFormData(prev => ({ ...prev, cost: parseFloat(e.target.value) || 0 }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className={fieldClass()}
                   />
                 </div>
 
@@ -829,7 +851,7 @@ const EventForm: React.FC<EventFormProps> = ({
                         <select
                           value={reminder.time}
                           onChange={(e) => updateReminder(index, { time: parseInt(e.target.value) })}
-                          className="px-2 py-1 border border-gray-300 rounded text-sm"
+                          className="rounded border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                         >
                           <option value={5}>5 minutes before</option>
                           <option value={15}>15 minutes before</option>
@@ -840,7 +862,7 @@ const EventForm: React.FC<EventFormProps> = ({
                         <select
                           value={reminder.type}
                           onChange={(e) => updateReminder(index, { type: e.target.value as 'notification' | 'email' | 'sms' })}
-                          className="px-2 py-1 border border-gray-300 rounded text-sm"
+                          className="rounded border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                         >
                           <option value="notification">Notification</option>
                           <option value="email">Email</option>
@@ -883,8 +905,8 @@ const EventForm: React.FC<EventFormProps> = ({
                       <select
                         value={formData.recurring || 'weekly'}
                         onChange={(e) => setFormData(prev => ({ ...prev, recurring: e.target.value as 'weekly' | 'monthly' | 'yearly' }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      >
+                    className={fieldClass()}
+                  >
                         <option value="weekly">Weekly</option>
                         <option value="monthly">Monthly</option>
                         <option value="yearly">Yearly</option>
@@ -904,7 +926,7 @@ const EventForm: React.FC<EventFormProps> = ({
                     onChange={(value) => setFormData(prev => ({ ...prev, notes: value }))}
                     rows={3}
                     context="Calendar event notes"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className={fieldClass()}
                     placeholder="Add any additional notes..."
                   />
                 </div>
@@ -913,7 +935,7 @@ const EventForm: React.FC<EventFormProps> = ({
           </div>
 
           {/* Action Buttons */}
-          <div className="flex items-center justify-between pt-6 border-t border-gray-200 mt-6 dark:border-slate-800">
+          <div className="sticky bottom-0 -mx-4 mt-6 flex items-center justify-between border-t border-gray-200 bg-white px-4 py-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] dark:border-slate-800 dark:bg-slate-900 sm:-mx-6 sm:px-6 sm:pb-3">
             <div>
               {event && onDelete && (
                 <button

@@ -3,8 +3,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Download, Info, X } from 'lucide-react';
 import { usePWAInstallPrompt } from '@/hooks/usePWAInstallPrompt';
+import { useAppView } from '@/contexts/familyHub/AppViewContext';
 
 export const PWAInstallPrompt = () => {
+  const { currentView } = useAppView();
   const {
     isInstallable,
     promptInstall,
@@ -36,7 +38,7 @@ export const PWAInstallPrompt = () => {
     setVisible(false);
   }, [dismissPrompt]);
 
-  if (!visible) {
+  if (!visible || currentView === 'calendar') {
     return null;
   }
 

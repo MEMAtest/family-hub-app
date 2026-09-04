@@ -5,9 +5,35 @@ const authMiddleware = process.env.NEON_AUTH_BASE_URL && process.env.NEXT_PUBLIC
   ? neonAuthMiddleware({ loginUrl: '/auth/sign-in' })
   : (_request: NextRequest) => NextResponse.next();
 
+const PUBLIC_PREFIXES = [
+  '/auth',
+  '/api/auth',
+  '/api/inbound/calendar-email',
+  '/api/property',
+  '/api/rss',
+];
+
+const PUBLIC_PATHS = new Set([
+  '/favicon.ico',
+  '/manifest.json',
+  '/offline.html',
+  '/sw.js',
+  '/force-reload.html',
+  '/reset-app.html',
+]);
+
+const isPublicRequest = (pathname: string) => (
+  PUBLIC_PATHS.has(pathname) ||
+  PUBLIC_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))
+);
+
 export async function middleware(request: NextRequest) {
-  // The Neon SDK bundles a different Next.js type version, while both middleware
-  // implementations receive the same runtime request object from Next.js.
+  const { pathname } = request.nextUrl;
+
+  if (isPublicRequest(pathname)) {
+    return NextResponse.next();
+  }
+
   return authMiddleware(request as never);
 }
 

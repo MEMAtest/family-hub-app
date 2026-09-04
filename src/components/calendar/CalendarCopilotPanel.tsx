@@ -1,7 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { CalendarPlus, CheckCircle2, Clock, FileUp, Loader2, MapPin, Search, Sparkles, XCircle } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { CalendarPlus, CheckCircle2, Clock, FileUp, Loader2, Mail, MapPin, RefreshCw, Search, Sparkles, XCircle } from 'lucide-react';
 import type { CalendarEvent, Person } from '@/types/calendar.types';
 import { useFamilyStore } from '@/store/familyStore';
 import {
@@ -19,6 +19,19 @@ interface CalendarCopilotPanelProps {
     draft: Omit<CalendarEvent, 'id' | 'createdAt' | 'updatedAt'>
   ) => Promise<{ status: 'conflict' } | { status: 'created'; event: CalendarEvent }>;
   onOpenCalendar: () => void;
+}
+
+interface CalendarInboxItem {
+  id: string;
+  sender?: string | null;
+  subject?: string | null;
+  status: string;
+  receivedAt: string;
+  autoCreated: number;
+  needsReview: number;
+  duplicateCount: number;
+  conflictCount: number;
+  parsedDrafts: CalendarImportDraft[];
 }
 
 const statusLabel: Record<CalendarImportDraft['importStatus'], string> = {
@@ -88,12 +101,21 @@ const CalendarCopilotPanel = ({
   const [importError, setImportError] = useState<string | null>(null);
   const [importSuccess, setImportSuccess] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
+  const [forwardingAddress, setForwardingAddress] = useState<string | null>(null);
+  const [inboxItems, setInboxItems] = useState<CalendarInboxItem[]>([]);
+  const [inboxLoading, setInboxLoading] = useState(false);
+  const [inboxError, setInboxError] = useState<string | null>(null);
+  const [activeInboxItemId, setActiveInboxItemId] = useState<string | null>(null);
 
   const selectedDrafts = useMemo(
     () => importDrafts.filter((draft) => selectedDraftIds.has(draft.importId)),
     [importDrafts, selectedDraftIds]
   );
   const assistantDrafts = assistantResult?.drafts ?? (assistantResult?.draft ? [assistantResult.draft] : []);
+  const pendingInboxItems = useMemo(
+    () => inboxItems.filter((item) => item.needsReview > 0 || item.conflictCount > 0 || item.status === 'review_required'),
+    [inboxItems]
+  );
   const personNameById = useMemo(
     () => new Map(people.map((person) => [person.id, person.name])),
     [people]
@@ -125,6 +147,38 @@ const CalendarCopilotPanel = ({
       });
     return grouped;
   }, [currentDate, events]);
+
+  const loadInbox = useCallback(async () => {
+    if (!activeFamilyId) return;
+
+    setInboxLoading(true);
+    setInboxError(null);
+    try {
+      const response = await fetch(`/api/families/${activeFamilyId}/calendar-intake/inbox`);
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || 'Calendar inbox could not be loaded.');
+      setForwardingAddress(payload.forwardingAddress ?? null);
+      setInboxItems(Array.isArray(payload.intakes) ? payload.intakes : []);
+    } catch (error) {
+      setInboxError(error instanceof Error ? error.message : 'Calendar inbox could not be loaded.');
+    } finally {
+      setInboxLoading(false);
+    }
+  }, [activeFamilyId]);
+
+  useEffect(() => {
+    void loadInbox();
+  }, [loadInbox]);
+
+  const reviewInboxItem = (item: CalendarInboxItem) => {
+    const drafts = item.parsedDrafts || [];
+    setImportText('');
+    setImportDrafts(drafts);
+    setSelectedDraftIds(new Set(drafts.filter((draft) => draft.importStatus !== 'duplicate').map((draft) => draft.importId)));
+    setActiveInboxItemId(item.id);
+    setImportError(null);
+    setImportSuccess(`Loaded ${drafts.length} event${drafts.length === 1 ? '' : 's'} from "${item.subject || item.sender || 'forwarded email'}".`);
+  };
 
   const runQuickPrompt = (prompt: string) => {
     setCommand(prompt);
@@ -197,6 +251,7 @@ const CalendarCopilotPanel = ({
 
   const readImportFile = async (file: File) => {
     setImportError(null);
+    setActiveInboxItemId(null);
     if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
       if (!activeFamilyId) {
         setImportError('Family database is still connecting. Try the PDF again in a moment.');
@@ -270,6 +325,7 @@ const CalendarCopilotPanel = ({
     setImportLoading(true);
     setImportError(null);
     setImportSuccess(null);
+    setActiveInboxItemId(null);
     setImportDrafts([]);
     setSelectedDraftIds(new Set());
 
@@ -340,6 +396,7 @@ const CalendarCopilotPanel = ({
     try {
       const createdDraftIds = new Set<string>();
       const failedDraftIds = new Set<string>();
+      const createdEventIds: string[] = [];
       let lastError: Error | null = null;
 
       for (const draft of selectedDrafts) {
@@ -347,6 +404,7 @@ const CalendarCopilotPanel = ({
           const result = await createEvent(importDraftToCalendarEventDraft(draft));
           if (result.status === 'created') {
             createdDraftIds.add(draft.importId);
+            createdEventIds.push(result.event.id);
           } else {
             failedDraftIds.add(draft.importId);
           }
@@ -366,6 +424,15 @@ const CalendarCopilotPanel = ({
         if (remainingDrafts.length === 0) setImportText('');
         setImportSuccess(`${createdCount} event${createdCount === 1 ? '' : 's'} added to the calendar.`);
         onOpenCalendar();
+        if (activeInboxItemId && activeFamilyId) {
+          await fetch(`/api/families/${activeFamilyId}/calendar-intake/inbox`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ intakeId: activeInboxItemId, createdEventIds }),
+          });
+          setActiveInboxItemId(null);
+          void loadInbox();
+        }
       }
 
       if (failedCount > 0) {
@@ -387,8 +454,150 @@ const CalendarCopilotPanel = ({
     <section className="grid gap-3 border-b border-gray-200 bg-[#f7fbf8] p-3 dark:border-slate-800 dark:bg-slate-950 md:grid-cols-2">
       <div className="rounded-lg border border-[#dde5e0] bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
         <div className="mb-2 flex items-center gap-2">
+          <FileUp className="h-4 w-4 text-purple-600" />
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-100">Add school dates</h3>
+        </div>
+        <div className="mb-3 rounded-md border border-purple-100 bg-purple-50 p-3 text-xs text-purple-900 dark:border-purple-500/30 dark:bg-purple-500/10 dark:text-purple-100">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="flex items-center gap-1.5 font-semibold">
+                <Mail className="h-3.5 w-3.5" />
+                Forwarded email inbox
+              </p>
+              {forwardingAddress ? (
+                <p className="mt-1 break-all font-mono text-[11px]">{forwardingAddress}</p>
+              ) : (
+                <p className="mt-1">Forwarding mailbox is not configured here yet. Paste or upload works now.</p>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => void loadInbox()}
+              disabled={inboxLoading || !activeFamilyId}
+              aria-label="Refresh calendar email inbox"
+              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-purple-700 hover:bg-purple-100 disabled:opacity-50 dark:text-purple-100 dark:hover:bg-purple-500/20"
+            >
+              <RefreshCw className={`h-4 w-4 ${inboxLoading ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
+          {inboxError && <p className="mt-2 text-amber-700 dark:text-amber-200">{inboxError}</p>}
+          {pendingInboxItems.length > 0 && (
+            <div className="mt-3 space-y-2">
+              {pendingInboxItems.slice(0, 3).map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => reviewInboxItem(item)}
+                  className="flex w-full items-center justify-between gap-3 rounded-md border border-purple-200 bg-white px-3 py-2 text-left hover:border-purple-400 dark:border-purple-500/30 dark:bg-slate-950 dark:hover:border-purple-300"
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate font-semibold">{item.subject || item.sender || 'Forwarded email'}</span>
+                    <span className="block text-[11px] opacity-75">
+                      {item.parsedDrafts.length} parsed, {item.needsReview} to review
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-[11px] font-semibold">Review</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <textarea
+          value={importText}
+          onChange={(event) => setImportText(event.target.value)}
+          rows={4}
+          placeholder="Paste term dates, forwarded ticket emails, school events, CSV rows, or copied PDF text..."
+          className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/15 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+        />
+        <div className="mt-2 grid gap-2 sm:flex sm:flex-wrap sm:items-center">
+          <label className="inline-flex min-h-10 cursor-pointer items-center justify-center gap-1.5 rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800">
+            <FileUp className="h-4 w-4" />
+            Upload PDF/image/CSV
+            <input
+              type="file"
+              accept=".txt,.csv,.tsv,.ics,.pdf,image/*"
+              className="hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) void readImportFile(file);
+              }}
+            />
+          </label>
+          <button
+            type="button"
+            onClick={() => void reviewImport()}
+            disabled={importLoading || !importText.trim()}
+            className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-md bg-purple-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+          >
+            {importLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarPlus className="h-4 w-4" />}
+            Review events
+          </button>
+          {selectedDrafts.length > 0 && (
+            <button
+              type="button"
+              onClick={() => void importSelectedDrafts()}
+              disabled={importing}
+              className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-md bg-[#147c72] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+            >
+              {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+              Import {selectedDrafts.length}
+            </button>
+          )}
+        </div>
+        {importError && <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">{importError}</p>}
+        {importSuccess && (
+          <div className="mt-2 flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200">
+            <CheckCircle2 className="h-4 w-4" />
+            {importSuccess}
+          </div>
+        )}
+
+        {importDrafts.length > 0 && (
+          <div className="mt-3 max-h-56 space-y-2 overflow-y-auto">
+            {importDrafts.map((draft) => (
+              <label
+                key={draft.importId}
+                className="flex cursor-pointer items-start gap-2 rounded-md border border-gray-200 bg-gray-50 p-2 dark:border-slate-800 dark:bg-slate-950"
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedDraftIds.has(draft.importId)}
+                  onChange={() => toggleDraft(draft.importId)}
+                  className="mt-1 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="truncate text-xs font-semibold text-gray-900 dark:text-slate-100">{draft.title}</p>
+                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                      draft.importStatus === 'ready'
+                        ? 'bg-green-100 text-green-700'
+                        : draft.importStatus === 'duplicate'
+                        ? 'bg-gray-200 text-gray-700'
+                        : 'bg-amber-100 text-amber-700'
+                    }`}>
+                      {statusLabel[draft.importStatus]}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-xs text-gray-500 dark:text-slate-400">
+                    {draft.date}{draft.endDate ? ` to ${draft.endDate}` : ''} at {draft.time}
+                  </p>
+                  {draft.warnings.length > 0 && (
+                    <p className="mt-1 inline-flex items-center gap-1 text-[11px] text-amber-700 dark:text-amber-300">
+                      <XCircle className="h-3 w-3" />
+                      {draft.warnings[0]}
+                    </p>
+                  )}
+                </div>
+              </label>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="rounded-lg border border-[#dde5e0] bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
+        <div className="mb-2 flex items-center gap-2">
           <Sparkles className="h-4 w-4 text-[#147c72]" />
-          <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-100">Ask Family Hub</h3>
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-100">Search or quick create</h3>
         </div>
         {peopleForWhereabouts.length > 0 && (
           <div className="mb-3">
@@ -524,102 +733,6 @@ const CalendarCopilotPanel = ({
         )}
       </div>
 
-      <div className="rounded-lg border border-[#dde5e0] bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
-        <div className="mb-2 flex items-center gap-2">
-          <FileUp className="h-4 w-4 text-purple-600" />
-          <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-100">Add dates from email, PDF, or calendar</h3>
-        </div>
-        <textarea
-          value={importText}
-          onChange={(event) => setImportText(event.target.value)}
-          rows={4}
-          placeholder="Paste term dates, forwarded ticket emails, school events, CSV rows, or copied PDF text..."
-          className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/15 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
-        />
-        <div className="mt-2 grid gap-2 sm:flex sm:flex-wrap sm:items-center">
-          <label className="inline-flex min-h-10 cursor-pointer items-center justify-center gap-1.5 rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800">
-            <FileUp className="h-4 w-4" />
-            Upload PDF/image/CSV
-            <input
-              type="file"
-              accept=".txt,.csv,.tsv,.ics,.pdf,image/*"
-              className="hidden"
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (file) void readImportFile(file);
-              }}
-            />
-          </label>
-          <button
-            type="button"
-            onClick={() => void reviewImport()}
-            disabled={importLoading || !importText.trim()}
-            className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-md bg-purple-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
-          >
-            {importLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarPlus className="h-4 w-4" />}
-            Review events
-          </button>
-          {selectedDrafts.length > 0 && (
-            <button
-              type="button"
-              onClick={() => void importSelectedDrafts()}
-              disabled={importing}
-              className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-md bg-[#147c72] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
-            >
-              {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-              Import {selectedDrafts.length}
-            </button>
-          )}
-        </div>
-        {importError && <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">{importError}</p>}
-        {importSuccess && (
-          <div className="mt-2 flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200">
-            <CheckCircle2 className="h-4 w-4" />
-            {importSuccess}
-          </div>
-        )}
-
-        {importDrafts.length > 0 && (
-          <div className="mt-3 max-h-56 space-y-2 overflow-y-auto">
-            {importDrafts.map((draft) => (
-              <label
-                key={draft.importId}
-                className="flex cursor-pointer items-start gap-2 rounded-md border border-gray-200 bg-gray-50 p-2 dark:border-slate-800 dark:bg-slate-950"
-              >
-                <input
-                  type="checkbox"
-                  checked={selectedDraftIds.has(draft.importId)}
-                  onChange={() => toggleDraft(draft.importId)}
-                  className="mt-1 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
-                />
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="truncate text-xs font-semibold text-gray-900 dark:text-slate-100">{draft.title}</p>
-                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                      draft.importStatus === 'ready'
-                        ? 'bg-green-100 text-green-700'
-                        : draft.importStatus === 'duplicate'
-                        ? 'bg-gray-200 text-gray-700'
-                        : 'bg-amber-100 text-amber-700'
-                    }`}>
-                      {statusLabel[draft.importStatus]}
-                    </span>
-                  </div>
-                  <p className="mt-0.5 text-xs text-gray-500 dark:text-slate-400">
-                    {draft.date}{draft.endDate ? ` to ${draft.endDate}` : ''} at {draft.time}
-                  </p>
-                  {draft.warnings.length > 0 && (
-                    <p className="mt-1 inline-flex items-center gap-1 text-[11px] text-amber-700 dark:text-amber-300">
-                      <XCircle className="h-3 w-3" />
-                      {draft.warnings[0]}
-                    </p>
-                  )}
-                </div>
-              </label>
-            ))}
-          </div>
-        )}
-      </div>
     </section>
   );
 };

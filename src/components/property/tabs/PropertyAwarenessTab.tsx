@@ -286,7 +286,7 @@ const mockCouncilNews: CouncilNewsItem[] = [
     summary: 'Application for single-storey rear extension submitted. Public consultation open until 15 January 2025.',
     date: '2024-12-20',
     category: 'planning',
-    url: 'https://pa.bromley.gov.uk',
+    url: 'https://pa.bromley.gov.uk/online-applications/search.do?action=simple&searchType=Application&postcode=SE20%207UA',
     priority: 'medium',
   },
   {

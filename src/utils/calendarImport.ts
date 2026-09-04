@@ -73,6 +73,9 @@ const schoolKeywords = [
   'exam',
   'club',
   'lesson',
+  'football',
+  'swimming',
+  'gala',
 ];
 
 const dayNamePattern = '(?:Mon(?:day)?|Tue(?:sday)?|Wed(?:nesday)?|Thu(?:rsday)?|Fri(?:day)?|Sat(?:urday)?|Sun(?:day)?)';
@@ -200,7 +203,14 @@ export const normalizeCalendarEmailText = ({
       line.toLowerCase().includes(keyword)
     );
 
-    if (hasDate || hasTime || hasEventKeyword) {
+    const standaloneNewsletterEvent = hasDate && hasEventKeyword;
+
+    if (standaloneNewsletterEvent) {
+      candidateLines.add(line);
+      return;
+    }
+
+    if (hasDate || hasTime) {
       const context = [cleanSubject, previousTwo, previous, line, next, nextTwo, nextThree]
         .filter(Boolean)
         .join(' • ');
@@ -383,6 +393,7 @@ const cleanTitleCandidate = (value: string, dateMatch?: string, location?: strin
     .replace(/\b(Title|Event|Subject|From|Date|When|Time|Location|Venue|Where|Place)\s*:/gi, ' ')
     .replace(/\bbday\b/gi, 'birthday')
     .replace(/^\s*(?:can you\s+)?(?:add|create|book|schedule|put|make|save|remember)\s+/i, ' ')
+    .replace(/\s+\bis\s*$/i, ' ')
     .replace(/[*`]+/g, ' ')
     .replace(/[•]+/g, ' ')
     .replace(/\s+/g, ' ');
@@ -433,6 +444,7 @@ const cleanLocationCandidate = (value: string, dateMatch?: string) => {
     .replace(/\b\d{1,2}[-/]\d{1,2}[-/]20\d{2}\b/g, ' ')
     .replace(/\b\d{1,2}[:.]\d{2}\s*(am|pm)?\b/gi, ' ')
     .replace(/\b\d{1,2}\s*(am|pm)\b/gi, ' ')
+    .replace(/^\s*(?:at|in|on)\s+/i, '')
     .replace(/^[\s,:;.!?-]+|[\s,:;.!?-]+$/g, '')
     .replace(/\s+/g, ' ')
     .trim();

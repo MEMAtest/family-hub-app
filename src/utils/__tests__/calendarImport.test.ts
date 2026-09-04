@@ -433,4 +433,52 @@ Location: Smile Clinic
       importStatus: 'ready',
     });
   });
+
+  it('keeps separate school newsletter lines as separate club and INSET drafts', () => {
+    const normalized = normalizeCalendarEmailText({
+      from: 'office@school.example',
+      subject: 'Stewart Fleming Primary key dates and clubs',
+      text: `
+Dear parents,
+Askia has football club on Tuesday 8 September 2026 from 3:30pm to 4:45pm at the school field.
+Swimming gala is Friday 18 September 2026 at 10am at Crystal Palace.
+INSET day Monday 21 September 2026.
+      `,
+    });
+
+    const drafts = parseCalendarImportText({
+      text: normalized,
+      people,
+      defaultPersonId: 'child-1',
+      today: new Date('2026-09-04T09:00:00Z'),
+    });
+
+    expect(drafts).toHaveLength(3);
+    expect(drafts).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        title: 'Askia Has Football Club',
+        date: '2026-09-08',
+        time: '15:30',
+        duration: 75,
+        location: 'the school field',
+        type: 'sport',
+        importStatus: 'ready',
+      }),
+      expect.objectContaining({
+        title: 'Swimming Gala',
+        date: '2026-09-18',
+        time: '10:00',
+        location: 'Crystal Palace',
+        type: 'sport',
+        importStatus: 'ready',
+      }),
+      expect.objectContaining({
+        title: 'INSET Day',
+        date: '2026-09-21',
+        time: '09:00',
+        type: 'education',
+        importStatus: 'ready',
+      }),
+    ]));
+  });
 });

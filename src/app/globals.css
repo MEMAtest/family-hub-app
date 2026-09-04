@@ -936,6 +936,7 @@ html.dark .family-hub-calendar .rbc-timeslot-group {
 @media (max-width: 768px) {
   .mobile-calendar-container {
     @apply overflow-visible;
+    padding-bottom: calc(env(safe-area-inset-bottom) + 2rem);
   }
 
   .mobile-calendar .rbc-calendar {
@@ -944,6 +945,7 @@ html.dark .family-hub-calendar .rbc-timeslot-group {
 
   .mobile-calendar .rbc-month-view {
     @apply text-xs;
+    min-height: 620px;
   }
 
   .mobile-calendar .rbc-header {
