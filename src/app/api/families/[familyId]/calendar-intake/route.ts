@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireFamilyAccess } from '@/lib/auth-utils';
 import { parseCalendarImportText } from '@/utils/calendarImport';
+import { summarizeSchoolDocument } from '@/utils/schoolDocumentSummary';
+import { Prisma } from '@prisma/client';
 import type { CalendarEvent, Person } from '@/types/calendar.types';
 
 const toDateKey = (value: Date) => value.toISOString().split('T')[0];
@@ -67,9 +69,33 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context) =>
       defaultPersonId: typeof body.defaultPersonId === 'string' ? body.defaultPersonId : undefined,
       today: body.today ? new Date(body.today) : new Date(),
     });
+    const documentSummary = summarizeSchoolDocument(text);
+    const sourceType = typeof body.sourceType === 'string' ? body.sourceType : null;
+    const sourceName = typeof body.sourceName === 'string' ? body.sourceName : null;
+    const intake = sourceType ? await prisma.calendarEmailIntake.create({
+      data: {
+        familyId,
+        subject: sourceName || 'Pasted school update',
+        sender: 'School document upload',
+        text,
+        normalizedText: text,
+        parsedDrafts: drafts as unknown as Prisma.InputJsonValue,
+        status: drafts.length > 0 ? 'review_required' : 'no_events',
+        needsReview: drafts.length,
+        duplicateCount: drafts.filter((draft) => draft.importStatus === 'duplicate').length,
+        conflictCount: drafts.filter((draft) => draft.importStatus === 'conflict').length,
+        metadata: {
+          sourceType,
+          fileName: sourceName,
+          documentSummary,
+        } as Prisma.InputJsonValue,
+      },
+    }) : null;
 
     return NextResponse.json({
       drafts,
+      intakeId: intake?.id,
+      documentSummary,
       summary: {
         total: drafts.length,
         ready: drafts.filter((draft) => draft.importStatus === 'ready').length,

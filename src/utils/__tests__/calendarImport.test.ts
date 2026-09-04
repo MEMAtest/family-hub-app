@@ -1,4 +1,5 @@
 import { normalizeCalendarEmailText, parseCalendarImportText } from '@/utils/calendarImport';
+import { summarizeSchoolDocument } from '@/utils/schoolDocumentSummary';
 import type { Person } from '@/types/calendar.types';
 
 const people: Person[] = [
@@ -479,6 +480,41 @@ INSET day Monday 21 September 2026.
         type: 'education',
         importStatus: 'ready',
       }),
+    ]));
+  });
+
+  it('does not turn a school newsletter issue date into a calendar event', () => {
+    const text = [
+      'Stewart Fleming Primary School',
+      'The Pioneer Academy',
+      'Friday 4th September 2026',
+      'Dear Parents and Carers,',
+      'In English, pupils will learn to compose sentences.',
+      'In Maths, pupils will explore place value to 10.',
+      'PE',
+      'Chaplin - Monday & Friday',
+      'Yousafzai - Monday & Friday',
+      'Scott - Wednesday & Friday',
+      'Homework will be sent home on a Friday and due in on Wednesday.',
+    ].join('\n');
+
+    const drafts = parseCalendarImportText({
+      text,
+      people,
+      defaultPersonId: 'child-1',
+      today: new Date('2026-09-04T00:00:00Z'),
+    });
+
+    expect(drafts).toHaveLength(0);
+    expect(summarizeSchoolDocument(text)).toMatchObject({
+      issuer: 'Stewart Fleming Primary School The Pioneer Academy',
+      issueDate: '2026-09-04',
+      subjects: ['English', 'Maths'],
+      documentLabel: 'School newsletter',
+    });
+    expect(summarizeSchoolDocument(text)?.routines).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: 'PE timetable' }),
+      expect.objectContaining({ label: 'Homework' }),
     ]));
   });
 });

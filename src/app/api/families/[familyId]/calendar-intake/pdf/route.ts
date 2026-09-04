@@ -3,6 +3,8 @@ import pdf from 'pdf-parse/lib/pdf-parse.js';
 import prisma from '@/lib/prisma';
 import { requireFamilyAccess } from '@/lib/auth-utils';
 import { parseCalendarImportText } from '@/utils/calendarImport';
+import { summarizeSchoolDocument } from '@/utils/schoolDocumentSummary';
+import { Prisma } from '@prisma/client';
 import type { CalendarEvent, Person } from '@/types/calendar.types';
 
 export const runtime = 'nodejs';
@@ -41,6 +43,8 @@ const mapPerson = (person: any): Person => ({
   icon: person.icon,
   role: person.role,
 });
+
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
 const isKnownPdfParserWarning = (value: unknown) => {
   const message = value instanceof Error ? value.message : String(value);
@@ -84,6 +88,10 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context) =>
       return NextResponse.json({ error: 'PDF file is required' }, { status: 400 });
     }
 
+    if (file.size > MAX_FILE_SIZE) {
+      return NextResponse.json({ error: 'PDF is too large. The maximum upload size is 10MB.' }, { status: 413 });
+    }
+
     if (file.type && file.type !== 'application/pdf') {
       return NextResponse.json({ error: 'Only PDF files are supported' }, { status: 400 });
     }
@@ -91,9 +99,13 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context) =>
     const buffer = Buffer.from(await file.arrayBuffer());
     const parsed = await parsePdfQuietly(buffer);
     const text = parsed.text?.trim() || '';
+    const documentSummary = summarizeSchoolDocument(text);
 
     if (!text) {
-      return NextResponse.json({ error: 'No selectable text was found in this PDF' }, { status: 422 });
+      return NextResponse.json({
+        code: 'PDF_TEXT_NOT_FOUND',
+        error: 'This PDF is image-based, so no selectable text was found. Upload its pages as photos or paste the text instead.',
+      }, { status: 422 });
     }
 
     const [events, members] = await Promise.all([
@@ -119,10 +131,35 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context) =>
         : new Date(),
     });
 
+    const intake = await prisma.calendarEmailIntake.create({
+      data: {
+        familyId,
+        subject: file.name || 'School PDF upload',
+        sender: 'School document upload',
+        text,
+        normalizedText: text,
+        parsedDrafts: drafts as unknown as Prisma.InputJsonValue,
+        status: drafts.length > 0 ? 'review_required' : 'no_events',
+        needsReview: drafts.length,
+        duplicateCount: drafts.filter((draft) => draft.importStatus === 'duplicate').length,
+        conflictCount: drafts.filter((draft) => draft.importStatus === 'conflict').length,
+        metadata: {
+          sourceType: 'pdf',
+          fileName: file.name || null,
+          mimeType: file.type || 'application/pdf',
+          sizeBytes: file.size,
+          pages: parsed.numpages,
+          documentSummary,
+        } as Prisma.InputJsonValue,
+      },
+    });
+
     return NextResponse.json({
       text,
       pages: parsed.numpages,
       drafts,
+      intakeId: intake.id,
+      documentSummary,
       summary: {
         total: drafts.length,
         ready: drafts.filter((draft) => draft.importStatus === 'ready').length,

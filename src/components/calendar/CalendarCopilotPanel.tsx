@@ -10,6 +10,7 @@ import {
   parseCalendarImportText,
 } from '@/utils/calendarImport';
 import { CalendarAssistantResponse, runCalendarAssistant } from '@/utils/calendarAssistant';
+import type { SchoolDocumentSummary } from '@/utils/schoolDocumentSummary';
 
 interface CalendarCopilotPanelProps {
   events: CalendarEvent[];
@@ -32,6 +33,7 @@ interface CalendarInboxItem {
   duplicateCount: number;
   conflictCount: number;
   parsedDrafts: CalendarImportDraft[];
+  documentSummary?: SchoolDocumentSummary | null;
 }
 
 const statusLabel: Record<CalendarImportDraft['importStatus'], string> = {
@@ -106,6 +108,9 @@ const CalendarCopilotPanel = ({
   const [inboxLoading, setInboxLoading] = useState(false);
   const [inboxError, setInboxError] = useState<string | null>(null);
   const [activeInboxItemId, setActiveInboxItemId] = useState<string | null>(null);
+  const [documentSummary, setDocumentSummary] = useState<SchoolDocumentSummary | null>(null);
+  const [importSourceType, setImportSourceType] = useState('pasted-text');
+  const [importSourceName, setImportSourceName] = useState<string | null>(null);
 
   const selectedDrafts = useMemo(
     () => importDrafts.filter((draft) => selectedDraftIds.has(draft.importId)),
@@ -113,7 +118,7 @@ const CalendarCopilotPanel = ({
   );
   const assistantDrafts = assistantResult?.drafts ?? (assistantResult?.draft ? [assistantResult.draft] : []);
   const pendingInboxItems = useMemo(
-    () => inboxItems.filter((item) => item.needsReview > 0 || item.conflictCount > 0 || item.status === 'review_required'),
+    () => inboxItems.filter((item) => item.needsReview > 0 || item.conflictCount > 0 || item.status === 'review_required' || item.documentSummary),
     [inboxItems]
   );
   const personNameById = useMemo(
@@ -174,6 +179,7 @@ const CalendarCopilotPanel = ({
     const drafts = item.parsedDrafts || [];
     setImportText('');
     setImportDrafts(drafts);
+    setDocumentSummary(item.documentSummary ?? null);
     setSelectedDraftIds(new Set(drafts.filter((draft) => draft.importStatus !== 'duplicate').map((draft) => draft.importId)));
     setActiveInboxItemId(item.id);
     setImportError(null);
@@ -249,9 +255,113 @@ const CalendarCopilotPanel = ({
     }
   };
 
+  const reviewImportText = async (
+    text: string,
+    sourceType = importSourceType,
+    sourceName = importSourceName,
+  ) => {
+    if (!text.trim()) return;
+
+    setImportLoading(true);
+    setImportError(null);
+    setImportSuccess(null);
+    setActiveInboxItemId(null);
+    setImportDrafts([]);
+    setSelectedDraftIds(new Set());
+    setImportText(text);
+
+    try {
+      const payload = activeFamilyId
+        ? await (async () => {
+            const isEmail = looksLikeForwardedEmail(text);
+            const response = await fetch(
+              '/api/families/' + activeFamilyId + '/calendar-intake' + (isEmail ? '/email' : ''),
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(isEmail
+                  ? {
+                      ...extractForwardedEmailFields(text),
+                      defaultPersonId: people[0]?.id,
+                      today: currentDate.toISOString(),
+                    }
+                  : {
+                      text,
+                      defaultPersonId: people[0]?.id,
+                      today: currentDate.toISOString(),
+                      sourceType,
+                      sourceName,
+                    }),
+              },
+            );
+            const json = await response.json();
+            if (!response.ok) throw new Error(json.error || 'Calendar import review failed');
+            return json;
+          })()
+        : {
+            drafts: parseCalendarImportText({
+              text,
+              people,
+              existingEvents: events,
+              defaultPersonId: people[0]?.id,
+              today: currentDate,
+            }),
+          };
+
+      const drafts: CalendarImportDraft[] = payload.drafts || [];
+      setDocumentSummary(payload.documentSummary ?? null);
+      setImportDrafts(drafts);
+      setSelectedDraftIds(new Set(drafts.filter((draft) => draft.importStatus !== 'duplicate').map((draft) => draft.importId)));
+      if (payload.intakeId) setActiveInboxItemId(payload.intakeId);
+      if (drafts.length === 0) {
+        setImportError(payload.documentSummary
+          ? 'No dated calendar events were found. The school update is saved below for reference.'
+          : 'No events were found. Try pasting lines with dates such as “Summer Term Ends: Friday 17 July 2026”.');
+      }
+    } catch (error) {
+      setImportError('Could not review imported calendar');
+    } finally {
+      setImportLoading(false);
+    }
+  };
+
+  const readImageFiles = async (files: File[]) => {
+    setImportError(null);
+    setImportSuccess(null);
+    setImportSourceType('image');
+    setImportSourceName(files.length === 1 ? files[0].name : files.length + ' school pages');
+    setImportLoading(true);
+    try {
+      const { createWorker } = await import('tesseract.js');
+      const worker = await createWorker('eng');
+      const pageTexts: string[] = [];
+      try {
+        for (const file of files) {
+          const result = await worker.recognize(file);
+          if (result.data.text.trim()) pageTexts.push(result.data.text.trim());
+        }
+      } finally {
+        await worker.terminate();
+      }
+      const text = pageTexts.join('\n\n');
+      if (!text) {
+        setImportError('No readable text was found in those pages. Try clearer photos or paste the newsletter text.');
+        return;
+      }
+      await reviewImportText(text, 'image', files.length === 1 ? files[0].name : files.length + ' school pages');
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : 'Could not read text from those school pages.');
+    } finally {
+      setImportLoading(false);
+    }
+  };
+
   const readImportFile = async (file: File) => {
     setImportError(null);
     setActiveInboxItemId(null);
+    setDocumentSummary(null);
+    setImportSourceName(file.name);
+    setImportSourceType(file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf') ? 'pdf' : 'text');
     if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
       if (!activeFamilyId) {
         setImportError('Family database is still connecting. Try the PDF again in a moment.');
@@ -278,8 +388,12 @@ const CalendarCopilotPanel = ({
         setImportText(payload.text || '');
         setImportDrafts(drafts);
         setSelectedDraftIds(new Set(drafts.filter((draft) => draft.importStatus !== 'duplicate').map((draft) => draft.importId)));
+        setDocumentSummary(payload.documentSummary ?? null);
+        if (payload.intakeId) setActiveInboxItemId(payload.intakeId);
         if (drafts.length === 0) {
-          setImportError('The PDF text was extracted, but no dated calendar events were found.');
+          setImportError(payload.documentSummary
+            ? 'No dated calendar events were found. The school PDF is saved below for reference.'
+            : 'The PDF text was extracted, but no dated calendar events were found.');
         }
       } catch (error) {
         setImportError(error instanceof Error ? error.message : 'Could not read calendar events from that PDF.');
@@ -290,23 +404,7 @@ const CalendarCopilotPanel = ({
     }
 
     if (file.type.startsWith('image/')) {
-      setImportLoading(true);
-      try {
-        const { createWorker } = await import('tesseract.js');
-        const worker = await createWorker('eng');
-        const result = await worker.recognize(file);
-        await worker.terminate();
-        const text = result.data.text.trim();
-        if (!text) {
-          setImportError('No readable text was found in that image. Try a clearer image or paste the calendar text.');
-          return;
-        }
-        setImportText(text);
-      } catch (error) {
-        setImportError(error instanceof Error ? error.message : 'Could not read text from that image.');
-      } finally {
-        setImportLoading(false);
-      }
+      await readImageFiles([file]);
       return;
     }
 
@@ -317,63 +415,10 @@ const CalendarCopilotPanel = ({
     }
 
     setImportText(text);
+    setDocumentSummary(null);
   };
 
-  const reviewImport = async () => {
-    if (!importText.trim()) return;
-
-    setImportLoading(true);
-    setImportError(null);
-    setImportSuccess(null);
-    setActiveInboxItemId(null);
-    setImportDrafts([]);
-    setSelectedDraftIds(new Set());
-
-    try {
-      const payload = activeFamilyId
-        ? await (async () => {
-            const isEmail = looksLikeForwardedEmail(importText);
-            const response = await fetch(`/api/families/${activeFamilyId}/calendar-intake${isEmail ? '/email' : ''}`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(isEmail
-                ? {
-                    ...extractForwardedEmailFields(importText),
-                    defaultPersonId: people[0]?.id,
-                    today: currentDate.toISOString(),
-                  }
-                : {
-                    text: importText,
-                    defaultPersonId: people[0]?.id,
-                    today: currentDate.toISOString(),
-                  }),
-            });
-            const json = await response.json();
-            if (!response.ok) throw new Error(json.error || 'Calendar import review failed');
-            return json;
-          })()
-        : {
-            drafts: parseCalendarImportText({
-              text: importText,
-              people,
-              existingEvents: events,
-              defaultPersonId: people[0]?.id,
-              today: currentDate,
-            }),
-          };
-
-      const drafts: CalendarImportDraft[] = payload.drafts || [];
-      setImportDrafts(drafts);
-      setSelectedDraftIds(new Set(drafts.filter((draft) => draft.importStatus !== 'duplicate').map((draft) => draft.importId)));
-      if (drafts.length === 0) {
-        setImportError('No events were found. Try pasting lines with dates such as “Summer Term Ends: Friday 17 July 2026”.');
-      }
-    } catch (error) {
-      setImportError(error instanceof Error ? error.message : 'Could not review imported calendar');
-    } finally {
-      setImportLoading(false);
-    }
-  };
+  const reviewImport = () => reviewImportText(importText);
 
   const toggleDraft = (draftId: string) => {
     setSelectedDraftIds((current) => {
@@ -516,10 +561,17 @@ const CalendarCopilotPanel = ({
             <input
               type="file"
               accept=".txt,.csv,.tsv,.ics,.pdf,image/*"
+              multiple
               className="hidden"
               onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (file) void readImportFile(file);
+                const files = Array.from(event.target.files || []);
+                if (files.length === 0) return;
+                if (files.every((file) => file.type.startsWith('image/'))) {
+                  void readImageFiles(files);
+                } else {
+                  void readImportFile(files[0]);
+                }
+                event.currentTarget.value = '';
               }}
             />
           </label>
@@ -549,6 +601,31 @@ const CalendarCopilotPanel = ({
           <div className="mt-2 flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200">
             <CheckCircle2 className="h-4 w-4" />
             {importSuccess}
+          </div>
+        )}
+
+        {documentSummary && (
+          <div className="mt-3 rounded-md border border-teal-200 bg-teal-50 px-3 py-3 text-xs text-teal-950 dark:border-teal-500/30 dark:bg-teal-500/10 dark:text-teal-100">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="font-semibold">{documentSummary.documentLabel} saved for reference</p>
+                <p className="mt-1 opacity-80">
+                  {documentSummary.issuer || 'School document'}
+                  {documentSummary.issueDate ? ' · issued ' + documentSummary.issueDate : ''}
+                </p>
+              </div>
+              <CheckCircle2 className="h-4 w-4 shrink-0" />
+            </div>
+            {documentSummary.subjects.length > 0 && (
+              <p className="mt-2"><span className="font-semibold">Subjects:</span> {documentSummary.subjects.join(', ')}</p>
+            )}
+            {documentSummary.routines.length > 0 && (
+              <div className="mt-2 space-y-1">
+                {documentSummary.routines.map((routine) => (
+                  <p key={routine.label + routine.detail}><span className="font-semibold">{routine.label}:</span> {routine.detail}</p>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

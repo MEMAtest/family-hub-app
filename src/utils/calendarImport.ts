@@ -175,6 +175,9 @@ const normalizeCalendarTextLabels = (text: string) =>
 const isEmailNoiseLine = (line: string) =>
   /unsubscribe|privacy policy|terms and conditions|view in browser|manage your booking|download app|add to wallet|do not reply/i.test(line);
 
+const isSchoolLetterHeader = (line: string) =>
+  line.length < 120 && /(?:primary|school|academy|college|nursery)/i.test(line);
+
 export const normalizeCalendarEmailText = ({
   subject,
   from,
@@ -793,8 +796,9 @@ export const parseCalendarImportText = ({
       const currentLineIndex = index - 1;
       const lineDate = parseDateValue(line, fallbackYear);
       const dateLineRemainder = lineDate ? cleanTitleCandidate(line, lineDate.match) : line;
+      const dateLineText = dateLineRemainder.replace(new RegExp('\\b' + dayNamePattern + '\\b', 'gi'), ' ');
       const dateOnlyLine = Boolean(
-        lineDate && !/[A-Za-z]{3,}/.test(dateLineRemainder.replace(/\b(date|when|on|at|am|pm)\b/gi, ''))
+        lineDate && !/[A-Za-z]{3,}/.test(dateLineText.replace(/\b(date|when|on|at|am|pm)\b/gi, ''))
       );
       const dateLabelLine = /^\s*(date|when)\s*:/i.test(line);
       const includeFollowingContext = Boolean(lineDate && (dateOnlyLine || dateLabelLine || !hasExplicitTime(line)));
@@ -814,6 +818,16 @@ export const parseCalendarImportText = ({
         }
         return [];
       })();
+
+      const metadataDateLine = Boolean(
+        lineDate &&
+        dateOnlyLine &&
+        !hasCalendarCue(line) &&
+        !hasCalendarLabel(line) &&
+        !hasExplicitTime(line) &&
+        (previousLines.length === 0 || previousLines.every(isSchoolLetterHeader)),
+      );
+      if (metadataDateLine) return [];
 
       const followingLines = (() => {
         if (!includeFollowingContext) return [] as string[];

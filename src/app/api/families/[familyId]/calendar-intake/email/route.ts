@@ -6,6 +6,7 @@ import {
   normalizeCalendarEmailText,
   parseCalendarImportText,
 } from '@/utils/calendarImport';
+import { summarizeSchoolDocument } from '@/utils/schoolDocumentSummary';
 import type { CalendarEvent, Person } from '@/types/calendar.types';
 
 const emailIntakeSchema = z.object({
@@ -94,6 +95,7 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context) =>
     return NextResponse.json({
       normalizedText,
       drafts,
+      documentSummary: summarizeSchoolDocument(normalizedText),
       summary: {
         total: drafts.length,
         ready: drafts.filter((draft) => draft.importStatus === 'ready').length,

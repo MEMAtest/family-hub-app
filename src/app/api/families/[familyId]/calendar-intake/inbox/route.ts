@@ -2,11 +2,18 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireFamilyAccess } from '@/lib/auth-utils';
 import type { CalendarImportDraft } from '@/utils/calendarImport';
+import type { SchoolDocumentSummary } from '@/utils/schoolDocumentSummary';
 
 const reviewStatuses = ['review_required', 'partial_review', 'no_events'];
 
 const parsedDraftsFromJson = (value: unknown): CalendarImportDraft[] =>
   Array.isArray(value) ? (value as CalendarImportDraft[]) : [];
+
+const summaryFromMetadata = (value: unknown): SchoolDocumentSummary | null => {
+  if (!value || typeof value !== 'object') return null;
+  const summary = (value as { documentSummary?: unknown }).documentSummary;
+  return summary && typeof summary === 'object' ? summary as SchoolDocumentSummary : null;
+};
 
 export const GET = requireFamilyAccess(async (_request: NextRequest, context) => {
   try {
@@ -47,6 +54,7 @@ export const GET = requireFamilyAccess(async (_request: NextRequest, context) =>
         conflictCount: intake.conflictCount,
         createdEventIds: intake.createdEventIds,
         parsedDrafts: parsedDraftsFromJson(intake.parsedDrafts),
+        documentSummary: summaryFromMetadata(intake.metadata),
       })),
     });
   } catch (error) {
