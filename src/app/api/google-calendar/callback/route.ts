@@ -4,14 +4,17 @@ import { createOAuthClient, decodeGoogleState } from '@/lib/googleCalendarServer
 
 export const runtime = 'nodejs';
 
-const popupResponse = (type: 'google_calendar_auth_success' | 'google_calendar_auth_error', message?: string) =>
+const popupResponse = (
+  type: 'google_calendar_auth_success' | 'google_calendar_auth_error' | 'gmail_auth_success' | 'gmail_auth_error',
+  message?: string,
+) =>
   new NextResponse(
     `<!doctype html><html><body><script>
       if (window.opener) {
         window.opener.postMessage(${JSON.stringify({ type, message })}, window.location.origin);
         window.close();
       } else {
-        document.body.textContent = ${JSON.stringify(message || (type === 'google_calendar_auth_success' ? 'Google Calendar connected.' : 'Google Calendar connection failed.'))};
+        document.body.textContent = ${JSON.stringify(message || (type === 'google_calendar_auth_success' ? 'Google Calendar connected.' : type === 'gmail_auth_success' ? 'Gmail connected.' : 'Google connection failed.'))};
       }
     </script></body></html>`,
     { headers: { 'content-type': 'text/html; charset=utf-8' } }
@@ -24,14 +27,21 @@ export async function GET(request: NextRequest) {
     const state = searchParams.get('state');
     const error = searchParams.get('error');
 
-    if (error) {
-      return popupResponse('google_calendar_auth_error', `Google authorization failed: ${error}`);
-    }
+    const statePurpose = (() => {
+      if (!state) return 'calendar';
+      try {
+        return decodeGoogleState(state).purpose || 'calendar';
+      } catch {
+        return 'calendar';
+      }
+    })();
+    const authErrorType = statePurpose === 'gmail' ? 'gmail_auth_error' : 'google_calendar_auth_error';
+    if (error) return popupResponse(authErrorType, `Google authorization failed: ${error}`);
     if (!code || !state) {
-      return popupResponse('google_calendar_auth_error', 'Missing Google authorization code.');
+      return popupResponse(authErrorType, 'Missing Google authorization code.');
     }
 
-    const { familyId, personId } = decodeGoogleState(state);
+    const { familyId, personId, purpose } = decodeGoogleState(state);
     const oauth2Client = createOAuthClient();
     const { tokens } = await oauth2Client.getToken(code);
     oauth2Client.setCredentials(tokens);
@@ -44,6 +54,32 @@ export async function GET(request: NextRequest) {
       googleUserEmail = tokenInfo?.email || null;
     } catch {
       googleUserEmail = null;
+    }
+
+    if (purpose === 'gmail') {
+      await prisma.gmailConnection.upsert({
+        where: { familyId },
+        create: {
+          familyId,
+          googleUserEmail,
+          accessToken: tokens.access_token || '',
+          refreshToken: tokens.refresh_token || null,
+          tokenType: tokens.token_type || null,
+          scope: tokens.scope || null,
+          expiryDate: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
+          enabled: true,
+        },
+        update: {
+          googleUserEmail,
+          accessToken: tokens.access_token || '',
+          refreshToken: tokens.refresh_token || undefined,
+          tokenType: tokens.token_type || null,
+          scope: tokens.scope || null,
+          expiryDate: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
+          enabled: true,
+        },
+      });
+      return popupResponse('gmail_auth_success', 'Gmail connected.');
     }
 
     if (personId) {

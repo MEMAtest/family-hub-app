@@ -31,7 +31,7 @@ const skipSetupWizard = () => {
   localStorage.setItem('familyHub_setupComplete', 'skipped');
 };
 
-const stubFamilyApis = async (page: Page, state: { documentRequestBody: string; eventPosts: unknown[] }) => {
+const stubFamilyApis = async (page: Page, state: { documentRequestBody: string; eventPosts: unknown[]; gmailSyncs: number }) => {
   await page.route('**/api/auth/me', async (route) => {
     await route.fulfill({
       status: 200,
@@ -106,11 +106,25 @@ const stubFamilyApis = async (page: Page, state: { documentRequestBody: string; 
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ forwardingAddress: null, intakes: [] }),
+        body: JSON.stringify({
+          forwardingAddress: 'ademolaomosanya+familyhub@gmail.com',
+          gmail: { connected: true, googleUserEmail: 'ademolaomosanya@gmail.com', lastSyncAt: null },
+          intakes: [],
+        }),
       });
       return;
     }
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ status: 'reviewed' }) });
+  });
+
+  await page.route('**/api/families/*/gmail', async (route) => {
+    if (route.request().method() !== 'POST') return route.fallback();
+    state.gmailSyncs += 1;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ processed: 1, matched: 1, autoCreated: 0, needsReview: 1, duplicates: 0, errors: [] }),
+    });
   });
 
   await page.route('**/calendar-intake/document', async (route) => {
@@ -139,7 +153,7 @@ const stubFamilyApis = async (page: Page, state: { documentRequestBody: string; 
 test.describe('school document calendar intake', () => {
   test('uploads a school PDF, preserves the source link, and schedules a weekly routine', async ({ page }) => {
     test.setTimeout(120_000);
-    const state = { documentRequestBody: '', eventPosts: [] as unknown[] };
+    const state = { documentRequestBody: '', eventPosts: [] as unknown[], gmailSyncs: 0 };
     const consoleErrors: string[] = [];
 
     await page.addInitScript(skipSetupWizard);
@@ -175,5 +189,20 @@ test.describe('school document calendar intake', () => {
     expect(state.eventPosts.every((event: any) => event.recurringPattern === 'weekly')).toBe(true);
     expect(state.eventPosts.every((event: any) => event.isRecurring === true)).toBe(true);
     expect(consoleErrors).toEqual([]);
+  });
+
+  test('syncs forwarded school email from the connected Gmail account', async ({ page }) => {
+    test.setTimeout(120_000);
+    const state = { documentRequestBody: '', eventPosts: [] as unknown[], gmailSyncs: 0 };
+
+    await page.addInitScript(skipSetupWizard);
+    await stubFamilyApis(page, state);
+    await page.goto('/?view=calendar');
+
+    await expect(page.getByText('Gmail school inbox', { exact: true })).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByText('Forward to ademolaomosanya+familyhub@gmail.com')).toBeVisible();
+    await page.getByRole('button', { name: 'Sync Gmail' }).click();
+    await expect(page.getByText('Synced 1 forwarded email from Gmail.')).toBeVisible();
+    expect(state.gmailSyncs).toBe(1);
   });
 });

@@ -20,11 +20,21 @@ export const GOOGLE_CALENDAR_SCOPES = [
   'https://www.googleapis.com/auth/calendar.readonly',
 ];
 
+export const GOOGLE_GMAIL_SCOPES = [
+  'https://www.googleapis.com/auth/gmail.readonly',
+];
+
 export const createOAuthClient = () =>
   new google.auth.OAuth2(clientId(), clientSecret(), redirectUri());
 
-export const encodeGoogleState = (familyId: string, personId?: string) => {
-  const payload = Buffer.from(JSON.stringify({ familyId, personId, ts: Date.now() })).toString('base64url');
+export type GoogleOAuthPurpose = 'calendar' | 'gmail';
+
+export const encodeGoogleState = (
+  familyId: string,
+  personId?: string,
+  purpose: GoogleOAuthPurpose = 'calendar',
+) => {
+  const payload = Buffer.from(JSON.stringify({ familyId, personId, purpose, ts: Date.now() })).toString('base64url');
   const sig = createHmac('sha256', stateSecret()).update(payload).digest('base64url');
   return `${payload}.${sig}`;
 };
@@ -34,7 +44,12 @@ export const decodeGoogleState = (state: string) => {
   if (!payload || !sig) throw new Error('Invalid OAuth state');
   const expected = createHmac('sha256', stateSecret()).update(payload).digest('base64url');
   if (sig !== expected) throw new Error('Invalid OAuth state signature');
-  const parsed = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as { familyId: string; personId?: string; ts: number };
+  const parsed = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as {
+    familyId: string;
+    personId?: string;
+    purpose?: GoogleOAuthPurpose;
+    ts: number;
+  };
   if (!parsed.familyId || Date.now() - parsed.ts > 30 * 60 * 1000) {
     throw new Error('Expired OAuth state');
   }
@@ -61,6 +76,18 @@ export const getPersonalGoogleCalendarAuthUrl = (familyId: string, personId: str
     prompt: 'consent',
     scope: GOOGLE_CALENDAR_SCOPES,
     state: encodeGoogleState(familyId, personId),
+  });
+};
+
+export const getGmailAuthUrl = (familyId: string) => {
+  const oauth2Client = createOAuthClient();
+  if (!clientId()) throw new Error('Google Client ID not configured');
+
+  return oauth2Client.generateAuthUrl({
+    access_type: 'offline',
+    prompt: 'consent',
+    scope: GOOGLE_GMAIL_SCOPES,
+    state: encodeGoogleState(familyId, undefined, 'gmail'),
   });
 };
 

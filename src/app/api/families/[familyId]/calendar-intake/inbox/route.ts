@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireFamilyAccess } from '@/lib/auth-utils';
+import { gmailForwardingAddress } from '@/lib/gmailCalendarServer';
 import type { CalendarImportDraft } from '@/utils/calendarImport';
 import type { SchoolDocumentSummary } from '@/utils/schoolDocumentSummary';
 
@@ -23,9 +24,17 @@ export const GET = requireFamilyAccess(async (_request: NextRequest, context) =>
       select: { id: true, familyCode: true },
     });
 
+    const gmailConnection = await prisma.gmailConnection.findUnique({
+      where: { familyId },
+      select: { enabled: true, googleUserEmail: true, lastSyncAt: true },
+    });
     const domain = process.env.CALENDAR_INBOUND_DOMAIN?.trim().toLowerCase();
     const familyKey = family?.familyCode || family?.id || familyId;
-    const forwardingAddress = domain ? `calendar+${familyKey}@${domain}` : null;
+    const forwardingAddress = gmailConnection?.enabled
+      ? gmailForwardingAddress(gmailConnection.googleUserEmail)
+      : domain
+        ? `calendar+${familyKey}@${domain}`
+        : null;
 
     const intakes = await prisma.calendarEmailIntake.findMany({
       where: {
@@ -47,6 +56,11 @@ export const GET = requireFamilyAccess(async (_request: NextRequest, context) =>
 
     return NextResponse.json({
       forwardingAddress,
+      gmail: {
+        connected: Boolean(gmailConnection?.enabled),
+        googleUserEmail: gmailConnection?.googleUserEmail || null,
+        lastSyncAt: gmailConnection?.lastSyncAt || null,
+      },
       intakes: intakes.map((intake) => ({
         id: intake.id,
         sender: intake.sender,

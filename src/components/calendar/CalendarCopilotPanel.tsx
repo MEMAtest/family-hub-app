@@ -117,6 +117,9 @@ const CalendarCopilotPanel = ({
   const [inboxItems, setInboxItems] = useState<CalendarInboxItem[]>([]);
   const [inboxLoading, setInboxLoading] = useState(false);
   const [inboxError, setInboxError] = useState<string | null>(null);
+  const [gmailConnected, setGmailConnected] = useState(false);
+  const [gmailEmail, setGmailEmail] = useState<string | null>(null);
+  const [gmailSyncLoading, setGmailSyncLoading] = useState(false);
   const [activeInboxItemId, setActiveInboxItemId] = useState<string | null>(null);
   const [documentSummary, setDocumentSummary] = useState<SchoolDocumentSummary | null>(null);
   const [documentAttachments, setDocumentAttachments] = useState<CalendarAttachment[]>([]);
@@ -178,6 +181,8 @@ const CalendarCopilotPanel = ({
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || 'Calendar inbox could not be loaded.');
       setForwardingAddress(payload.forwardingAddress ?? null);
+      setGmailConnected(Boolean(payload.gmail?.connected));
+      setGmailEmail(payload.gmail?.googleUserEmail ?? null);
       setInboxItems(Array.isArray(payload.intakes) ? payload.intakes : []);
     } catch (error) {
       setInboxError(error instanceof Error ? error.message : 'Calendar inbox could not be loaded.');
@@ -189,6 +194,56 @@ const CalendarCopilotPanel = ({
   useEffect(() => {
     void loadInbox();
   }, [loadInbox]);
+
+  useEffect(() => {
+    const handleGmailAuthMessage = (event: MessageEvent<{ type?: string; message?: string }>) => {
+      if (event.origin !== window.location.origin) return;
+      if (event.data?.type === 'gmail_auth_success') {
+        setImportSuccess('Gmail connected. Forward school emails to the Family Hub address below, then sync.');
+        void loadInbox();
+      }
+      if (event.data?.type === 'gmail_auth_error') {
+        setInboxError(event.data.message || 'Gmail connection failed.');
+      }
+    };
+
+    window.addEventListener('message', handleGmailAuthMessage);
+    return () => window.removeEventListener('message', handleGmailAuthMessage);
+  }, [loadInbox]);
+
+  const connectGmail = async () => {
+    if (!activeFamilyId) return;
+    setInboxError(null);
+    try {
+      const response = await fetch(`/api/families/${activeFamilyId}/gmail/connect`);
+      const payload = await response.json();
+      if (!response.ok || !payload.authUrl) throw new Error(payload.error || 'Gmail connection could not be started.');
+      window.open(payload.authUrl, 'family-hub-gmail-connect', 'width=560,height=720');
+    } catch (error) {
+      setInboxError(error instanceof Error ? error.message : 'Gmail connection could not be started.');
+    }
+  };
+
+  const syncGmail = async () => {
+    if (!activeFamilyId) return;
+    setGmailSyncLoading(true);
+    setInboxError(null);
+    try {
+      const response = await fetch(`/api/families/${activeFamilyId}/gmail`, { method: 'POST' });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || 'Gmail could not be synced.');
+      await loadInbox();
+      setImportSuccess(
+        payload.processed > 0
+          ? `Synced ${payload.processed} forwarded email${payload.processed === 1 ? '' : 's'} from Gmail.`
+          : 'Gmail is up to date. Forward an email to the Family Hub address to import it.',
+      );
+    } catch (error) {
+      setInboxError(error instanceof Error ? error.message : 'Gmail could not be synced.');
+    } finally {
+      setGmailSyncLoading(false);
+    }
+  };
 
   const reviewInboxItem = (item: CalendarInboxItem) => {
     const drafts = item.parsedDrafts || [];
@@ -590,23 +645,39 @@ const CalendarCopilotPanel = ({
             <div className="min-w-0">
               <p className="flex items-center gap-1.5 font-semibold">
                 <Mail className="h-3.5 w-3.5" />
-                Forwarded email inbox
+                Gmail school inbox
               </p>
-              {forwardingAddress ? (
-                <p className="mt-1 break-all font-mono text-[11px]">{forwardingAddress}</p>
+              {gmailConnected && gmailEmail ? (
+                <>
+                  <p className="mt-1">Connected to {gmailEmail}</p>
+                  {forwardingAddress && (
+                    <p className="mt-1 break-all font-mono text-[11px]">Forward to {forwardingAddress}</p>
+                  )}
+                </>
               ) : (
-                <p className="mt-1">Forwarding mailbox is not configured here yet. Paste or upload works now.</p>
+                <p className="mt-1">Connect Gmail to import school emails you forward to a private Family Hub address.</p>
               )}
             </div>
-            <button
-              type="button"
-              onClick={() => void loadInbox()}
-              disabled={inboxLoading || !activeFamilyId}
-              aria-label="Refresh calendar email inbox"
-              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-purple-700 hover:bg-purple-100 disabled:opacity-50 dark:text-purple-100 dark:hover:bg-purple-500/20"
-            >
-              <RefreshCw className={`h-4 w-4 ${inboxLoading ? 'animate-spin' : ''}`} />
-            </button>
+            <div className="flex shrink-0 items-center gap-1">
+              <button
+                type="button"
+                onClick={() => void (gmailConnected ? syncGmail() : connectGmail())}
+                disabled={inboxLoading || gmailSyncLoading || !activeFamilyId}
+                className="inline-flex min-h-8 items-center gap-1 rounded-md bg-purple-600 px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-purple-700 disabled:opacity-50"
+              >
+                {gmailSyncLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Mail className="h-3.5 w-3.5" />}
+                {gmailConnected ? 'Sync Gmail' : 'Connect Gmail'}
+              </button>
+              <button
+                type="button"
+                onClick={() => void loadInbox()}
+                disabled={inboxLoading || !activeFamilyId}
+                aria-label="Refresh calendar email inbox"
+                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-purple-700 hover:bg-purple-100 disabled:opacity-50 dark:text-purple-100 dark:hover:bg-purple-500/20"
+              >
+                <RefreshCw className={`h-4 w-4 ${inboxLoading ? 'animate-spin' : ''}`} />
+              </button>
+            </div>
           </div>
           {inboxError && <p className="mt-2 text-amber-700 dark:text-amber-200">{inboxError}</p>}
           {pendingInboxItems.length > 0 && (
