@@ -4,7 +4,7 @@ import { requireFamilyAccess } from '@/lib/auth-utils';
 import type { CalendarImportDraft } from '@/utils/calendarImport';
 import type { SchoolDocumentSummary } from '@/utils/schoolDocumentSummary';
 
-const reviewStatuses = ['review_required', 'partial_review', 'no_events'];
+const reviewStatuses = ['review_required', 'partial_review', 'no_events', 'needs_ocr'];
 
 const parsedDraftsFromJson = (value: unknown): CalendarImportDraft[] =>
   Array.isArray(value) ? (value as CalendarImportDraft[]) : [];
@@ -37,6 +37,12 @@ export const GET = requireFamilyAccess(async (_request: NextRequest, context) =>
       },
       orderBy: { receivedAt: 'desc' },
       take: 12,
+      include: {
+        attachments: {
+          select: { id: true, fileName: true, mimeType: true, sizeBytes: true },
+          orderBy: { createdAt: 'asc' },
+        },
+      },
     });
 
     return NextResponse.json({
@@ -55,6 +61,10 @@ export const GET = requireFamilyAccess(async (_request: NextRequest, context) =>
         createdEventIds: intake.createdEventIds,
         parsedDrafts: parsedDraftsFromJson(intake.parsedDrafts),
         documentSummary: summaryFromMetadata(intake.metadata),
+        attachments: intake.attachments.map((attachment) => ({
+          ...attachment,
+          downloadUrl: `/api/families/${familyId}/calendar-intake/attachments/${attachment.id}`,
+        })),
       })),
     });
   } catch (error) {

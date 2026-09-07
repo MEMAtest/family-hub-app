@@ -8,6 +8,7 @@ export default defineConfig({
     'bootstrap-resilience.spec.ts',
     'brain-integrations.spec.ts',
     'budget.spec.ts',
+    'calendar-school-document.spec.ts',
     'full-app-critical.spec.ts',
     'mobile-persistence.spec.ts',
     'personal-hubs.spec.ts',

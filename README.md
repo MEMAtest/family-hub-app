@@ -17,3 +17,9 @@ A comprehensive family management application with calendar, budget tracking, me
 - `npm run test:e2e:user-journeys` – the serial, on-screen release gate used by the independent reviewer. It retains screenshots, traces and video for failures and writes an HTML report to `journey-report/`.
 
 _CI:_ `.github/workflows/ci.yml` runs unit and smoke checks. `.github/workflows/user-journey-review.yml` runs the independent browser journey gate against an isolated PostgreSQL service on pushes and pull requests to `main`, and can also be started manually. See `docs/user-journey-reviewer.md` for the reviewer contract and evidence rules.
+
+## School document intake
+
+From **Calendar -> Quick add & import**, a family can upload one PDF or multiple page photos. Selectable PDF text is extracted server-side; photos are OCR'd in the browser. The original PDF/photos are retained privately as calendar-intake attachments, while dated items remain reviewable drafts rather than being silently added.
+
+Forwarded email intake uses the signed `POST /api/inbound/calendar-email` webhook. Production requires `CALENDAR_INBOUND_DOMAIN` and either `CALENDAR_INBOUND_WEBHOOK_SECRET` or the provider's `RESEND_WEBHOOK_SECRET`, alongside the existing `CALENDAR_INBOUND_FAMILY_ID`. The family address is `calendar+<familyCode>@<domain>`. Provider attachment payloads should include base64 content; URL-only attachments are recorded as metadata but are not fetched automatically.

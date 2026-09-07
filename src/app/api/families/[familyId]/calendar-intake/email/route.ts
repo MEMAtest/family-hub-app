@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { requireFamilyAccess } from '@/lib/auth-utils';
 import {
@@ -92,10 +93,32 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context) =>
       today: body.today ? new Date(body.today) : new Date(),
     });
 
+    const documentSummary = summarizeSchoolDocument(normalizedText);
+    const intake = await prisma.calendarEmailIntake.create({
+      data: {
+        familyId,
+        sender: body.from || 'Pasted forwarded email',
+        subject: body.subject || 'Forwarded calendar email',
+        text: body.text || null,
+        html: body.html || null,
+        normalizedText,
+        parsedDrafts: drafts as unknown as Prisma.InputJsonValue,
+        status: drafts.length > 0 ? 'review_required' : 'no_events',
+        needsReview: drafts.length,
+        duplicateCount: drafts.filter((draft) => draft.importStatus === 'duplicate').length,
+        conflictCount: drafts.filter((draft) => draft.importStatus === 'conflict').length,
+        metadata: {
+          sourceType: 'manual-email-review',
+          documentSummary,
+        } as Prisma.InputJsonValue,
+      },
+    });
+
     return NextResponse.json({
       normalizedText,
       drafts,
-      documentSummary: summarizeSchoolDocument(normalizedText),
+      intakeId: intake.id,
+      documentSummary,
       summary: {
         total: drafts.length,
         ready: drafts.filter((draft) => draft.importStatus === 'ready').length,

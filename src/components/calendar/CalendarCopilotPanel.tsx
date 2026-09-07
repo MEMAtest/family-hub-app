@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { CalendarPlus, CheckCircle2, Clock, FileUp, Loader2, Mail, MapPin, RefreshCw, Search, Sparkles, XCircle } from 'lucide-react';
+import { CalendarPlus, CheckCircle2, Clock, ExternalLink, FileUp, Loader2, Mail, MapPin, RefreshCw, Search, Sparkles, XCircle } from 'lucide-react';
 import type { CalendarEvent, Person } from '@/types/calendar.types';
 import { useFamilyStore } from '@/store/familyStore';
 import {
@@ -10,7 +10,8 @@ import {
   parseCalendarImportText,
 } from '@/utils/calendarImport';
 import { CalendarAssistantResponse, runCalendarAssistant } from '@/utils/calendarAssistant';
-import type { SchoolDocumentSummary } from '@/utils/schoolDocumentSummary';
+import type { SchoolDocumentRoutine, SchoolDocumentSummary } from '@/utils/schoolDocumentSummary';
+import { extractRoutineWeekdays, nextDateForWeekday } from '@/utils/schoolRoutineSchedule';
 
 interface CalendarCopilotPanelProps {
   events: CalendarEvent[];
@@ -34,6 +35,15 @@ interface CalendarInboxItem {
   conflictCount: number;
   parsedDrafts: CalendarImportDraft[];
   documentSummary?: SchoolDocumentSummary | null;
+  attachments?: CalendarAttachment[];
+}
+
+interface CalendarAttachment {
+  id: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  downloadUrl: string;
 }
 
 const statusLabel: Record<CalendarImportDraft['importStatus'], string> = {
@@ -109,6 +119,11 @@ const CalendarCopilotPanel = ({
   const [inboxError, setInboxError] = useState<string | null>(null);
   const [activeInboxItemId, setActiveInboxItemId] = useState<string | null>(null);
   const [documentSummary, setDocumentSummary] = useState<SchoolDocumentSummary | null>(null);
+  const [documentAttachments, setDocumentAttachments] = useState<CalendarAttachment[]>([]);
+  const [routineToSchedule, setRoutineToSchedule] = useState<SchoolDocumentRoutine | null>(null);
+  const [routineTime, setRoutineTime] = useState('15:30');
+  const [routinePersonId, setRoutinePersonId] = useState(people[0]?.id || '');
+  const [routineSaving, setRoutineSaving] = useState(false);
   const [importSourceType, setImportSourceType] = useState('pasted-text');
   const [importSourceName, setImportSourceName] = useState<string | null>(null);
 
@@ -118,7 +133,7 @@ const CalendarCopilotPanel = ({
   );
   const assistantDrafts = assistantResult?.drafts ?? (assistantResult?.draft ? [assistantResult.draft] : []);
   const pendingInboxItems = useMemo(
-    () => inboxItems.filter((item) => item.needsReview > 0 || item.conflictCount > 0 || item.status === 'review_required' || item.documentSummary),
+    () => inboxItems.filter((item) => item.needsReview > 0 || item.conflictCount > 0 || item.status === 'review_required' || item.status === 'needs_ocr' || item.documentSummary),
     [inboxItems]
   );
   const personNameById = useMemo(
@@ -180,6 +195,7 @@ const CalendarCopilotPanel = ({
     setImportText('');
     setImportDrafts(drafts);
     setDocumentSummary(item.documentSummary ?? null);
+    setDocumentAttachments(item.attachments ?? []);
     setSelectedDraftIds(new Set(drafts.filter((draft) => draft.importStatus !== 'duplicate').map((draft) => draft.importId)));
     setActiveInboxItemId(item.id);
     setImportError(null);
@@ -255,6 +271,49 @@ const CalendarCopilotPanel = ({
     }
   };
 
+  const scheduleRoutine = async () => {
+    if (!routineToSchedule || !routinePersonId) return;
+    const weekdays = extractRoutineWeekdays(routineToSchedule.detail);
+    if (weekdays.length === 0) {
+      setImportError('This routine has no weekday in the source. Use quick create to choose its day and time.');
+      return;
+    }
+
+    setRoutineSaving(true);
+    setImportError(null);
+    try {
+      let created = 0;
+      for (const weekday of weekdays) {
+        const result = await createEvent({
+          title: routineToSchedule.label,
+          person: routinePersonId,
+          date: nextDateForWeekday(currentDate, weekday),
+          time: routineTime,
+          duration: 60,
+          location: '',
+          recurring: 'weekly',
+          isRecurring: true,
+          cost: 0,
+          type: routineToSchedule.label.toLowerCase().includes('pe') ? 'sport' : 'education',
+          notes: routineToSchedule.detail,
+          priority: 'medium',
+          status: 'confirmed',
+        });
+        if (result.status === 'created') created += 1;
+      }
+
+      if (created > 0) {
+        setImportSuccess(`${created} weekly ${routineToSchedule.label.toLowerCase()} session${created === 1 ? '' : 's'} added.`);
+        setRoutineToSchedule(null);
+        onOpenCalendar();
+      }
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : 'Could not schedule this routine.');
+    } finally {
+      setRoutineSaving(false);
+    }
+  };
+
   const reviewImportText = async (
     text: string,
     sourceType = importSourceType,
@@ -268,6 +327,7 @@ const CalendarCopilotPanel = ({
     setActiveInboxItemId(null);
     setImportDrafts([]);
     setSelectedDraftIds(new Set());
+    setDocumentAttachments([]);
     setImportText(text);
 
     try {
@@ -310,6 +370,7 @@ const CalendarCopilotPanel = ({
 
       const drafts: CalendarImportDraft[] = payload.drafts || [];
       setDocumentSummary(payload.documentSummary ?? null);
+      setDocumentAttachments(payload.attachments ?? []);
       setImportDrafts(drafts);
       setSelectedDraftIds(new Set(drafts.filter((draft) => draft.importStatus !== 'duplicate').map((draft) => draft.importId)));
       if (payload.intakeId) setActiveInboxItemId(payload.intakeId);
@@ -320,6 +381,63 @@ const CalendarCopilotPanel = ({
       }
     } catch (error) {
       setImportError('Could not review imported calendar');
+    } finally {
+      setImportLoading(false);
+    }
+  };
+
+  const uploadDocumentFiles = async (files: File[], extractedText: string, sourceType: string, sourceName: string) => {
+    if (!activeFamilyId) {
+      setImportError('Family database is still connecting. Try the upload again in a moment.');
+      return;
+    }
+
+    setImportLoading(true);
+    setImportError(null);
+    setImportSuccess(null);
+    setActiveInboxItemId(null);
+    setImportDrafts([]);
+    setSelectedDraftIds(new Set());
+    setImportSourceType(sourceType);
+    setImportSourceName(sourceName);
+
+    try {
+      const formData = new FormData();
+      files.forEach((file) => formData.append('file', file));
+      if (extractedText.trim()) formData.append('extractedText', extractedText);
+      formData.append('sourceType', sourceType);
+      formData.append('sourceName', sourceName);
+      if (people[0]?.id) formData.append('defaultPersonId', people[0].id);
+      formData.append('today', currentDate.toISOString());
+
+      const response = await fetch(`/api/families/${activeFamilyId}/calendar-intake/document`, {
+        method: 'POST',
+        body: formData,
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        setDocumentAttachments(payload.attachments ?? []);
+        if (payload.intakeId) setActiveInboxItemId(payload.intakeId);
+        if (payload.attachments?.length) {
+          setImportSuccess('The original document was saved. Upload clearer pages or paste the text to extract events.');
+        }
+        throw new Error(payload.error || 'School document upload failed');
+      }
+
+      const drafts: CalendarImportDraft[] = payload.drafts || [];
+      setImportText(payload.text || extractedText);
+      setImportDrafts(drafts);
+      setSelectedDraftIds(new Set(drafts.filter((draft) => draft.importStatus !== 'duplicate').map((draft) => draft.importId)));
+      setDocumentSummary(payload.documentSummary ?? null);
+      setDocumentAttachments(payload.attachments ?? []);
+      if (payload.intakeId) setActiveInboxItemId(payload.intakeId);
+      if (drafts.length === 0) {
+        setImportError(payload.documentSummary
+          ? 'No dated calendar events were found. The school document is saved below for reference.'
+          : 'The document text was extracted, but no dated calendar events were found.');
+      }
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : 'Could not save the school document.');
     } finally {
       setImportLoading(false);
     }
@@ -348,7 +466,7 @@ const CalendarCopilotPanel = ({
         setImportError('No readable text was found in those pages. Try clearer photos or paste the newsletter text.');
         return;
       }
-      await reviewImportText(text, 'image', files.length === 1 ? files[0].name : files.length + ' school pages');
+      await uploadDocumentFiles(files, text, 'image', files.length === 1 ? files[0].name : files.length + ' school pages');
     } catch (error) {
       setImportError(error instanceof Error ? error.message : 'Could not read text from those school pages.');
     } finally {
@@ -363,43 +481,7 @@ const CalendarCopilotPanel = ({
     setImportSourceName(file.name);
     setImportSourceType(file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf') ? 'pdf' : 'text');
     if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
-      if (!activeFamilyId) {
-        setImportError('Family database is still connecting. Try the PDF again in a moment.');
-        return;
-      }
-
-      setImportLoading(true);
-      setImportDrafts([]);
-      setSelectedDraftIds(new Set());
-      try {
-        const formData = new FormData();
-        formData.append('file', file);
-        if (people[0]?.id) formData.append('defaultPersonId', people[0].id);
-        formData.append('today', currentDate.toISOString());
-
-        const response = await fetch(`/api/families/${activeFamilyId}/calendar-intake/pdf`, {
-          method: 'POST',
-          body: formData,
-        });
-        const payload = await response.json();
-        if (!response.ok) throw new Error(payload.error || 'PDF calendar import failed');
-
-        const drafts: CalendarImportDraft[] = payload.drafts || [];
-        setImportText(payload.text || '');
-        setImportDrafts(drafts);
-        setSelectedDraftIds(new Set(drafts.filter((draft) => draft.importStatus !== 'duplicate').map((draft) => draft.importId)));
-        setDocumentSummary(payload.documentSummary ?? null);
-        if (payload.intakeId) setActiveInboxItemId(payload.intakeId);
-        if (drafts.length === 0) {
-          setImportError(payload.documentSummary
-            ? 'No dated calendar events were found. The school PDF is saved below for reference.'
-            : 'The PDF text was extracted, but no dated calendar events were found.');
-        }
-      } catch (error) {
-        setImportError(error instanceof Error ? error.message : 'Could not read calendar events from that PDF.');
-      } finally {
-        setImportLoading(false);
-      }
+      await uploadDocumentFiles([file], '', 'pdf', file.name);
       return;
     }
 
@@ -416,6 +498,7 @@ const CalendarCopilotPanel = ({
 
     setImportText(text);
     setDocumentSummary(null);
+    setDocumentAttachments([]);
   };
 
   const reviewImport = () => reviewImportText(importText);
@@ -616,16 +699,104 @@ const CalendarCopilotPanel = ({
               </div>
               <CheckCircle2 className="h-4 w-4 shrink-0" />
             </div>
+            {documentAttachments.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {documentAttachments.map((attachment) => (
+                  <a
+                    key={attachment.id}
+                    href={attachment.downloadUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 rounded-md border border-teal-300 bg-white px-2 py-1 font-medium text-teal-800 hover:bg-teal-100 dark:border-teal-500/40 dark:bg-slate-950 dark:text-teal-100 dark:hover:bg-teal-500/20"
+                  >
+                    <ExternalLink className="h-3 w-3" />
+                    Open {attachment.fileName}
+                  </a>
+                ))}
+              </div>
+            )}
             {documentSummary.subjects.length > 0 && (
               <p className="mt-2"><span className="font-semibold">Subjects:</span> {documentSummary.subjects.join(', ')}</p>
             )}
             {documentSummary.routines.length > 0 && (
               <div className="mt-2 space-y-1">
-                {documentSummary.routines.map((routine) => (
-                  <p key={routine.label + routine.detail}><span className="font-semibold">{routine.label}:</span> {routine.detail}</p>
-                ))}
+                {documentSummary.routines.map((routine) => {
+                  const weekdays = extractRoutineWeekdays(routine.detail);
+                  return (
+                    <div key={routine.label + routine.detail} className="flex flex-wrap items-start justify-between gap-2">
+                      <p className="min-w-0 flex-1"><span className="font-semibold">{routine.label}:</span> {routine.detail}</p>
+                      {weekdays.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRoutineToSchedule(routine);
+                            setRoutinePersonId(people[0]?.id || '');
+                            setImportError(null);
+                          }}
+                          className="shrink-0 rounded-md border border-teal-300 bg-white px-2 py-1 font-semibold text-teal-800 hover:bg-teal-100 dark:border-teal-500/40 dark:bg-slate-950 dark:text-teal-100 dark:hover:bg-teal-500/20"
+                        >
+                          Schedule weekly
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
+            {routineToSchedule && (
+              <div className="mt-3 rounded-md border border-teal-300 bg-white p-3 text-gray-900 dark:border-teal-500/40 dark:bg-slate-950 dark:text-slate-100">
+                <p className="font-semibold">Schedule {routineToSchedule.label}</p>
+                <p className="mt-1 text-[11px] text-gray-600 dark:text-slate-400">
+                  Weekly on {extractRoutineWeekdays(routineToSchedule.detail).map((day) => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][day]).join(', ')}
+                </p>
+                <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                  <label className="text-[11px] font-semibold">
+                    Child or family member
+                    <select
+                      value={routinePersonId}
+                      onChange={(event) => setRoutinePersonId(event.target.value)}
+                      className="mt-1 w-full rounded-md border border-gray-200 bg-white px-2 py-2 text-xs font-normal dark:border-slate-700 dark:bg-slate-900"
+                    >
+                      {people.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}
+                    </select>
+                  </label>
+                  <label className="text-[11px] font-semibold">
+                    Start time
+                    <input
+                      type="time"
+                      value={routineTime}
+                      onChange={(event) => setRoutineTime(event.target.value)}
+                      className="mt-1 w-full rounded-md border border-gray-200 bg-white px-2 py-2 text-xs font-normal dark:border-slate-700 dark:bg-slate-900"
+                    />
+                  </label>
+                </div>
+                <div className="mt-2 flex justify-end gap-2">
+                  <button type="button" onClick={() => setRoutineToSchedule(null)} className="rounded-md px-2 py-1 text-xs font-semibold text-gray-600 dark:text-slate-300">Cancel</button>
+                  <button type="button" onClick={() => void scheduleRoutine()} disabled={routineSaving || !routinePersonId} className="rounded-md bg-[#147c72] px-2 py-1 text-xs font-semibold text-white disabled:opacity-50">
+                    {routineSaving ? 'Adding...' : 'Add weekly routine'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+        {!documentSummary && documentAttachments.length > 0 && (
+          <div className="mt-3 rounded-md border border-teal-200 bg-teal-50 px-3 py-3 text-xs text-teal-950 dark:border-teal-500/30 dark:bg-teal-500/10 dark:text-teal-100">
+            <p className="font-semibold">Original document saved</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {documentAttachments.map((attachment) => (
+                <a
+                  key={attachment.id}
+                  href={attachment.downloadUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 rounded-md border border-teal-300 bg-white px-2 py-1 font-medium text-teal-800 hover:bg-teal-100 dark:border-teal-500/40 dark:bg-slate-950 dark:text-teal-100 dark:hover:bg-teal-500/20"
+                >
+                  <ExternalLink className="h-3 w-3" />
+                  Open {attachment.fileName}
+                </a>
+              ))}
+            </div>
           </div>
         )}
 

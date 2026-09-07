@@ -191,10 +191,27 @@ model CalendarEmailIntake {
   updatedAt      DateTime @updatedAt @map("updated_at")
 
   family Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  attachments CalendarIntakeAttachment[]
 
   @@index([familyId, receivedAt])
   @@index([familyId, status])
   @@map("calendar_email_intakes")
+}
+
+// Original school PDFs/photos are retained privately alongside their extracted intake text.
+model CalendarIntakeAttachment {
+  id        String   @id @default(cuid())
+  intakeId  String   @map("intake_id")
+  fileName  String   @map("file_name")
+  mimeType  String   @map("mime_type")
+  sizeBytes Int      @map("size_bytes")
+  data      Bytes
+  createdAt DateTime @default(now()) @map("created_at")
+
+  intake CalendarEmailIntake @relation(fields: [intakeId], references: [id], onDelete: Cascade)
+
+  @@index([intakeId])
+  @@map("calendar_intake_attachments")
 }
 
 model GoogleCalendarConnection {

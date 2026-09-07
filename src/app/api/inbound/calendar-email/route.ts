@@ -5,12 +5,14 @@ import prisma from '@/lib/prisma';
 import { calendarEventDraftToDbData, toCalendarEventResponse } from '@/lib/calendarEventMapping';
 import { getAuthedCalendarClient, googlePayloadFromFamilyEvent } from '@/lib/googleCalendarServer';
 import { sendFamilyPushNotification } from '@/lib/webPush';
+import { MAX_CALENDAR_ATTACHMENT_SIZE, MAX_CALENDAR_ATTACHMENT_TOTAL } from '@/lib/calendarIntakeAttachments';
 import {
   CalendarImportDraft,
   importDraftToCalendarEventDraft,
   normalizeCalendarEmailText,
   parseCalendarImportText,
 } from '@/utils/calendarImport';
+import { summarizeSchoolDocument } from '@/utils/schoolDocumentSummary';
 
 export const runtime = 'nodejs';
 
@@ -120,6 +122,23 @@ const isHighConfidenceAutoCreate = (draft: CalendarImportDraft) =>
   draft.time !== '09:00' &&
   Boolean(draft.person);
 
+const inboundAttachment = (value: any) => {
+  const encoded = value?.contentBase64 || value?.base64 || value?.data || value?.content;
+  if (typeof encoded !== 'string' || !encoded.trim()) return null;
+
+  const dataUrl = encoded.match(/^data:([^;]+);base64,([\s\S]+)$/);
+  const base64 = dataUrl?.[2] || encoded;
+  const data = Buffer.from(base64, 'base64');
+  if (!data.length || data.length > MAX_CALENDAR_ATTACHMENT_SIZE) return null;
+
+  return {
+    fileName: String(value?.fileName || value?.filename || value?.name || 'email-attachment'),
+    mimeType: String(value?.mimeType || value?.contentType || dataUrl?.[1] || 'application/octet-stream'),
+    sizeBytes: data.length,
+    data,
+  };
+};
+
 export async function POST(request: NextRequest) {
   const rawBody = await request.text();
   if (!verifyWebhook(rawBody, request)) {
@@ -145,6 +164,32 @@ export async function POST(request: NextRequest) {
   const text = data.text || data.textBody || data.plain_text || data.plainText || '';
   const html = data.html || data.htmlBody || '';
   const messageId = data.messageId || data.message_id || data.id || payload.id || null;
+  const inboundAttachments = (Array.isArray(data.attachments) ? data.attachments : [])
+    .map(inboundAttachment)
+    .filter((attachment: ReturnType<typeof inboundAttachment>): attachment is NonNullable<ReturnType<typeof inboundAttachment>> => Boolean(attachment));
+  const totalAttachmentBytes = inboundAttachments.reduce(
+    (total: number, attachment: { sizeBytes: number }) => total + attachment.sizeBytes,
+    0,
+  );
+
+  if (totalAttachmentBytes > MAX_CALENDAR_ATTACHMENT_TOTAL) {
+    return NextResponse.json({ error: 'Inbound attachments exceed the 20MB total limit' }, { status: 413 });
+  }
+
+  if (messageId) {
+    const existingIntake = await prisma.calendarEmailIntake.findFirst({
+      where: { familyId: family.id, messageId: String(messageId) },
+      select: { id: true, status: true, createdEventIds: true },
+    });
+    if (existingIntake) {
+      return NextResponse.json({
+        intakeId: existingIntake.id,
+        status: existingIntake.status,
+        duplicate: true,
+        createdEventIds: existingIntake.createdEventIds,
+      });
+    }
+  }
 
   const normalizedText = normalizeCalendarEmailText({ subject, from: sender, text, html });
   const existingEvents = await prisma.calendarEvent.findMany({
@@ -182,7 +227,15 @@ export async function POST(request: NextRequest) {
       status: 'processing',
       metadata: {
         providerType: payload.type || payload.event || null,
-      },
+        documentSummary: summarizeSchoolDocument(normalizedText),
+        attachmentCount: Array.isArray(data.attachments) ? data.attachments.length : 0,
+        attachmentNames: (Array.isArray(data.attachments) ? data.attachments : []).map((attachment: any) =>
+          String(attachment?.fileName || attachment?.filename || attachment?.name || 'email-attachment')
+        ),
+      } as Prisma.InputJsonValue,
+      ...(inboundAttachments.length > 0
+        ? { attachments: { create: inboundAttachments } }
+        : {}),
     },
   });
 

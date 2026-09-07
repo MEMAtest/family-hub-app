@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pdf from 'pdf-parse/lib/pdf-parse.js';
+import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { requireFamilyAccess } from '@/lib/auth-utils';
-import { attachmentMetadata, validateCalendarAttachments } from '@/lib/calendarIntakeAttachments';
+import {
+  attachmentMetadata,
+  extensionForMimeType,
+  validateCalendarAttachments,
+} from '@/lib/calendarIntakeAttachments';
 import { parseCalendarImportText } from '@/utils/calendarImport';
 import { summarizeSchoolDocument } from '@/utils/schoolDocumentSummary';
-import { Prisma } from '@prisma/client';
 import type { CalendarEvent, Person } from '@/types/calendar.types';
 
 export const runtime = 'nodejs';
@@ -45,102 +49,75 @@ const mapPerson = (person: any): Person => ({
   role: person.role,
 });
 
-const isKnownPdfParserWarning = (value: unknown) => {
-  const message = value instanceof Error ? value.message : String(value);
-  return (
-    message.startsWith('Warning: TT:') ||
-    message.includes('TT: undefined function') ||
-    message.includes('TT: invalid function id') ||
-    message.includes('Buffer() is deprecated')
-  );
-};
-
-const parsePdfQuietly = async (buffer: Buffer) => {
-  const originalWarn = console.warn;
-  const originalEmitWarning = process.emitWarning;
-
-  console.warn = (...args: unknown[]) => {
-    if (args.some(isKnownPdfParserWarning)) return;
-    originalWarn(...args);
-  };
-
-  process.emitWarning = ((warning: string | Error, ...args: any[]) => {
-    if (isKnownPdfParserWarning(warning)) return;
-    return originalEmitWarning.call(process, warning as any, ...args);
-  }) as typeof process.emitWarning;
-
-  try {
-    return await pdf(buffer);
-  } finally {
-    console.warn = originalWarn;
-    process.emitWarning = originalEmitWarning;
-  }
+const parsePdf = async (file: File) => {
+  const parsed = await pdf(Buffer.from(await file.arrayBuffer()));
+  return { text: parsed.text?.trim() || '', pages: parsed.numpages };
 };
 
 export const POST = requireFamilyAccess(async (request: NextRequest, context) => {
   try {
     const { familyId } = await context.params;
     const formData = await request.formData();
-    const file = formData.get('file');
+    const files = formData.getAll('file').filter((value): value is File => value instanceof File);
+    const validationError = validateCalendarAttachments(files);
+    if (validationError) return NextResponse.json({ error: validationError }, { status: 400 });
 
-    if (!(file instanceof File)) {
-      return NextResponse.json({ error: 'PDF file is required' }, { status: 400 });
+    const fileKinds = files.map(extensionForMimeType);
+    let text = typeof formData.get('extractedText') === 'string'
+      ? String(formData.get('extractedText')).trim()
+      : '';
+    let pages = files.length;
+    const sourceType = typeof formData.get('sourceType') === 'string'
+      ? String(formData.get('sourceType'))
+      : fileKinds[0] || 'document';
+    const sourceName = typeof formData.get('sourceName') === 'string'
+      ? String(formData.get('sourceName'))
+      : files.length === 1 ? files[0].name : `${files.length} school pages`;
+
+    if (fileKinds[0] === 'pdf') {
+      const parsed = await parsePdf(files[0]);
+      text = parsed.text;
+      pages = parsed.pages;
     }
-
-    const validationError = validateCalendarAttachments([file]);
-    if (validationError) {
-      const status = file.size > 10 * 1024 * 1024 ? 413 : 400;
-      return NextResponse.json({ error: validationError }, { status });
-    }
-
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const parsed = await parsePdfQuietly(buffer);
-    const text = parsed.text?.trim() || '';
-    const documentSummary = summarizeSchoolDocument(text);
 
     if (!text) {
       const intake = await prisma.calendarEmailIntake.create({
         data: {
           familyId,
-          subject: file.name || 'School PDF upload',
+          subject: sourceName || 'School document upload',
           sender: 'School document upload',
           parsedDrafts: [],
           status: 'needs_ocr',
           needsReview: 1,
           metadata: {
-            sourceType: 'pdf',
-            fileName: file.name || null,
-            mimeType: file.type || 'application/pdf',
-            sizeBytes: file.size,
-            pages: parsed.numpages,
+            sourceType,
+            fileName: sourceName,
+            fileCount: files.length,
+            pages,
             documentSummary: null,
           } as Prisma.InputJsonValue,
           attachments: {
-            create: {
+            create: await Promise.all(files.map(async (file) => ({
               ...attachmentMetadata(file),
-              data: buffer,
-            },
+              data: Buffer.from(await file.arrayBuffer()),
+            }))),
           },
         },
         include: { attachments: { select: { id: true, fileName: true, mimeType: true, sizeBytes: true } } },
       });
       return NextResponse.json({
-        code: 'PDF_TEXT_NOT_FOUND',
-        error: 'This PDF is image-based, so no selectable text was found. Upload its pages as photos or paste the text instead.',
+        code: fileKinds[0] === 'pdf' ? 'PDF_TEXT_NOT_FOUND' : 'IMAGE_TEXT_NOT_FOUND',
+        error: fileKinds[0] === 'pdf'
+          ? 'This PDF is image-based, so no selectable text was found. Upload its pages as photos or paste the text instead.'
+          : 'No readable text was found in those pages. Try clearer photos or paste the newsletter text.',
         intakeId: intake.id,
         attachments: intake.attachments,
       }, { status: 422 });
     }
 
     const [events, members] = await Promise.all([
-      prisma.calendarEvent.findMany({
-        where: { familyId },
-        orderBy: { eventDate: 'asc' },
-      }),
-      prisma.familyMember.findMany({
-        where: { familyId },
-        orderBy: { createdAt: 'asc' },
-      }),
+      prisma.calendarEvent.findMany({ where: { familyId }, orderBy: { eventDate: 'asc' } }),
+      prisma.familyMember.findMany({ where: { familyId }, orderBy: { createdAt: 'asc' } }),
     ]);
 
     const drafts = parseCalendarImportText({
@@ -154,11 +131,11 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context) =>
         ? new Date(String(formData.get('today')))
         : new Date(),
     });
-
+    const documentSummary = summarizeSchoolDocument(text);
     const intake = await prisma.calendarEmailIntake.create({
       data: {
         familyId,
-        subject: file.name || 'School PDF upload',
+        subject: sourceName || 'School document upload',
         sender: 'School document upload',
         text,
         normalizedText: text,
@@ -168,18 +145,17 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context) =>
         duplicateCount: drafts.filter((draft) => draft.importStatus === 'duplicate').length,
         conflictCount: drafts.filter((draft) => draft.importStatus === 'conflict').length,
         metadata: {
-          sourceType: 'pdf',
-          fileName: file.name || null,
-          mimeType: file.type || 'application/pdf',
-          sizeBytes: file.size,
-          pages: parsed.numpages,
+          sourceType,
+          fileName: sourceName,
+          fileCount: files.length,
+          pages,
           documentSummary,
         } as Prisma.InputJsonValue,
         attachments: {
-          create: {
+          create: await Promise.all(files.map(async (file) => ({
             ...attachmentMetadata(file),
-            data: buffer,
-          },
+            data: Buffer.from(await file.arrayBuffer()),
+          }))),
         },
       },
       include: { attachments: { select: { id: true, fileName: true, mimeType: true, sizeBytes: true } } },
@@ -187,7 +163,7 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context) =>
 
     return NextResponse.json({
       text,
-      pages: parsed.numpages,
+      pages,
       drafts,
       intakeId: intake.id,
       documentSummary,
@@ -201,7 +177,7 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context) =>
       },
     });
   } catch (error) {
-    console.error('Calendar PDF intake error:', error);
-    return NextResponse.json({ error: 'Failed to extract calendar events from PDF' }, { status: 500 });
+    console.error('Calendar document intake error:', error);
+    return NextResponse.json({ error: 'Failed to save and extract the school document' }, { status: 500 });
   }
 });
