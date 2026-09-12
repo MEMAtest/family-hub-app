@@ -1,4 +1,5 @@
 import type { Prisma } from '@prisma/client';
+import pdf from 'pdf-parse/lib/pdf-parse.js';
 import prisma from '@/lib/prisma';
 import { calendarEventDraftToDbData, toCalendarEventResponse } from '@/lib/calendarEventMapping';
 import { getAuthedCalendarClient, googlePayloadFromFamilyEvent } from '@/lib/googleCalendarServer';
@@ -84,6 +85,21 @@ const inboundAttachment = (value: any) => {
   };
 };
 
+const extractPdfAttachmentText = async (attachments: Array<{ fileName: string; mimeType: string; data: Buffer }>) => {
+  const extracted: string[] = [];
+  for (const attachment of attachments) {
+    const isPdf = attachment.mimeType.toLowerCase().includes('pdf') || /\.pdf$/i.test(attachment.fileName);
+    if (!isPdf) continue;
+    try {
+      const parsed = await pdf(attachment.data);
+      if (parsed.text?.trim()) extracted.push(parsed.text.trim());
+    } catch (error) {
+      console.warn(`Unable to extract forwarded PDF ${attachment.fileName}:`, error);
+    }
+  }
+  return extracted;
+};
+
 const isHighConfidenceAutoCreate = (draft: CalendarImportDraft) =>
   draft.importStatus === 'ready' &&
   draft.confidence >= 0.9 &&
@@ -141,7 +157,9 @@ export const ingestCalendarEmailPayload = async (
     }
   }
 
-  const normalizedText = normalizeCalendarEmailText({ subject, from: sender, text, html });
+  const extractedAttachmentText = await extractPdfAttachmentText(inboundAttachments);
+  const combinedText = [text, ...extractedAttachmentText].filter(Boolean).join('\n\n');
+  const normalizedText = normalizeCalendarEmailText({ subject, from: sender, text: combinedText, html });
   const existingEvents = await prisma.calendarEvent.findMany({
     where: { familyId: family.id },
     orderBy: { eventDate: 'asc' },
@@ -168,7 +186,7 @@ export const ingestCalendarEmailPayload = async (
       recipient: recipients[0] || null,
       sender,
       subject,
-      text,
+      text: combinedText,
       html,
       normalizedText,
       parsedDrafts: drafts as unknown as Prisma.InputJsonValue,
@@ -177,6 +195,7 @@ export const ingestCalendarEmailPayload = async (
         providerType: payload?.type || payload?.event || null,
         documentSummary: summarizeSchoolDocument(normalizedText),
         attachmentCount: Array.isArray(data?.attachments) ? data.attachments.length : 0,
+        extractedPdfCount: extractedAttachmentText.length,
         attachmentNames: (Array.isArray(data?.attachments) ? data.attachments : []).map((attachment: any) =>
           String(attachment?.fileName || attachment?.filename || attachment?.name || 'email-attachment')
         ),
