@@ -33,7 +33,7 @@ test('desktop daily flow is compact, navigable and review-first', async ({ page 
   await page.getByRole('button', { name: /^Calendar$/ }).first().click();
   await expect(page).toHaveURL(/\?view=calendar/);
   await expect(page.getByRole('button', { name: 'Quick add & import' })).toBeVisible();
-  await expect(page.getByText('Ask Family Hub', { exact: true })).toBeVisible();
+  await expect(page.getByText('Search or quick create', { exact: true })).toBeVisible();
 
   await page.goBack();
   await expect(overview).toBeVisible();
@@ -129,7 +129,7 @@ for (const viewport of [
 
     await page.getByRole('button', { name: /^Calendar$/ }).last().click();
     await expect(page.getByRole('button', { name: 'Quick add & import' })).toBeVisible();
-    await expect(page.getByText('Ask Family Hub', { exact: true })).toBeVisible();
+    await expect(page.getByText('Search or quick create', { exact: true })).toBeVisible();
     await expectNoHorizontalOverflow(page);
 
     await page.getByRole('button', { name: /^Shopping$/ }).last().click();
