@@ -48,6 +48,7 @@ import WorkStatusManager from './WorkStatusManager'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { useFamilyStore } from '@/store/familyStore'
 import { formatConflictGroupTimeRange, getSameDayConflictGroups } from '@/utils/calendarConflicts'
+import { expandEvents, getExpansionRange, type Occurrence } from '@/utils/recurrence'
 
 // Set up moment localizer and drag-and-drop calendar
 const localizer = momentLocalizer(moment)
@@ -59,6 +60,15 @@ const getEventEnd = (event: CalendarEvent) => {
     return moment(`${event.endDate} 23:59`, 'YYYY-MM-DD HH:mm').toDate()
   }
   return eventStart.clone().add(event.duration, 'minutes').toDate()
+}
+
+/** End of a single expanded occurrence (not of the series row). */
+const getOccurrenceEnd = (occ: Occurrence) => {
+  const start = moment(`${occ.date} ${occ.time}`, 'YYYY-MM-DD HH:mm')
+  if (occ.endDate > occ.date) {
+    return moment(`${occ.endDate} 23:59`, 'YYYY-MM-DD HH:mm').toDate()
+  }
+  return start.clone().add(occ.duration, 'minutes').toDate()
 }
 
 const buildDefaultSlotForDate = (date: Date) => {
@@ -439,21 +449,23 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
 
     console.log(`🎯 Filtered ${filtered.length} events from ${events.length} total`);
 
-    return filtered.map(event => {
-      const eventStart = moment(`${event.date} ${event.time}`, 'YYYY-MM-DD HH:mm').toDate()
-      const eventEnd = getEventEnd(event)
-      const isMultiDay = Boolean(event.endDate && event.endDate > event.date)
+    // A recurring event is stored as ONE row with one date. Expand it into the
+    // dates it actually falls on before handing anything to the grid —
+    // otherwise a weekly event renders only on the day it was created.
+    const { start: rangeStart, end: rangeEnd } = getExpansionRange(currentDate, view)
+    const occurrences = expandEvents(filtered, rangeStart, rangeEnd)
 
-      return {
-        id: event.id,
-        title: event.title,
-        start: eventStart,
-        end: eventEnd,
-        resource: event,
-        allDay: isMultiDay
-      }
-    });
-  }, [events, selectedPeople, selectedCategories])
+    return occurrences.map(occ => ({
+      // event.id is no longer unique once a series expands; duplicate keys make
+      // the grid reuse DOM nodes across different weeks.
+      id: occ.occurrenceId,
+      title: occ.event.title,
+      start: moment(`${occ.date} ${occ.time}`, 'YYYY-MM-DD HH:mm').toDate(),
+      end: getOccurrenceEnd(occ),
+      resource: occ.event,
+      allDay: occ.endDate > occ.date,
+    }));
+  }, [events, selectedPeople, selectedCategories, currentDate, view])
 
   // Get person color for event styling
   const getPersonColor = useCallback((personId: string) => {

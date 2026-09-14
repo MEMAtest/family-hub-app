@@ -527,7 +527,14 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
     const success = await databaseService.deleteEvent(id);
 
     if (success) {
-      setEvents(events.filter((event) => event.id !== id));
+      const nextEvents = events.filter((event) => event.id !== id);
+      setEvents(nextEvents);
+      // createEvent and updateEvent both write through to localStorage. Without
+      // this, mergeEvents pulls the deleted event back out of the cache on the
+      // next hydration and it reappears.
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('calendarEvents', JSON.stringify(nextEvents));
+      }
       if (eventToDelete) {
         await showNotification({
           type: 'system',
