@@ -61,7 +61,7 @@ const cachedEvent = {
  * Fails the events fetch `failures` times, then serves it normally — the shape
  * of a transient interruption rather than a broken endpoint.
  */
-const stubApis = async (page: Page, failures: number) => {
+const stubApis = async (page: Page, failures: number, mode: 'abort' | 'hang' = 'abort') => {
   let seen = 0;
 
   // Playwright matches the most recently registered route first, so the
@@ -84,7 +84,12 @@ const stubApis = async (page: Page, failures: number) => {
       return route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
     }
     seen += 1;
-    if (seen <= failures) return route.abort('connectionreset');
+    if (seen <= failures) {
+      // 'hang' is the one that actually bit us in CI: the server stops
+      // answering rather than refusing, so a bare fetch never rejects.
+      if (mode === 'hang') return new Promise(() => {});
+      return route.abort('connectionreset');
+    }
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([dbEvent]) });
   });
 
@@ -102,7 +107,7 @@ const stubApis = async (page: Page, failures: number) => {
   );
 };
 
-const openCalendar = async (page: Page, failures: number, seedCache: boolean) => {
+const openCalendar = async (page: Page, failures: number, seedCache: boolean, mode: 'abort' | 'hang' = 'abort') => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.addInitScript(({ seed, withCache }) => {
     localStorage.setItem('familyHub_setupComplete', 'skipped');
@@ -112,7 +117,7 @@ const openCalendar = async (page: Page, failures: number, seedCache: boolean) =>
     localStorage.setItem('calendarEvents', withCache ? JSON.stringify([seed]) : '[]');
   }, { seed: cachedEvent, withCache: seedCache });
 
-  await stubApis(page, failures);
+  await stubApis(page, failures, mode);
   await page.goto('/');
   await page.getByRole('button', { name: /calendar/i }).first().click();
   await expect(page.locator('.rbc-calendar')).toBeVisible({ timeout: 20_000 });
@@ -128,6 +133,18 @@ test.describe('the calendar survives a failed first load', () => {
     // would take a minute, not seconds.
     await expect
       .poll(() => page.locator('.rbc-event', { hasText: 'Swimming lesson' }).count(), { timeout: 25_000 })
+      .toBe(5);
+  });
+
+  test('a hung request does not leave the month blank forever', async ({ page }) => {
+    // The CI failure mode: the first events request never answers at all. With
+    // no timeout the fetch stays pending, so nothing retries and the calendar
+    // waits for the 60s poll. One attempt must give up and the next succeed.
+    test.setTimeout(90_000);
+    await openCalendar(page, 1, false, 'hang');
+
+    await expect
+      .poll(() => page.locator('.rbc-event', { hasText: 'Swimming lesson' }).count(), { timeout: 40_000 })
       .toBe(5);
   });
 

@@ -130,8 +130,21 @@ const mergeEvents = (primary: CalendarEvent[], secondary: CalendarEvent[]) => {
 };
 
 /**
- * Fetch that tolerates a transient failure. Returns the response, or null when
- * every attempt failed — callers decide what an outright failure means.
+ * How long a single attempt may hang before we stop waiting on it.
+ *
+ * This matters more than the retry count. A server that *refuses* a connection
+ * rejects immediately and retrying is easy; a server that simply stops
+ * answering — a cold dev server buried under the hydration burst — leaves a
+ * bare `fetch` pending forever. It never rejects, so nothing retries and
+ * nothing recovers. `databaseService.fetchAPI` already guards its own calls
+ * this way; the calendar's did not, and sat on a blank month indefinitely.
+ */
+const FETCH_TIMEOUT_MS = 6_000;
+
+/**
+ * Fetch that tolerates a transient failure, including a request that simply
+ * hangs. Returns the response, or null when every attempt failed — callers
+ * decide what an outright failure means.
  */
 const fetchWithRetry = async (url: string, attempts = 3): Promise<Response | null> => {
   const backoff = [0, 400, 1200];
@@ -139,13 +152,18 @@ const fetchWithRetry = async (url: string, attempts = 3): Promise<Response | nul
 
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     if (backoff[attempt]) await wait(backoff[attempt]);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
     try {
-      const response = await fetch(url);
+      const response = await fetch(url, { signal: controller.signal });
       // A 5xx is worth another go; a 4xx will not change on retry.
       if (response.ok || response.status < 500) return response;
       lastError = new Error(`HTTP ${response.status}`);
     } catch (error) {
       lastError = error;
+    } finally {
+      clearTimeout(timeoutId);
     }
   }
 
@@ -218,9 +236,10 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
         let projectsRes: Response | null = null;
         try {
           [nodesRes, projectsRes] = await Promise.all([
-            fetch(`/api/families/${fid}/brain/nodes?showOnCalendar=true`),
-            fetch(`/api/families/${fid}/brain/projects`),
+            fetchWithRetry(`/api/families/${fid}/brain/nodes?showOnCalendar=true`, 1),
+            fetchWithRetry(`/api/families/${fid}/brain/projects`, 1),
           ]);
+          if (!nodesRes || !projectsRes) throw new Error('brain fetch failed');
         } catch (error) {
           if (attempt === retryDelays.length - 1) {
             console.warn('📆 CalendarContext: brain fetch failed on every attempt:', error);
