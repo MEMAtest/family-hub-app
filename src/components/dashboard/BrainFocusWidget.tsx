@@ -23,6 +23,12 @@ interface TodayData {
   groups: TodayGroup[];
 }
 
+const isTodayData = (value: unknown): value is TodayData =>
+  Boolean(value) &&
+  typeof value === 'object' &&
+  Array.isArray((value as TodayData).groups) &&
+  (value as TodayData).groups.every((g) => g && Array.isArray(g.nodes) && Boolean(g.project));
+
 const BrainFocusWidget = () => {
   const familyId = useFamilyStore((s) => s.databaseStatus.familyId);
   const setActiveBrainProject = useFamilyStore((s) => s.setActiveBrainProject);
@@ -34,7 +40,10 @@ const BrainFocusWidget = () => {
     const controller = new AbortController();
     fetch(`/api/families/${familyId}/brain/today`, { signal: controller.signal })
       .then((res) => (res.ok ? res.json() : null))
-      .then((d) => { if (d) setData(d); })
+      // A malformed payload used to sail past this and blow up on `data.groups`
+      // during render, which takes out the whole dashboard behind the error
+      // boundary. Only accept something that is actually shaped like TodayData.
+      .then((d) => { if (isTodayData(d)) setData(d); })
       .catch(() => {});
     return () => controller.abort();
   }, [familyId]);
@@ -44,7 +53,7 @@ const BrainFocusWidget = () => {
     setView('brain');
   };
 
-  if (!data || data.total === 0) return null;
+  if (!data || data.groups.length === 0) return null;
 
   const now = new Date();
   const allNodes = data.groups.flatMap((g) =>
