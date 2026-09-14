@@ -131,3 +131,48 @@ describe('calendar assistant parser', () => {
     });
   });
 });
+
+describe('sentences without a command verb (regression)', () => {
+  const parents: Person[] = [
+    ...people,
+    { id: 'p1', name: 'Ade', color: '#000', icon: '👨', role: 'Parent' },
+  ];
+
+  it('creates an event from natural phrasing', () => {
+    const result = runCalendarAssistant({
+      command: 'Angela has swimming on Tuesdays at 5',
+      events: [],
+      people: parents,
+      today: new Date('2026-09-02T09:00:00'),
+    });
+    expect(result.action).toBe('create');
+    expect(result.draft?.title).toBe('Swimming');
+    expect(result.draft?.person).toBe('child-1');
+    expect(result.draft?.time).toBe('17:00');
+    expect(result.draft?.recurringPattern?.frequency).toBe('weekly');
+  });
+
+  it('creates a task when there is a deadline', () => {
+    const result = runCalendarAssistant({
+      command: 'Askia has maths homework due Sunday',
+      events: [],
+      people: parents,
+      today: new Date('2026-09-02T09:00:00'),
+    });
+    expect(result.taskDraft?.dueDate).toBe('2026-09-06');
+    expect(result.taskDraft?.assignees).toEqual(['child-2']);
+    expect(result.taskDraft?.subject).toBe('Maths');
+  });
+
+  it('asks who it is for rather than guessing a child', () => {
+    const result = runCalendarAssistant({
+      command: 'football training every Saturday at 10am',
+      events: [],
+      people: parents,
+      today: new Date('2026-09-02T09:00:00'),
+    });
+    expect(result.needs).toContain('assignee');
+    expect(result.warnings.join(' ')).toContain('Who is this for');
+    expect(result.draft?.person).toBe('');
+  });
+});

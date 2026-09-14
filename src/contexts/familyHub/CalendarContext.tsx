@@ -1,7 +1,7 @@
 'use client'
 
 import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { CalendarEvent, EventTemplate, Person } from '@/types/calendar.types';
+import { CalendarEvent, CalendarTask, EventTemplate, Person } from '@/types/calendar.types';
 import type { BrainNode, BrainProject } from '@/types/brain.types';
 import { ConflictResolution, DetectedConflict } from '@/services/conflictDetectionService';
 import conflictDetectionService from '@/services/conflictDetectionService';
@@ -14,6 +14,13 @@ import { getCalendarEventIcon, getEventNotificationMetadata } from '@/utils/even
 
 interface CalendarContextValue {
   events: CalendarEvent[];
+  /** Homework, chores and anything else with a deadline. */
+  tasks: CalendarTask[];
+  createTask: (draft: Omit<CalendarTask, 'id' | 'createdAt' | 'updatedAt'>) => CalendarTask;
+  updateTask: (id: string, updates: Partial<CalendarTask>) => void;
+  deleteTask: (id: string) => void;
+  /** Mark done / not done. Completion is what a task is for. */
+  toggleTaskComplete: (id: string, completedBy?: string) => void;
   eventTemplates: EventTemplate[];
   selectedEvent: CalendarEvent | null;
   defaultSlot: { start: Date; end: Date } | null;
@@ -374,6 +381,89 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
     };
   }, [databaseStatus.connected, refreshEventsFromDatabase]);
 
+  // Tasks are cached locally so the feature works before the calendar_tasks
+  // migration has been run; the API is wired in the same shape as events.
+  const TASKS_KEY = 'familyHubTasks';
+  const [tasks, setTasks] = useState<CalendarTask[]>([]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const stored = localStorage.getItem(TASKS_KEY);
+      const parsed = stored ? JSON.parse(stored) : [];
+      if (Array.isArray(parsed)) {
+        setTasks(
+          parsed.map((task: CalendarTask) => ({
+            ...task,
+            createdAt: new Date(task.createdAt),
+            updatedAt: new Date(task.updatedAt),
+          }))
+        );
+      }
+    } catch (error) {
+      console.warn('CalendarContext: could not read cached tasks', error);
+    }
+  }, []);
+
+  const persistTasks = useCallback((next: CalendarTask[]) => {
+    setTasks(next);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(TASKS_KEY, JSON.stringify(next));
+      } catch (error) {
+        console.warn('CalendarContext: could not cache tasks', error);
+      }
+    }
+  }, []);
+
+  const createTask = useCallback(
+    (draft: Omit<CalendarTask, 'id' | 'createdAt' | 'updatedAt'>): CalendarTask => {
+      const task: CalendarTask = {
+        ...draft,
+        // A deadline before the day it was set is always a mistake.
+        dueDate: draft.dueDate < draft.assignedDate ? draft.assignedDate : draft.dueDate,
+        id: createId('task'),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      persistTasks([...tasks, task]);
+      return task;
+    },
+    [persistTasks, tasks]
+  );
+
+  const updateTask = useCallback(
+    (id: string, updates: Partial<CalendarTask>) => {
+      persistTasks(
+        tasks.map((task) => (task.id === id ? { ...task, ...updates, updatedAt: new Date() } : task))
+      );
+    },
+    [persistTasks, tasks]
+  );
+
+  const deleteTask = useCallback(
+    (id: string) => persistTasks(tasks.filter((task) => task.id !== id)),
+    [persistTasks, tasks]
+  );
+
+  const toggleTaskComplete = useCallback(
+    (id: string, completedBy?: string) => {
+      persistTasks(
+        tasks.map((task) =>
+          task.id === id
+            ? {
+                ...task,
+                completedAt: task.completedAt ? null : new Date().toISOString(),
+                completedBy: task.completedAt ? null : completedBy ?? null,
+                updatedAt: new Date(),
+              }
+            : task
+        )
+      );
+    },
+    [persistTasks, tasks]
+  );
+
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [defaultSlot, setDefaultSlot] = useState<{ start: Date; end: Date } | null>(null);
   const [isEventFormOpen, setIsEventFormOpen] = useState(false);
@@ -527,7 +617,14 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
     const success = await databaseService.deleteEvent(id);
 
     if (success) {
-      setEvents(events.filter((event) => event.id !== id));
+      const nextEvents = events.filter((event) => event.id !== id);
+      setEvents(nextEvents);
+      // createEvent and updateEvent both write through to localStorage. Without
+      // this, mergeEvents pulls the deleted event back out of the cache on the
+      // next hydration and it reappears.
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('calendarEvents', JSON.stringify(nextEvents));
+      }
       if (eventToDelete) {
         await showNotification({
           type: 'system',
@@ -706,6 +803,11 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
 
   const value = useMemo<CalendarContextValue>(() => ({
     events,
+    tasks,
+    createTask,
+    updateTask,
+    deleteTask,
+    toggleTaskComplete,
     eventTemplates,
     selectedEvent,
     defaultSlot,
@@ -748,6 +850,11 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
     duplicateTemplate,
     eventTemplates,
     events,
+    tasks,
+    createTask,
+    updateTask,
+    deleteTask,
+    toggleTaskComplete,
     ignoreConflict,
     isConflictModalOpen,
     isConflictSettingsOpen,

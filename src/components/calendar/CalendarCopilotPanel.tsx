@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { CalendarPlus, CheckCircle2, Clock, ExternalLink, FileUp, Loader2, Mail, MapPin, RefreshCw, Search, Sparkles, XCircle } from 'lucide-react';
 import type { CalendarEvent, Person } from '@/types/calendar.types';
+import type { CalendarTask } from '@/types/calendar.types';
 import { useFamilyStore } from '@/store/familyStore';
 import {
   CalendarImportDraft,
@@ -12,11 +13,14 @@ import {
 import { CalendarAssistantResponse, runCalendarAssistant } from '@/utils/calendarAssistant';
 import type { SchoolDocumentRoutine, SchoolDocumentSummary } from '@/utils/schoolDocumentSummary';
 import { extractRoutineWeekdays, nextDateForWeekday } from '@/utils/schoolRoutineSchedule';
+import { addDays, expandEvents } from '@/utils/recurrence';
 
 interface CalendarCopilotPanelProps {
   events: CalendarEvent[];
   people: Person[];
   currentDate: Date;
+  /** Save a parsed deadline as work with a window, not an event. */
+  createTask?: (draft: Omit<CalendarTask, 'id' | 'createdAt' | 'updatedAt'>) => unknown;
   createEvent: (
     draft: Omit<CalendarEvent, 'id' | 'createdAt' | 'updatedAt'>
   ) => Promise<{ status: 'conflict' } | { status: 'created'; event: CalendarEvent }>;
@@ -96,6 +100,7 @@ const CalendarCopilotPanel = ({
   people,
   currentDate,
   createEvent,
+  createTask,
   onOpenCalendar,
 }: CalendarCopilotPanelProps) => {
   const familyId = useFamilyStore((state) => state.databaseStatus.familyId);
@@ -157,12 +162,13 @@ const CalendarCopilotPanel = ({
   const todaysEventsByPerson = useMemo(() => {
     const dateKey = toDateKey(currentDate);
     const grouped = new Map<string, CalendarEvent[]>();
-    events
-      .filter((event) => {
-        if (event.status === 'cancelled') return false;
-        const endDate = event.endDate || event.date;
-        return event.date <= dateKey && endDate >= dateKey;
-      })
+    // Expand before asking what is on. Filtering `event.date` here meant a
+    // weekly club only ever counted as "on" during the week it was created, so
+    // "where everyone is today" was blank on every later week.
+    const live = events.filter((event) => event.status !== 'cancelled');
+    expandEvents(live, addDays(dateKey, -31), addDays(dateKey, 1))
+      .filter((occ) => occ.date <= dateKey && occ.endDate >= dateKey)
+      .map((occ) => ({ ...occ.event, date: occ.date, endDate: occ.endDate, time: occ.time, duration: occ.duration }))
       .sort((a, b) => timeToMinutes(a.time) - timeToMinutes(b.time))
       .forEach((event) => {
         const existing = grouped.get(event.person) ?? [];
@@ -1035,6 +1041,33 @@ const CalendarCopilotPanel = ({
                 >
                   {savingDraft ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
                   {assistantDrafts.length === 1 ? 'Confirm and add' : `Confirm and add ${assistantDrafts.length}`}
+                </button>
+              </div>
+            )}
+            {assistantResult.taskDraft && (
+              <div className="mt-3 border-t border-gray-200 pt-3 dark:border-slate-800">
+                <div className="flex items-baseline justify-between gap-3 py-1 text-xs">
+                  <p className="min-w-0 truncate font-semibold text-gray-900 dark:text-slate-100">
+                    📝 {assistantResult.taskDraft.subject ? `${assistantResult.taskDraft.subject}: ` : ''}
+                    {assistantResult.taskDraft.title}
+                  </p>
+                  <p className="shrink-0 text-gray-500 dark:text-slate-400">
+                    set {assistantResult.taskDraft.assignedDate} · due {assistantResult.taskDraft.dueDate}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  disabled={savingDraft || !createTask}
+                  onClick={() => {
+                    if (!assistantResult.taskDraft || !createTask) return;
+                    createTask(assistantResult.taskDraft);
+                    setAssistantResult(null);
+                    setCommand('');
+                  }}
+                  className="mt-3 inline-flex w-fit items-center gap-1.5 rounded-md bg-[#147c72] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                >
+                  <CheckCircle2 className="h-4 w-4" />
+                  Add this homework
                 </button>
               </div>
             )}

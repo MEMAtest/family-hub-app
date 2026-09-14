@@ -13,6 +13,7 @@ import {
   Star
 } from 'lucide-react';
 import { CalendarEvent, Person } from '@/types/calendar.types';
+import { expandEvents, groupOccurrencesByDate } from '@/utils/recurrence';
 
 interface YearViewProps {
   events: CalendarEvent[];
@@ -78,6 +79,18 @@ const YearView: React.FC<YearViewProps> = ({
     }
   };
 
+  /**
+   * Every day of the year that has anything on it, keyed `YYYY-MM-DD`.
+   *
+   * This used to filter `event.date === dateString` per day, so a weekly club
+   * coloured exactly one square of the whole year. Expanding once up front also
+   * keeps the heat map honest: intensity is per occurrence, not per stored row.
+   */
+  const occurrencesByDate = useMemo(() => {
+    const expanded = expandEvents(events, `${currentYear}-01-01`, `${currentYear}-12-31`);
+    return groupOccurrencesByDate(expanded);
+  }, [events, currentYear]);
+
   // Generate year data
   const yearData = useMemo((): MonthData[] => {
     const months: MonthData[] = [];
@@ -109,9 +122,17 @@ const YearView: React.FC<YearViewProps> = ({
       // Add days of current month
       for (let day = 1; day <= monthEnd.getDate(); day++) {
         const date = new Date(currentYear, month, day);
-        const dateString = date.toISOString().split('T')[0];
+        // toISOString() on a locally-constructed date reports the previous day
+        // for anywhere east of Greenwich — the whole of British summer time.
+        const dateString = `${currentYear}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 
-        const dayEvents = events.filter(event => event.date === dateString);
+        const dayEvents = (occurrencesByDate.get(dateString) ?? []).map((occ) => ({
+          ...occ.event,
+          date: occ.date,
+          endDate: occ.endDate,
+          time: occ.time,
+          duration: occ.duration,
+        }));
         const dayTotalCost = dayEvents.reduce((sum, event) => sum + (event.cost || 0), 0);
 
         monthEventCount += dayEvents.length;
@@ -156,7 +177,7 @@ const YearView: React.FC<YearViewProps> = ({
     }
 
     return months;
-  }, [events, currentYear, today]);
+  }, [occurrencesByDate, currentYear, today]);
 
   // Calculate year statistics
   const yearStats = useMemo(() => {

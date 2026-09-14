@@ -36,7 +36,7 @@ import {
   Sparkles,
   RefreshCw
 } from 'lucide-react'
-import { CalendarEvent, BigCalendarEvent, CalendarView, Person } from '@/types/calendar.types'
+import { CalendarEvent, BigCalendarEvent, CalendarTask, CalendarView, Person } from '@/types/calendar.types'
 import GoogleCalendarSync from './GoogleCalendarSync'
 import ICalExport from './ICalExport'
 import PDFImport from './PDFImport'
@@ -48,6 +48,8 @@ import WorkStatusManager from './WorkStatusManager'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { useFamilyStore } from '@/store/familyStore'
 import { formatConflictGroupTimeRange, getSameDayConflictGroups } from '@/utils/calendarConflicts'
+import { addDays, expandEvents, getExpansionRange, type Occurrence } from '@/utils/recurrence'
+import { buildTaskEntries, getTaskEntryStyle, isTaskEntry } from '@/utils/taskCalendar'
 
 // Set up moment localizer and drag-and-drop calendar
 const localizer = momentLocalizer(moment)
@@ -59,6 +61,15 @@ const getEventEnd = (event: CalendarEvent) => {
     return moment(`${event.endDate} 23:59`, 'YYYY-MM-DD HH:mm').toDate()
   }
   return eventStart.clone().add(event.duration, 'minutes').toDate()
+}
+
+/** End of a single expanded occurrence (not of the series row). */
+const getOccurrenceEnd = (occ: Occurrence) => {
+  const start = moment(`${occ.date} ${occ.time}`, 'YYYY-MM-DD HH:mm')
+  if (occ.endDate > occ.date) {
+    return moment(`${occ.endDate} 23:59`, 'YYYY-MM-DD HH:mm').toDate()
+  }
+  return start.clone().add(occ.duration, 'minutes').toDate()
 }
 
 const buildDefaultSlotForDate = (date: Date) => {
@@ -96,6 +107,8 @@ const buildDefaultSlotForDate = (date: Date) => {
 
 interface CalendarMainProps {
   events: CalendarEvent[]
+  /** Homework, chores and anything else with a deadline. */
+  tasks?: CalendarTask[]
   people: Person[]
   onEventClick: (event: CalendarEvent) => void
   onEventCreate: (slotInfo: { start: Date; end: Date }) => void
@@ -112,6 +125,7 @@ interface CalendarMainProps {
 
 const CalendarMain: React.FC<CalendarMainProps> = ({
   events,
+  tasks = [],
   people,
   onEventClick,
   onEventCreate,
@@ -439,21 +453,38 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
 
     console.log(`🎯 Filtered ${filtered.length} events from ${events.length} total`);
 
-    return filtered.map(event => {
-      const eventStart = moment(`${event.date} ${event.time}`, 'YYYY-MM-DD HH:mm').toDate()
-      const eventEnd = getEventEnd(event)
-      const isMultiDay = Boolean(event.endDate && event.endDate > event.date)
+    // A recurring event is stored as ONE row with one date. Expand it into the
+    // dates it actually falls on before handing anything to the grid —
+    // otherwise a weekly event renders only on the day it was created.
+    const { start: rangeStart, end: rangeEnd } = getExpansionRange(currentDate, view)
+    const occurrences = expandEvents(filtered, rangeStart, rangeEnd)
 
-      return {
-        id: event.id,
-        title: event.title,
-        start: eventStart,
-        end: eventEnd,
-        resource: event,
-        allDay: isMultiDay
-      }
-    });
-  }, [events, selectedPeople, selectedCategories])
+    const eventEntries = occurrences.map(occ => ({
+      // event.id is no longer unique once a series expands; duplicate keys make
+      // the grid reuse DOM nodes across different weeks.
+      id: occ.occurrenceId,
+      title: occ.event.title,
+      start: moment(`${occ.date} ${occ.time}`, 'YYYY-MM-DD HH:mm').toDate(),
+      end: getOccurrenceEnd(occ),
+      resource: occ.event,
+      allDay: occ.endDate > occ.date,
+    }));
+
+    // Tasks are drawn as all-day bands spanning set date -> due date, so the
+    // week's workload is visible across the days it actually hangs over rather
+    // than as a block at an invented time.
+    const visibleTasks = tasks.filter(task =>
+      task.assignees.length === 0 || task.assignees.some(id => selectedPeople.includes(id))
+    );
+    const taskEntries = buildTaskEntries(
+      visibleTasks,
+      rangeStart,
+      rangeEnd,
+      moment().format('YYYY-MM-DD')
+    );
+
+    return [...eventEntries, ...taskEntries];
+  }, [events, tasks, selectedPeople, selectedCategories, currentDate, view])
 
   // Get person color for event styling
   const getPersonColor = useCallback((personId: string) => {
@@ -463,6 +494,10 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
 
   // Event style function
   const eventStyleGetter = useCallback((event: any) => {
+    // Work with a deadline is coloured by how close it is to being late, not by
+    // whose it is — on a calendar that is the only question that matters.
+    if (isTaskEntry(event)) return getTaskEntryStyle(event)
+
     const personColor = getPersonColor(event.resource!.person)
 
     return {
@@ -487,6 +522,11 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
 
   // Handle event selection
   const handleSelectEvent = useCallback((event: any) => {
+    if (isTaskEntry(event)) {
+      // Tasks have no event record to edit; jump the agenda to the due date.
+      setSelectedAgendaDate(event.occurrence.dueDate)
+      return
+    }
     setSelectedAgendaDate(event.resource!.date)
     onEventClick(event.resource!)
   }, [onEventClick])
@@ -631,14 +671,19 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
     const monthStart = currentMonth.clone().startOf('month');
     const monthEnd = currentMonth.clone().endOf('month');
 
-    // Filter events for current month and selected filters
-    const monthEvents = events.filter(event => {
-      const eventDate = moment(event.date);
+    // Count occurrences, not stored rows. A weekly club is one row; filtering
+    // on `event.date` scored it as a single September event and as nothing at
+    // all in October, so every figure below was wrong for any repeating event.
+    const visible = events.filter(event => {
       const personMatch = event.person === '' || selectedPeople.includes(event.person);
-      return eventDate.isBetween(monthStart, monthEnd, 'day', '[]') &&
-             personMatch &&
-             selectedCategories.includes(event.type);
+      return personMatch && selectedCategories.includes(event.type);
     });
+
+    const monthEvents = expandEvents(
+      visible,
+      monthStart.format('YYYY-MM-DD'),
+      monthEnd.format('YYYY-MM-DD')
+    ).map(occ => ({ ...occ.event, date: occ.date, endDate: occ.endDate, time: occ.time, duration: occ.duration }));
 
     // Calculate analytics
     const totalEvents = monthEvents.length;
@@ -685,15 +730,25 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
   }, [events, currentDate, view, selectedPeople, selectedCategories, people]);
 
   const selectedDayEvents = useMemo(() => {
-    return events
-      .filter((event) => {
-        const personMatch = event.person === '' || selectedPeople.includes(event.person)
-        const categoryMatch = selectedCategories.includes(event.type)
-        const startsBeforeOrOn = event.date <= selectedAgendaDate
-        const endsAfterOrOn = (event.endDate || event.date) >= selectedAgendaDate
-        return personMatch && categoryMatch && startsBeforeOrOn && endsAfterOrOn
-      })
-      .slice()
+    // Expand first. Filtering raw `event.date` here meant the day panel only
+    // ever knew about the first instance of a series: the grid drew swimming on
+    // five Wednesdays, and clicking the third one said "No events on this date".
+    const visible = events.filter((event) => {
+      const personMatch = event.person === '' || selectedPeople.includes(event.person)
+      const categoryMatch = selectedCategories.includes(event.type)
+      return personMatch && categoryMatch
+    })
+
+    // A multi-day occurrence can start before the selected day, so expand a
+    // window around it rather than the single date.
+    const windowStart = addDays(selectedAgendaDate, -31)
+    const windowEnd = addDays(selectedAgendaDate, 1)
+
+    return expandEvents(visible, windowStart, windowEnd)
+      .filter((occ) => occ.date <= selectedAgendaDate && occ.endDate >= selectedAgendaDate)
+      // Present each instance as an event on the day it actually falls, so
+      // conflict grouping and the row UI below see the occurrence's date.
+      .map((occ) => ({ ...occ.event, date: occ.date, endDate: occ.endDate, time: occ.time, duration: occ.duration }))
       .sort((a, b) => a.time.localeCompare(b.time) || a.title.localeCompare(b.title))
   }, [events, selectedAgendaDate, selectedPeople, selectedCategories])
 
