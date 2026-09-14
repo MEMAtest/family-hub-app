@@ -237,6 +237,13 @@ drifted apart. `resolvePattern()` is the shim that makes a gradual migration saf
   for a whole year's series), and the copilot's "where everyone is today". All four now
   expand first, and all four are pinned by e2e journeys. Still on raw dates, and still to
   do: `eventMatches` in `calendarAssistant.ts`, and `conflictDetectionService`.
+- **A failed first hydration used to be permanent.** `lastHydrationKey` is claimed
+  *before* the events fetch resolves, so an interrupted request left the guard set with
+  nothing loaded and no path back — the calendar stayed empty until the 60s poll. This is
+  what made the brain-integrations journey flake in CI: its trace showed `/events` aborted
+  20ms after it started, then no network activity at all for the rest of the test. The
+  fetch now retries, and a total failure releases the claim so a retry can happen.
+  `tests/e2e/calendar-hydration-resilience.spec.ts` pins it.
 - **`toISOString()` on a locally-constructed `Date` reports the previous day** anywhere
   east of Greenwich — all summer, here. `YearView` built its day keys that way. Prefer
   string arithmetic (`recurrence.ts` has it) over round-tripping through `Date`.

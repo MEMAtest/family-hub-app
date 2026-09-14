@@ -129,6 +129,30 @@ const mergeEvents = (primary: CalendarEvent[], secondary: CalendarEvent[]) => {
   return Array.from(merged.values());
 };
 
+/**
+ * Fetch that tolerates a transient failure. Returns the response, or null when
+ * every attempt failed — callers decide what an outright failure means.
+ */
+const fetchWithRetry = async (url: string, attempts = 3): Promise<Response | null> => {
+  const backoff = [0, 400, 1200];
+  let lastError: unknown = null;
+
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    if (backoff[attempt]) await wait(backoff[attempt]);
+    try {
+      const response = await fetch(url);
+      // A 5xx is worth another go; a 4xx will not change on retry.
+      if (response.ok || response.status < 500) return response;
+      lastError = new Error(`HTTP ${response.status}`);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  console.warn('📆 CalendarContext: giving up on', url, lastError);
+  return null;
+};
+
 const mapDatabaseEventsToCalendarEvents = (dbEvents: any[]): CalendarEvent[] =>
   dbEvents.map((e: any) => {
     const eventTime = new Date(e.eventTime);
@@ -186,10 +210,24 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
       for (const [attempt, delay] of retryDelays.entries()) {
         if (delay > 0) await wait(delay);
 
-        const [nodesRes, projectsRes] = await Promise.all([
-          fetch(`/api/families/${fid}/brain/nodes?showOnCalendar=true`),
-          fetch(`/api/families/${fid}/brain/projects`),
-        ]);
+        // An aborted fetch rejects. Catching per attempt keeps one interrupted
+        // request from abandoning the whole load — previously it threw straight
+        // past the retry loop to the outer catch, and brain items simply never
+        // appeared on the calendar.
+        let nodesRes: Response | null = null;
+        let projectsRes: Response | null = null;
+        try {
+          [nodesRes, projectsRes] = await Promise.all([
+            fetch(`/api/families/${fid}/brain/nodes?showOnCalendar=true`),
+            fetch(`/api/families/${fid}/brain/projects`),
+          ]);
+        } catch (error) {
+          if (attempt === retryDelays.length - 1) {
+            console.warn('📆 CalendarContext: brain fetch failed on every attempt:', error);
+            return;
+          }
+          continue;
+        }
         if (!nodesRes.ok || !projectsRes.ok) {
           if (attempt === retryDelays.length - 1) return;
           continue;
@@ -311,8 +349,14 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
       // Try database first
       if (familyId && databaseStatus.connected) {
         try {
-          const response = await fetch(`/api/families/${familyId}/events`);
-          if (response.ok) {
+          // A single attempt was not enough. The hydration burst fires a dozen
+          // requests at once and an interrupted one — a navigation mid-load, a
+          // cold server, a dropped connection — rejects here. Because
+          // `lastHydrationKey` is already claimed above, nothing re-hydrates and
+          // the calendar stays empty until the 60s poll, which is a long time to
+          // stare at a blank month.
+          const response = await fetchWithRetry(`/api/families/${familyId}/events`);
+          if (response?.ok) {
             const dbEvents = await response.json();
             if (Array.isArray(dbEvents)) {
               // Convert database events to app format
@@ -334,6 +378,10 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
         } catch (error) {
           console.error('📆 CalendarContext: Failed to load events from database:', error);
         }
+
+        // Every attempt failed, so this hydration never happened. Release the
+        // claim, or the guard above blocks the retry that would fix it.
+        lastHydrationKey.current = null;
       }
 
       // Fallback to localStorage
