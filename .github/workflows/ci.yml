@@ -28,13 +28,35 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps
 
+      # next dev compiles API routes lazily, but generating the client up front
+      # removes a whole class of "Prisma client not initialised" flakiness.
+      - name: Generate Prisma client
+        run: npx prisma generate
+
       - name: Run unit tests
         run: npm run test -- --runInBand
 
       - name: Run AI smoke tests
         run: npm run test:smoke
 
-      # E2E tests skipped - requires DATABASE_URL secret to be configured
+      # The calendar journeys stub the family APIs, so they need no database and
+      # can run on every PR. The rest of the E2E suite still waits on a
+      # DATABASE_URL secret.
+      - name: Run calendar E2E journeys
+        run: npm run test:e2e -- tests/e2e/calendar-recurrence.spec.ts
+
+      - name: Upload E2E artefacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: calendar-e2e-trace
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 7
+          if-no-files-found: ignore
+
+      # Remaining E2E tests skipped - require DATABASE_URL secret to be configured
       # - name: Run Playwright end-to-end tests
       #   run: npm run test:e2e
 
