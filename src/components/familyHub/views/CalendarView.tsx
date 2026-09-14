@@ -12,9 +12,11 @@ import type { CalendarEvent } from '@/types/calendar.types';
 export const CalendarView = () => {
   const {
     events,
+    tasks,
     openEditForm,
     openCreateForm,
     createEvent,
+    createTask,
     updateEvent,
     deleteEvent,
     openTemplateManager,
@@ -102,6 +104,7 @@ export const CalendarView = () => {
           people={people}
           currentDate={currentDate}
           createEvent={createEvent}
+          createTask={createTask}
           onOpenCalendar={() => setCurrentDate(currentDate)}
         />
       )}
@@ -109,6 +112,7 @@ export const CalendarView = () => {
       <div className="min-h-[720px] flex-1 overflow-visible pb-4 sm:pb-6 lg:pb-0">
         <CalendarMain
           events={events}
+          tasks={tasks}
           people={people}
           onEventClick={openEditForm}
           onEventCreate={openCreateForm}

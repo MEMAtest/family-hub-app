@@ -43,6 +43,7 @@ model Family {
   owner                 User?          @relation("FamilyOwner", fields: [ownerId], references: [id])
   members               FamilyMember[]
   calendarEvents        CalendarEvent[]
+  calendarTasks         CalendarTask[]
   budgetIncome          BudgetIncome[]
   budgetExpenses        BudgetExpense[]
   budgetCategories      BudgetCategory[]
@@ -161,12 +162,71 @@ model CalendarEvent {
   updatedAt        DateTime @updatedAt @map("updated_at")
 
   // Relations
-  family Family       @relation(fields: [familyId], references: [id], onDelete: Cascade)
-  person FamilyMember @relation(fields: [personId], references: [id], onDelete: Cascade)
+  family     Family                   @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  person     FamilyMember             @relation(fields: [personId], references: [id], onDelete: Cascade)
+  exceptions CalendarEventException[]
+  tasks      CalendarTask[]
 
   @@index([familyId, source, sourceId])
   @@index([familyId, googleCalendarId, googleEventId])
   @@map("calendar_events")
+}
+
+/// One-instance changes to a recurring series: cancel this week, move that one.
+/// Without this, cancelling a single swimming lesson means deleting the series.
+model CalendarEventException {
+  id         String   @id @default(cuid())
+  eventId    String   @map("event_id")
+  /// The date in the original series this applies to, YYYY-MM-DD.
+  seriesDate String   @map("series_date")
+  /// "skip" removes the instance, "override" changes it.
+  type       String
+  /// { date?, time?, duration?, title?, location?, notes?, status?, person? }
+  overrides  Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  event CalendarEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, seriesDate])
+  @@index([eventId])
+  @@map("calendar_event_exceptions")
+}
+
+/// Work with a deadline — homework, chores, forms to return.
+/// Deliberately separate from CalendarEvent: an event happens AT a time, a task
+/// is set on one day, due by another, and is either done or it isn't.
+model CalendarTask {
+  id             String    @id @default(cuid())
+  familyId       String    @map("family_id")
+  title          String
+  /// Family member ids. Plural — homework can be set for both kids.
+  assignees      String[]  @map("assignees")
+  /// The day it was set.
+  assignedDate   DateTime  @map("assigned_date")
+  /// The day it must be done by.
+  dueDate        DateTime  @map("due_date")
+  /// Optional time on the due date, "HH:MM".
+  dueTime        String?   @map("due_time")
+  completedAt    DateTime? @map("completed_at")
+  completedBy    String?   @map("completed_by")
+  taskType       String    @default("homework") @map("task_type")
+  subject        String?
+  notes          String?
+  priority       String    @default("medium")
+  effortMinutes  Int?      @map("effort_minutes")
+  /// The lesson or club that generated this, if any.
+  sourceEventId  String?   @map("source_event_id")
+  /// Serialised RecurringPattern for repeating work (weekly spellings, etc).
+  recurrenceRule Json?     @map("recurrence_rule")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  family      Family         @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  sourceEvent CalendarEvent? @relation(fields: [sourceEventId], references: [id], onDelete: SetNull)
+
+  @@index([familyId, dueDate])
+  @@index([familyId, completedAt])
+  @@map("calendar_tasks")
 }
 
 model CalendarEmailIntake {

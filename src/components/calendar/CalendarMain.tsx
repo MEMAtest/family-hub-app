@@ -36,7 +36,7 @@ import {
   Sparkles,
   RefreshCw
 } from 'lucide-react'
-import { CalendarEvent, BigCalendarEvent, CalendarView, Person } from '@/types/calendar.types'
+import { CalendarEvent, BigCalendarEvent, CalendarTask, CalendarView, Person } from '@/types/calendar.types'
 import GoogleCalendarSync from './GoogleCalendarSync'
 import ICalExport from './ICalExport'
 import PDFImport from './PDFImport'
@@ -49,6 +49,7 @@ import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { useFamilyStore } from '@/store/familyStore'
 import { formatConflictGroupTimeRange, getSameDayConflictGroups } from '@/utils/calendarConflicts'
 import { expandEvents, getExpansionRange, type Occurrence } from '@/utils/recurrence'
+import { buildTaskEntries, getTaskEntryStyle, isTaskEntry } from '@/utils/taskCalendar'
 
 // Set up moment localizer and drag-and-drop calendar
 const localizer = momentLocalizer(moment)
@@ -106,6 +107,8 @@ const buildDefaultSlotForDate = (date: Date) => {
 
 interface CalendarMainProps {
   events: CalendarEvent[]
+  /** Homework, chores and anything else with a deadline. */
+  tasks?: CalendarTask[]
   people: Person[]
   onEventClick: (event: CalendarEvent) => void
   onEventCreate: (slotInfo: { start: Date; end: Date }) => void
@@ -122,6 +125,7 @@ interface CalendarMainProps {
 
 const CalendarMain: React.FC<CalendarMainProps> = ({
   events,
+  tasks = [],
   people,
   onEventClick,
   onEventCreate,
@@ -455,7 +459,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
     const { start: rangeStart, end: rangeEnd } = getExpansionRange(currentDate, view)
     const occurrences = expandEvents(filtered, rangeStart, rangeEnd)
 
-    return occurrences.map(occ => ({
+    const eventEntries = occurrences.map(occ => ({
       // event.id is no longer unique once a series expands; duplicate keys make
       // the grid reuse DOM nodes across different weeks.
       id: occ.occurrenceId,
@@ -465,7 +469,22 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
       resource: occ.event,
       allDay: occ.endDate > occ.date,
     }));
-  }, [events, selectedPeople, selectedCategories, currentDate, view])
+
+    // Tasks are drawn as all-day bands spanning set date -> due date, so the
+    // week's workload is visible across the days it actually hangs over rather
+    // than as a block at an invented time.
+    const visibleTasks = tasks.filter(task =>
+      task.assignees.length === 0 || task.assignees.some(id => selectedPeople.includes(id))
+    );
+    const taskEntries = buildTaskEntries(
+      visibleTasks,
+      rangeStart,
+      rangeEnd,
+      moment().format('YYYY-MM-DD')
+    );
+
+    return [...eventEntries, ...taskEntries];
+  }, [events, tasks, selectedPeople, selectedCategories, currentDate, view])
 
   // Get person color for event styling
   const getPersonColor = useCallback((personId: string) => {
@@ -475,6 +494,10 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
 
   // Event style function
   const eventStyleGetter = useCallback((event: any) => {
+    // Work with a deadline is coloured by how close it is to being late, not by
+    // whose it is — on a calendar that is the only question that matters.
+    if (isTaskEntry(event)) return getTaskEntryStyle(event)
+
     const personColor = getPersonColor(event.resource!.person)
 
     return {
@@ -499,6 +522,11 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
 
   // Handle event selection
   const handleSelectEvent = useCallback((event: any) => {
+    if (isTaskEntry(event)) {
+      // Tasks have no event record to edit; jump the agenda to the due date.
+      setSelectedAgendaDate(event.occurrence.dueDate)
+      return
+    }
     setSelectedAgendaDate(event.resource!.date)
     onEventClick(event.resource!)
   }, [onEventClick])

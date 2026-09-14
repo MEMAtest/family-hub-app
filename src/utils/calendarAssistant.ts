@@ -1,4 +1,5 @@
-import type { CalendarEvent, Person } from '@/types/calendar.types';
+import type { CalendarEvent, CalendarTask, Person } from '@/types/calendar.types';
+import { parseFamilyInput } from '@/utils/familyInputParser';
 import { importDraftToCalendarEventDraft, parseCalendarImportText } from '@/utils/calendarImport';
 
 export type CalendarAssistantAction = 'search' | 'create' | 'unknown';
@@ -10,6 +11,12 @@ export interface CalendarAssistantResponse {
   results?: CalendarEvent[];
   draft?: Omit<CalendarEvent, 'id' | 'createdAt' | 'updatedAt'>;
   drafts?: Omit<CalendarEvent, 'id' | 'createdAt' | 'updatedAt'>[];
+  /** Set when the input described work with a deadline rather than an event. */
+  taskDraft?: Omit<CalendarTask, 'id' | 'createdAt' | 'updatedAt'>;
+  /** What the user still has to resolve. Never silently defaulted. */
+  needs?: Array<'assignee' | 'date' | 'time'>;
+  /** 0-1. Below ~0.5 the UI should confirm rather than assume. */
+  confidence?: number;
   warnings: string[];
 }
 
@@ -201,6 +208,26 @@ const eventMatches = (event: CalendarEvent, query: string, today: Date) => {
 const isCreateIntent = (command: string) => /^(add|create|book|schedule|put|make)\b/i.test(command.trim());
 const isSearchIntent = (command: string) => /^(find|search|show|what|when|list)\b/i.test(command.trim()) || /coming up|summer holiday|summer holidays/i.test(command);
 
+/**
+ * Format a Date as YYYY-MM-DD in LOCAL time.
+ *
+ * Not toISOString().slice(0,10) — that converts to UTC first, so an evening in
+ * BST reports tomorrow's date and "today" lands on the wrong day.
+ */
+const toLocalDateKey = (date: Date): string =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
+    date.getDate()
+  ).padStart(2, '0')}`;
+
+const describeNeeds = (needs: Array<'assignee' | 'date' | 'time'> = []): string[] =>
+  needs.map((need) =>
+    need === 'assignee'
+      ? 'Who is this for? I have not assumed a family member.'
+      : need === 'date'
+        ? 'I could not find a clear date — please confirm it.'
+        : 'No time was given, so I used a default.'
+  );
+
 export const runCalendarAssistant = ({
   command,
   events,
@@ -218,6 +245,22 @@ export const runCalendarAssistant = ({
       action: 'unknown',
       summary: 'Ask me to search or create a family event.',
       warnings: ['No command provided.'],
+    };
+  }
+
+  // Understand the sentence first. The old flow only recognised input that
+  // STARTED with add/create/book, so "Kayode has swimming on Tuesdays" was
+  // rejected outright — which is most of how people actually write.
+  const parsed = parseFamilyInput({ text: trimmed, people, today: toLocalDateKey(today) });
+
+  if (parsed.kind === 'task' && parsed.taskDraft) {
+    return {
+      action: 'create',
+      summary: parsed.summary,
+      taskDraft: parsed.taskDraft,
+      needs: parsed.needs,
+      confidence: parsed.confidence,
+      warnings: describeNeeds(parsed.needs),
     };
   }
 
@@ -286,7 +329,18 @@ export const runCalendarAssistant = ({
     };
   }
 
-  if (isSearchIntent(trimmed)) {
+  if (parsed.kind === 'event' && parsed.eventDraft && parsed.confidence >= 0.5) {
+    return {
+      action: 'create',
+      summary: parsed.summary,
+      draft: parsed.eventDraft,
+      needs: parsed.needs,
+      confidence: parsed.confidence,
+      warnings: describeNeeds(parsed.needs),
+    };
+  }
+
+  if (isSearchIntent(trimmed) || parsed.kind === 'query') {
     const results = events
       .filter((event) => eventMatches(event, trimmed, today))
       .sort((a, b) => `${a.date}T${a.time}`.localeCompare(`${b.date}T${b.time}`))
