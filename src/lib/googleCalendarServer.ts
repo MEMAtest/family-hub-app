@@ -15,6 +15,8 @@ const stateSecret = () =>
   process.env.RESEND_WEBHOOK_SECRET ||
   'family-hub-dev';
 
+const gmailAccountHint = () => process.env.GOOGLE_GMAIL_ACCOUNT?.trim().toLowerCase() || undefined;
+
 export const GOOGLE_CALENDAR_SCOPES = [
   'https://www.googleapis.com/auth/calendar.events',
   'https://www.googleapis.com/auth/calendar.readonly',
@@ -85,7 +87,8 @@ export const getGmailAuthUrl = (familyId: string) => {
 
   return oauth2Client.generateAuthUrl({
     access_type: 'offline',
-    prompt: 'consent',
+    prompt: 'select_account consent',
+    login_hint: gmailAccountHint(),
     scope: GOOGLE_GMAIL_SCOPES,
     state: encodeGoogleState(familyId, undefined, 'gmail'),
   });

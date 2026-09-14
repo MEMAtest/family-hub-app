@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { google } from 'googleapis';
 import prisma from '@/lib/prisma';
 import { createOAuthClient, decodeGoogleState } from '@/lib/googleCalendarServer';
 
@@ -57,6 +58,21 @@ export async function GET(request: NextRequest) {
     }
 
     if (purpose === 'gmail') {
+      try {
+        const profile = await google.gmail({ version: 'v1', auth: oauth2Client }).users.getProfile({ userId: 'me' });
+        googleUserEmail = profile.data.emailAddress || googleUserEmail;
+      } catch {
+        // Token info remains a valid fallback when Gmail profile lookup is unavailable.
+      }
+
+      const expectedGmailAccount = process.env.GOOGLE_GMAIL_ACCOUNT?.trim().toLowerCase();
+      if (expectedGmailAccount && googleUserEmail?.toLowerCase() !== expectedGmailAccount) {
+        return popupResponse(
+          'gmail_auth_error',
+          `Connect ${expectedGmailAccount} in Google, not ${googleUserEmail || 'the selected account'}.`,
+        );
+      }
+
       await prisma.gmailConnection.upsert({
         where: { familyId },
         create: {
