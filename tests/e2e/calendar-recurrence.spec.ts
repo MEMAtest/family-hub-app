@@ -288,4 +288,29 @@ test.describe('everything else that answers "what is on" agrees with the grid', 
     // Was 0. October has four Wednesdays.
     await expect(total).toContainText('4', { timeout: 10_000 });
   });
+
+  test('the "where everyone is today" panel knows about later occurrences', async ({ page }) => {
+    // "Today" is Monday 14 September 2026 and the series starts Monday 17
+    // August, so only an expanded view puts anything on today at all.
+    await openCalendarWith(page, [
+      withPattern({ title: 'Swimming lesson', date: '2026-08-17', recurring: 'weekly' }),
+    ]);
+
+    const today = page.getByText('WHERE EVERYONE IS TODAY').locator('..');
+    // Was empty: the panel only ever knew about the week the event was created.
+    await expect(today).toContainText('1 today', { timeout: 10_000 });
+    await expect(today).toContainText('Swimming lesson');
+  });
+
+  test('the year view counts every week of a series, not just the first', async ({ page }) => {
+    await openCalendarWith(page, [weeklyEvent]);
+
+    await page.getByRole('button', { name: /^Year$/ }).first().click();
+
+    // Wednesdays from 2 September to the end of 2026: 18 of them, 5 of which
+    // are in September. Before this, the year heat map coloured a single square.
+    const totals = page.getByText('Total Events').locator('..');
+    await expect(totals).toContainText('18', { timeout: 15_000 });
+    await expect(page.getByText('Busiest Month').locator('..')).toContainText('September');
+  });
 });

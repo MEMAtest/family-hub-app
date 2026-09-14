@@ -13,6 +13,7 @@ import {
 import { CalendarAssistantResponse, runCalendarAssistant } from '@/utils/calendarAssistant';
 import type { SchoolDocumentRoutine, SchoolDocumentSummary } from '@/utils/schoolDocumentSummary';
 import { extractRoutineWeekdays, nextDateForWeekday } from '@/utils/schoolRoutineSchedule';
+import { addDays, expandEvents } from '@/utils/recurrence';
 
 interface CalendarCopilotPanelProps {
   events: CalendarEvent[];
@@ -161,12 +162,13 @@ const CalendarCopilotPanel = ({
   const todaysEventsByPerson = useMemo(() => {
     const dateKey = toDateKey(currentDate);
     const grouped = new Map<string, CalendarEvent[]>();
-    events
-      .filter((event) => {
-        if (event.status === 'cancelled') return false;
-        const endDate = event.endDate || event.date;
-        return event.date <= dateKey && endDate >= dateKey;
-      })
+    // Expand before asking what is on. Filtering `event.date` here meant a
+    // weekly club only ever counted as "on" during the week it was created, so
+    // "where everyone is today" was blank on every later week.
+    const live = events.filter((event) => event.status !== 'cancelled');
+    expandEvents(live, addDays(dateKey, -31), addDays(dateKey, 1))
+      .filter((occ) => occ.date <= dateKey && occ.endDate >= dateKey)
+      .map((occ) => ({ ...occ.event, date: occ.date, endDate: occ.endDate, time: occ.time, duration: occ.duration }))
       .sort((a, b) => timeToMinutes(a.time) - timeToMinutes(b.time))
       .forEach((event) => {
         const existing = grouped.get(event.person) ?? [];

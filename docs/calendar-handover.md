@@ -107,7 +107,9 @@ Everything the original sandbox could not run has now been run on a real machine
 | `prisma validate` / `prisma generate` | ✅ schema valid, client generates |
 | **Playwright `calendar-recurrence.spec.ts`** | ✅ **3/3 passing — first real execution** |
 | **Calendar rendered in a browser** | ✅ weekly series drawn on every Wednesday, one-off drawn once |
-| Migration applied | ❌ not applied — deliberate, see below |
+| Playwright, whole `user-journeys` suite | ✅ 62 passing locally; the 4 that fail in CI are red on `main` too |
+| Prisma schema against a real Postgres | ✅ `db push` applies; both new tables created |
+| Migration applied to production | ❌ not applied — deliberate, see below |
 
 The first real e2e run found two things, both fixed in `921e29c`.
 
@@ -228,8 +230,16 @@ drifted apart. `resolvePattern()` is the shim that makes a gradual migration saf
 
 - **Everything that answers "what is on between X and Y" must go through
   `expandEvents`/`expandTasks`.** Any new code filtering on `event.date` reintroduces the
-  original bug. Current call sites still on raw dates: `eventMatches` in
-  `calendarAssistant.ts`, and `conflictDetectionService`.
+  original bug. Four places were found doing exactly that after the grid was fixed, each
+  one visible to a user, none caught by a test — the day panel under the grid ("No events
+  on this date" on a day the grid had drawn), the month analytics (a weekly club counted
+  as one September event and nothing in October), the year heat map (one coloured square
+  for a whole year's series), and the copilot's "where everyone is today". All four now
+  expand first, and all four are pinned by e2e journeys. Still on raw dates, and still to
+  do: `eventMatches` in `calendarAssistant.ts`, and `conflictDetectionService`.
+- **`toISOString()` on a locally-constructed `Date` reports the previous day** anywhere
+  east of Greenwich — all summer, here. `YearView` built its day keys that way. Prefer
+  string arithmetic (`recurrence.ts` has it) over round-tripping through `Date`.
 - **Never key a grid entry on `event.id`.** Use `occurrenceId`.
 - **An event whose `type` is not on the category allowlist is silently invisible.**
   `CalendarMain` filters with `selectedCategories.includes(event.type)` against a hardcoded
