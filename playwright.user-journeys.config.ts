@@ -3,6 +3,7 @@ import baseConfig from './playwright.config';
 
 export default defineConfig({
   ...baseConfig,
+  globalSetup: baseConfig.globalSetup,
   testMatch: [
     'auth-private-boundaries.spec.ts',
     'bootstrap-resilience.spec.ts',

@@ -138,8 +138,13 @@ const mergeEvents = (primary: CalendarEvent[], secondary: CalendarEvent[]) => {
  * bare `fetch` pending forever. It never rejects, so nothing retries and
  * nothing recovers. `databaseService.fetchAPI` already guards its own calls
  * this way; the calendar's did not, and sat on a blank month indefinitely.
+ *
+ * Kept generous rather than snappy: the job is to escape a request that is
+ * never coming back, not to abandon one that is merely slow. `fetchAPI` waits
+ * 20s for a single try; three tries of 10s costs the same patience overall and
+ * gets two more chances out of it.
  */
-const FETCH_TIMEOUT_MS = 6_000;
+const FETCH_TIMEOUT_MS = 10_000;
 
 /**
  * Fetch that tolerates a transient failure, including a request that simply
