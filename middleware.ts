@@ -34,7 +34,15 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  return authMiddleware(request as never);
+  try {
+    return await authMiddleware(request as never);
+  } catch (error) {
+    console.error('Neon Auth middleware failed:', error);
+    const signInUrl = request.nextUrl.clone();
+    signInUrl.pathname = '/auth/sign-in';
+    signInUrl.searchParams.set('error', 'auth_unavailable');
+    return NextResponse.redirect(signInUrl);
+  }
 }
 
 export const config = {

@@ -15,6 +15,7 @@ export default function SignInPage() {
       const result = await authClient.signIn.social({
         provider: 'google',
         callbackURL: '/',
+        loginHint: process.env.NEXT_PUBLIC_FAMILY_OWNER_EMAIL || undefined,
       });
       if (result.error) setError(result.error.message || 'Google sign-in could not be started.');
     } catch {
