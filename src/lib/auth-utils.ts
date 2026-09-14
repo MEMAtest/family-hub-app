@@ -22,6 +22,21 @@ export const isLegacyProfileUser = (
   user: { neonAuthId: string | null; authProvider: string } | null | undefined
 ) => Boolean(user && !user.neonAuthId && user.authProvider === 'local-profile');
 
+const isTransientDatabaseError = (error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error);
+  return /closed|connection|P1001|P1017|P2024/i.test(message);
+};
+
+const withDatabaseRetry = async <T>(operation: () => Promise<T>) => {
+  try {
+    return await operation();
+  } catch (error) {
+    if (!isTransientDatabaseError(error)) throw error;
+    await new Promise((resolve) => setTimeout(resolve, 75));
+    return operation();
+  }
+};
+
 function getBypassTestUser(): AuthenticatedUser | null {
   if (process.env.NODE_ENV !== 'test' || process.env.BYPASS_AUTH_FOR_TESTS !== 'true') return null;
 
@@ -191,15 +206,17 @@ export async function getAuthenticatedUser(request: NextRequest, params?: RouteP
 
   const identity = await getCurrentSessionIdentity(request);
   if (!identity) return null;
-  const dbUser = await getOrCreateUserForIdentity(identity);
+  const { dbUser, member } = await withDatabaseRetry(async () => {
+    const nextDbUser = await getOrCreateUserForIdentity(identity);
+    let nextMember = await prisma.familyMember.findFirst({
+      where: { userId: nextDbUser.id },
+      orderBy: { createdAt: 'asc' },
+    });
 
-  let member = await prisma.familyMember.findFirst({
-    where: { userId: dbUser.id },
-    orderBy: { createdAt: 'asc' },
+    const bootstrappedMember = await bootstrapConfiguredOwner(identity, nextDbUser.id);
+    if (bootstrappedMember) nextMember = bootstrappedMember;
+    return { dbUser: nextDbUser, member: nextMember };
   });
-
-  const bootstrappedMember = await bootstrapConfiguredOwner(identity, dbUser.id);
-  if (bootstrappedMember) member = bootstrappedMember;
   if (!member) return null;
 
   return {
