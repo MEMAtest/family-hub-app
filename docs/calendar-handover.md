@@ -1,7 +1,7 @@
 # Family Hub calendar — state of play and handover
 
-**Branch:** `fix/calendar-recurrence` (3 commits, not yet pushed)
-**Base:** behind `origin/main` by 2 commits (Google sign-in work) — no file overlap, merges clean
+**Branch:** `fix/calendar-recurrence`
+**Base:** `origin/main` merged in; branch is up to date with it
 **Date:** 14 September 2026
 
 ---
@@ -93,60 +93,66 @@ test steps.
 
 ---
 
-## Verification status — read this before trusting anything
+## Verification status
+
+Everything the original sandbox could not run has now been run on a real machine
+(14 September 2026, macOS, Node 25, `Europe/London`).
 
 | Check | Status |
 |---|---|
 | Jest, full suite | ✅ **239 passing**, 24 suites (65 new tests) |
-| `tsc --noEmit` | ✅ clean |
+| Jest under `TZ=UTC` and `TZ=Europe/London` | ✅ both green |
+| `tsc --noEmit` | ✅ clean (needs `NODE_OPTIONS=--max-old-space-size=8192`) |
 | ESLint across `src/` | ✅ clean |
-| Playwright spec collects | ✅ 3 tests listed |
-| **Playwright actually executed** | ❌ **never run anywhere** |
-| **App opened in a browser** | ❌ **never** |
-| `prisma validate` / `generate` | ❌ could not run |
-| Migration applied | ❌ not applied |
+| `prisma validate` / `prisma generate` | ✅ schema valid, client generates |
+| **Playwright `calendar-recurrence.spec.ts`** | ✅ **3/3 passing — first real execution** |
+| **Calendar rendered in a browser** | ✅ weekly series drawn on every Wednesday, one-off drawn once |
+| Migration applied | ❌ not applied — deliberate, see below |
 
-**Three hard blockers in the sandbox this was built in**, all network/permission, none
-fixable with more effort:
+The first real e2e run found two things, both fixed in `921e29c`.
 
-- **Chromium will not install** — the Playwright CDN is blocked by the egress proxy, there
-  is no sudo, and the npm-hosted browser package downloads from the same host. So the e2e
-  spec and the CI step it enables are **unproven**; expect the first CI run to need a
-  selector tweak.
-- **Prisma engine binaries are blocked** (same proxy), so `prisma generate` and
-  `prisma validate` could not run. The schema edits are syntactically careful but
-  **unvalidated**.
-- **No GitHub credentials** — no token, no credential helper, no `~/.netrc`, and SSH
-  cannot resolve github.com. The branch cannot be pushed from here.
+**`BrainFocusWidget` took the whole dashboard down on a malformed payload.** Its guard read
+`!data || data.total === 0`, so any truthy non-`TodayData` response walked straight past it
+and `data.groups.flatMap(...)` threw during render. That unwinds to the top-level
+`ErrorBoundary`, so the user gets "Something went wrong" and no app at all — from one bad
+response on a widget whose whole job is to render nothing when there is nothing to show.
+It now type-guards the fetch and keys the render off `groups`. This is what made the e2e
+fail: the calendar button was never reachable, because the dashboard had already crashed.
+
+**Two `taskCalendar` assertions were timezone-dependent.** They read local-midnight `Date`s
+back through `toISOString()`, which is UTC — green in the UTC sandbox, red on any British
+summer afternoon. The grid works in local time, so they now compare local date parts.
+
+Worth knowing: the `dateUtils`, `formatDate` and `schoolRoutineSchedule` suites (all
+pre-existing, none touched by this branch) fail under `TZ=America/Los_Angeles` and
+`TZ=Pacific/Auckland`. Green in the UK, and this is a UK family calendar, so it is noted
+rather than fixed — but it means the suite is not a timezone-correctness check.
 
 ---
 
 ## Immediate next steps
 
 ```bash
-# 1. push and open a PR against main (CI only triggers on PRs to main)
-git push -u origin fix/calendar-recurrence
-
-# 2. validate what the sandbox could not
-npx prisma generate
-npx prisma validate
-
-# 3. run the e2e locally — first real execution
+# 1. the e2e journeys, now known to pass
 npm run test:e2e -- tests/e2e/calendar-recurrence.spec.ts
 
-# 4. only when you want tasks persisted server-side (currently localStorage)
+# 2. only when you want tasks persisted server-side (currently localStorage)
 npm run db:push
 ```
 
 The Prisma change is **purely additive** — two new tables, no changes to existing columns
 — and nothing queries them yet, so deploying before `db:push` is safe.
 
-**Also worth doing:** `origin/main` moved ahead during this work. The copies of
-`.env.example`, `middleware.ts`, `src/app/auth/sign-in/page.tsx` and `src/lib/auth-utils.ts`
-sitting uncommitted in the working tree are **older** than main — `sign-in/page.tsx` is
-missing the `auth_unavailable` error handling and the owner-email hint. They were left
-untouched and backed up to `.local-backup-20260914/`. Check them out from main before they
-cause confusion.
+`origin/main` has been merged in (`75e188d`), which restored the `auth_unavailable`
+handling and the owner-email hint that stale working-tree copies of
+`src/app/auth/sign-in/page.tsx` had been masking. `.local-backup-20260914/` is now
+redundant and can be deleted.
+
+⚠️ **`.env` and `.env.local` both point at the production Neon database.** `npm run dev`
+on this machine reads and writes the real family's data. The Playwright config points at
+a separate `TEST_DATABASE_URL` and the calendar spec stubs its APIs client-side, so the
+e2e run touches nothing real — but do the visual checks through Playwright, not through
+`next dev`, unless you mean to be on prod.
 
 ---
 
@@ -225,6 +231,13 @@ drifted apart. `resolvePattern()` is the shim that makes a gradual migration saf
   original bug. Current call sites still on raw dates: `eventMatches` in
   `calendarAssistant.ts`, and `conflictDetectionService`.
 - **Never key a grid entry on `event.id`.** Use `occurrenceId`.
+- **An event whose `type` is not on the category allowlist is silently invisible.**
+  `CalendarMain` filters with `selectedCategories.includes(event.type)` against a hardcoded
+  list — `sport, meeting, fitness, social, education, family, other, appointment, work,
+  personal, brain`. Today every producer emits a listed value, so nothing is lost. But add
+  a new event type anywhere (the parser, Gmail intake, a template) without adding it there
+  and the event saves, syncs, and never appears, with no error. Cost me an hour of thinking
+  the grid was broken.
 - **All-day `end` is exclusive** in react-big-calendar.
 - **`npm run typecheck` OOMs** on the default heap. Use
   `NODE_OPTIONS="--max-old-space-size=8192" npx tsc --noEmit`. Pre-existing.
