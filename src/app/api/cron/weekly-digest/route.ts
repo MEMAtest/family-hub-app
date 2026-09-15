@@ -90,6 +90,10 @@ export async function GET(request: NextRequest) {
   const preview = searchParams.get('preview') === '1';
   const dryRun = preview || searchParams.get('dry') === '1';
   const familyId = searchParams.get('familyId');
+  // Narrow a real send to one person — for trying it out without mailing the
+  // whole household. It can only ever *filter* the recipients the digest had
+  // already resolved, so it cannot be used to send to an arbitrary address.
+  const only = searchParams.get('only')?.toLowerCase() ?? null;
   const weekStart = mondayOf(searchParams.get('week') || toDateKey(new Date()));
 
   if (!authorised(request)) {
@@ -110,7 +114,15 @@ export async function GET(request: NextRequest) {
         continue;
       }
 
-      const { family, digest, recipients } = loaded;
+      const { family, digest } = loaded;
+      const recipients = only
+        ? loaded.recipients.filter((r) => r.email.toLowerCase() === only)
+        : loaded.recipients;
+
+      if (only && recipients.length === 0) {
+        results.push({ familyId: id, skipped: `"${only}" is not a recipient of this household` });
+        continue;
+      }
       const subject = renderWeeklyDigestSubject(digest, family.familyName);
       const html = renderWeeklyDigestHtml(digest, family.familyName);
       const text = renderWeeklyDigestText(digest, family.familyName);
