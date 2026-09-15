@@ -3,11 +3,13 @@ import baseConfig from './playwright.config';
 
 export default defineConfig({
   ...baseConfig,
+  globalSetup: baseConfig.globalSetup,
   testMatch: [
     'auth-private-boundaries.spec.ts',
     'bootstrap-resilience.spec.ts',
     'brain-integrations.spec.ts',
     'budget.spec.ts',
+    'calendar-hydration-resilience.spec.ts',
     'calendar-school-document.spec.ts',
     'full-app-critical.spec.ts',
     'mobile-persistence.spec.ts',

@@ -10,6 +10,8 @@ const TEST_DATABASE_URL =
 
 const config: PlaywrightTestConfig = {
   testDir: 'tests/e2e',
+  // Compile the API routes once up front; see tests/e2e/global-setup.ts.
+  globalSetup: require.resolve('./tests/e2e/global-setup'),
   timeout: 60_000,
   expect: {
     timeout: 10_000,
