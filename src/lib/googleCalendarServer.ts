@@ -24,6 +24,11 @@ export const GOOGLE_CALENDAR_SCOPES = [
 
 export const GOOGLE_GMAIL_SCOPES = [
   'https://www.googleapis.com/auth/gmail.readonly',
+  // Lets the household send its own mail — the Monday digest goes out from the
+  // family's own address rather than needing a transactional provider and a
+  // DNS-verified domain. Adding a scope means anyone connected before this has
+  // to reconnect once; Google never widens an existing grant silently.
+  'https://www.googleapis.com/auth/gmail.send',
 ];
 
 export const createOAuthClient = () =>
