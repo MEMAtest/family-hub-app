@@ -1,0 +1,145 @@
+import { expect, test, type Page } from '@playwright/test';
+
+/**
+ * Mobile calendar journeys.
+ *
+ * Two faults this covers, both reported from a phone and both reproduced here
+ * before being fixed:
+ *
+ *  - Tapping a repeat booking sent the day panel to the day the series STARTED
+ *    rather than the day tapped. Tap the last swimming lesson of the month and
+ *    the panel jumped back to the first one.
+ *  - The quick-add panel was wider than the screen. Because the page does not
+ *    scroll sideways the excess was clipped, not reachable: "Connect Gmail" was
+ *    cut mid-word and the quick-create "Run" button sat entirely off screen.
+ */
+
+const family = { id: 'mobile-family', familyName: 'Mobile family', familyCode: 'mobile' };
+const child = { id: 'mobile-child', familyId: family.id, name: 'Kayode', role: 'Child', ageGroup: 'Child', color: '#147c72', icon: 'K' };
+
+/** Monday 14 September 2026 — pinned so these keep meaning the same thing. */
+const TODAY = new Date('2026-09-14T09:00:00.000Z');
+
+/** Wednesdays: 2, 9, 16, 23, 30 September. */
+const swimming = {
+  id: 'mobile-swim', title: 'Swimming lesson', person: child.id, date: '2026-09-02', time: '17:00', duration: 60,
+  recurring: 'weekly', isRecurring: true, cost: 0, type: 'sport', priority: 'medium', status: 'confirmed',
+  createdAt: '2026-09-01T00:00:00.000Z', updatedAt: '2026-09-01T00:00:00.000Z',
+};
+
+/** Sundays: 6, 13, 20, 27 September. */
+const sundayClub = { ...swimming, id: 'mobile-sunday', title: 'Sunday swimming', date: '2026-09-06', time: '10:00' };
+
+const stubApis = async (page: Page) => {
+  await page.route('**/api/families/**', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: route.request().method() === 'GET' ? '[]' : '{}' })
+  );
+  await page.route('**/api/families', (route) =>
+    route.request().method() !== 'GET'
+      ? route.fallback()
+      : route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ ...family, members: [child] }]) })
+  );
+  await page.route('**/api/families/*/members', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([child]) })
+  );
+  await page.route('**/api/families/*/events', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: route.request().method() === 'GET' ? '[]' : '{}' })
+  );
+  await page.route('**/api/auth/me', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        user: { id: 'mobile-user', email: 'mobile@example.com', displayName: 'E2E User' },
+        family: null,
+        familyMember: null,
+        needsOnboarding: false,
+      }),
+    })
+  );
+};
+
+const PHONES = [
+  { name: 'iPhone', width: 390, height: 844 },
+  { name: 'small Android', width: 360, height: 800 },
+];
+
+const openCalendar = async (page: Page, events: unknown[], width: number, height: number) => {
+  await page.setViewportSize({ width, height });
+  await page.clock.setFixedTime(TODAY);
+  await page.addInitScript((seed) => {
+    localStorage.setItem('familyHub_setupComplete', 'skipped');
+    localStorage.setItem('familyId', 'mobile-family');
+    localStorage.setItem('calendarEvents', JSON.stringify(seed));
+  }, events);
+  await stubApis(page);
+  await page.goto('/');
+  await page.getByRole('button', { name: /^Calendar$/ }).last().click();
+  await expect(page.locator('.rbc-calendar')).toBeVisible({ timeout: 20_000 });
+  await page.waitForTimeout(1_000);
+};
+
+/**
+ * Controls whose box falls outside the viewport while the page has no sideways
+ * scroll — i.e. genuinely unreachable rather than merely needing a swipe.
+ * The suggestion-chip row is excluded: it is a deliberate horizontal scroller.
+ */
+const clippedControls = (page: Page) =>
+  page.evaluate(() => {
+    const doc = document.documentElement;
+    if (doc.scrollWidth > doc.clientWidth) return ['PAGE SCROLLS SIDEWAYS'];
+    const out: string[] = [];
+    document.querySelectorAll<HTMLElement>('button, a[href], input, textarea').forEach((el) => {
+      const rect = el.getBoundingClientRect();
+      if (rect.width < 8 || rect.height < 8) return;
+      if (el.closest('.overflow-x-auto')) return;
+      if (rect.right > doc.clientWidth + 1 || rect.left < -1) {
+        out.push((el.textContent || el.getAttribute('placeholder') || el.getAttribute('aria-label') || '?').trim().slice(0, 40));
+      }
+    });
+    return out;
+  });
+
+for (const phone of PHONES) {
+  test.describe(`${phone.name}`, () => {
+    test('tapping a later occurrence selects the day tapped, not the day the series began', async ({ page }) => {
+      await openCalendar(page, [swimming], phone.width, phone.height);
+
+      const blocks = page.locator('.rbc-event', { hasText: 'Swimming lesson' });
+      await expect(blocks).toHaveCount(5);
+
+      // The last Wednesday of the month, four weeks after the series started.
+      await blocks.last().click({ force: true });
+
+      const panel = page.getByTestId('selected-day-agenda');
+      // Was "Wednesday, 2 September" — the stored row's date.
+      await expect(panel).toContainText('Wednesday, 30 September', { timeout: 10_000 });
+      await expect(panel).toContainText('Swimming lesson');
+    });
+
+    test('a Sunday repeat opens on that Sunday', async ({ page }) => {
+      await openCalendar(page, [sundayClub], phone.width, phone.height);
+
+      const blocks = page.locator('.rbc-event', { hasText: 'Sunday swimming' });
+      await expect(blocks).toHaveCount(4);
+      await blocks.nth(2).click({ force: true });
+
+      const panel = page.getByTestId('selected-day-agenda');
+      await expect(panel).toContainText('Sunday, 20 September', { timeout: 10_000 });
+      await expect(panel).toContainText('Sunday swimming');
+    });
+
+    // Deliberately no "scroll to the Run button and check it is in view" test:
+    // scrollIntoViewIfNeeded moves an ancestor programmatically even when the
+    // overflow is not user-scrollable, so it passed while the button was in
+    // fact unreachable. The clipping check below is the one that distinguishes.
+    test('no control is clipped off the side of the screen', async ({ page }) => {
+      await openCalendar(page, [swimming], phone.width, phone.height);
+
+      // "Connect Gmail", "Review events" and the quick-create "Run" all used to
+      // sit past the right edge with no way to scroll to them.
+      expect(await clippedControls(page)).toEqual([]);
+    });
+
+  });
+}

@@ -467,6 +467,10 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
       start: moment(`${occ.date} ${occ.time}`, 'YYYY-MM-DD HH:mm').toDate(),
       end: getOccurrenceEnd(occ),
       resource: occ.event,
+      // The date of THIS instance. `resource` is the stored row, so its `date`
+      // is where the series began — tapping the last swimming lesson of the
+      // month used to send the day panel back to the first one.
+      occurrenceDate: occ.date,
       allDay: occ.endDate > occ.date,
     }));
 
@@ -527,7 +531,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
       setSelectedAgendaDate(event.occurrence.dueDate)
       return
     }
-    setSelectedAgendaDate(event.resource!.date)
+    setSelectedAgendaDate(event.occurrenceDate ?? event.resource!.date)
     onEventClick(event.resource!)
   }, [onEventClick])
 
