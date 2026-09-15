@@ -100,8 +100,18 @@ const stubApis = async (page: Page) => {
   );
 };
 
+/**
+ * Every fixture below is anchored to September 2026, and the grid opens on
+ * whatever month it believes today to be. Pin the clock so these journeys keep
+ * meaning the same thing tomorrow — an earlier version asserted a Monday series
+ * was "on today", which was true on the Monday it was written and broke main
+ * the next morning.
+ */
+const TODAY = new Date('2026-09-14T09:00:00.000Z');
+
 /** Seed the local cache the calendar hydrates from, then open the calendar. */
 const openCalendarWith = async (page: Page, events: unknown[]) => {
+  await page.clock.setFixedTime(TODAY);
   await page.addInitScript(skipSetupWizard);
   await page.addInitScript((seed) => {
     localStorage.setItem('calendarEvents', JSON.stringify(seed));
