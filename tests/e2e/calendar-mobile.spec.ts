@@ -30,9 +30,18 @@ const swimming = {
 /** Sundays: 6, 13, 20, 27 September. */
 const sundayClub = { ...swimming, id: 'mobile-sunday', title: 'Sunday swimming', date: '2026-09-06', time: '10:00' };
 
+/** 50 unread, so the bell badge is two digits — one digit hid the overflow. */
+const unread = Array.from({ length: 50 }, (_, i) => ({
+  id: `n${i}`, familyId: family.id, type: 'reminder', title: `Reminder ${i}`, message: 'x', icon: 'bell',
+  priority: 'medium', category: 'calendar', timestamp: '2026-09-14T08:00:00.000Z', read: false,
+  actionRequired: false, actions: [], createdAt: '2026-09-14T08:00:00.000Z', updatedAt: '2026-09-14T08:00:00.000Z',
+}));
+
 const stubApis = async (page: Page) => {
   await page.route('**/api/families/**', (route) =>
-    route.fulfill({ status: 200, contentType: 'application/json', body: route.request().method() === 'GET' ? '[]' : '{}' })
+    route.request().url().includes('/notifications')
+      ? route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(unread) })
+      : route.fulfill({ status: 200, contentType: 'application/json', body: route.request().method() === 'GET' ? '[]' : '{}' })
   );
   await page.route('**/api/families', (route) =>
     route.request().method() !== 'GET'
@@ -143,3 +152,39 @@ for (const phone of PHONES) {
 
   });
 }
+
+/**
+ * Nothing at all may stick out past the right edge, at any phone width.
+ *
+ * Two separate faults were caught this way. The quick-add panel stretched its
+ * own grid column; and the notification bell's badge was offset twice — once by
+ * `-right-1` and again by `translate-x-1/2`, half its own width — so a
+ * two-digit unread count sat 16px beyond a button only 8px from the edge. On a
+ * real phone the "50" was sliced in half.
+ */
+test.describe('nothing overflows the viewport', () => {
+  for (const width of [360, 390, 412, 430]) {
+    test(`at ${width}px`, async ({ page }) => {
+      await openCalendar(page, [swimming], width, 880);
+
+      const overflowing = await page.evaluate(() => {
+        const doc = document.documentElement;
+        const out: string[] = [];
+        document.querySelectorAll<HTMLElement>('*').forEach((el) => {
+          const rect = el.getBoundingClientRect();
+          if (rect.width === 0 || rect.height === 0) return;
+          // A deliberate horizontal scroller may extend past; its children are its business.
+          if (el.closest('.overflow-x-auto')) return;
+          if (rect.right > doc.clientWidth + 1) {
+            out.push(`<${el.tagName.toLowerCase()}> "${(el.textContent || '').trim().slice(0, 20)}" right=${Math.round(rect.right)} > ${doc.clientWidth}`);
+          }
+        });
+        return out.slice(0, 6);
+      });
+
+      expect(overflowing).toEqual([]);
+      // And the page itself must never scroll sideways.
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+    });
+  }
+});

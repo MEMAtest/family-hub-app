@@ -36,7 +36,11 @@ const NotificationBell: React.FC<NotificationBellProps> = ({ className = '' }) =
 
         {/* Notification badge */}
         {unreadCount > 0 && (
-          <span className="absolute -top-1 -right-1 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white transform translate-x-1/2 -translate-y-1/2 bg-red-600 rounded-full">
+          // `-right-1` already lifts the badge clear of the bell. The old
+          // `translate-x-1/2` added half the badge's own width on top of that,
+          // so a two-digit count sat ~16px beyond a button that is only 8px
+          // from the screen edge — the "50" was clipped on every phone width.
+          <span className="absolute -top-1 -right-1 inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-red-600 px-1.5 py-0.5 text-[0.625rem] font-bold leading-none text-white">
             {unreadCount > 99 ? '99+' : unreadCount}
           </span>
         )}
