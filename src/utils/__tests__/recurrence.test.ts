@@ -364,3 +364,64 @@ describe('end to end: what the calendar grid actually receives', () => {
     expect(new Set(gridEntries.map((e) => e.id)).size).toBe(gridEntries.length);
   });
 });
+
+describe('rows that were already materialised into instances', () => {
+  const swimming = (date: string, time = '08:00'): CalendarEvent => ({
+    id: `swim-${date}-${time}`,
+    title: 'Swimming Lesson',
+    person: 'child-1',
+    date,
+    time,
+    duration: 60,
+    recurring: 'weekly',
+    isRecurring: true,
+    cost: 0,
+    type: 'sport',
+    priority: 'medium',
+    status: 'confirmed',
+    createdAt: new Date('2025-10-04T23:29:03Z'),
+    updatedAt: new Date('2025-10-04T23:29:03Z'),
+  });
+
+  it('does not turn one weekly lesson stored as twelve rows into twelve series', () => {
+    // Real data: creating "swimming every week" once wrote a row per week and
+    // marked every one recurring. Expanding each of them stacked twelve
+    // identical lessons on every single week, for ever.
+    const rows = [
+      '2025-10-26', '2025-11-02', '2025-11-09', '2025-11-16',
+      '2025-11-23', '2025-11-30', '2025-12-07', '2025-12-14',
+      '2025-12-21', '2025-12-28',
+    ].map((d) => swimming(d));
+
+    const occurrences = expandEvents(rows, '2026-09-14', '2026-09-20');
+    expect(occurrences).toHaveLength(0);
+
+    // Each still appears exactly once, on the day it was stored for.
+    const inTerm = expandEvents(rows, '2025-10-20', '2025-11-10');
+    expect(inTerm.map((o) => o.date)).toEqual(['2025-10-26', '2025-11-02', '2025-11-09']);
+  });
+
+  it('still expands a genuine series stored as a single row', () => {
+    const occurrences = expandEvents([swimming('2026-09-06', '08:45')], '2026-09-01', '2026-09-30');
+    expect(occurrences.map((o) => o.date)).toEqual(['2026-09-06', '2026-09-13', '2026-09-20', '2026-09-27']);
+  });
+
+  it('keeps two different times apart rather than lumping them together', () => {
+    // The same live data had two rows at 07:00 and ten at 08:00.
+    const rows = [swimming('2025-10-12', '07:00'), swimming('2025-10-19', '07:00'), swimming('2025-10-26')];
+    const occurrences = expandEvents(rows, '2025-10-01', '2025-10-31');
+    expect(occurrences.map((o) => `${o.date} ${o.time}`)).toEqual([
+      '2025-10-12 07:00',
+      '2025-10-19 07:00',
+      '2025-10-26 08:00',
+    ]);
+  });
+
+  it('does not confuse two children with the same club', () => {
+    const a = { ...swimming('2026-09-06'), id: 'a', person: 'child-1' };
+    const b = { ...swimming('2026-09-06'), id: 'b', person: 'child-2' };
+    // One row each: both are genuine series and both must expand.
+    const occurrences = expandEvents([a, b], '2026-09-01', '2026-09-20');
+    expect(occurrences).toHaveLength(6);
+  });
+});
