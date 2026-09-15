@@ -107,8 +107,12 @@ const stubApis = async (page: Page, failures: number, mode: 'abort' | 'hang' = '
   );
 };
 
+/** The fixture sits in September 2026; pin the clock so the grid opens there. */
+const TODAY = new Date('2026-09-14T09:00:00.000Z');
+
 const openCalendar = async (page: Page, failures: number, seedCache: boolean, mode: 'abort' | 'hang' = 'abort') => {
   await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.clock.setFixedTime(TODAY);
   await page.addInitScript(({ seed, withCache }) => {
     localStorage.setItem('familyHub_setupComplete', 'skipped');
     localStorage.setItem('familyId', 'hydration-family');
