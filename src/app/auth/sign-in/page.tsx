@@ -7,7 +7,6 @@ import { authClient } from '@/lib/neonAuthClient';
 export default function SignInPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const ownerEmail = process.env.NEXT_PUBLIC_FAMILY_OWNER_EMAIL;
 
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get('error') === 'auth_unavailable') {
@@ -19,10 +18,14 @@ export default function SignInPage() {
     setLoading(true);
     setError('');
     try {
+      // Deliberately no `loginHint`. It used to be pinned to
+      // NEXT_PUBLIC_FAMILY_OWNER_EMAIL, which told Google to sign everyone in
+      // as the household owner — so a second parent could not get their own
+      // account past the picker. Without it Google offers the normal chooser
+      // and each person signs in as themselves.
       const result = await authClient.signIn.social({
         provider: 'google',
         callbackURL: '/',
-        loginHint: process.env.NEXT_PUBLIC_FAMILY_OWNER_EMAIL || undefined,
       });
       if (result.error) setError(result.error.message || 'Google sign-in could not be started.');
     } catch {
@@ -43,11 +46,10 @@ export default function SignInPage() {
         <p className="mt-4 text-sm leading-6 text-slate-600 dark:text-slate-300">
           Sign in with the Google account linked to your Family Hub profile.
         </p>
-        {ownerEmail && (
-          <p className="mt-3 text-xs leading-5 text-slate-500 dark:text-slate-400">
-            Main family account: <span className="font-semibold text-slate-700 dark:text-slate-200">{ownerEmail}</span>. Select this account on the Google screen.
-          </p>
-        )}
+        <p className="mt-3 text-xs leading-5 text-slate-500 dark:text-slate-400">
+          Each person signs in with their own Google account. Pick yours on the
+          Google screen.
+        </p>
         {error && <p className="mt-5 rounded-md border border-rose-300 bg-rose-50 p-3 text-sm text-rose-800 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-200">{error}</p>}
         <button
           type="button"
