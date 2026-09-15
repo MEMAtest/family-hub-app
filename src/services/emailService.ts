@@ -602,6 +602,40 @@ View detailed analytics in Family Hub: ${process.env.NEXT_PUBLIC_APP_URL || 'htt
   /**
    * Test email sending capability
    */
+  /**
+   * Send a template that has already been rendered.
+   *
+   * The older `sendWeeklySummary` builds its own body straight from stored
+   * events, so it never expands a series and silently omits everything
+   * recurring. The Monday digest renders through `weeklyDigestEmail` instead
+   * and just needs a way out.
+   */
+  async sendRawEmail(
+    recipient: EmailRecipient,
+    subject: string,
+    html: string,
+    text: string
+  ): Promise<boolean> {
+    if (!resend) {
+      console.warn('Email service not configured: RESEND_API_KEY is missing');
+      return false;
+    }
+
+    try {
+      await resend.emails.send({
+        from: this.fromEmail,
+        to: recipient.email,
+        subject,
+        html,
+        text,
+      });
+      return true;
+    } catch (error) {
+      console.error('Failed to send email:', error);
+      return false;
+    }
+  }
+
   async testEmail(recipient: EmailRecipient): Promise<boolean> {
     if (!resend) {
       console.warn('Email service not configured: RESEND_API_KEY is missing');

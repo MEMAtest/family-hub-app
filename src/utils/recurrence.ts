@@ -351,6 +351,34 @@ export const expandOccurrences = (
   return results;
 };
 
+/**
+ * Identifies rows that are already the instances of a series rather than a
+ * series apiece.
+ *
+ * Before the calendar could expand anything, creating "swimming every week"
+ * wrote one row per week and marked *every one of them* recurring. Expanding
+ * those naively turns a single weekly lesson into twelve overlapping weekly
+ * series — twelve identical entries on every Sunday, for ever. Live data had
+ * exactly that: twelve Swimming Lesson rows written in the same second.
+ *
+ * Several rows sharing person, title, time, duration and pattern are that
+ * shape. They are instances: each renders on its own date and expands no
+ * further. A genuine series is a single row and is untouched.
+ */
+const materialisedSeriesKeys = (events: CalendarEvent[]): Set<string> => {
+  const seen = new Map<string, number>();
+  const keyOf = (event: CalendarEvent) =>
+    `${event.person}|${event.title}|${event.time}|${event.duration}|${event.recurring ?? ''}`;
+
+  for (const event of events) {
+    if (!isRecurringEvent(event)) continue;
+    const key = keyOf(event);
+    seen.set(key, (seen.get(key) ?? 0) + 1);
+  }
+
+  return new Set([...seen.entries()].filter(([, count]) => count > 1).map(([key]) => key));
+};
+
 /** Expand a list of events and return every occurrence in range, date-sorted. */
 export const expandEvents = (
   events: CalendarEvent[],
@@ -360,9 +388,26 @@ export const expandEvents = (
   options: ExpandOptions = {}
 ): Occurrence[] => {
   const out: Occurrence[] = [];
+  const materialised = materialisedSeriesKeys(events);
+
   for (const event of events) {
+    const key = `${event.person}|${event.title}|${event.time}|${event.duration}|${event.recurring ?? ''}`;
+    if (materialised.has(key)) {
+      // Already an instance. Render it where it is and do not repeat it.
+      out.push(
+        ...expandOccurrences(
+          { ...event, recurring: 'none', isRecurring: false, recurringPattern: undefined },
+          rangeStart,
+          rangeEnd,
+          exceptions,
+          options
+        )
+      );
+      continue;
+    }
     out.push(...expandOccurrences(event, rangeStart, rangeEnd, exceptions, options));
   }
+
   return out.sort((a, b) =>
     a.date === b.date ? a.time.localeCompare(b.time) : a.date.localeCompare(b.date)
   );
