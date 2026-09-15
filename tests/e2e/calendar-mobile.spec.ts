@@ -188,3 +188,89 @@ test.describe('nothing overflows the viewport', () => {
     });
   }
 });
+
+/**
+ * The school-document review card, which only appears once an intake is opened.
+ *
+ * It was in the reported screenshot with its "Schedule weekly" button cut off
+ * at the right edge, and none of the checks above rendered it — they stub the
+ * inbox as empty, so the card never existed to be measured. Seeding a real
+ * intake payload covers the state the phone was actually in.
+ */
+test.describe('the school-document review card fits on a phone', () => {
+  const intake = {
+    id: 'intake-1',
+    familyId: family.id,
+    subject: 'Phonics screening',
+    status: 'review_required',
+    needsReview: 2,
+    conflictCount: 0,
+    receivedAt: '2026-09-14T07:00:00.000Z',
+    parsedDrafts: [],
+    attachments: [],
+    documentSummary: {
+      issuer: 'Norwood School',
+      issueDate: '2026-09-01',
+      documentLabel: 'Autumn term letter',
+      subjects: ['Phonics', 'Maths'],
+      routines: [
+        { label: 'Phonics', detail: 'Screening check June -Friday 18' },
+        { label: 'Football club', detail: 'every Tuesday at 4pm' },
+      ],
+    },
+  };
+
+  for (const width of [360, 390, 412]) {
+    test(`at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 880 });
+      await page.clock.setFixedTime(TODAY);
+      await page.addInitScript(() => {
+        localStorage.setItem('familyHub_setupComplete', 'skipped');
+        localStorage.setItem('familyId', 'mobile-family');
+        localStorage.setItem('calendarEvents', '[]');
+      });
+
+      // The inbox payload is `{ forwardingAddress, gmail, intakes }` — a bare
+      // array silently renders nothing, which is how this state got missed.
+      await page.route('**/api/families/**', (route) =>
+        route.request().url().includes('calendar-intake/inbox')
+          ? route.fulfill({
+              status: 200,
+              contentType: 'application/json',
+              body: JSON.stringify({ forwardingAddress: 'x@family.test', gmail: { connected: false }, intakes: [intake] }),
+            })
+          : route.fulfill({ status: 200, contentType: 'application/json', body: route.request().method() === 'GET' ? '[]' : '{}' })
+      );
+      await page.route('**/api/families', (route) =>
+        route.request().method() !== 'GET'
+          ? route.fallback()
+          : route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ ...family, members: [child] }]) })
+      );
+      await page.route('**/api/families/*/members', (route) =>
+        route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([child]) })
+      );
+      await page.route('**/api/auth/me', (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ user: { id: 'u', email: 'e@e.com', displayName: 'E' }, family: null, familyMember: null, needsOnboarding: false }),
+        })
+      );
+
+      await page.goto('/');
+      await page.getByRole('button', { name: /^Calendar$/ }).last().click();
+      await expect(page.locator('.rbc-calendar')).toBeVisible({ timeout: 20_000 });
+      await page.waitForTimeout(1_200);
+
+      await page.getByRole('button', { name: /Review events|Review/i }).first().click({ force: true }).catch(() => {});
+      await page.waitForTimeout(800);
+
+      const schedule = page.getByRole('button', { name: /Schedule weekly/i }).first();
+      await expect(schedule).toBeVisible();
+
+      const box = await schedule.boundingBox();
+      expect(box).not.toBeNull();
+      expect(box!.x + box!.width).toBeLessThanOrEqual(width);
+    });
+  }
+});
