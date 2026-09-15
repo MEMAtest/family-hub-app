@@ -143,6 +143,9 @@ export async function GET(request: NextRequest) {
       let sent = 0;
       let via = 'resend';
       let gmailNote: string | undefined;
+      // A count alone hides the interesting case: nothing arrived and nobody
+      // said why. Record each failure so the response explains itself.
+      const failures: string[] = [];
 
       for (const recipient of recipients) {
         try {
@@ -156,10 +159,25 @@ export async function GET(request: NextRequest) {
         }
 
         const ok = await emailService.sendRawEmail(recipient, subject, html, text);
-        if (ok) sent += 1;
+        if (ok) {
+          sent += 1;
+        } else {
+          failures.push(`${recipient.email}: Resend did not accept the message (see server logs)`);
+        }
       }
 
-      results.push({ familyId: id, subject, sent, of: recipients.length, via, gmailNote, events: digest.eventCount, tasks: digest.tasks.length, clashes: digest.clashes.length });
+      results.push({
+        familyId: id,
+        subject,
+        sent,
+        of: recipients.length,
+        via,
+        ...(gmailNote ? { gmailNote } : {}),
+        ...(failures.length ? { failures } : {}),
+        events: digest.eventCount,
+        tasks: digest.tasks.length,
+        clashes: digest.clashes.length,
+      });
     }
 
     return NextResponse.json({ weekStart, families: results.length, results });
