@@ -248,6 +248,17 @@ drifted apart. `resolvePattern()` is the shim that makes a gradual migration saf
   east of Greenwich — all summer, here. `YearView` built its day keys that way. Prefer
   string arithmetic (`recurrence.ts` has it) over round-tripping through `Date`.
 - **Never key a grid entry on `event.id`.** Use `occurrenceId`.
+- **`resource` on a grid entry is the STORED ROW, not the instance.** Its `date` is where
+  the series began, so anything reading `event.resource.date` is looking at the wrong day
+  for every occurrence but the first — that is how tapping the last swimming lesson of the
+  month sent the day panel back to the first. Each entry also carries `occurrenceDate`;
+  use it.
+- **Grid and flex items default to `min-width: auto`,** so one wide child sets the whole
+  column's width. A horizontally scrolling chip row inside the quick-add panel stretched
+  its column past the viewport and, because the page does not scroll sideways, the excess
+  was clipped rather than reachable — "Connect Gmail" cut mid-word, the quick-create "Run"
+  button entirely off a 390px screen. `min-w-0` on the track and its children is what keeps
+  `overflow-x-auto` doing its job. Check phone widths after touching that panel.
 - **An event whose `type` is not on the category allowlist is silently invisible.**
   `CalendarMain` filters with `selectedCategories.includes(event.type)` against a hardcoded
   list — `sport, meeting, fitness, social, education, family, other, appointment, work,

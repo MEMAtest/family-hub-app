@@ -639,9 +639,14 @@ const CalendarCopilotPanel = ({
     }
   };
 
+  // `min-w-0` on the section and on both cards below is load-bearing. A grid
+  // item defaults to `min-width: auto`, so the horizontally scrolling chip row
+  // sets the column's width instead of scrolling within it — which dragged the
+  // quick-create input and its Run button clean off a 390px screen, with no way
+  // to reach them because the page itself does not scroll sideways.
   return (
-    <section className="grid gap-3 border-b border-gray-200 bg-[#f7fbf8] p-3 dark:border-slate-800 dark:bg-slate-950 md:grid-cols-2">
-      <div className="rounded-lg border border-[#dde5e0] bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
+    <section className="grid min-w-0 gap-3 border-b border-gray-200 bg-[#f7fbf8] p-3 dark:border-slate-800 dark:bg-slate-950 md:grid-cols-2">
+      <div className="min-w-0 rounded-lg border border-[#dde5e0] bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
         <div className="mb-2 flex items-center gap-2">
           <FileUp className="h-4 w-4 text-purple-600" />
           <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-100">Add school dates</h3>
@@ -919,7 +924,7 @@ const CalendarCopilotPanel = ({
         )}
       </div>
 
-      <div className="rounded-lg border border-[#dde5e0] bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
+      <div className="min-w-0 rounded-lg border border-[#dde5e0] bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
         <div className="mb-2 flex items-center gap-2">
           <Sparkles className="h-4 w-4 text-[#147c72]" />
           <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-100">Search or quick create</h3>

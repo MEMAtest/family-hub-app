@@ -10,6 +10,7 @@ export default defineConfig({
     'brain-integrations.spec.ts',
     'budget.spec.ts',
     'calendar-hydration-resilience.spec.ts',
+    'calendar-mobile.spec.ts',
     'calendar-school-document.spec.ts',
     'full-app-critical.spec.ts',
     'mobile-persistence.spec.ts',
