@@ -9,6 +9,7 @@ import {
 } from '@/lib/weeklyDigestEmail';
 import type { CalendarEvent, CalendarTask, Person } from '@/types/calendar.types';
 import { emailService } from '@/services/emailService';
+import { GmailSendUnavailable, sendViaGmail } from '@/lib/gmailSend';
 
 /**
  * Monday morning digest.
@@ -136,13 +137,29 @@ export async function GET(request: NextRequest) {
         continue;
       }
 
+      // Prefer the household's own Gmail. It arrives from an address the family
+      // recognises and needs no verified domain; Resend is the fallback for
+      // households that have not connected Google.
       let sent = 0;
+      let via = 'resend';
+      let gmailNote: string | undefined;
+
       for (const recipient of recipients) {
+        try {
+          await sendViaGmail(id, { to: recipient.email, subject, html, text });
+          via = 'gmail';
+          sent += 1;
+          continue;
+        } catch (error) {
+          if (!(error instanceof GmailSendUnavailable)) throw error;
+          gmailNote = error.message;
+        }
+
         const ok = await emailService.sendRawEmail(recipient, subject, html, text);
         if (ok) sent += 1;
       }
 
-      results.push({ familyId: id, subject, sent, of: recipients.length, events: digest.eventCount, tasks: digest.tasks.length, clashes: digest.clashes.length });
+      results.push({ familyId: id, subject, sent, of: recipients.length, via, gmailNote, events: digest.eventCount, tasks: digest.tasks.length, clashes: digest.clashes.length });
     }
 
     return NextResponse.json({ weekStart, families: results.length, results });
