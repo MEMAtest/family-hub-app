@@ -23,6 +23,7 @@ describe('signing in', () => {
     await waitFor(() => expect(social).toHaveBeenCalled());
     const options = social.mock.calls[0][0];
     expect(options.provider).toBe('google');
+    expect(options.callbackURL).toBe(`${window.location.origin}/auth/callback`);
     expect(options).not.toHaveProperty('loginHint');
     expect(JSON.stringify(options)).not.toContain('owner@example.com');
   });

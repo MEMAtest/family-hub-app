@@ -25,7 +25,7 @@ export default function SignInPage() {
       // and each person signs in as themselves.
       const result = await authClient.signIn.social({
         provider: 'google',
-        callbackURL: '/',
+        callbackURL: `${window.location.origin}/auth/callback`,
       });
       if (result.error) setError(result.error.message || 'Google sign-in could not be started.');
     } catch {
