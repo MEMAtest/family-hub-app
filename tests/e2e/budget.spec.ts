@@ -1,12 +1,13 @@
 import { test, expect } from '@playwright/test';
-import { PrismaClient } from '@prisma/client';
+import {
+  createTestPrisma,
+  hasTestDatabase,
+  TEST_DATABASE_REQUIRED,
+} from './test-database';
 
-if (!process.env.DATABASE_URL) {
-  process.env.DATABASE_URL =
-    'postgresql://neondb_owner:npg_FfSTB5lXxPU4@ep-bold-pine-abqy8czb-pooler.eu-west-2.aws.neon.tech/neondb?sslmode=require';
-}
+test.skip(!hasTestDatabase, TEST_DATABASE_REQUIRED);
 
-const prisma = new PrismaClient();
+const prisma = createTestPrisma();
 const createdIncomeIds: string[] = [];
 const createdExpenseIds: string[] = [];
 let familyId: string;
@@ -154,6 +155,27 @@ test('budget search and receipt filter behave as expected', async ({ page }) => 
   await page.getByRole('button', { name: 'All items' }).click();
   await searchInput.fill('Filter Expense');
   await expect(page.getByText('Playwright Filter Expense')).toBeVisible();
+});
+
+test('budget calculator opens and recalculates monthly plan', async ({ page }) => {
+  await page.goto('/');
+
+  const budgetNavButton = page.locator('aside').getByRole('button', { name: 'Budget', exact: true });
+  await budgetNavButton.click();
+
+  await expect(page.getByPlaceholder('Search income, expenses, or amounts')).toBeVisible({ timeout: 60_000 });
+  await page.getByRole('button', { name: 'Calculator' }).first().click();
+  await expect(page.getByRole('heading', { name: 'Budget Calculator' })).toBeVisible();
+
+  await page.getByLabel('Monthly income').fill('4000');
+  await page.getByLabel('Fixed costs').fill('2200');
+  await page.getByLabel('Variable spend').fill('900');
+  await page.getByLabel('Savings target').fill('500');
+  await page.getByLabel('Buffer').fill('100');
+
+  await expect(page.getByText('£300.00')).toBeVisible();
+  await expect(page.getByText('£10.00')).toBeVisible();
+  await expect(page.getByText('12.5%')).toBeVisible();
 });
 
 test('receipt scanner opens and shows offline OCR UI', async ({ page }) => {

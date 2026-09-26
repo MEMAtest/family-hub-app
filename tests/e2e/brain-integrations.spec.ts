@@ -9,14 +9,15 @@
  *  5. Click "View Brain Map" → navigates to Brain view with that project
  */
 import { expect, test, type Page } from '@playwright/test';
-import { PrismaClient } from '@prisma/client';
+import {
+  createTestPrisma,
+  hasTestDatabase,
+  TEST_DATABASE_REQUIRED,
+} from './test-database';
 
-if (!process.env.DATABASE_URL) {
-  process.env.DATABASE_URL =
-    'postgresql://neondb_owner:npg_FfSTB5lXxPU4@ep-bold-pine-abqy8czb-pooler.eu-west-2.aws.neon.tech/neondb?sslmode=require';
-}
+test.skip(!hasTestDatabase, TEST_DATABASE_REQUIRED);
 
-const prisma = new PrismaClient();
+const prisma = createTestPrisma();
 
 // ─── Tracking for cleanup ──────────────────────────────────────────
 const createdIds = {
@@ -225,6 +226,7 @@ let overdueProjectId = '';
 let overdueNodeId = '';
 let goalLinkedProjectId = '';
 let testGoalId = '';
+let obsidianProjectId = '';
 
 // ═══════════════════════════════════════════════════════════════════
 // CHECK 1: Brain node with showOnCalendar + dueDate → calendar event
@@ -491,4 +493,136 @@ test('5 · clicking "View Brain Map" navigates to Brain with correct project', a
   // Verify we're in Brain view with the correct project selected
   const projectName = page.getByText('Goal-Linked Brain Project');
   await expect(projectName.first()).toBeVisible({ timeout: 10_000 });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// CHECK 6: Obsidian-style linked notes, backlinks, checklist, search, map edge
+// ═══════════════════════════════════════════════════════════════════
+
+test('6 · seed linked brain notes for workspace check', async () => {
+  const project = await prisma.brainProject.create({
+    data: {
+      familyId,
+      name: 'Obsidian Notes E2E Project',
+      color: '#14B8A6',
+      icon: 'book',
+      status: 'active',
+    },
+  });
+  obsidianProjectId = project.id;
+  createdIds.brainProjects.add(project.id);
+
+  const target = await prisma.brainNode.create({
+    data: {
+      projectId: project.id,
+      title: 'Flights and passports',
+      content: 'Passport references and flight details.',
+      status: 'todo',
+      priority: 'medium',
+      nodeType: 'note',
+      positionX: 120,
+      positionY: 120,
+      tags: ['travel'],
+      showOnCalendar: false,
+    },
+  });
+
+  const source = await prisma.brainNode.create({
+    data: {
+      projectId: project.id,
+      title: 'Hotel planning',
+      content: 'Check [[Flights and passports]] before booking.\n- [ ] Book hotel\n- [x] Check passports\n#travel',
+      status: 'todo',
+      priority: 'medium',
+      nodeType: 'note',
+      positionX: 360,
+      positionY: 120,
+      tags: ['travel'],
+      showOnCalendar: false,
+    },
+  });
+
+  const mention = await prisma.brainNode.create({
+    data: {
+      projectId: project.id,
+      title: 'Loose travel note',
+      content: 'Flights and passports need another review.',
+      status: 'todo',
+      priority: 'medium',
+      nodeType: 'note',
+      positionX: 240,
+      positionY: 320,
+      tags: [],
+      showOnCalendar: false,
+    },
+  });
+
+  createdIds.brainNodes.add(target.id);
+  createdIds.brainNodes.add(source.id);
+  createdIds.brainNodes.add(mention.id);
+  expect(obsidianProjectId).toBeTruthy();
+});
+
+test('6 · Brain notes workspace shows links, related items, checklist, search, and map edge', async ({ page }) => {
+  await page.goto('/');
+  await waitForHubShell(page);
+
+  await switchToView(page, 'Brain');
+  await page.waitForTimeout(2_000);
+
+  const projectButton = page.getByText('Obsidian Notes E2E Project').first();
+  await expect(projectButton).toBeVisible({ timeout: 15_000 });
+  await projectButton.click();
+  await page.waitForTimeout(2_000);
+
+  await expect(page.getByRole('button', { name: /Notes/i }).first()).toBeVisible({ timeout: 10_000 });
+
+  const titleInput = page.getByPlaceholder('Optional note title');
+  const contentInput = page.getByPlaceholder('Capture a note, checklist, or linked thought...');
+  const addNoteButton = page.getByRole('button', { name: /^Add note$/ });
+
+  await titleInput.fill('UI created note');
+  await contentInput.fill('Created through the note composer #ui');
+  await expect(titleInput).toHaveValue('UI created note', { timeout: 10_000 });
+  await expect(contentInput).toHaveValue('Created through the note composer #ui', { timeout: 10_000 });
+  await expect(addNoteButton).toBeEnabled({ timeout: 10_000 });
+  await addNoteButton.click();
+  await expect(
+    page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'UI created note' }) }).first()
+  ).toBeVisible({ timeout: 15_000 });
+
+  await page.reload();
+  await waitForHubShell(page);
+  await switchToView(page, 'Brain');
+  await expect(page.getByText('Obsidian Notes E2E Project').first()).toBeVisible({ timeout: 15_000 });
+  await page.getByText('Obsidian Notes E2E Project').first().click();
+  await expect(
+    page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'UI created note' }) }).first()
+  ).toBeVisible({ timeout: 15_000 });
+
+  const hotelArticle = page
+    .getByRole('article')
+    .filter({ has: page.getByRole('heading', { name: 'Hotel planning' }) })
+    .first();
+  await expect(hotelArticle).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText('Book hotel').first()).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText('1 open').first()).toBeVisible({ timeout: 10_000 });
+
+  await page.getByPlaceholder('Search notes...').fill('hotel');
+  await expect(hotelArticle).toBeVisible({ timeout: 10_000 });
+  await page.getByPlaceholder('Search notes...').fill('');
+
+  const flightsArticle = page
+    .getByRole('article')
+    .filter({ has: page.getByRole('heading', { name: 'Flights and passports' }) })
+    .first();
+  await flightsArticle.getByRole('button').first().click();
+  await expect(page.getByText('Linked here').first()).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole('button', { name: /Hotel planning/ }).first()).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText('Mentioned but not linked').first()).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole('button', { name: /Loose travel note/ }).first()).toBeVisible({ timeout: 10_000 });
+
+  await page.getByRole('button', { name: /Map/i }).first().click();
+  await page.waitForTimeout(2_000);
+  await expect(page.locator('.react-flow__edge').first()).toBeVisible({ timeout: 10_000 });
 });

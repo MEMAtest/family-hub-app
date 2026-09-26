@@ -1,8 +1,9 @@
 'use client'
 
-import { useCallback, useMemo } from 'react';
-import { Settings, LayoutGrid } from 'lucide-react';
+import { useCallback, useMemo, useState } from 'react';
+import { ChevronDown, ChevronUp, Import, Settings, LayoutGrid } from 'lucide-react';
 import CalendarMain from '@/components/calendar/CalendarMain';
+import CalendarCopilotPanel from '@/components/calendar/CalendarCopilotPanel';
 import { useCalendarContext } from '@/contexts/familyHub/CalendarContext';
 import { useFamilyContext } from '@/contexts/familyHub/FamilyContext';
 import { useAppView } from '@/contexts/familyHub/AppViewContext';
@@ -11,9 +12,11 @@ import type { CalendarEvent } from '@/types/calendar.types';
 export const CalendarView = () => {
   const {
     events,
+    tasks,
     openEditForm,
     openCreateForm,
     createEvent,
+    createTask,
     updateEvent,
     deleteEvent,
     openTemplateManager,
@@ -21,6 +24,7 @@ export const CalendarView = () => {
   } = useCalendarContext();
   const { members } = useFamilyContext();
   const { currentDate, setCurrentDate } = useAppView();
+  const [showAddOrImport, setShowAddOrImport] = useState(true);
 
   const people = useMemo(() => members.map((member) => ({
     id: member.id,
@@ -28,6 +32,7 @@ export const CalendarView = () => {
     icon: member.icon,
     color: member.color,
     role: member.role,
+    ageGroup: member.ageGroup,
   })), [members]);
 
   const handleEventsSync = useCallback(async (importedEvents: CalendarEvent[]) => {
@@ -78,9 +83,36 @@ export const CalendarView = () => {
         </div>
       </div>
 
+      <div className="border-b border-gray-200 bg-white px-3 py-2 dark:border-slate-800 dark:bg-slate-900 sm:px-4">
+        <button
+          type="button"
+          onClick={() => setShowAddOrImport((value) => !value)}
+          className="inline-flex w-full items-center justify-between gap-3 rounded-lg border border-gray-200 px-3 py-2 text-left text-sm font-semibold text-gray-800 hover:bg-gray-50 dark:border-slate-700 dark:text-slate-100 dark:hover:bg-slate-800 sm:w-auto"
+          aria-expanded={showAddOrImport}
+        >
+          <span className="inline-flex items-center gap-2">
+            <Import className="h-4 w-4" />
+            Quick add & import
+          </span>
+          {showAddOrImport ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+        </button>
+      </div>
+
+      {showAddOrImport && (
+        <CalendarCopilotPanel
+          events={events}
+          people={people}
+          currentDate={currentDate}
+          createEvent={createEvent}
+          createTask={createTask}
+          onOpenCalendar={() => setCurrentDate(currentDate)}
+        />
+      )}
+
       <div className="min-h-[720px] flex-1 overflow-visible pb-4 sm:pb-6 lg:pb-0">
         <CalendarMain
           events={events}
+          tasks={tasks}
           people={people}
           onEventClick={openEditForm}
           onEventCreate={openCreateForm}

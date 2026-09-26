@@ -1,9 +1,11 @@
 // Notification System TypeScript Definitions
+import type { CalendarEvent } from './calendar.types';
 
 export interface NotificationSettings {
   enabled: boolean;
   channels: {
     browser: boolean;
+    push: boolean;
     email: boolean;
     inApp: boolean;
   };
@@ -38,8 +40,17 @@ export interface NotificationReminder {
     title: string;
     body: string;
     icon?: string;
+    iconEmoji?: string;
     badge?: string;
     tag?: string;
+    eventIcon?: string;
+    eventTitle?: string;
+    eventType?: CalendarEvent['type'];
+    eventDate?: string;
+    eventTime?: string;
+    eventLocation?: string;
+    location?: string;
+    startsAt?: string;
     data?: any;
   };
 }
@@ -84,7 +95,7 @@ export interface NotificationPreferences {
     [key: string]: {
       enabled: boolean;
       reminders: number[]; // minutes before
-      channels: ('browser' | 'email' | 'inApp')[];
+      channels: ('browser' | 'push' | 'email' | 'inApp')[];
       priority: 'low' | 'medium' | 'high';
     };
   };
@@ -108,6 +119,7 @@ export interface NotificationService {
   // Permission management
   requestPermission(): Promise<NotificationPermission>;
   checkPermission(): NotificationPermission;
+  syncPushSubscription(): Promise<void>;
 
   // Reminder scheduling
   scheduleReminder(eventId: string, reminder: Omit<NotificationReminder, 'id'>): Promise<NotificationReminder>;
@@ -184,6 +196,6 @@ export interface NotificationContextType {
   updateSettings(settings: Partial<NotificationSettings>): Promise<void>;
 
   // Event scheduling
-  scheduleEventReminders(eventId: string, eventDate: Date, eventType: string): Promise<void>;
+  scheduleEventReminders(event: CalendarEvent): Promise<void>;
   cancelEventReminders(eventId: string): Promise<void>;
 }

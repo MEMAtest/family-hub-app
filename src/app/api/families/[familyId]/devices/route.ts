@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
-import { requireFamilyAccess } from '@/lib/auth-utils';
+import { privateAreaResponse, requireFamilyAccess, requireOwnProfile } from '@/lib/auth-utils';
 
 /**
  * GET /api/families/[familyId]/devices
  * Get all connected devices for a person
  */
-export const GET = requireFamilyAccess(async (request: NextRequest, context, _authUser) => {
+export const GET = requireFamilyAccess(async (request: NextRequest, context, authUser) => {
   try {
     const { familyId } = await context.params;
     const { searchParams } = new URL(request.url);
@@ -19,6 +19,7 @@ export const GET = requireFamilyAccess(async (request: NextRequest, context, _au
         { status: 400 }
       );
     }
+    if (!(await requireOwnProfile(authUser, personId))) return privateAreaResponse();
 
     // Verify person belongs to family
     const person = await prisma.familyMember.findFirst({
@@ -66,7 +67,7 @@ export const GET = requireFamilyAccess(async (request: NextRequest, context, _au
  * POST /api/families/[familyId]/devices
  * Connect a new device
  */
-export const POST = requireFamilyAccess(async (request: NextRequest, context, _authUser) => {
+export const POST = requireFamilyAccess(async (request: NextRequest, context, authUser) => {
   try {
     const { familyId } = await context.params;
     const body = await request.json();
@@ -79,6 +80,7 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context, _a
         { status: 400 }
       );
     }
+    if (!(await requireOwnProfile(authUser, personId))) return privateAreaResponse();
 
     // Verify person belongs to family
     const person = await prisma.familyMember.findFirst({
@@ -162,7 +164,7 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context, _a
  * DELETE /api/families/[familyId]/devices
  * Disconnect a device
  */
-export const DELETE = requireFamilyAccess(async (request: NextRequest, context, _authUser) => {
+export const DELETE = requireFamilyAccess(async (request: NextRequest, context, authUser) => {
   try {
     const { familyId } = await context.params;
     const { searchParams } = new URL(request.url);
@@ -175,6 +177,7 @@ export const DELETE = requireFamilyAccess(async (request: NextRequest, context, 
         { status: 400 }
       );
     }
+    if (!(await requireOwnProfile(authUser, personId))) return privateAreaResponse();
 
     // Verify person belongs to family
     const person = await prisma.familyMember.findFirst({

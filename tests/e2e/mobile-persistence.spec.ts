@@ -1,12 +1,13 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { PrismaClient } from '@prisma/client';
+import {
+  createTestPrisma,
+  hasTestDatabase,
+  TEST_DATABASE_REQUIRED,
+} from './test-database';
 
-if (!process.env.DATABASE_URL) {
-  process.env.DATABASE_URL =
-    'postgresql://neondb_owner:npg_FfSTB5lXxPU4@ep-bold-pine-abqy8czb-pooler.eu-west-2.aws.neon.tech/neondb?sslmode=require';
-}
+test.skip(!hasTestDatabase, TEST_DATABASE_REQUIRED);
 
-const prisma = new PrismaClient();
+const prisma = createTestPrisma();
 const createdFitnessIds = new Set<string>();
 let familyId = '';
 let memberId = '';
@@ -114,7 +115,20 @@ const switchToView = async (page: Page, label: string) => {
     return;
   } catch {
     const textMatch = primaryNav.locator('button').filter({ hasText: label });
-    await clickVisibleButton(textMatch, `view "${label}" (text)`);
+    try {
+      await clickVisibleButton(textMatch, `view "${label}" (text)`);
+      return;
+    } catch {
+      await clickVisibleButton(page.getByRole('button', { name: 'Open navigation' }), 'open mobile navigation');
+      await page.waitForTimeout(300);
+      const drawerButton = page
+        .locator('[role="dialog"]')
+        .locator('button')
+        .filter({ hasText: label })
+        .first();
+      await expect(drawerButton).toBeVisible({ timeout: 10_000 });
+      await drawerButton.evaluate((button: HTMLButtonElement) => button.click());
+    }
   }
 };
 
@@ -272,12 +286,24 @@ test('mobile fitness add, edit, and delete persists end-to-end', async ({ page }
 
   await expect(page.getByText('What exercises did you do?')).toBeVisible({ timeout: 20_000 });
   await page.getByPlaceholder('e.g., Push Day, Upper Body, Leg Day').fill(workoutName);
-  await page.getByPlaceholder('Search exercises...').fill('Bench Press');
-  await page.getByRole('button', { name: /Bench Press/ }).first().click();
+  const pushDayTemplate = page.getByRole('button', { name: /^Push Day$/ });
+  if (await pushDayTemplate.isVisible().catch(() => false)) {
+    await pushDayTemplate.click({ force: true });
+    await page.getByPlaceholder('e.g., Push Day, Upper Body, Leg Day').fill(workoutName);
+  } else {
+    await page.getByPlaceholder('Search exercises...').fill('Bench Press');
+    await clickVisibleButton(page.getByRole('button', { name: /Bench Press/ }), 'bench press exercise');
+  }
   await page.getByRole('button', { name: 'Continue to sets & reps' }).click();
 
   await expect(page.getByText('Add your sets and reps')).toBeVisible({ timeout: 20_000 });
-  await page.getByRole('button', { name: 'Continue' }).click();
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    if (await page.getByText('Any other activities?').isVisible().catch(() => false)) {
+      break;
+    }
+    await clickVisibleButton(page.getByRole('button', { name: /^(Continue|Next Exercise)$/ }), 'exercise details continue');
+    await page.waitForTimeout(150);
+  }
 
   await expect(page.getByText('Any other activities?')).toBeVisible({ timeout: 20_000 });
   await page.getByRole('button', { name: 'Continue' }).click();

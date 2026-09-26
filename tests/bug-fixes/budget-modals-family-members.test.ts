@@ -17,8 +17,13 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { PrismaClient } from '@prisma/client';
 
+const testDatabaseUrl = process.env.TEST_DATABASE_URL;
+if (!testDatabaseUrl) {
+  throw new Error('TEST_DATABASE_URL is required for database-backed bug-fix tests.');
+}
+
 const prisma = new PrismaClient({
-  datasourceUrl: process.env.DATABASE_URL || "postgresql://neondb_owner:npg_FfSTB5lXxPU4@ep-bold-pine-abqy8czb-pooler.eu-west-2.aws.neon.tech/neondb?sslmode=require"
+  datasourceUrl: testDatabaseUrl,
 });
 
 const FAMILY_ID = 'cmg741w2h0000ljcb3f6fo19g';

@@ -1,7 +1,7 @@
 'use client'
 
 import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { CalendarEvent, EventTemplate, Person } from '@/types/calendar.types';
+import { CalendarEvent, CalendarTask, EventTemplate, Person } from '@/types/calendar.types';
 import type { BrainNode, BrainProject } from '@/types/brain.types';
 import { ConflictResolution, DetectedConflict } from '@/services/conflictDetectionService';
 import conflictDetectionService from '@/services/conflictDetectionService';
@@ -9,9 +9,18 @@ import databaseService from '@/services/databaseService';
 import { useFamilyStore } from '@/store/familyStore';
 import { createId } from '@/utils/id';
 import { useNotifications } from '@/contexts/NotificationContext';
+import { DEFAULT_FAMILY_ID } from '@/lib/defaultFamilyProfile';
+import { getCalendarEventIcon, getEventNotificationMetadata } from '@/utils/eventSemantics';
 
 interface CalendarContextValue {
   events: CalendarEvent[];
+  /** Homework, chores and anything else with a deadline. */
+  tasks: CalendarTask[];
+  createTask: (draft: Omit<CalendarTask, 'id' | 'createdAt' | 'updatedAt'>) => CalendarTask;
+  updateTask: (id: string, updates: Partial<CalendarTask>) => void;
+  deleteTask: (id: string) => void;
+  /** Mark done / not done. Completion is what a task is for. */
+  toggleTaskComplete: (id: string, completedBy?: string) => void;
   eventTemplates: EventTemplate[];
   selectedEvent: CalendarEvent | null;
   defaultSlot: { start: Date; end: Date } | null;
@@ -49,6 +58,7 @@ interface CalendarContextValue {
 }
 
 const CalendarContext = createContext<CalendarContextValue | undefined>(undefined);
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const mapMembersToPeople = (members: ReturnType<typeof useFamilyStore.getState>['people']): Person[] => {
   return members.map((member) => {
@@ -68,6 +78,7 @@ const mapMembersToPeople = (members: ReturnType<typeof useFamilyStore.getState>[
         typeof memberRecord.role === 'object' && memberRecord.role !== null
           ? memberRecord.role.name ?? 'Family Member'
           : (memberRecord.role as string) || 'Family Member',
+      ageGroup: memberRecord.ageGroup,
     };
   });
 };
@@ -87,6 +98,15 @@ const buildEvent = (draft: CalendarDraft, id?: string): CalendarEvent => ({
   priority: draft.priority ?? 'medium',
   status: draft.status ?? 'confirmed',
 });
+
+const inferEndDate = (date: string, time: string, durationMinutes?: number | null) => {
+  if (!durationMinutes || durationMinutes <= 0) return undefined;
+  const start = new Date(`${date}T${time}:00Z`);
+  if (Number.isNaN(start.getTime())) return undefined;
+  const end = new Date(start.getTime() + durationMinutes * 60 * 1000);
+  const endDate = end.toISOString().split('T')[0];
+  return endDate > date ? endDate : undefined;
+};
 
 const mergeEvents = (primary: CalendarEvent[], secondary: CalendarEvent[]) => {
   const merged = new Map<string, CalendarEvent>();
@@ -109,6 +129,87 @@ const mergeEvents = (primary: CalendarEvent[], secondary: CalendarEvent[]) => {
   return Array.from(merged.values());
 };
 
+/**
+ * How long a single attempt may hang before we stop waiting on it.
+ *
+ * This matters more than the retry count. A server that *refuses* a connection
+ * rejects immediately and retrying is easy; a server that simply stops
+ * answering — a cold dev server buried under the hydration burst — leaves a
+ * bare `fetch` pending forever. It never rejects, so nothing retries and
+ * nothing recovers. `databaseService.fetchAPI` already guards its own calls
+ * this way; the calendar's did not, and sat on a blank month indefinitely.
+ *
+ * Kept generous rather than snappy: the job is to escape a request that is
+ * never coming back, not to abandon one that is merely slow. `fetchAPI` waits
+ * 20s for a single try; three tries of 10s costs the same patience overall and
+ * gets two more chances out of it.
+ */
+const FETCH_TIMEOUT_MS = 10_000;
+
+/**
+ * Fetch that tolerates a transient failure, including a request that simply
+ * hangs. Returns the response, or null when every attempt failed — callers
+ * decide what an outright failure means.
+ */
+const fetchWithRetry = async (url: string, attempts = 3): Promise<Response | null> => {
+  const backoff = [0, 400, 1200];
+  let lastError: unknown = null;
+
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    if (backoff[attempt]) await wait(backoff[attempt]);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+    try {
+      const response = await fetch(url, { signal: controller.signal });
+      // A 5xx is worth another go; a 4xx will not change on retry.
+      if (response.ok || response.status < 500) return response;
+      lastError = new Error(`HTTP ${response.status}`);
+    } catch (error) {
+      lastError = error;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  console.warn('📆 CalendarContext: giving up on', url, lastError);
+  return null;
+};
+
+const mapDatabaseEventsToCalendarEvents = (dbEvents: any[]): CalendarEvent[] =>
+  dbEvents.map((e: any) => {
+    const eventTime = new Date(e.eventTime);
+    const hours = eventTime.getUTCHours().toString().padStart(2, '0');
+    const minutes = eventTime.getUTCMinutes().toString().padStart(2, '0');
+    const date = e.eventDate ? e.eventDate.split('T')[0] : new Date().toISOString().split('T')[0];
+
+    return {
+      id: e.id,
+      title: e.title,
+      person: e.personId,
+      date,
+      endDate: inferEndDate(date, `${hours}:${minutes}`, e.durationMinutes),
+      time: `${hours}:${minutes}`,
+      duration: e.durationMinutes,
+      location: e.location,
+      recurring: e.recurringPattern,
+      cost: e.cost,
+      type: e.eventType,
+      notes: e.notes,
+      isRecurring: e.isRecurring,
+      source: e.source ?? undefined,
+      sourceId: e.sourceId ?? undefined,
+      googleCalendarId: e.googleCalendarId ?? undefined,
+      googleEventId: e.googleEventId ?? undefined,
+      priority: 'medium' as const,
+      status: 'confirmed' as const,
+      createdAt: e.createdAt,
+      updatedAt: e.updatedAt,
+      reminders: [{ id: 'reminder-15', type: 'notification' as const, time: 15, enabled: true }],
+      attendees: [],
+    };
+  });
+
 export const CalendarProvider = ({ children }: PropsWithChildren) => {
   const events = useFamilyStore((state) => state.events);
   const setEvents = useFamilyStore((state) => state.setEvents);
@@ -117,6 +218,7 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
   const updateEventTemplateStore = useFamilyStore((state) => state.updateEventTemplate);
   const deleteEventTemplateStore = useFamilyStore((state) => state.deleteEventTemplate);
   const members = useFamilyStore((state) => state.people);
+  const databaseStatus = useFamilyStore((state) => state.databaseStatus);
 
   // Debug logging
   console.log('📆 CalendarContext: events from store:', events.length);
@@ -126,68 +228,133 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
   // ─── Brain nodes → calendar events helper ─────────────────────────
   const loadBrainEvents = useCallback(async (fid: string) => {
     try {
-      const [nodesRes, projectsRes] = await Promise.all([
-        fetch(`/api/families/${fid}/brain/nodes?showOnCalendar=true`),
-        fetch(`/api/families/${fid}/brain/projects`),
-      ]);
-      if (!nodesRes.ok || !projectsRes.ok) return;
+      const retryDelays = [0, 500, 1200];
 
-      const nodes: BrainNode[] = await nodesRes.json();
-      const projects: BrainProject[] = await projectsRes.json();
-      if (!Array.isArray(nodes) || nodes.length === 0) return;
+      for (const [attempt, delay] of retryDelays.entries()) {
+        if (delay > 0) await wait(delay);
 
-      const projectMap = new Map(projects.map((p) => [p.id, p]));
+        // An aborted fetch rejects. Catching per attempt keeps one interrupted
+        // request from abandoning the whole load — previously it threw straight
+        // past the retry loop to the outer catch, and brain items simply never
+        // appeared on the calendar.
+        let nodesRes: Response | null = null;
+        let projectsRes: Response | null = null;
+        try {
+          [nodesRes, projectsRes] = await Promise.all([
+            fetchWithRetry(`/api/families/${fid}/brain/nodes?showOnCalendar=true`, 1),
+            fetchWithRetry(`/api/families/${fid}/brain/projects`, 1),
+          ]);
+          if (!nodesRes || !projectsRes) throw new Error('brain fetch failed');
+        } catch (error) {
+          if (attempt === retryDelays.length - 1) {
+            console.warn('📆 CalendarContext: brain fetch failed on every attempt:', error);
+            return;
+          }
+          continue;
+        }
+        if (!nodesRes.ok || !projectsRes.ok) {
+          if (attempt === retryDelays.length - 1) return;
+          continue;
+        }
 
-      const brainEvents: CalendarEvent[] = nodes
-        .filter((n): n is BrainNode & { dueDate: string } => !!n.dueDate)
-        .map((node) => {
-          const project = projectMap.get(node.projectId);
-          return {
-            id: `brain-${node.id}`,
-            title: `🧠 ${node.title}`,
-            person: '',
-            date: node.dueDate.split('T')[0],
-            time: '09:00',
-            duration: 30,
-            recurring: 'none' as const,
-            cost: 0,
-            type: 'brain' as const,
-            notes: `Brain: ${project?.name ?? 'Project'}`,
-            isRecurring: false,
-            priority: (node.priority === 'urgent' ? 'high' : node.priority) as 'low' | 'medium' | 'high',
-            status: 'confirmed' as const,
-            color: project?.color,
-            createdAt: new Date(node.createdAt),
-            updatedAt: new Date(node.updatedAt),
-          };
-        });
+        const nodes: BrainNode[] = await nodesRes.json();
+        const projects: BrainProject[] = await projectsRes.json();
+        if (!Array.isArray(nodes)) return;
+        if (nodes.length === 0 && attempt < retryDelays.length - 1) continue;
 
-      if (brainEvents.length > 0) {
+        const projectMap = new Map(projects.map((p) => [p.id, p]));
+
+        const brainEvents: CalendarEvent[] = nodes
+          .filter((n): n is BrainNode & { dueDate: string } => !!n.dueDate)
+          .map((node) => {
+            const project = projectMap.get(node.projectId);
+            return {
+              id: `brain-${node.id}`,
+              title: `🧠 ${node.title}`,
+              person: '',
+              date: node.dueDate.split('T')[0],
+              time: '09:00',
+              duration: 30,
+              recurring: 'none' as const,
+              cost: 0,
+              type: 'brain' as const,
+              notes: `Brain: ${project?.name ?? 'Project'}`,
+              isRecurring: false,
+              priority: (node.priority === 'urgent' ? 'high' : node.priority) as 'low' | 'medium' | 'high',
+              status: 'confirmed' as const,
+              color: project?.color,
+              createdAt: new Date(node.createdAt),
+              updatedAt: new Date(node.updatedAt),
+            };
+          });
+
         const currentEvents = useFamilyStore.getState().events;
         const nonBrainEvents = currentEvents.filter((e) => !e.id.startsWith('brain-'));
         setEvents(mergeEvents(brainEvents, nonBrainEvents));
+        return;
       }
     } catch (err) {
       console.warn('📆 CalendarContext: Failed to load brain events:', err);
     }
   }, [setEvents]);
 
-  // Track if we've already hydrated to prevent duplicate loads
-  const hasHydrated = useRef(false);
+  const lastHydrationKey = useRef<string | null>(null);
+
+  const getActiveFamilyId = useCallback(() =>
+    databaseStatus.familyId ||
+    (typeof window !== 'undefined' ? localStorage.getItem('familyId') : null) ||
+    DEFAULT_FAMILY_ID,
+  [databaseStatus.familyId]);
+
+  const refreshEventsFromDatabase = useCallback(async () => {
+    const familyId = getActiveFamilyId();
+    if (!familyId || !databaseStatus.connected) return;
+
+    try {
+      const response = await fetch(`/api/families/${familyId}/events`);
+      if (!response.ok) return;
+
+      const dbEvents = await response.json();
+      if (!Array.isArray(dbEvents)) return;
+
+      const formattedEvents = mapDatabaseEventsToCalendarEvents(dbEvents);
+      const storedEvents = (() => {
+        if (typeof window === 'undefined') return [] as CalendarEvent[];
+        try {
+          const stored = localStorage.getItem('calendarEvents');
+          const parsed = stored ? JSON.parse(stored) : [];
+          return Array.isArray(parsed) ? parsed : [];
+        } catch {
+          return [] as CalendarEvent[];
+        }
+      })();
+      const currentEvents = useFamilyStore.getState().events;
+      const mergedEvents = mergeEvents(
+        formattedEvents,
+        mergeEvents(storedEvents, currentEvents)
+      );
+
+      setEvents(mergedEvents);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('calendarEvents', JSON.stringify(mergedEvents));
+      }
+      await loadBrainEvents(familyId);
+    } catch (error) {
+      console.warn('📆 CalendarContext: Failed to refresh events from database:', error);
+    }
+  }, [databaseStatus.connected, getActiveFamilyId, loadBrainEvents, setEvents]);
 
   // Hydrate events from database/localStorage on mount
   useEffect(() => {
-    if (hasHydrated.current) return;
-    if (events.length > 0) {
-      hasHydrated.current = true;
-      // Still need to load brain events even when regular events already exist
-      const fid = typeof window !== 'undefined' ? localStorage.getItem('familyId') : null;
-      if (fid) loadBrainEvents(fid);
-      return;
-    }
-
     const loadEvents = async () => {
-      hasHydrated.current = true;
+      const familyId = getActiveFamilyId();
+      const hydrationKey = `${familyId}:${databaseStatus.connected ? 'database' : databaseStatus.mode}`;
+
+      if (lastHydrationKey.current === hydrationKey) {
+        return;
+      }
+
+      lastHydrationKey.current = hydrationKey;
       console.log('📆 CalendarContext: Hydrating events...');
 
       const storedEvents = (() => {
@@ -201,47 +368,29 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
           return [];
         }
       })();
+      const currentEvents = useFamilyStore.getState().events;
 
       // Try database first
-      const familyId = typeof window !== 'undefined' ? localStorage.getItem('familyId') : null;
-      if (familyId) {
+      if (familyId && databaseStatus.connected) {
         try {
-          const response = await fetch(`/api/families/${familyId}/events`);
-          if (response.ok) {
+          // A single attempt was not enough. The hydration burst fires a dozen
+          // requests at once and an interrupted one — a navigation mid-load, a
+          // cold server, a dropped connection — rejects here. Because
+          // `lastHydrationKey` is already claimed above, nothing re-hydrates and
+          // the calendar stays empty until the 60s poll, which is a long time to
+          // stare at a blank month.
+          const response = await fetchWithRetry(`/api/families/${familyId}/events`);
+          if (response?.ok) {
             const dbEvents = await response.json();
             if (Array.isArray(dbEvents)) {
               // Convert database events to app format
-              const formattedEvents = dbEvents.map((e: any) => {
-                const eventTime = new Date(e.eventTime);
-                const hours = eventTime.getUTCHours().toString().padStart(2, '0');
-                const minutes = eventTime.getUTCMinutes().toString().padStart(2, '0');
-
-                return {
-                  id: e.id,
-                  title: e.title,
-                  person: e.personId,
-                  date: e.eventDate ? e.eventDate.split('T')[0] : new Date().toISOString().split('T')[0],
-                  time: `${hours}:${minutes}`,
-                  duration: e.durationMinutes,
-                  location: e.location,
-                  recurring: e.recurringPattern,
-                  cost: e.cost,
-                  type: e.eventType,
-                  notes: e.notes,
-                  isRecurring: e.isRecurring,
-                  priority: 'medium' as const,
-                  status: 'confirmed' as const,
-                  createdAt: e.createdAt,
-                  updatedAt: e.updatedAt,
-                  reminders: [{ id: 'reminder-15', type: 'notification' as const, time: 15, enabled: true }],
-                  attendees: [],
-                };
-              });
-              const mergedEvents = mergeEvents(formattedEvents, storedEvents);
+              const formattedEvents = mapDatabaseEventsToCalendarEvents(dbEvents);
+              const mergedEvents = mergeEvents(
+                formattedEvents,
+                mergeEvents(storedEvents, currentEvents)
+              );
               console.log('📆 CalendarContext: Loaded', mergedEvents.length, 'events from database/local cache');
-              if (mergedEvents.length > 0) {
-                setEvents(mergedEvents);
-              }
+              setEvents(mergedEvents);
               if (typeof window !== 'undefined') {
                 localStorage.setItem('calendarEvents', JSON.stringify(mergedEvents));
               }
@@ -253,26 +402,139 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
         } catch (error) {
           console.error('📆 CalendarContext: Failed to load events from database:', error);
         }
+
+        // Every attempt failed, so this hydration never happened. Release the
+        // claim, or the guard above blocks the retry that would fix it.
+        lastHydrationKey.current = null;
       }
 
       // Fallback to localStorage
       try {
-        if (storedEvents.length > 0) {
-          console.log('📆 CalendarContext: Loaded', storedEvents.length, 'events from localStorage');
-          setEvents(storedEvents);
+        const mergedLocalEvents = mergeEvents(currentEvents, storedEvents);
+        if (mergedLocalEvents.length > 0) {
+          console.log('📆 CalendarContext: Loaded', mergedLocalEvents.length, 'events from local cache');
+          setEvents(mergedLocalEvents);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('calendarEvents', JSON.stringify(mergedLocalEvents));
+          }
         }
       } catch (error) {
         console.error('📆 CalendarContext: Failed to load events from localStorage:', error);
       }
 
       // Load brain events after localStorage fallback too
-      if (familyId) {
+      if (familyId && databaseStatus.connected) {
         await loadBrainEvents(familyId);
       }
     };
 
     loadEvents();
-  }, [events.length, loadBrainEvents, setEvents]);
+  }, [databaseStatus.connected, databaseStatus.familyId, databaseStatus.mode, getActiveFamilyId, loadBrainEvents, setEvents]);
+
+  useEffect(() => {
+    if (!databaseStatus.connected) return;
+
+    const refresh = () => {
+      void refreshEventsFromDatabase();
+    };
+
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') refresh();
+    };
+
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+    const intervalId = window.setInterval(refresh, 60_000);
+
+    return () => {
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+      window.clearInterval(intervalId);
+    };
+  }, [databaseStatus.connected, refreshEventsFromDatabase]);
+
+  // Tasks are cached locally so the feature works before the calendar_tasks
+  // migration has been run; the API is wired in the same shape as events.
+  const TASKS_KEY = 'familyHubTasks';
+  const [tasks, setTasks] = useState<CalendarTask[]>([]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const stored = localStorage.getItem(TASKS_KEY);
+      const parsed = stored ? JSON.parse(stored) : [];
+      if (Array.isArray(parsed)) {
+        setTasks(
+          parsed.map((task: CalendarTask) => ({
+            ...task,
+            createdAt: new Date(task.createdAt),
+            updatedAt: new Date(task.updatedAt),
+          }))
+        );
+      }
+    } catch (error) {
+      console.warn('CalendarContext: could not read cached tasks', error);
+    }
+  }, []);
+
+  const persistTasks = useCallback((next: CalendarTask[]) => {
+    setTasks(next);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(TASKS_KEY, JSON.stringify(next));
+      } catch (error) {
+        console.warn('CalendarContext: could not cache tasks', error);
+      }
+    }
+  }, []);
+
+  const createTask = useCallback(
+    (draft: Omit<CalendarTask, 'id' | 'createdAt' | 'updatedAt'>): CalendarTask => {
+      const task: CalendarTask = {
+        ...draft,
+        // A deadline before the day it was set is always a mistake.
+        dueDate: draft.dueDate < draft.assignedDate ? draft.assignedDate : draft.dueDate,
+        id: createId('task'),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      persistTasks([...tasks, task]);
+      return task;
+    },
+    [persistTasks, tasks]
+  );
+
+  const updateTask = useCallback(
+    (id: string, updates: Partial<CalendarTask>) => {
+      persistTasks(
+        tasks.map((task) => (task.id === id ? { ...task, ...updates, updatedAt: new Date() } : task))
+      );
+    },
+    [persistTasks, tasks]
+  );
+
+  const deleteTask = useCallback(
+    (id: string) => persistTasks(tasks.filter((task) => task.id !== id)),
+    [persistTasks, tasks]
+  );
+
+  const toggleTaskComplete = useCallback(
+    (id: string, completedBy?: string) => {
+      persistTasks(
+        tasks.map((task) =>
+          task.id === id
+            ? {
+                ...task,
+                completedAt: task.completedAt ? null : new Date().toISOString(),
+                completedBy: task.completedAt ? null : completedBy ?? null,
+                updatedAt: new Date(),
+              }
+            : task
+        )
+      );
+    },
+    [persistTasks, tasks]
+  );
 
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [defaultSlot, setDefaultSlot] = useState<{ start: Date; end: Date } | null>(null);
@@ -284,9 +546,10 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
   const [conflictRules, setConflictRules] = useState(conflictDetectionService.getRules());
 
   const openCreateForm = useCallback((slot?: { start: Date; end: Date }) => {
-    setDefaultSlot(slot ?? null);
+    setIsEventFormOpen(false);
     setSelectedEvent(null);
-    setIsEventFormOpen(true);
+    setDefaultSlot(slot ?? null);
+    window.requestAnimationFrame(() => setIsEventFormOpen(true));
   }, []);
 
   const openEditForm = useCallback((event: CalendarEvent) => {
@@ -323,27 +586,30 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
     | { status: 'created'; event: CalendarEvent }
   > => {
     const eventToSave = buildEvent(draft);
-    const conflicts = detectConflicts(eventToSave, events);
-
-    if (conflicts.length > 0) {
-      openConflictModal(conflicts);
-      return { status: 'conflict' };
+    if (!eventToSave.person) {
+      throw new Error('Choose a family member before saving this event.');
     }
+    const currentEvents = useFamilyStore.getState().events;
+    const conflicts = detectConflicts(eventToSave, currentEvents);
 
-    const savedEvent = await databaseService.saveEvent(eventToSave) ?? eventToSave;
-    setEvents([...events, savedEvent]);
+    const savedEvent = await databaseService.saveEvent(eventToSave);
+    setEvents([...currentEvents, savedEvent]);
 
     try {
-      const eventDateTime = new Date(`${savedEvent.date}T${savedEvent.time}`);
-      await scheduleEventReminders(savedEvent.id, eventDateTime, savedEvent.type);
+      await scheduleEventReminders(savedEvent);
       await showNotification({
         type: 'system',
-        title: 'Event Created',
-        message: `"${savedEvent.title}" has been added to your calendar with reminders.`,
+        title: conflicts.length > 0 ? 'Event Added With Clash' : 'Event Created',
+        message: conflicts.length > 0
+          ? `"${savedEvent.title}" has been added. It overlaps ${conflicts.length === 1 ? 'another calendar item' : `${conflicts.length} calendar items`}.`
+          : `"${savedEvent.title}" has been added to your calendar with reminders.`,
+        icon: getCalendarEventIcon(savedEvent),
         priority: 'medium',
-        category: 'event',
+        category: conflicts.length > 0 ? 'conflict' : 'event',
         read: false,
-        actionRequired: false,
+        actionRequired: conflicts.length > 0,
+        relatedEventId: savedEvent.id,
+        metadata: getEventNotificationMetadata(savedEvent),
       });
     } catch (error) {
       console.error('Failed to schedule reminders for created event', error);
@@ -354,8 +620,6 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
   }, [
     closeEventForm,
     detectConflicts,
-    events,
-    openConflictModal,
     scheduleEventReminders,
     setEvents,
     showNotification,
@@ -365,22 +629,19 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
     id: string,
     updates: Partial<CalendarEvent>
   ): Promise<true | 'conflict'> => {
-    const existingEvent = events.find((event) => event.id === id);
+    const currentEvents = useFamilyStore.getState().events;
+    const existingEvent = currentEvents.find((event) => event.id === id);
     if (!existingEvent) {
       return true;
     }
 
     const updatedEvent = buildEvent({ ...existingEvent, ...updates }, id);
-    const otherEvents = events.filter((event) => event.id !== id);
+    const otherEvents = currentEvents.filter((event) => event.id !== id);
 
     const conflicts = detectConflicts(updatedEvent, otherEvents);
-    if (conflicts.length > 0) {
-      openConflictModal(conflicts);
-      return 'conflict';
-    }
 
     const success = await databaseService.updateEvent(id, updatedEvent);
-    const nextEvents = events.map((event) => (event.id === id ? updatedEvent : event));
+    const nextEvents = currentEvents.map((event) => (event.id === id ? updatedEvent : event));
     setEvents(nextEvents);
     if (typeof window !== 'undefined') {
       localStorage.setItem('calendarEvents', JSON.stringify(nextEvents));
@@ -389,19 +650,23 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
       console.warn('📆 CalendarContext: Updated event in local state after database update failed:', id);
     }
 
-    if (updates.date || updates.time) {
+    if (updates.date || updates.time || conflicts.length > 0) {
       try {
         await cancelEventReminders(id);
-        const eventDateTime = new Date(`${updatedEvent.date}T${updatedEvent.time}`);
-        await scheduleEventReminders(id, eventDateTime, updatedEvent.type);
+        await scheduleEventReminders(updatedEvent);
         await showNotification({
           type: 'system',
-          title: 'Event Updated',
-          message: `"${updatedEvent.title}" has been updated with new reminders.`,
+          title: conflicts.length > 0 ? 'Event Updated With Clash' : 'Event Updated',
+          message: conflicts.length > 0
+            ? `"${updatedEvent.title}" has been updated. It overlaps ${conflicts.length === 1 ? 'another calendar item' : `${conflicts.length} calendar items`}.`
+            : `"${updatedEvent.title}" has been updated with new reminders.`,
+          icon: getCalendarEventIcon(updatedEvent),
           priority: 'medium',
-          category: 'event',
+          category: conflicts.length > 0 ? 'conflict' : 'event',
           read: false,
-          actionRequired: false,
+          actionRequired: conflicts.length > 0,
+          relatedEventId: updatedEvent.id,
+          metadata: getEventNotificationMetadata(updatedEvent),
         });
       } catch (error) {
         console.error('Failed to reschedule reminders for updated event', error);
@@ -414,8 +679,6 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
     cancelEventReminders,
     closeEventForm,
     detectConflicts,
-    events,
-    openConflictModal,
     scheduleEventReminders,
     setEvents,
     showNotification,
@@ -426,16 +689,26 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
     const success = await databaseService.deleteEvent(id);
 
     if (success) {
-      setEvents(events.filter((event) => event.id !== id));
+      const nextEvents = events.filter((event) => event.id !== id);
+      setEvents(nextEvents);
+      // createEvent and updateEvent both write through to localStorage. Without
+      // this, mergeEvents pulls the deleted event back out of the cache on the
+      // next hydration and it reappears.
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('calendarEvents', JSON.stringify(nextEvents));
+      }
       if (eventToDelete) {
         await showNotification({
           type: 'system',
           title: 'Event Deleted',
           message: `"${eventToDelete.title}" has been removed from your calendar.`,
+          icon: getCalendarEventIcon(eventToDelete),
           priority: 'medium',
           category: 'event',
           read: false,
           actionRequired: false,
+          relatedEventId: eventToDelete.id,
+          metadata: getEventNotificationMetadata(eventToDelete),
         });
       }
     }
@@ -499,10 +772,13 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
           type: 'system',
           title: 'Event Cancelled',
           message: `"${conflict.newEvent.title}" has been cancelled to resolve the conflict.`,
+          icon: getCalendarEventIcon(conflict.newEvent),
           priority: 'medium',
           category: 'conflict',
           read: false,
           actionRequired: false,
+          relatedEventId: conflict.newEvent.id,
+          metadata: getEventNotificationMetadata(conflict.newEvent),
         });
         break;
       case 'reschedule':
@@ -510,10 +786,13 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
           type: 'system',
           title: 'Manual Rescheduling Required',
           message: `Please reschedule "${conflict.newEvent.title}" to resolve the conflict.`,
+          icon: getCalendarEventIcon(conflict.newEvent),
           priority: 'high',
           category: 'conflict',
           read: false,
           actionRequired: true,
+          relatedEventId: conflict.newEvent.id,
+          metadata: getEventNotificationMetadata(conflict.newEvent),
         });
         break;
       case 'relocate':
@@ -521,10 +800,13 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
           type: 'system',
           title: 'Location Change Recommended',
           message: `Consider changing the location for "${conflict.newEvent.title}".`,
+          icon: getCalendarEventIcon(conflict.newEvent),
           priority: 'medium',
           category: 'conflict',
           read: false,
           actionRequired: true,
+          relatedEventId: conflict.newEvent.id,
+          metadata: getEventNotificationMetadata(conflict.newEvent),
         });
         break;
       default:
@@ -532,10 +814,13 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
           type: 'system',
           title: 'Resolution Applied',
           message: `Applied ${resolution.type} resolution for "${conflict.newEvent.title}".`,
+          icon: getCalendarEventIcon(conflict.newEvent),
           priority: 'medium',
           category: 'conflict',
           read: false,
           actionRequired: false,
+          relatedEventId: conflict.newEvent.id,
+          metadata: getEventNotificationMetadata(conflict.newEvent),
         });
     }
 
@@ -549,17 +834,20 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
     const conflict = detectedConflicts.find((item) => item.id === conflictId);
     if (!conflict) return;
 
-    const savedEvent = await databaseService.saveEvent(conflict.newEvent) ?? conflict.newEvent;
+    const savedEvent = await databaseService.saveEvent(conflict.newEvent);
     const currentEvents = useFamilyStore.getState().events;
     setEvents([...currentEvents, savedEvent]);
     await showNotification({
       type: 'system',
       title: 'Conflict Ignored',
       message: `"${savedEvent.title}" has been added despite the conflict.`,
+      icon: getCalendarEventIcon(savedEvent),
       priority: 'medium',
       category: 'conflict',
       read: false,
       actionRequired: false,
+      relatedEventId: savedEvent.id,
+      metadata: getEventNotificationMetadata(savedEvent),
     });
 
     setDetectedConflicts((prev) => prev.filter((item) => item.id !== conflictId));
@@ -587,6 +875,11 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
 
   const value = useMemo<CalendarContextValue>(() => ({
     events,
+    tasks,
+    createTask,
+    updateTask,
+    deleteTask,
+    toggleTaskComplete,
     eventTemplates,
     selectedEvent,
     defaultSlot,
@@ -629,6 +922,11 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
     duplicateTemplate,
     eventTemplates,
     events,
+    tasks,
+    createTask,
+    updateTask,
+    deleteTask,
+    toggleTaskComplete,
     ignoreConflict,
     isConflictModalOpen,
     isConflictSettingsOpen,

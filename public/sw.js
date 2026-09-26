@@ -1,8 +1,8 @@
 // Family Hub Service Worker – offline caching, install promotion helpers, push notifications
 
-const APP_SHELL_CACHE = 'family-hub-app-shell-v2';
-const RUNTIME_CACHE = 'family-hub-runtime-v2';
-const MEDIA_CACHE = 'family-hub-media-v2';
+const APP_SHELL_CACHE = 'family-hub-app-shell-v3';
+const RUNTIME_CACHE = 'family-hub-runtime-v3';
+const MEDIA_CACHE = 'family-hub-media-v3';
 const OFFLINE_URL = '/offline.html';
 
 const PRECACHE_ASSETS = [
@@ -239,9 +239,9 @@ self.addEventListener('notificationclick', (event) => {
 
   if (clickedAction === 'view') {
     // Open the app and navigate to the event
-    const urlToOpen = notificationData.eventId
+    const urlToOpen = notificationData.url || (notificationData.eventId
       ? `/?event=${notificationData.eventId}`
-      : '/';
+      : '/');
 
     event.waitUntil(
       clients.matchAll({ type: 'window' }).then((clientList) => {
@@ -279,7 +279,7 @@ self.addEventListener('notificationclick', (event) => {
     );
   } else {
     // Default click action - open app
-    const urlToOpen = '/';
+    const urlToOpen = notificationData.url || '/';
     event.waitUntil(
       clients.matchAll({ type: 'window' }).then((clientList) => {
         for (const client of clientList) {

@@ -5,6 +5,7 @@ import { X } from 'lucide-react';
 import { useBrainContext } from '@/contexts/familyHub/BrainContext';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { NODE_STATUS_CONFIG, NODE_PRIORITY_CONFIG, type BrainNodeStatus, type BrainNodePriority, type BrainNodeType } from '@/types/brain.types';
+import AIEnhancedField from '@/components/common/AIEnhancedField';
 
 const NODE_TYPES: { value: BrainNodeType; label: string }[] = [
   { value: 'thought', label: 'Thought' },
@@ -19,32 +20,46 @@ const CreateNodeModal = () => {
   const isDesktop = useMediaQuery('(min-width: 768px)');
 
   const [title, setTitle] = useState('');
-  const [nodeType, setNodeType] = useState<BrainNodeType>('thought');
+  const [content, setContent] = useState('');
+  const [nodeType, setNodeType] = useState<BrainNodeType>('note');
   const [status, setStatus] = useState<BrainNodeStatus>('todo');
   const [priority, setPriority] = useState<BrainNodePriority>('medium');
   const [dueDate, setDueDate] = useState('');
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   if (!isCreateNodeOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim()) return;
+    const trimmedContent = content.trim();
+    const derivedTitle =
+      title.trim() ||
+      (trimmedContent
+        ? trimmedContent.split('\n')[0].slice(0, 90)
+        : '');
+    if (!derivedTitle) return;
     setSaving(true);
+    setSaveError(null);
     try {
       await createNode({
-        title: title.trim(),
+        title: derivedTitle,
+        content: trimmedContent || undefined,
         nodeType,
         status,
         priority,
         dueDate: dueDate || undefined,
       });
       setTitle('');
-      setNodeType('thought');
+      setContent('');
+      setNodeType('note');
       setStatus('todo');
       setPriority('medium');
       setDueDate('');
       setIsCreateNodeOpen(false);
+    } catch (error) {
+      console.warn('Failed to create brain node:', error);
+      setSaveError('Could not save this item. Your draft is still here.');
     } finally {
       setSaving(false);
     }
@@ -53,7 +68,7 @@ const CreateNodeModal = () => {
   const formContent = (
     <form onSubmit={handleSubmit} className="flex flex-col h-full">
       <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-slate-700">
-        <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-100">Add Node</h3>
+        <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-100">Add Note</h3>
         <button
           type="button"
           onClick={() => setIsCreateNodeOpen(false)}
@@ -65,11 +80,13 @@ const CreateNodeModal = () => {
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         <div>
-          <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-slate-400">Title *</label>
+          <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-slate-400">Title</label>
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="What's on your mind?"
+            placeholder="Optional note title"
+            spellCheck
+            lang="en-GB"
             autoFocus
             className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
           />
@@ -104,6 +121,18 @@ const CreateNodeModal = () => {
           </div>
         </div>
 
+        <div>
+          <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-slate-400">Note</label>
+          <AIEnhancedField
+            value={content}
+            onChange={setContent}
+            context="Project Brain note"
+            rows={7}
+            placeholder="Write the note, checklist, or linked thought..."
+            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+          />
+        </div>
+
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-slate-400">Priority</label>
@@ -134,11 +163,12 @@ const CreateNodeModal = () => {
       <div className="border-t border-gray-200 px-4 py-3 dark:border-slate-700" style={{ paddingBottom: isDesktop ? undefined : 'calc(env(safe-area-inset-bottom) + 12px)' }}>
         <button
           type="submit"
-          disabled={!title.trim() || saving}
+          disabled={!(title.trim() || content.trim()) || saving}
           className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
         >
-          {saving ? 'Creating...' : 'Create Node'}
+          {saving ? 'Creating...' : nodeType === 'task' ? 'Create Task' : 'Create Note'}
         </button>
+        {saveError && <p className="mt-2 text-xs font-medium text-amber-600 dark:text-amber-300">{saveError}</p>}
       </div>
     </form>
   );

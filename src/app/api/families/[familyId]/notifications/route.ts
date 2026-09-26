@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import prisma from '@/lib/prisma';
 import { requireFamilyAccess } from '@/lib/auth-utils';
+import { sendFamilyPushNotification } from '@/lib/webPush';
 
 const dateString = z.string().datetime();
 
@@ -77,7 +78,11 @@ export const GET = requireFamilyAccess(async (request: NextRequest, context, _au
 export const POST = requireFamilyAccess(async (request: NextRequest, context, _authUser) => {
   try {
     const { familyId } = await context.params;
-    const raw = await request.json();
+    const raw = await request.json().catch(() => null);
+    if (!raw) {
+      return NextResponse.json({ error: 'Invalid notification payload' }, { status: 400 });
+    }
+
     const body = createNotificationSchema.parse(raw);
 
     const notification = await prisma.notification.create({
@@ -102,7 +107,23 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context, _a
       },
     });
 
-    return NextResponse.json(toClient(notification), { status: 201 });
+    const pushResult = await sendFamilyPushNotification(familyId, {
+      title: notification.title,
+      body: notification.message,
+      tag: `notification-${notification.id}`,
+      data: {
+        familyId,
+        notificationId: notification.id,
+        type: notification.type,
+        relatedEventId: notification.relatedEventId,
+        url: '/',
+      },
+      actions: [
+        { action: 'view', title: 'Open' },
+      ],
+    });
+
+    return NextResponse.json({ ...toClient(notification), push: pushResult }, { status: 201 });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: 'Invalid notification payload' }, { status: 400 });

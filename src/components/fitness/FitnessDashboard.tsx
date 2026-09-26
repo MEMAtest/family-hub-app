@@ -18,6 +18,7 @@ import {
   Watch,
   Pencil,
   Trash2,
+  Copy,
 } from 'lucide-react';
 import { ActivityLoggingWizard } from './ActivityLoggingWizard';
 import DeviceConnections from './DeviceConnections';
@@ -53,10 +54,12 @@ const FitnessDashboard: React.FC<FitnessDashboardProps> = ({
 }) => {
   const [showWizard, setShowWizard] = useState(false);
   const [editingActivity, setEditingActivity] = useState<FitnessActivity | null>(null);
+  const [copySourceActivity, setCopySourceActivity] = useState<FitnessActivity | null>(null);
   const [showDeviceSettings, setShowDeviceSettings] = useState(false);
   const [activities, setActivities] = useState<FitnessActivity[]>([]);
   const [stats, setStats] = useState<FitnessStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [repeatingLastWorkout, setRepeatingLastWorkout] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
@@ -100,6 +103,13 @@ const FitnessDashboard: React.FC<FitnessDashboardProps> = ({
     fetchData(); // Refresh stats
     setShowWizard(false);
     setEditingActivity(null);
+    setCopySourceActivity(null);
+  };
+
+  const openNewActivity = () => {
+    setEditingActivity(null);
+    setCopySourceActivity(null);
+    setShowWizard(true);
   };
 
   const handleDeleteActivity = useCallback(async (activityId: string) => {
@@ -121,6 +131,60 @@ const FitnessDashboard: React.FC<FitnessDashboardProps> = ({
       setError('Failed to delete activity');
     }
   }, [familyId, fetchData]);
+
+  const handleRepeatLastWorkout = useCallback(async () => {
+    const lastWorkout = activities[0];
+    if (!lastWorkout || repeatingLastWorkout) return;
+
+    try {
+      setRepeatingLastWorkout(true);
+      setError(null);
+
+      const response = await fetch(`/api/families/${familyId}/fitness`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          personId,
+          activityType: lastWorkout.activityType,
+          durationMinutes: lastWorkout.durationMinutes,
+          intensityLevel: lastWorkout.intensityLevel,
+          workoutName: lastWorkout.workoutName,
+          exercises: lastWorkout.exercises
+            ? lastWorkout.exercises.map((exercise, exerciseIndex) => ({
+                ...exercise,
+                id: `repeat_${Date.now()}_${exerciseIndex}`,
+                sets: exercise.sets.map((set) => ({ ...set })),
+              }))
+            : undefined,
+          notes: lastWorkout.notes,
+          activityDate: new Date().toISOString(),
+          source: 'manual',
+        }),
+      });
+
+      if (!response.ok) {
+        let message = 'Failed to repeat workout';
+        try {
+          const payload = await response.json();
+          if (typeof payload?.error === 'string' && payload.error.trim()) {
+            message = payload.error;
+          }
+        } catch {
+          // Keep default message.
+        }
+        throw new Error(message);
+      }
+
+      const activity = await response.json();
+      setActivities((prev) => [activity, ...prev]);
+      await fetchData();
+    } catch (err) {
+      console.error('Failed to repeat workout:', err);
+      setError(err instanceof Error ? err.message : 'Failed to repeat workout');
+    } finally {
+      setRepeatingLastWorkout(false);
+    }
+  }, [activities, familyId, fetchData, personId, repeatingLastWorkout]);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -144,14 +208,6 @@ const FitnessDashboard: React.FC<FitnessDashboardProps> = ({
     const mins = minutes % 60;
     return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
   };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -185,22 +241,51 @@ const FitnessDashboard: React.FC<FitnessDashboardProps> = ({
             <RefreshCw className="w-5 h-5" />
           </button>
           <button
-            onClick={() => {
-              setEditingActivity(null);
-              setShowWizard(true);
-            }}
+            onClick={openNewActivity}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
             <Plus className="w-5 h-5" />
             <span className="hidden sm:inline">Log Activity</span>
             <span className="sm:hidden">Log</span>
           </button>
+          {activities[0] && (
+            <button
+              onClick={() => void handleRepeatLastWorkout()}
+              disabled={repeatingLastWorkout}
+              className="flex items-center gap-2 rounded-lg bg-[#147c72] px-4 py-2 text-white transition-colors hover:bg-[#0f625a] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <RefreshCw className={`w-4 h-4 ${repeatingLastWorkout ? 'animate-spin' : ''}`} />
+              <span className="hidden sm:inline">Repeat Last</span>
+              <span className="sm:hidden">Repeat</span>
+            </button>
+          )}
+          {activities[0] && (
+            <button
+              onClick={() => {
+                setEditingActivity(null);
+                setCopySourceActivity(activities[0]);
+                setShowWizard(true);
+              }}
+              className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-gray-700 transition-colors hover:bg-gray-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+            >
+              <Copy className="w-4 h-4" />
+              <span className="hidden sm:inline">Copy Last</span>
+              <span className="sm:hidden">Copy</span>
+            </button>
+          )}
         </div>
       </div>
 
       {error && (
         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 text-red-700 dark:text-red-300">
           {error}
+        </div>
+      )}
+
+      {loading && (
+        <div className="flex items-center gap-3 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700 dark:border-blue-900/40 dark:bg-blue-900/20 dark:text-blue-200">
+          <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-300 border-b-blue-700" />
+          Refreshing fitness data…
         </div>
       )}
 
@@ -347,10 +432,7 @@ const FitnessDashboard: React.FC<FitnessDashboardProps> = ({
               No activities logged yet
             </p>
             <button
-              onClick={() => {
-                setEditingActivity(null);
-                setShowWizard(true);
-              }}
+              onClick={openNewActivity}
               className="text-blue-600 dark:text-blue-400 hover:underline"
             >
               Log your first workout
@@ -419,12 +501,24 @@ const FitnessDashboard: React.FC<FitnessDashboardProps> = ({
                       <button
                         onClick={() => {
                           setEditingActivity(activity);
+                          setCopySourceActivity(null);
                           setShowWizard(true);
                         }}
                         className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
                         title="Edit"
                       >
                         <Pencil className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          setEditingActivity(null);
+                          setCopySourceActivity(activity);
+                          setShowWizard(true);
+                        }}
+                        className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                        title="Copy"
+                      >
+                        <Copy className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => void handleDeleteActivity(activity.id)}
@@ -448,12 +542,14 @@ const FitnessDashboard: React.FC<FitnessDashboardProps> = ({
         onClose={() => {
           setShowWizard(false);
           setEditingActivity(null);
+          setCopySourceActivity(null);
         }}
         onComplete={handleActivityComplete}
         personId={personId}
         familyId={familyId}
-        lastWorkout={activities[0]}
+        lastWorkout={copySourceActivity ?? activities[0]}
         editingActivity={editingActivity}
+        startFromLastWorkout={Boolean(copySourceActivity)}
       />
     </div>
   );

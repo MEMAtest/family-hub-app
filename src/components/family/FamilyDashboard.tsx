@@ -72,42 +72,37 @@ const FamilyDashboard: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6">
+      <div className="flex flex-col gap-4 rounded-lg border border-[#dde5e0] bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h2 className="text-2xl font-semibold text-gray-900 dark:text-slate-100">Family</h2>
+            <h2 className="kinboard-serif text-3xl leading-none text-[#18221f] dark:text-slate-100">Profiles</h2>
             <p className="text-sm text-gray-600 dark:text-slate-400">
-              Manage family members and keep roles and age groups up to date.
+              Separate Ade and Angela profiles for calendars, money, meals, and household tasks without signing in.
             </p>
           </div>
           <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-slate-400">
-            <span className="rounded-full border border-gray-200 dark:border-slate-700 px-3 py-1">
-              {databaseStatus.connected ? 'Connected' : 'Offline'} • {databaseStatus.mode}
+            <span className="rounded-full border border-[#dde5e0] bg-[#f8faf6] px-3 py-1 font-semibold text-[#5f6a64] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+              {databaseStatus.connected ? 'Synced profiles' : 'Saved on this device'}
             </span>
-            {databaseStatus.familyId && (
-              <span className="rounded-full border border-gray-200 dark:border-slate-700 px-3 py-1">
-                Family ID: {databaseStatus.familyId.slice(0, 8)}…
-              </span>
-            )}
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <div className="rounded-lg bg-blue-50 dark:bg-blue-900/20 p-4">
-            <p className="text-sm text-blue-700 dark:text-blue-300">Total Members</p>
-            <p className="text-2xl font-semibold text-blue-900 dark:text-blue-100">{stats.total}</p>
+          <div className="rounded-lg bg-[#eaf1e7] p-4 dark:bg-[#147c72]/20">
+            <p className="text-sm text-[#147c72] dark:text-[#56c6b8]">Profiles</p>
+            <p className="text-2xl font-semibold text-[#18221f] dark:text-slate-100">{stats.total}</p>
           </div>
-          <div className="rounded-lg bg-green-50 dark:bg-green-900/20 p-4">
-            <p className="text-sm text-green-700 dark:text-green-300">Parents</p>
-            <p className="text-2xl font-semibold text-green-900 dark:text-green-100">{stats.parents}</p>
+          <div className="rounded-lg bg-[#fff3d5] p-4 dark:bg-[#f3b33d]/15">
+            <p className="text-sm text-[#8b5b0b] dark:text-[#f3d28a]">Parents</p>
+            <p className="text-2xl font-semibold text-[#18221f] dark:text-slate-100">{stats.parents}</p>
           </div>
-          <div className="rounded-lg bg-purple-50 dark:bg-purple-900/20 p-4">
-            <p className="text-sm text-purple-700 dark:text-purple-300">Students</p>
-            <p className="text-2xl font-semibold text-purple-900 dark:text-purple-100">{stats.students}</p>
+          <div className="rounded-lg bg-[#edf4ff] p-4 dark:bg-[#447cbf]/20">
+            <p className="text-sm text-[#447cbf] dark:text-[#8db7e8]">Students</p>
+            <p className="text-2xl font-semibold text-[#18221f] dark:text-slate-100">{stats.students}</p>
           </div>
-          <div className="rounded-lg bg-gray-50 dark:bg-slate-800 p-4">
-            <p className="text-sm text-gray-600 dark:text-slate-400">Other</p>
-            <p className="text-2xl font-semibold text-gray-900 dark:text-slate-100">{stats.other}</p>
+          <div className="rounded-lg bg-[#fdebf1] p-4 dark:bg-[#d8527d]/15">
+            <p className="text-sm text-[#d8527d] dark:text-[#f3a6bf]">Other</p>
+            <p className="text-2xl font-semibold text-[#18221f] dark:text-slate-100">{stats.other}</p>
           </div>
         </div>
       </div>
@@ -143,10 +138,10 @@ const FamilyDashboard: React.FC = () => {
         <div className="flex items-center gap-3">
           <button
             onClick={() => openForm()}
-            className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+            className="inline-flex items-center gap-2 rounded-md bg-[#147c72] px-4 py-2 text-sm font-semibold text-white hover:bg-[#0f625a]"
           >
             <Plus className="h-4 w-4" />
-            Add Member
+            Add profile
           </button>
           <button
             onClick={() => refetch()}
@@ -176,14 +171,14 @@ const FamilyDashboard: React.FC = () => {
           <Users className="mx-auto mb-3 h-8 w-8 text-gray-400 dark:text-slate-500" />
           <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">No family members yet</h3>
           <p className="mt-2 text-sm text-gray-600 dark:text-slate-400">
-            Add your first member to start managing roles, age groups, and family details.
+            Add a profile to start assigning calendar events, shopping items, and household actions.
           </p>
           <button
             onClick={() => openForm()}
-            className="mt-4 inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+            className="mt-4 inline-flex items-center gap-2 rounded-md bg-[#147c72] px-4 py-2 text-sm font-semibold text-white hover:bg-[#0f625a]"
           >
             <Plus className="h-4 w-4" />
-            Add Member
+            Add profile
           </button>
         </div>
       )}
@@ -220,7 +215,7 @@ const FamilyDashboard: React.FC = () => {
                     </p>
                   </div>
                   <span className="rounded-full border border-gray-200 dark:border-slate-700 px-2 py-1 text-xs text-gray-500 dark:text-slate-400">
-                    {databaseStatus.connected && member.familyId !== 'local-family' ? 'Synced' : 'Local'}
+                    {databaseStatus.connected && member.familyId !== 'local-family' ? 'Synced' : 'Local profile'}
                   </span>
                 </div>
                 {member.fitnessGoals && Object.keys(member.fitnessGoals).length > 0 && (

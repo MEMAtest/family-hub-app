@@ -3,7 +3,14 @@
 import { useEffect, useRef } from 'react';
 import { useFamilyStore, FamilyState, BudgetData, MealPlanning, ShoppingList, GoalsData } from '@/store/familyStore';
 import databaseService from '@/services/databaseService';
+import type { DatabaseBootstrapFamily } from '@/services/databaseService';
 import { createId } from '@/utils/id';
+import {
+  DEFAULT_FAMILY_ID,
+  DEFAULT_FAMILY_NAME,
+  DEFAULT_FAMILY_MEMBERS,
+  buildDefaultLocalMembers,
+} from '@/lib/defaultFamilyProfile';
 
 const SHOULD_SEED_E2E = process.env.NEXT_PUBLIC_E2E_SEED === 'true';
 const E2E_SEED_KEY = 'familyHub_e2eSeeded';
@@ -29,6 +36,40 @@ const readCacheObject = <T extends Record<string, any>>(key: string): T | null =
   const parsed = safeJsonParse<T | unknown>(localStorage.getItem(key), null);
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
   return parsed as T;
+};
+
+const ensureLocalFamilyBootstrap = () => {
+  if (typeof window === 'undefined') return DEFAULT_FAMILY_ID;
+
+  const familyId = localStorage.getItem('familyId') || DEFAULT_FAMILY_ID;
+  localStorage.setItem('familyId', familyId);
+
+  if (!localStorage.getItem('familyName')) {
+    localStorage.setItem('familyName', DEFAULT_FAMILY_NAME);
+  }
+
+  const cachedMembers = readCacheArray<any>('familyMembers');
+  const existingKeys = new Set<string>();
+  cachedMembers.forEach((member) => {
+    const id = String(member?.id || '').trim().toLowerCase();
+    const name = String(member?.name || '').trim().toLowerCase();
+    if (id) existingKeys.add(id);
+    if (name) existingKeys.add(name);
+  });
+  const missingDefaultMembers = buildDefaultLocalMembers(familyId).filter((member) => {
+    const defaultProfile = DEFAULT_FAMILY_MEMBERS.find((profile) => profile.id === member.id);
+    return (
+      !existingKeys.has(member.id.toLowerCase()) &&
+      !existingKeys.has(member.name.toLowerCase()) &&
+      !(defaultProfile && existingKeys.has(defaultProfile.name.toLowerCase()))
+    );
+  });
+
+  if (missingDefaultMembers.length > 0) {
+    localStorage.setItem('familyMembers', JSON.stringify([...cachedMembers, ...missingDefaultMembers]));
+  }
+
+  return familyId;
 };
 
 const normaliseMember = (member: any, familyId?: string) => {
@@ -328,7 +369,7 @@ const buildGoalsData = (goals: any[], achievements: any[] = []): GoalsData => {
   };
 };
 
-export const useDatabaseSync = () => {
+export const useDatabaseSync = (bootstrapFamily?: DatabaseBootstrapFamily | null) => {
   const setDatabaseStatus = useFamilyStore((state: FamilyState) => state.setDatabaseStatus);
   const setPeople = useFamilyStore((state: FamilyState) => state.setPeople);
   const setFamilyMilestones = useFamilyStore((state: FamilyState) => state.setFamilyMilestones);
@@ -349,18 +390,22 @@ export const useDatabaseSync = () => {
       console.log('🔄 Initializing database connection...');
 
       seedE2EBudgetFixtures();
+      // A browser cache is never an authority for household identity. The active
+      // family must come from the signed-in session and protected API response.
+      const localFamilyId: string | undefined = undefined;
 
       const hydrateFromCache = (familyId?: string) => {
         const storeState = useFamilyStore.getState();
+        const resolvedFamilyId = familyId || localFamilyId || DEFAULT_FAMILY_ID;
 
         const cachedMembers = readCacheArray<any>('familyMembers');
-        if (!storeState.people.length && cachedMembers.length) {
-          setPeople(cachedMembers.map((member) => normaliseMember(member, familyId)));
+        if (cachedMembers.length) {
+          setPeople(cachedMembers.map((member) => normaliseMember(member, resolvedFamilyId)));
         }
 
         const cachedMilestones = readCacheArray<any>('familyMilestones');
         if (!storeState.familyMilestones.length && cachedMilestones.length) {
-          setFamilyMilestones(cachedMilestones.map((milestone) => normaliseMilestone(milestone, familyId)));
+          setFamilyMilestones(cachedMilestones.map((milestone) => normaliseMilestone(milestone, resolvedFamilyId)));
         }
 
         const cachedIncome = readCacheArray<any>('budgetIncome');
@@ -552,12 +597,12 @@ export const useDatabaseSync = () => {
       };
 
       let connected = false;
-      let resolvedFamilyId: string | undefined;
+      let resolvedFamilyId: string | undefined = localFamilyId;
 
       try {
-        connected = await databaseService.initialize();
+        connected = await databaseService.initialize(bootstrapFamily);
         const status = databaseService.getStatus();
-        resolvedFamilyId = status.familyId ?? localStorage.getItem('familyId') ?? undefined;
+        resolvedFamilyId = status.familyId ?? undefined;
 
         if (connected) {
           console.log('✅ Database connected:', status);
@@ -567,31 +612,29 @@ export const useDatabaseSync = () => {
             mode: 'database',
           });
         } else {
-          console.log('📦 Falling back to localStorage mode');
-          // Try to get familyId from localStorage for offline operation
+          console.warn('Database connection unavailable; withholding household data until the secure session reconnects.');
           setDatabaseStatus({
             connected: false,
-            familyId: resolvedFamilyId ?? null,
-            mode: 'localStorage',
+            familyId: null,
+            mode: 'offline',
           });
         }
       } catch (error) {
         console.error('Database initialization failed:', error);
-        const storedFamilyId = localStorage.getItem('familyId');
         setDatabaseStatus({
           connected: false,
-          familyId: storedFamilyId,
-          mode: 'localStorage',
+          familyId: null,
+          mode: 'offline',
         });
-        resolvedFamilyId = storedFamilyId ?? undefined;
+        resolvedFamilyId = undefined;
       } finally {
-        hydrateFromCache(resolvedFamilyId);
-        if (resolvedFamilyId) {
+        if (connected && resolvedFamilyId) {
+          hydrateFromCache(resolvedFamilyId);
           await refreshFromDatabase(resolvedFamilyId, connected);
         }
       }
     };
 
     initDatabase();
-  }, [setDatabaseStatus]);
+  }, [bootstrapFamily, setDatabaseStatus]);
 };

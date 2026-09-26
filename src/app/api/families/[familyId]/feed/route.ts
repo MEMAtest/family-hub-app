@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireFamilyAccess } from '@/lib/auth-utils';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 type FeedSeverity = 'info' | 'attention' | 'urgent';
 
 type FeedItem = {
@@ -21,6 +24,41 @@ type FeedItem = {
 };
 
 const isoDate = (d: Date) => d.toISOString().split('T')[0];
+
+const notificationDedupeKey = (notification: {
+  id: string;
+  type: string;
+  title: string;
+  metadata?: unknown;
+}) => {
+  const metadata = notification.metadata && typeof notification.metadata === 'object'
+    ? notification.metadata as Record<string, any>
+    : null;
+
+  return metadata?.dedupeKey ||
+    (metadata?.type && metadata?.nodeId ? `${metadata.type}:${metadata.nodeId}` : null) ||
+    (notification.type === 'system' && notification.title === 'Enable Notifications?'
+      ? 'system-enable-browser-notifications'
+      : null) ||
+    notification.id;
+};
+
+const feedDedupeKey = (item: FeedItem) => [
+  item.type,
+  item.title.trim().toLowerCase(),
+  item.summary.trim().toLowerCase(),
+  item.timestamp,
+].join(':');
+
+const dedupeFeedItems = (items: FeedItem[]) => {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const key = feedDedupeKey(item);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
 
 export const GET = requireFamilyAccess(async (request: NextRequest, context, _authUser) => {
   try {
@@ -79,7 +117,12 @@ export const GET = requireFamilyAccess(async (request: NextRequest, context, _au
     }
 
     // Notifications: unread
+    const seenNotifications = new Set<string>();
     for (const n of unreadNotifications) {
+      const dedupeKey = notificationDedupeKey(n);
+      if (seenNotifications.has(dedupeKey)) continue;
+      seenNotifications.add(dedupeKey);
+
       items.push({
         id: `notification:${n.id}`,
         type: 'notification',
@@ -197,7 +240,11 @@ export const GET = requireFamilyAccess(async (request: NextRequest, context, _au
     const { searchParams } = new URL(request.url);
     const limit = Math.min(100, Math.max(1, Number(searchParams.get('limit') || 30)));
 
-    return NextResponse.json(items.slice(0, limit));
+    const dedupedItems = dedupeFeedItems(items);
+
+    return NextResponse.json(dedupedItems.slice(0, limit), {
+      headers: { 'Cache-Control': 'no-store, max-age=0' },
+    });
   } catch (error) {
     console.error('Feed error:', error);
     return NextResponse.json({ error: 'Failed to build feed' }, { status: 500 });

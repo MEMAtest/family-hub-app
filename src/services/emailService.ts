@@ -5,6 +5,45 @@ import { InAppNotification } from '@/types/notification.types';
 // Initialize Resend client only if API key is provided
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
+/**
+ * Actually deliver, and tell the truth about whether it worked.
+ *
+ * `resend.emails.send()` RESOLVES with `{ data, error }` — it does not throw
+ * when the API rejects the message. Code that awaits it inside a try/catch and
+ * then returns true reports success for a message that was never sent: an
+ * invalid key comes back as `{ data: null, error: { statusCode: 401 } }` and
+ * the catch never fires. That is exactly how a weekly digest was reported as
+ * "sent: 1 of 1" while nobody received anything.
+ */
+const deliver = async (payload: {
+  from: string;
+  to: string;
+  subject: string;
+  html: string;
+  text: string;
+}): Promise<boolean> => {
+  if (!resend) {
+    console.warn('Email service not configured: RESEND_API_KEY is missing');
+    return false;
+  }
+
+  try {
+    const { data, error } = await resend.emails.send(payload);
+    if (error) {
+      console.error('Resend rejected the message:', error);
+      return false;
+    }
+    if (!data?.id) {
+      console.error('Resend accepted the message but returned no id; treating as not sent.');
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.error('Failed to reach Resend:', error);
+    return false;
+  }
+};
+
 export interface EmailTemplate {
   subject: string;
   html: string;
@@ -43,16 +82,13 @@ class EmailService {
     try {
       const template = this.generateEventReminderTemplate(event, reminderTime);
 
-      const response = await resend.emails.send({
+      return deliver({
         from: this.fromEmail,
         to: recipient.email,
         subject: template.subject,
         html: template.html,
         text: template.text,
       });
-
-      console.log('Event reminder email sent:', response);
-      return true;
     } catch (error) {
       console.error('Failed to send event reminder email:', error);
       return false;
@@ -74,19 +110,20 @@ class EmailService {
     try {
       const template = this.generateConflictAlertTemplate(conflictData);
 
-      const emailPromises = recipients.map(recipient =>
-        resend.emails.send({
-          from: this.fromEmail,
-          to: recipient.email,
-          subject: template.subject,
-          html: template.html,
-          text: template.text,
-        })
+      const results = await Promise.all(
+        recipients.map((recipient) =>
+          deliver({
+            from: this.fromEmail,
+            to: recipient.email,
+            subject: template.subject,
+            html: template.html,
+            text: template.text,
+          })
+        )
       );
 
-      const responses = await Promise.all(emailPromises);
-      console.log('Conflict alert emails sent:', responses);
-      return true;
+      // One recipient failing is still a failure worth reporting.
+      return results.length > 0 && results.every(Boolean);
     } catch (error) {
       console.error('Failed to send conflict alert emails:', error);
       return false;
@@ -110,16 +147,13 @@ class EmailService {
     try {
       const template = this.generateDailyDigestTemplate(events, notifications, date);
 
-      const response = await resend.emails.send({
+      return deliver({
         from: this.fromEmail,
         to: recipient.email,
         subject: template.subject,
         html: template.html,
         text: template.text,
       });
-
-      console.log('Daily digest email sent:', response);
-      return true;
     } catch (error) {
       console.error('Failed to send daily digest email:', error);
       return false;
@@ -143,16 +177,13 @@ class EmailService {
     try {
       const template = this.generateWeeklySummaryTemplate(events, people, weekStart);
 
-      const response = await resend.emails.send({
+      return deliver({
         from: this.fromEmail,
         to: recipient.email,
         subject: template.subject,
         html: template.html,
         text: template.text,
       });
-
-      console.log('Weekly summary email sent:', response);
-      return true;
     } catch (error) {
       console.error('Failed to send weekly summary email:', error);
       return false;
@@ -602,6 +633,29 @@ View detailed analytics in Family Hub: ${process.env.NEXT_PUBLIC_APP_URL || 'htt
   /**
    * Test email sending capability
    */
+  /**
+   * Send a template that has already been rendered.
+   *
+   * The older `sendWeeklySummary` builds its own body straight from stored
+   * events, so it never expands a series and silently omits everything
+   * recurring. The Monday digest renders through `weeklyDigestEmail` instead
+   * and just needs a way out.
+   */
+  async sendRawEmail(
+    recipient: EmailRecipient,
+    subject: string,
+    html: string,
+    text: string
+  ): Promise<boolean> {
+    return deliver({
+      from: this.fromEmail,
+      to: recipient.email,
+      subject,
+      html,
+      text,
+    });
+  }
+
   async testEmail(recipient: EmailRecipient): Promise<boolean> {
     if (!resend) {
       console.warn('Email service not configured: RESEND_API_KEY is missing');
@@ -609,7 +663,7 @@ View detailed analytics in Family Hub: ${process.env.NEXT_PUBLIC_APP_URL || 'htt
     }
 
     try {
-      const response = await resend.emails.send({
+      return deliver({
         from: this.fromEmail,
         to: recipient.email,
         subject: 'Family Hub Email Service Test',
@@ -636,9 +690,6 @@ If you received this email, your notification system is properly configured!
 Time: ${new Date().toLocaleString()}
         `
       });
-
-      console.log('Test email sent successfully:', response);
-      return true;
     } catch (error) {
       console.error('Test email failed:', error);
       return false;

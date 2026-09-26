@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import type { CreateActivityRequest } from '@/types/fitness.types';
 import prisma from '@/lib/prisma';
-import { requireFamilyAccess } from '@/lib/auth-utils';
+import { privateAreaResponse, requireFamilyAccess, requireOwnProfile } from '@/lib/auth-utils';
 
 const parseFitnessImageIdFromUrl = (familyId: string, url: string): string | null => {
   try {
@@ -21,12 +21,16 @@ const parseFitnessImageIdFromUrl = (familyId: string, url: string): string | nul
  * Fetch fitness activities with optional filters
  * Query params: personId, startDate, endDate, activityType, limit, offset
  */
-export const GET = requireFamilyAccess(async (request: NextRequest, context, _authUser) => {
+export const GET = requireFamilyAccess(async (request: NextRequest, context, authUser) => {
   try {
     const { familyId } = await context.params;
     const { searchParams } = new URL(request.url);
 
-    const personId = searchParams.get('personId');
+    const requestedPersonId = searchParams.get('personId');
+    if (requestedPersonId && !(await requireOwnProfile(authUser, requestedPersonId))) {
+      return privateAreaResponse();
+    }
+    const personId = authUser.familyMemberId;
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
     const activityType = searchParams.get('activityType');
@@ -98,7 +102,7 @@ export const GET = requireFamilyAccess(async (request: NextRequest, context, _au
  * POST /api/families/[familyId]/fitness
  * Create a new fitness activity
  */
-export const POST = requireFamilyAccess(async (request: NextRequest, context, _authUser) => {
+export const POST = requireFamilyAccess(async (request: NextRequest, context, authUser) => {
   try {
     const { familyId } = await context.params;
     const body: CreateActivityRequest = await request.json();
@@ -110,10 +114,11 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context, _a
         { status: 400 }
       );
     }
+    if (!(await requireOwnProfile(authUser, body.personId))) return privateAreaResponse();
 
     // Validate person belongs to family
     const person = await prisma.familyMember.findFirst({
-      where: { id: body.personId, familyId },
+      where: { id: authUser.familyMemberId, familyId },
     });
 
     if (!person) {
@@ -131,7 +136,7 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context, _a
     const activity = await prisma.$transaction(async (tx) => {
       const created = await tx.fitnessTracking.create({
         data: {
-          personId: body.personId,
+          personId: authUser.familyMemberId,
           activityType: body.activityType,
           durationMinutes: body.durationMinutes,
           intensityLevel: body.intensityLevel || 'moderate',
@@ -163,6 +168,7 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context, _a
           where: {
             familyId,
             id: { in: imageIds },
+            uploadedById: authUser.familyMemberId,
             OR: [{ fitnessTrackingId: null }, { fitnessTrackingId: created.id }],
           },
           data: { fitnessTrackingId: created.id },

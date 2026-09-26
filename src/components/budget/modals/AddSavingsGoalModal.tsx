@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { X, Target, Calendar, TrendingUp } from 'lucide-react';
 import { SavingsGoalFormData } from '@/types/budget.types';
+import AIEnhancedField from '@/components/common/AIEnhancedField';
 
 interface AddSavingsGoalModalProps {
   isOpen: boolean;
@@ -167,10 +168,11 @@ const AddSavingsGoalModal: React.FC<AddSavingsGoalModalProps> = ({ isOpen, onClo
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Description
               </label>
-              <textarea
-                value={formData.goalDescription}
-                onChange={(e) => handleInputChange('goalDescription', e.target.value)}
+              <AIEnhancedField
+                value={formData.goalDescription || ''}
+                onChange={(value) => handleInputChange('goalDescription', value)}
                 rows={2}
+                context="Savings goal description"
                 className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="Optional description of your savings goal"
               />

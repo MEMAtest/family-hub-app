@@ -9,6 +9,7 @@ import {
   Download,
   ExternalLink,
 } from 'lucide-react';
+import { trackOwnedEvent } from '@/utils/ownedAnalytics';
 import {
   ExtractedQuote,
   QuoteLineItem,
@@ -179,6 +180,11 @@ export default function QuoteItemsTable({
     a.download = `${quote.contractorName.replace(/\s+/g, '_')}_quote_items.csv`;
     a.click();
     URL.revokeObjectURL(url);
+    trackOwnedEvent('download_completed', {
+      asset_type: 'quote_items',
+      format: 'csv',
+      item_count: filteredAndSortedItems.length,
+    });
   };
 
   return (

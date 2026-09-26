@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useMemo, useCallback, useEffect } from 'react'
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { Calendar, momentLocalizer, View, Views } from 'react-big-calendar'
 
 type ExtendedView = View | 'YEAR';
@@ -36,7 +36,7 @@ import {
   Sparkles,
   RefreshCw
 } from 'lucide-react'
-import { CalendarEvent, BigCalendarEvent, CalendarView, Person } from '@/types/calendar.types'
+import { CalendarEvent, BigCalendarEvent, CalendarTask, CalendarView, Person } from '@/types/calendar.types'
 import GoogleCalendarSync from './GoogleCalendarSync'
 import ICalExport from './ICalExport'
 import PDFImport from './PDFImport'
@@ -47,10 +47,43 @@ import YearView from './YearView'
 import WorkStatusManager from './WorkStatusManager'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { useFamilyStore } from '@/store/familyStore'
+import { formatConflictGroupTimeRange, getSameDayConflictGroups } from '@/utils/calendarConflicts'
+import { addDays, expandEvents, getExpansionRange, type Occurrence } from '@/utils/recurrence'
+import { buildTaskEntries, getTaskEntryStyle, isTaskEntry } from '@/utils/taskCalendar'
 
 // Set up moment localizer and drag-and-drop calendar
 const localizer = momentLocalizer(moment)
 const DnDCalendar = withDragAndDrop(Calendar)
+
+const getEventEnd = (event: CalendarEvent) => {
+  const eventStart = moment(`${event.date} ${event.time}`, 'YYYY-MM-DD HH:mm')
+  if (event.endDate && event.endDate > event.date) {
+    return moment(`${event.endDate} 23:59`, 'YYYY-MM-DD HH:mm').toDate()
+  }
+  return eventStart.clone().add(event.duration, 'minutes').toDate()
+}
+
+/** End of a single expanded occurrence (not of the series row). */
+const getOccurrenceEnd = (occ: Occurrence) => {
+  const start = moment(`${occ.date} ${occ.time}`, 'YYYY-MM-DD HH:mm')
+  if (occ.endDate > occ.date) {
+    return moment(`${occ.endDate} 23:59`, 'YYYY-MM-DD HH:mm').toDate()
+  }
+  return start.clone().add(occ.duration, 'minutes').toDate()
+}
+
+const buildDefaultSlotForDate = (date: Date) => {
+  const now = moment()
+  const start = moment(date)
+    .hour(now.hour())
+    .minute(now.minute())
+    .second(0)
+    .millisecond(0)
+  return {
+    start: start.toDate(),
+    end: start.clone().add(1, 'hour').toDate()
+  }
+}
 
 /**
  * Drag and Drop Features:
@@ -74,6 +107,8 @@ const DnDCalendar = withDragAndDrop(Calendar)
 
 interface CalendarMainProps {
   events: CalendarEvent[]
+  /** Homework, chores and anything else with a deadline. */
+  tasks?: CalendarTask[]
   people: Person[]
   onEventClick: (event: CalendarEvent) => void
   onEventCreate: (slotInfo: { start: Date; end: Date }) => void
@@ -90,6 +125,7 @@ interface CalendarMainProps {
 
 const CalendarMain: React.FC<CalendarMainProps> = ({
   events,
+  tasks = [],
   people,
   onEventClick,
   onEventCreate,
@@ -151,6 +187,8 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
   const [dragFeedback, setDragFeedback] = useState<string | null>(null)
   const [showWorkStatusManager, setShowWorkStatusManager] = useState(false)
   const [showMobileMenu, setShowMobileMenu] = useState(false)
+  const [selectedAgendaDate, setSelectedAgendaDate] = useState(() => moment(currentDate).format('YYYY-MM-DD'))
+  const dayAgendaRef = useRef<HTMLElement>(null)
   const [isAIConflictOpen, setIsAIConflictOpen] = useState(false)
   const [isAIScheduleOpen, setIsAIScheduleOpen] = useState(false)
   const [aiConflictForm, setAiConflictForm] = useState({
@@ -415,20 +453,42 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
 
     console.log(`🎯 Filtered ${filtered.length} events from ${events.length} total`);
 
-    return filtered.map(event => {
-      const eventStart = moment(`${event.date} ${event.time}`, 'YYYY-MM-DD HH:mm').toDate()
-      const eventEnd = moment(eventStart).add(event.duration, 'minutes').toDate()
+    // A recurring event is stored as ONE row with one date. Expand it into the
+    // dates it actually falls on before handing anything to the grid —
+    // otherwise a weekly event renders only on the day it was created.
+    const { start: rangeStart, end: rangeEnd } = getExpansionRange(currentDate, view)
+    const occurrences = expandEvents(filtered, rangeStart, rangeEnd)
 
-      return {
-        id: event.id,
-        title: event.title,
-        start: eventStart,
-        end: eventEnd,
-        resource: event,
-        allDay: false
-      }
-    });
-  }, [events, selectedPeople, selectedCategories])
+    const eventEntries = occurrences.map(occ => ({
+      // event.id is no longer unique once a series expands; duplicate keys make
+      // the grid reuse DOM nodes across different weeks.
+      id: occ.occurrenceId,
+      title: occ.event.title,
+      start: moment(`${occ.date} ${occ.time}`, 'YYYY-MM-DD HH:mm').toDate(),
+      end: getOccurrenceEnd(occ),
+      resource: occ.event,
+      // The date of THIS instance. `resource` is the stored row, so its `date`
+      // is where the series began — tapping the last swimming lesson of the
+      // month used to send the day panel back to the first one.
+      occurrenceDate: occ.date,
+      allDay: occ.endDate > occ.date,
+    }));
+
+    // Tasks are drawn as all-day bands spanning set date -> due date, so the
+    // week's workload is visible across the days it actually hangs over rather
+    // than as a block at an invented time.
+    const visibleTasks = tasks.filter(task =>
+      task.assignees.length === 0 || task.assignees.some(id => selectedPeople.includes(id))
+    );
+    const taskEntries = buildTaskEntries(
+      visibleTasks,
+      rangeStart,
+      rangeEnd,
+      moment().format('YYYY-MM-DD')
+    );
+
+    return [...eventEntries, ...taskEntries];
+  }, [events, tasks, selectedPeople, selectedCategories, currentDate, view])
 
   // Get person color for event styling
   const getPersonColor = useCallback((personId: string) => {
@@ -438,6 +498,10 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
 
   // Event style function
   const eventStyleGetter = useCallback((event: any) => {
+    // Work with a deadline is coloured by how close it is to being late, not by
+    // whose it is — on a calendar that is the only question that matters.
+    if (isTaskEntry(event)) return getTaskEntryStyle(event)
+
     const personColor = getPersonColor(event.resource!.person)
 
     return {
@@ -456,11 +520,18 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
 
   // Handle slot selection (creating new events)
   const handleSelectSlot = useCallback((slotInfo: { start: Date; end: Date }) => {
+    setSelectedAgendaDate(moment(slotInfo.start).format('YYYY-MM-DD'))
     onEventCreate(slotInfo)
   }, [onEventCreate])
 
   // Handle event selection
   const handleSelectEvent = useCallback((event: any) => {
+    if (isTaskEntry(event)) {
+      // Tasks have no event record to edit; jump the agenda to the due date.
+      setSelectedAgendaDate(event.occurrence.dueDate)
+      return
+    }
+    setSelectedAgendaDate(event.occurrenceDate ?? event.resource!.date)
     onEventClick(event.resource!)
   }, [onEventClick])
 
@@ -476,6 +547,12 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
     const newDate = moment(start).format('YYYY-MM-DD')
     const newTime = moment(start).format('HH:mm')
     const duration = moment(end).diff(moment(start), 'minutes')
+    const multiDaySpan = originalEvent.endDate && originalEvent.endDate > originalEvent.date
+      ? moment(originalEvent.endDate, 'YYYY-MM-DD').diff(moment(originalEvent.date, 'YYYY-MM-DD'), 'days')
+      : 0
+    const newEndDate = multiDaySpan > 0
+      ? moment(newDate, 'YYYY-MM-DD').add(multiDaySpan, 'days').format('YYYY-MM-DD')
+      : undefined
 
     // Show feedback
     const oldDateTime = moment(`${originalEvent.date} ${originalEvent.time}`, 'YYYY-MM-DD HH:mm')
@@ -508,7 +585,8 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
     onEventUpdate(originalEvent.id, {
       date: newDate,
       time: newTime,
-      duration: duration
+      duration: multiDaySpan > 0 ? originalEvent.duration : duration,
+      endDate: newEndDate
     })
   }, [onEventUpdate])
 
@@ -517,6 +595,8 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
     const { event, start, end } = args
     const originalEvent = event.resource!
     const duration = moment(end).diff(moment(start), 'minutes')
+    const resizedEndDate = moment(end).format('YYYY-MM-DD')
+    const startDate = moment(start).format('YYYY-MM-DD')
 
     // Show feedback
     const durationChanged = duration !== originalEvent.duration
@@ -533,14 +613,27 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
 
     // Call the parent's update function with the correct signature
     onEventUpdate(originalEvent.id, {
-      duration: duration
+      duration: duration,
+      endDate: resizedEndDate > startDate ? resizedEndDate : undefined
     })
   }, [onEventUpdate])
 
   // Navigate calendar
   const handleNavigate = useCallback((date: Date) => {
+    setSelectedAgendaDate(moment(date).format('YYYY-MM-DD'))
     onDateChange(date)
   }, [onDateChange])
+
+  const handleShowMore = useCallback((_events: object[], date: Date) => {
+    setSelectedAgendaDate(moment(date).format('YYYY-MM-DD'))
+
+    if (!isMobile) return
+
+    window.requestAnimationFrame(() => {
+      dayAgendaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      dayAgendaRef.current?.focus({ preventScroll: true })
+    })
+  }, [isMobile])
 
   // Toggle person filter
   const togglePersonFilter = (personId: string) => {
@@ -570,7 +663,8 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
     other: 'bg-gray-100 text-gray-800 dark:bg-slate-700 dark:text-slate-200',
     appointment: 'bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-200',
     work: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-500/20 dark:text-indigo-200',
-    personal: 'bg-teal-100 text-teal-800 dark:bg-teal-500/20 dark:text-teal-200'
+    personal: 'bg-teal-100 text-teal-800 dark:bg-teal-500/20 dark:text-teal-200',
+    brain: 'bg-violet-100 text-violet-800 dark:bg-violet-500/20 dark:text-violet-200'
   }
 
   // Month analytics calculations
@@ -581,13 +675,19 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
     const monthStart = currentMonth.clone().startOf('month');
     const monthEnd = currentMonth.clone().endOf('month');
 
-    // Filter events for current month and selected filters
-    const monthEvents = events.filter(event => {
-      const eventDate = moment(event.date);
-      return eventDate.isBetween(monthStart, monthEnd, 'day', '[]') &&
-             selectedPeople.includes(event.person) &&
-             selectedCategories.includes(event.type);
+    // Count occurrences, not stored rows. A weekly club is one row; filtering
+    // on `event.date` scored it as a single September event and as nothing at
+    // all in October, so every figure below was wrong for any repeating event.
+    const visible = events.filter(event => {
+      const personMatch = event.person === '' || selectedPeople.includes(event.person);
+      return personMatch && selectedCategories.includes(event.type);
     });
+
+    const monthEvents = expandEvents(
+      visible,
+      monthStart.format('YYYY-MM-DD'),
+      monthEnd.format('YYYY-MM-DD')
+    ).map(occ => ({ ...occ.event, date: occ.date, endDate: occ.endDate, time: occ.time, duration: occ.duration }));
 
     // Calculate analytics
     const totalEvents = monthEvents.length;
@@ -633,9 +733,47 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
     };
   }, [events, currentDate, view, selectedPeople, selectedCategories, people]);
 
+  const selectedDayEvents = useMemo(() => {
+    // Expand first. Filtering raw `event.date` here meant the day panel only
+    // ever knew about the first instance of a series: the grid drew swimming on
+    // five Wednesdays, and clicking the third one said "No events on this date".
+    const visible = events.filter((event) => {
+      const personMatch = event.person === '' || selectedPeople.includes(event.person)
+      const categoryMatch = selectedCategories.includes(event.type)
+      return personMatch && categoryMatch
+    })
+
+    // A multi-day occurrence can start before the selected day, so expand a
+    // window around it rather than the single date.
+    const windowStart = addDays(selectedAgendaDate, -31)
+    const windowEnd = addDays(selectedAgendaDate, 1)
+
+    return expandEvents(visible, windowStart, windowEnd)
+      .filter((occ) => occ.date <= selectedAgendaDate && occ.endDate >= selectedAgendaDate)
+      // Present each instance as an event on the day it actually falls, so
+      // conflict grouping and the row UI below see the occurrence's date.
+      .map((occ) => ({ ...occ.event, date: occ.date, endDate: occ.endDate, time: occ.time, duration: occ.duration }))
+      .sort((a, b) => a.time.localeCompare(b.time) || a.title.localeCompare(b.title))
+  }, [events, selectedAgendaDate, selectedPeople, selectedCategories])
+
+  const selectedDayLabel = useMemo(
+    () => moment(selectedAgendaDate, 'YYYY-MM-DD').format('dddd, D MMMM'),
+    [selectedAgendaDate]
+  )
+
+  const selectedDayConflictGroups = useMemo(
+    () => getSameDayConflictGroups(selectedDayEvents, selectedAgendaDate),
+    [selectedAgendaDate, selectedDayEvents]
+  )
+
+  const selectedDayConflictingEventIds = useMemo(
+    () => new Set(selectedDayConflictGroups.flatMap((group) => group.events.map((event) => event.id))),
+    [selectedDayConflictGroups]
+  )
+
   // Mobile Calendar Header Component
   const renderMobileHeader = () => (
-    <div className="lg:hidden bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 px-4 py-3 sticky top-0 z-40 pwa-safe-top">
+    <div className="relative z-10 border-b border-gray-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900 lg:hidden">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-3">
           <CalendarDays className="w-6 h-6 text-blue-600" />
@@ -657,6 +795,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
             handleNavigate(moment(currentDate).subtract(1, unit).toDate());
           }}
           className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg touch-target"
+          aria-label="Previous calendar period"
         >
           <ChevronLeft className="w-5 h-5" />
         </button>
@@ -677,6 +816,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
             handleNavigate(moment(currentDate).add(1, unit).toDate());
           }}
           className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg touch-target"
+          aria-label="Next calendar period"
         >
           <ChevronRight className="w-5 h-5" />
         </button>
@@ -722,7 +862,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
             <Filter className="w-4 h-4" />
           </button>
           <button
-            onClick={() => onEventCreate({ start: new Date(), end: moment().add(1, 'hour').toDate() })}
+            onClick={() => onEventCreate(buildDefaultSlotForDate(currentDate))}
             className="mobile-btn-primary flex items-center gap-2"
           >
             <Plus className="w-4 h-4" />
@@ -735,26 +875,27 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
 
   // Desktop Calendar Header Component
   const renderDesktopHeader = () => (
-    <div className="hidden lg:flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 sm:p-4 md:p-6 border-b border-gray-200 dark:border-slate-800 gap-3">
-        <div className="flex items-center space-x-4">
-          <div className="flex items-center space-x-2">
-            <CalendarDays className="w-6 h-6 text-blue-600" />
+    <div className="hidden flex-col gap-4 border-b border-gray-200 p-3 dark:border-slate-800 sm:p-4 md:p-6 lg:flex xl:flex-row xl:items-center xl:justify-between">
+        <div className="flex min-w-0 flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2">
+            <CalendarDays className="w-6 h-6 text-[#147c72] dark:text-[#56c6b8]" />
             <h1 className="text-xl sm:text-2xl font-semibold text-gray-900 dark:text-slate-100">Calendar</h1>
           </div>
 
           {/* Date Navigation */}
-          <div className="flex items-center space-x-2 ml-8">
+          <div className="flex min-w-0 items-center gap-2">
             <button
               onClick={() => {
                 const unit = view === 'YEAR' ? 'year' : view.toLowerCase() as any;
                 handleNavigate(moment(currentDate).subtract(1, unit).toDate());
               }}
               className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-md transition-colors"
+              aria-label="Previous calendar period"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
 
-            <div className="px-4 py-2 bg-gray-50 dark:bg-slate-800 rounded-md min-w-[200px] text-center">
+            <div className="min-w-[180px] max-w-full rounded-md bg-gray-50 px-4 py-2 text-center dark:bg-slate-800">
               <span className="text-lg font-medium text-gray-900 dark:text-slate-100">
                 {view === Views.MONTH && moment(currentDate).format('MMMM YYYY')}
                 {view === Views.WEEK && `Week of ${moment(currentDate).startOf('week').format('MMM D, YYYY')}`}
@@ -770,13 +911,14 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                 handleNavigate(moment(currentDate).add(1, unit).toDate());
               }}
               className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-md transition-colors"
+              aria-label="Next calendar period"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
 
             <button
               onClick={() => handleNavigate(new Date())}
-              className="px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+              className="rounded-md bg-[#147c72] px-3 py-2 text-sm text-white transition-colors hover:bg-[#0f625a]"
             >
               Today
             </button>
@@ -810,7 +952,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                     type="text"
                     value={aiConflictForm.title}
                     onChange={(event) => setAiConflictForm((prev) => ({ ...prev, title: event.target.value }))}
-                    className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-purple-500 focus:ring-purple-500"
+                    className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-purple-500 focus:ring-purple-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500"
                     placeholder="e.g., Piano lesson"
                   />
                 </div>
@@ -821,7 +963,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                       type="date"
                       value={aiConflictForm.date}
                       onChange={(event) => setAiConflictForm((prev) => ({ ...prev, date: event.target.value }))}
-                      className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-purple-500 focus:ring-purple-500"
+                      className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-purple-500 focus:ring-purple-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                     />
                   </div>
                   <div>
@@ -830,7 +972,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                       type="time"
                       value={aiConflictForm.time}
                       onChange={(event) => setAiConflictForm((prev) => ({ ...prev, time: event.target.value }))}
-                      className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-purple-500 focus:ring-purple-500"
+                      className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-purple-500 focus:ring-purple-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                     />
                   </div>
                   <div>
@@ -841,7 +983,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                       step={15}
                       value={aiConflictForm.durationMinutes}
                       onChange={(event) => setAiConflictForm((prev) => ({ ...prev, durationMinutes: Number(event.target.value) }))}
-                      className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-purple-500 focus:ring-purple-500"
+                      className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-purple-500 focus:ring-purple-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                     />
                   </div>
                   <div>
@@ -849,7 +991,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                     <select
                       value={aiConflictForm.personId}
                       onChange={(event) => setAiConflictForm((prev) => ({ ...prev, personId: event.target.value }))}
-                      className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-purple-500 focus:ring-purple-500"
+                      className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-purple-500 focus:ring-purple-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                     >
                       {people.map((person) => (
                         <option key={person.id} value={person.id}>{person.name}</option>
@@ -863,7 +1005,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                     type="text"
                     value={aiConflictForm.location}
                     onChange={(event) => setAiConflictForm((prev) => ({ ...prev, location: event.target.value }))}
-                    className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-purple-500 focus:ring-purple-500"
+                    className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-purple-500 focus:ring-purple-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500"
                     placeholder="Home, school, etc."
                   />
                 </div>
@@ -970,7 +1112,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                     type="text"
                     value={aiScheduleForm.title}
                     onChange={(event) => setAiScheduleForm((prev) => ({ ...prev, title: event.target.value }))}
-                    className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500"
+                    className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                     placeholder="e.g., Family budget review"
                   />
                 </div>
@@ -983,7 +1125,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                       step={15}
                       value={aiScheduleForm.durationMinutes}
                       onChange={(event) => setAiScheduleForm((prev) => ({ ...prev, durationMinutes: Number(event.target.value) }))}
-                      className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500"
+                      className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                     />
                   </div>
                   <div>
@@ -993,12 +1135,12 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                         type="date"
                         value={aiScheduleForm.dateInput}
                         onChange={(event) => setAiScheduleForm((prev) => ({ ...prev, dateInput: event.target.value }))}
-                        className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500"
+                        className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                       />
                       <button
                         type="button"
                         onClick={addPreferredDate}
-                        className="inline-flex items-center justify-center rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:bg-slate-800"
+                        className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
                       >
                         Add
                       </button>
@@ -1123,7 +1265,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
           </div>
         </div>
       )}
-        <div className="flex items-center space-x-2">
+        <div className="flex flex-wrap items-center justify-start gap-2 xl:justify-end">
           {/* Notification Bell */}
           <NotificationBell />
 
@@ -1155,7 +1297,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
             onClick={() => setShowFilters(!showFilters)}
             className={`p-2 rounded-md transition-colors ${
               showFilters
-                ? 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-200'
+                ? 'bg-[#eaf1e7] text-[#147c72] dark:bg-[#147c72]/20 dark:text-[#56c6b8]'
                 : 'hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-600 dark:text-slate-300'
             }`}
           >
@@ -1200,8 +1342,8 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
           </button>
 
           <button
-            onClick={() => onEventCreate({ start: new Date(), end: moment().add(1, 'hour').toDate() })}
-            className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+            onClick={() => onEventCreate(buildDefaultSlotForDate(currentDate))}
+            className="flex shrink-0 items-center gap-2 rounded-md bg-[#147c72] px-4 py-2 text-white transition-colors hover:bg-[#0f625a]"
           >
             <Plus className="w-4 h-4" />
             <span>New Event</span>
@@ -1583,8 +1725,8 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
       )}
 
       {/* Calendar Component */}
-      <div className={`flex-1 ${isMobile ? 'p-2 pb-28 pwa-safe-bottom' : 'p-6'}`}>
-        <div className={`relative min-h-[640px] ${isMobile ? 'mobile-calendar-container' : ''}`}>
+      <div className={`flex-1 ${isMobile ? 'p-2 pb-[calc(env(safe-area-inset-bottom)+8rem)]' : 'p-6'}`}>
+        <div className={`relative ${isMobile ? 'mobile-calendar-container min-h-[calc(100dvh-10rem)]' : 'min-h-[640px]'}`}>
           {view === 'YEAR' ? (
             <YearView
               events={events}
@@ -1593,6 +1735,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
               onDateChange={handleNavigate}
               onEventClick={handleSelectEvent}
               onDateClick={(date) => {
+                setSelectedAgendaDate(moment(date).format('YYYY-MM-DD'));
                 setView(Views.DAY);
                 handleNavigate(date);
               }}
@@ -1620,6 +1763,10 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
             eventPropGetter={eventStyleGetter}
             popup={!isMobile}
             popupOffset={isMobile ? 0 : 30}
+            doShowMoreDrillDown={!isMobile}
+            onShowMore={handleShowMore}
+            showAllEvents={isMobile && view === Views.MONTH}
+            style={isMobile && view === Views.MONTH ? { height: 'max(620px, calc(100dvh - 12rem))' } : undefined}
             toolbar={false}
             className={`family-hub-calendar ${isMobile ? 'mobile-calendar' : ''}`}
             formats={{
@@ -1665,6 +1812,121 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
           />
           )}
 
+          {view !== 'YEAR' && (
+            <section
+              ref={dayAgendaRef}
+              data-testid="selected-day-agenda"
+              tabIndex={-1}
+              className="mt-4 scroll-mt-4 rounded-lg border border-gray-200 bg-white p-3 shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-[#147c72] dark:border-slate-800 dark:bg-slate-900 sm:p-4"
+            >
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h2 className="text-sm font-semibold text-gray-900 dark:text-slate-100">
+                    {selectedDayLabel}
+                  </h2>
+                  <p className="text-xs text-gray-500 dark:text-slate-400">
+                    {selectedDayEvents.length === 0
+                      ? 'No events on this date'
+                      : `${selectedDayEvents.length} event${selectedDayEvents.length === 1 ? '' : 's'} on this date`}
+                  </p>
+                </div>
+                {selectedDayConflictGroups.length > 0 && (
+                  <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-800 dark:bg-amber-500/20 dark:text-amber-200">
+                    {selectedDayConflictGroups.length} clash{selectedDayConflictGroups.length === 1 ? '' : 'es'}
+                  </span>
+                )}
+              </div>
+
+              {selectedDayConflictGroups.length > 0 && (
+                <div className="mb-3 space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-400/25 dark:bg-amber-500/10">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-amber-900 dark:text-amber-100">
+                    <AlertTriangle className="h-4 w-4" />
+                    <span>Competing events</span>
+                  </div>
+                  <div className="space-y-2">
+                    {selectedDayConflictGroups.map((group) => (
+                      <div
+                        key={group.id}
+                        className="rounded-md border border-amber-200/80 bg-white/80 p-2 dark:border-amber-300/20 dark:bg-slate-950/60"
+                      >
+                        <div className="mb-2 text-xs font-medium text-amber-800 dark:text-amber-200">
+                          {formatConflictGroupTimeRange(group)}
+                        </div>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {group.events.map((event) => {
+                            const person = people.find((item) => item.id === event.person)
+                            return (
+                              <button
+                                key={event.id}
+                                type="button"
+                                onClick={() => onEventClick(event)}
+                                className="flex items-start gap-2 rounded-md border border-amber-100 bg-amber-50/80 p-2 text-left transition hover:border-amber-200 hover:bg-amber-100 dark:border-amber-300/10 dark:bg-amber-500/10 dark:hover:bg-amber-500/20"
+                              >
+                                <span
+                                  className="mt-1 h-2.5 w-2.5 flex-shrink-0 rounded-full"
+                                  style={{ backgroundColor: person?.color || getPersonColor(event.person) }}
+                                />
+                                <span className="min-w-0">
+                                  <span className="block truncate text-xs font-semibold text-gray-900 dark:text-slate-100">
+                                    {event.title}
+                                  </span>
+                                  <span className="mt-0.5 block text-xs text-gray-600 dark:text-slate-300">
+                                    {event.time} · {person?.name || 'Family'}
+                                  </span>
+                                </span>
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {selectedDayEvents.length > 0 && (
+                <div className="space-y-2">
+                  {selectedDayEvents.map((event) => {
+                    const person = people.find((item) => item.id === event.person)
+                    const isConflicting = selectedDayConflictingEventIds.has(event.id)
+                    return (
+                      <button
+                        key={event.id}
+                        type="button"
+                        onClick={() => onEventClick(event)}
+                        className={`flex w-full items-start gap-3 rounded-md border p-3 text-left transition ${
+                          isConflicting
+                            ? 'border-amber-200 bg-amber-50 hover:border-amber-300 hover:bg-amber-100 dark:border-amber-300/20 dark:bg-amber-500/10 dark:hover:bg-amber-500/20'
+                            : 'border-gray-100 bg-gray-50 hover:border-gray-200 hover:bg-gray-100 dark:border-slate-800 dark:bg-slate-950 dark:hover:border-slate-700 dark:hover:bg-slate-800'
+                        }`}
+                      >
+                        <span
+                          className="mt-1 h-3 w-3 flex-shrink-0 rounded-full"
+                          style={{ backgroundColor: person?.color || getPersonColor(event.person) }}
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-semibold text-gray-900 dark:text-slate-100">
+                            {event.title}
+                          </span>
+                          <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-600 dark:text-slate-300">
+                            <span>{event.time} · {event.duration} min</span>
+                            {person && <span>{person.name}</span>}
+                            {event.location && <span className="truncate">{event.location}</span>}
+                            {isConflicting && (
+                              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800 dark:bg-amber-400/15 dark:text-amber-100">
+                                Clashes
+                              </span>
+                            )}
+                          </span>
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </section>
+          )}
+
           {/* Event Tooltip */}
           {hoveredEvent && ((!isMobile && tooltipPosition) || isMobile) && view !== 'YEAR' && (
             <div
@@ -1702,7 +1964,11 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
 
                 <div className="flex items-center space-x-2 text-sm text-gray-600 dark:text-slate-300">
                   <Clock className="w-4 h-4" />
-                  <span>{hoveredEvent.time} ({hoveredEvent.duration} min)</span>
+                  <span>
+                    {hoveredEvent.endDate && hoveredEvent.endDate > hoveredEvent.date
+                      ? `${hoveredEvent.date} - ${hoveredEvent.endDate}`
+                      : `${hoveredEvent.time} (${hoveredEvent.duration} min)`}
+                  </span>
                 </div>
 
                 {hoveredEvent.location && (

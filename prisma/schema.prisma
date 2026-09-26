@@ -25,6 +25,7 @@ model User {
   // Relations
   familyMembers FamilyMember[]
   ownedFamilies Family[]       @relation("FamilyOwner")
+  sentHouseholdInvites HouseholdInvite[] @relation("HouseholdInviteCreator")
 
   @@map("users")
 }
@@ -42,6 +43,7 @@ model Family {
   owner                 User?          @relation("FamilyOwner", fields: [ownerId], references: [id])
   members               FamilyMember[]
   calendarEvents        CalendarEvent[]
+  calendarTasks         CalendarTask[]
   budgetIncome          BudgetIncome[]
   budgetExpenses        BudgetExpense[]
   budgetCategories      BudgetCategory[]
@@ -57,7 +59,16 @@ model Family {
   contractors           Contractor[]
   contractorAppointments ContractorAppointment[]
   notifications         Notification[]
+  pushSubscriptions     PushSubscription[]
   brainProjects         BrainProject[]
+  calendarEmailIntakes  CalendarEmailIntake[]
+  googleCalendarConnections GoogleCalendarConnection[]
+  gmailConnection       GmailConnection?
+  householdInvites      HouseholdInvite[]
+  budgetAccounts        BudgetAccount[]
+  statementImports      StatementImport[]
+  budgetTransactions    BudgetTransaction[]
+  fragranceRecognitionMemories FragranceRecognitionMemory[]
 
   @@map("families")
 }
@@ -75,6 +86,7 @@ model FamilyMember {
   color        String   // Hex color code
   icon         String   // Emoji icon
   fitnessGoals Json?    @map("fitness_goals")
+  privateCycleAccess Boolean @default(false) @map("private_cycle_access")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
@@ -89,7 +101,18 @@ model FamilyMember {
   fitnessTracking  FitnessTracking[]
   deviceSyncs      DeviceSync[]
   fitnessImagesUploaded FitnessImage[]
+  receivedHouseholdInvites HouseholdInvite[] @relation("HouseholdInviteTarget")
+  fragrances        Fragrance[]
+  fragranceDrafts   FragranceDraft[]
+  fragranceWearLogs FragranceWearLog[]
+  fragranceCandidates FragranceCandidate[]
+  cycleProfile      CycleProfile?
+  cyclePeriods      CyclePeriod[]
+  cycleDailyLogs    CycleDailyLog[]
+  cycleReminders    CycleReminder[]
+  personalGoogleCalendarConnection PersonalGoogleCalendarConnection?
 
+  @@index([familyId, userId])
   @@map("family_members")
 }
 
@@ -131,14 +154,268 @@ model CalendarEvent {
   recurringPattern String   @default("none") @map("recurring_pattern")
   isRecurring      Boolean  @default(false) @map("is_recurring")
   notes            String?
+  source           String?  @map("source")
+  sourceId         String?  @map("source_id")
+  googleCalendarId String?  @map("google_calendar_id")
+  googleEventId    String?  @map("google_event_id")
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
 
   // Relations
-  family Family       @relation(fields: [familyId], references: [id], onDelete: Cascade)
-  person FamilyMember @relation(fields: [personId], references: [id], onDelete: Cascade)
+  family     Family                   @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  person     FamilyMember             @relation(fields: [personId], references: [id], onDelete: Cascade)
+  exceptions CalendarEventException[]
+  tasks      CalendarTask[]
 
+  @@index([familyId, source, sourceId])
+  @@index([familyId, googleCalendarId, googleEventId])
   @@map("calendar_events")
+}
+
+/// One-instance changes to a recurring series: cancel this week, move that one.
+/// Without this, cancelling a single swimming lesson means deleting the series.
+model CalendarEventException {
+  id         String   @id @default(cuid())
+  eventId    String   @map("event_id")
+  /// The date in the original series this applies to, YYYY-MM-DD.
+  seriesDate String   @map("series_date")
+  /// "skip" removes the instance, "override" changes it.
+  type       String
+  /// { date?, time?, duration?, title?, location?, notes?, status?, person? }
+  overrides  Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  event CalendarEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, seriesDate])
+  @@index([eventId])
+  @@map("calendar_event_exceptions")
+}
+
+/// Work with a deadline — homework, chores, forms to return.
+/// Deliberately separate from CalendarEvent: an event happens AT a time, a task
+/// is set on one day, due by another, and is either done or it isn't.
+model CalendarTask {
+  id             String    @id @default(cuid())
+  familyId       String    @map("family_id")
+  title          String
+  /// Family member ids. Plural — homework can be set for both kids.
+  assignees      String[]  @map("assignees")
+  /// The day it was set.
+  assignedDate   DateTime  @map("assigned_date")
+  /// The day it must be done by.
+  dueDate        DateTime  @map("due_date")
+  /// Optional time on the due date, "HH:MM".
+  dueTime        String?   @map("due_time")
+  completedAt    DateTime? @map("completed_at")
+  completedBy    String?   @map("completed_by")
+  taskType       String    @default("homework") @map("task_type")
+  subject        String?
+  notes          String?
+  priority       String    @default("medium")
+  effortMinutes  Int?      @map("effort_minutes")
+  /// The lesson or club that generated this, if any.
+  sourceEventId  String?   @map("source_event_id")
+  /// Serialised RecurringPattern for repeating work (weekly spellings, etc).
+  recurrenceRule Json?     @map("recurrence_rule")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  family      Family         @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  sourceEvent CalendarEvent? @relation(fields: [sourceEventId], references: [id], onDelete: SetNull)
+
+  @@index([familyId, dueDate])
+  @@index([familyId, completedAt])
+  @@map("calendar_tasks")
+}
+
+model CalendarEmailIntake {
+  id             String   @id @default(cuid())
+  familyId       String   @map("family_id")
+  messageId      String?  @map("message_id")
+  recipient      String?
+  sender         String?
+  subject        String?
+  text           String?
+  html           String?
+  normalizedText String?  @map("normalized_text")
+  parsedDrafts   Json     @map("parsed_drafts")
+  createdEventIds Json?   @map("created_event_ids")
+  status         String   @default("review_required")
+  autoCreated    Int      @default(0) @map("auto_created")
+  needsReview    Int      @default(0) @map("needs_review")
+  duplicateCount Int      @default(0) @map("duplicate_count")
+  conflictCount  Int      @default(0) @map("conflict_count")
+  metadata       Json?
+  receivedAt     DateTime @default(now()) @map("received_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  family Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  attachments CalendarIntakeAttachment[]
+
+  @@index([familyId, receivedAt])
+  @@index([familyId, status])
+  @@map("calendar_email_intakes")
+}
+
+// Original school PDFs/photos are retained privately alongside their extracted intake text.
+model CalendarIntakeAttachment {
+  id        String   @id @default(cuid())
+  intakeId  String   @map("intake_id")
+  fileName  String   @map("file_name")
+  mimeType  String   @map("mime_type")
+  sizeBytes Int      @map("size_bytes")
+  data      Bytes
+  createdAt DateTime @default(now()) @map("created_at")
+
+  intake CalendarEmailIntake @relation(fields: [intakeId], references: [id], onDelete: Cascade)
+
+  @@index([intakeId])
+  @@map("calendar_intake_attachments")
+}
+
+model GoogleCalendarConnection {
+  id                String   @id @default(cuid())
+  familyId          String   @map("family_id")
+  googleUserEmail   String?  @map("google_user_email")
+  accessToken       String   @map("access_token")
+  refreshToken      String?  @map("refresh_token")
+  tokenType         String?  @map("token_type")
+  scope             String?
+  expiryDate        DateTime? @map("expiry_date")
+  selectedCalendarId String? @map("selected_calendar_id")
+  selectedCalendarName String? @map("selected_calendar_name")
+  syncDirection     String   @default("export") @map("sync_direction")
+  enabled           Boolean  @default(true)
+  lastExportAt      DateTime? @map("last_export_at")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  family Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  @@unique([familyId])
+  @@index([familyId, enabled])
+  @@map("google_calendar_connections")
+}
+
+model GmailConnection {
+  id                String   @id @default(cuid())
+  familyId          String   @unique @map("family_id")
+  googleUserEmail   String?  @map("google_user_email")
+  accessToken       String   @map("access_token")
+  refreshToken      String?  @map("refresh_token")
+  tokenType         String?  @map("token_type")
+  scope             String?
+  expiryDate        DateTime? @map("expiry_date")
+  enabled           Boolean  @default(true)
+  lastSyncAt        DateTime? @map("last_sync_at")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  family Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  @@index([familyId, enabled])
+  @@map("gmail_connections")
+}
+
+// A one-use household invitation links a signed-in adult to an existing adult profile.
+model HouseholdInvite {
+  id             String    @id @default(cuid())
+  familyId       String    @map("family_id")
+  targetMemberId String    @map("target_member_id")
+  createdById    String    @map("created_by_id")
+  codeHash       String    @unique @map("code_hash")
+  expiresAt      DateTime  @map("expires_at")
+  usedAt         DateTime? @map("used_at")
+  redeemedById   String?   @map("redeemed_by_id")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  family       Family       @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  targetMember FamilyMember @relation("HouseholdInviteTarget", fields: [targetMemberId], references: [id], onDelete: Cascade)
+  createdBy    User         @relation("HouseholdInviteCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([familyId, targetMemberId])
+  @@index([expiresAt])
+  @@map("household_invites")
+}
+
+// Imported statement rows are actuals. Planned income and expenses remain separate commitments.
+model BudgetAccount {
+  id                 String    @id @default(cuid())
+  familyId           String    @map("family_id")
+  name               String
+  institution        String?
+  accountType        String    @default("current") @map("account_type")
+  lastFour           String?   @map("last_four")
+  currency           String    @default("GBP")
+  openingBalance     Float?    @map("opening_balance")
+  openingBalanceDate DateTime? @map("opening_balance_date")
+  active             Boolean   @default(true)
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  family       Family              @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  imports      StatementImport[]
+  transactions BudgetTransaction[]
+
+  @@index([familyId, active])
+  @@map("budget_accounts")
+}
+
+model StatementImport {
+  id             String    @id @default(cuid())
+  familyId       String    @map("family_id")
+  accountId      String    @map("account_id")
+  fileName       String    @map("file_name")
+  sourceType     String    @map("source_type")
+  contentHash    String    @map("content_hash")
+  statementStart DateTime? @map("statement_start")
+  statementEnd   DateTime? @map("statement_end")
+  openingBalance Float?    @map("opening_balance")
+  closingBalance Float?    @map("closing_balance")
+  parsedRows     Int       @default(0) @map("parsed_rows")
+  importedRows   Int       @default(0) @map("imported_rows")
+  duplicateRows  Int       @default(0) @map("duplicate_rows")
+  rejectedRows   Json?     @map("rejected_rows")
+  importedById   String    @map("imported_by_id")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  family       Family              @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  account      BudgetAccount       @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  transactions BudgetTransaction[]
+
+  @@unique([accountId, contentHash])
+  @@index([familyId, createdAt])
+  @@map("statement_imports")
+}
+
+model BudgetTransaction {
+  id                String    @id @default(cuid())
+  familyId          String    @map("family_id")
+  accountId         String    @map("account_id")
+  statementImportId String?   @map("statement_import_id")
+  transactionDate   DateTime  @map("transaction_date")
+  description       String
+  amount            Float
+  direction         String
+  balance           Float?
+  category          String?
+  transactionType   String    @default("normal") @map("transaction_type")
+  transferGroupId   String?   @map("transfer_group_id")
+  fingerprint       String
+  source            String    @default("statement")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  family          Family           @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  account         BudgetAccount    @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  statementImport StatementImport? @relation(fields: [statementImportId], references: [id], onDelete: SetNull)
+
+  @@unique([accountId, fingerprint])
+  @@index([familyId, transactionDate])
+  @@index([transferGroupId])
+  @@map("budget_transactions")
 }
 
 // Budget income table
@@ -462,6 +739,265 @@ model DeviceSync {
   @@map("device_syncs")
 }
 
+// Shared fragrance identity and transparent source provenance.
+model FragranceCatalogEntry {
+  id              String   @id @default(cuid())
+  slug            String   @unique
+  house           String
+  name            String
+  concentration   String?
+  releaseYear     Int?     @map("release_year")
+  olfactiveFamily String?  @map("olfactive_family")
+  notes           Json?
+  accords         Json?
+  description     String?
+  imageUrl        String?  @map("image_url")
+  sourceName      String   @map("source_name")
+  sourceUrl       String?  @map("source_url")
+  sourceKind      String   @default("curated") @map("source_kind")
+  catalogueStatus String   @default("verified") @map("catalogue_status")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  fragrances Fragrance[]
+  candidates FragranceCandidate[]
+  recognitionMemories FragranceRecognitionMemory[]
+
+  @@index([house, name])
+  @@index([olfactiveFamily])
+  @@map("fragrance_catalog_entries")
+}
+
+// Personal fragrance collection and wear evidence. Every record belongs to one profile.
+model Fragrance {
+  id             String    @id @default(cuid())
+  personId       String    @map("person_id")
+  catalogEntryId String?   @map("catalog_entry_id")
+  house          String
+  name           String
+  concentration  String?
+  notes          String?
+  photoData      Bytes?    @map("photo_data")
+  photoMimeType  String?   @map("photo_mime_type")
+  photoSizeBytes Int?      @map("photo_size_bytes")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  person       FamilyMember           @relation(fields: [personId], references: [id], onDelete: Cascade)
+  catalogEntry FragranceCatalogEntry? @relation(fields: [catalogEntryId], references: [id], onDelete: SetNull)
+  wearLogs    FragranceWearLog[]
+  benchmarks  FragranceBenchmark[]
+
+  @@unique([personId, house, name, concentration])
+  @@index([personId, createdAt])
+  @@index([catalogEntryId])
+  @@map("fragrances")
+}
+
+model FragranceDraft {
+  id             String   @id @default(cuid())
+  personId       String   @map("person_id")
+  suggestedHouse String?  @map("suggested_house")
+  suggestedName  String?  @map("suggested_name")
+  suggestedConcentration String? @map("suggested_concentration")
+  extractedText  String?  @map("extracted_text")
+  ocrStatus      String   @default("ready") @map("ocr_status")
+  ocrConfidence  Float?   @map("ocr_confidence")
+  ocrProvider    String?  @map("ocr_provider")
+  ocrError       String?  @map("ocr_error")
+  ocrUsage       Json?    @map("ocr_usage")
+  matchCandidates Json?   @map("match_candidates")
+  photoData      Bytes    @map("photo_data")
+  photoMimeType  String   @map("photo_mime_type")
+  photoSizeBytes Int      @map("photo_size_bytes")
+  confirmedAt    DateTime? @map("confirmed_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  person FamilyMember @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@index([personId, createdAt])
+  @@map("fragrance_drafts")
+}
+
+// Household-confirmed label aliases improve matching without sharing private bottle photos.
+model FragranceRecognitionMemory {
+  id                String   @id @default(cuid())
+  familyId          String   @map("family_id")
+  catalogEntryId    String?  @map("catalog_entry_id")
+  normalizedLabel   String   @map("normalized_label")
+  house             String
+  name              String
+  concentration     String?
+  confirmationCount Int      @default(1) @map("confirmation_count")
+  lastConfirmedAt   DateTime @default(now()) @map("last_confirmed_at")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  family       Family                 @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  catalogEntry FragranceCatalogEntry? @relation(fields: [catalogEntryId], references: [id], onDelete: SetNull)
+
+  @@unique([familyId, normalizedLabel])
+  @@index([familyId, house, name])
+  @@map("fragrance_recognition_memories")
+}
+
+model FragranceWearLog {
+  id          String   @id @default(cuid())
+  personId    String   @map("person_id")
+  fragranceId String   @map("fragrance_id")
+  wornAt      DateTime @default(now()) @map("worn_at")
+  overallRating Int?
+  longevityHours Float? @map("longevity_hours")
+  projectionRating Int? @map("projection_rating")
+  context     Json?
+  notes       String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  person    FamilyMember @relation(fields: [personId], references: [id], onDelete: Cascade)
+  fragrance Fragrance    @relation(fields: [fragranceId], references: [id], onDelete: Cascade)
+
+  @@index([personId, wornAt])
+  @@index([fragranceId, wornAt])
+  @@map("fragrance_wear_logs")
+}
+
+model FragranceBenchmark {
+  id               String   @id @default(cuid())
+  fragranceId      String   @map("fragrance_id")
+  sourceName       String   @map("source_name")
+  sourceUrl        String   @map("source_url")
+  capturedAt       DateTime @default(now()) @map("captured_at")
+  rating           Float?
+  longevityRating  Float?  @map("longevity_rating")
+  notes            String?
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  fragrance Fragrance @relation(fields: [fragranceId], references: [id], onDelete: Cascade)
+
+  @@index([fragranceId, capturedAt])
+  @@map("fragrance_benchmarks")
+}
+
+// Curated, sourced candidates support recommendations without scraping or invented ratings.
+model FragranceCandidate {
+  id              String   @id @default(cuid())
+  personId        String   @map("person_id")
+  catalogEntryId  String?  @map("catalog_entry_id")
+  house           String
+  name            String
+  concentration   String?
+  profile          Json?
+  sourceName      String   @map("source_name")
+  sourceUrl       String   @map("source_url")
+  capturedAt      DateTime @default(now()) @map("captured_at")
+  rating          Float?
+  longevityRating Float?   @map("longevity_rating")
+  notes           String?
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  person       FamilyMember           @relation(fields: [personId], references: [id], onDelete: Cascade)
+  catalogEntry FragranceCatalogEntry? @relation(fields: [catalogEntryId], references: [id], onDelete: SetNull)
+
+  @@unique([personId, house, name, sourceUrl])
+  @@index([personId, capturedAt])
+  @@index([catalogEntryId])
+  @@map("fragrance_candidates")
+}
+
+// Private cycle records are not family events and are never added to the shared calendar.
+model CycleProfile {
+  id                    String   @id @default(cuid())
+  personId              String   @unique @map("person_id")
+  reminderEnabled       Boolean  @default(true) @map("reminder_enabled")
+  reminderTime           String? @map("reminder_time")
+  personalCalendarEnabled Boolean @default(false) @map("personal_calendar_enabled")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  person FamilyMember @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@map("cycle_profiles")
+}
+
+model CyclePeriod {
+  id              String    @id @default(cuid())
+  personId        String    @map("person_id")
+  startDate       DateTime  @map("start_date")
+  endDate         DateTime? @map("end_date")
+  notes           String?
+  calendarEventId String?   @map("calendar_event_id")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  person FamilyMember @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@unique([personId, startDate])
+  @@index([personId, startDate])
+  @@map("cycle_periods")
+}
+
+model CycleDailyLog {
+  id          String   @id @default(cuid())
+  personId    String   @map("person_id")
+  logDate     DateTime @map("log_date")
+  flow        String?
+  symptoms    Json?
+  mood        String?
+  energy      Int?
+  sleepHours  Float?   @map("sleep_hours")
+  painLevel   Int?     @map("pain_level")
+  medication  String?
+  tags        Json?
+  notes       String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  person FamilyMember @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@unique([personId, logDate])
+  @@index([personId, logDate])
+  @@map("cycle_daily_logs")
+}
+
+model CycleReminder {
+  id              String   @id @default(cuid())
+  personId        String   @map("person_id")
+  reminderType    String   @map("reminder_type")
+  daysBefore      Int      @default(0) @map("days_before")
+  timeOfDay       String?  @map("time_of_day")
+  enabled         Boolean  @default(true)
+  calendarEventId String?  @map("calendar_event_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  person FamilyMember @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@unique([personId, reminderType])
+  @@map("cycle_reminders")
+}
+
+model PersonalGoogleCalendarConnection {
+  id                   String    @id @default(cuid())
+  personId             String    @unique @map("person_id")
+  googleUserEmail      String?   @map("google_user_email")
+  accessToken          String    @map("access_token")
+  refreshToken         String?   @map("refresh_token")
+  tokenType            String?   @map("token_type")
+  scope                String?
+  expiryDate           DateTime? @map("expiry_date")
+  selectedCalendarId   String?   @map("selected_calendar_id")
+  selectedCalendarName String?   @map("selected_calendar_name")
+  enabled              Boolean   @default(true)
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  person FamilyMember @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@map("personal_google_calendar_connections")
+}
+
 // Contractors (Phase 2)
 model Contractor {
   id        String   @id @default(cuid())
@@ -537,6 +1073,25 @@ model Notification {
   @@index([familyId, read])
   @@index([familyId, timestamp])
   @@map("notifications")
+}
+
+model PushSubscription {
+  id          String   @id @default(cuid())
+  familyId    String   @map("family_id")
+  endpoint    String   @unique
+  p256dh      String
+  auth        String
+  userAgent   String?  @map("user_agent")
+  deviceLabel String?  @map("device_label")
+  isActive    Boolean  @default(true) @map("is_active")
+  lastSeenAt  DateTime @default(now()) @map("last_seen_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  family Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  @@index([familyId, isActive])
+  @@map("push_subscriptions")
 }
 
 // Brain mind-map projects

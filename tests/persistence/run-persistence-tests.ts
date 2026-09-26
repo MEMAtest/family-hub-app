@@ -125,6 +125,17 @@ import {
   PATCH as milestonePatch,
   DELETE as milestoneDelete,
 } from '../../src/app/api/families/[familyId]/milestones/[milestoneId]/route';
+import {
+  GET as cyclesGet,
+  POST as cyclesPost,
+  DELETE as cyclesDelete,
+} from '../../src/app/api/families/[familyId]/cycles/route';
+import { POST as fragrancePhotoPost } from '../../src/app/api/families/[familyId]/perfumes/[fragranceId]/photo/route';
+import { GET as fragranceCatalogGet } from '../../src/app/api/families/[familyId]/perfumes/catalog/route';
+import { POST as fragrancesPost } from '../../src/app/api/families/[familyId]/perfumes/route';
+import { POST as fragranceDraftPost } from '../../src/app/api/families/[familyId]/perfumes/photo-drafts/route';
+import { POST as fragranceDraftConfirmPost } from '../../src/app/api/families/[familyId]/perfumes/photo-drafts/[draftId]/confirm/route';
+import { fragranceCatalogSlug } from '../../src/lib/fragranceCatalog';
 
 type AnyJson = Record<string, any> | any[] | null;
 type HandlerContext = { params: Promise<Record<string, string>> };
@@ -136,15 +147,13 @@ interface CheckResult {
   details: string;
 }
 
-const fallbackDatabaseUrl =
-  'postgresql://neondb_owner:npg_FfSTB5lXxPU4@ep-bold-pine-abqy8czb-pooler.eu-west-2.aws.neon.tech/neondb?sslmode=require';
-
-if (!process.env.DATABASE_URL) {
-  process.env.DATABASE_URL = fallbackDatabaseUrl;
+const testDatabaseUrl = process.env.TEST_DATABASE_URL;
+if (!testDatabaseUrl) {
+  throw new Error('TEST_DATABASE_URL is required for persistence tests.');
 }
 
 const prisma = new PrismaClient({
-  datasourceUrl: process.env.DATABASE_URL,
+  datasourceUrl: testDatabaseUrl,
 });
 
 const results: CheckResult[] = [];
@@ -166,6 +175,10 @@ const createdIds = {
   notifications: [] as string[],
   familyMembers: [] as string[],
   familyMilestones: [] as string[],
+  cyclePeriods: [] as string[],
+  fragrances: [] as string[],
+  fragranceCatalogEntries: [] as string[],
+  fragranceRecognitionMemories: [] as string[],
 };
 
 let currentFamilyId = '';
@@ -251,6 +264,10 @@ const runCheck = async (name: string, fn: () => Promise<void>) => {
 const uniq = (ids: string[]) => Array.from(new Set(ids.filter(Boolean)));
 
 const cleanupCreatedRows = async () => {
+  await prisma.fragrance.deleteMany({ where: { id: { in: uniq(createdIds.fragrances) } } });
+  await prisma.fragranceRecognitionMemory.deleteMany({ where: { id: { in: uniq(createdIds.fragranceRecognitionMemories) } } });
+  await prisma.fragranceCatalogEntry.deleteMany({ where: { id: { in: uniq(createdIds.fragranceCatalogEntries) } } });
+  await prisma.cyclePeriod.deleteMany({ where: { id: { in: uniq(createdIds.cyclePeriods) } } });
   await prisma.contractorAppointment.deleteMany({ where: { id: { in: uniq(createdIds.contractorAppointments) } } });
   await prisma.contractor.deleteMany({ where: { id: { in: uniq(createdIds.contractors) } } });
   await prisma.shoppingItem.deleteMany({ where: { id: { in: uniq(createdIds.shoppingItems) } } });
@@ -323,6 +340,15 @@ const cleanupByTag = async () => {
   await prisma.familyMilestone.deleteMany({
     where: { familyId: currentFamilyId, title: { startsWith: runTag } },
   });
+  await prisma.cyclePeriod.deleteMany({
+    where: { notes: { startsWith: runTag } },
+  });
+  await prisma.fragrance.deleteMany({
+    where: { name: { startsWith: runTag } },
+  });
+  await prisma.fragranceCatalogEntry.deleteMany({
+    where: { name: { startsWith: runTag } },
+  });
   await prisma.familyMember.deleteMany({
     where: { familyId: currentFamilyId, name: { startsWith: runTag } },
   });
@@ -363,6 +389,347 @@ const runPersistenceChecks = async () => {
   const now = new Date();
   const today = now.toISOString().slice(0, 10);
   const nextDate = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+  await runCheck('Private cycle periods', async () => {
+    const cycleMember = await prisma.familyMember.create({
+      data: {
+        familyId: currentFamilyId,
+        name: `${runTag} Private Cycle Member`,
+        role: 'Parent',
+        ageGroup: 'Adult',
+        color: '#d8527d',
+        icon: 'P',
+        privateCycleAccess: true,
+      },
+    });
+    createdIds.familyMembers.push(cycleMember.id);
+
+    const previousMemberId = process.env.TEST_AUTH_FAMILY_MEMBER_ID;
+    process.env.TEST_AUTH_FAMILY_MEMBER_ID = cycleMember.id;
+    try {
+      const startDate = '2088-09-14';
+      const endDate = '2088-09-18';
+      const sharedCalendarCount = await prisma.calendarEvent.count({ where: { familyId: currentFamilyId } });
+      const created = await call(
+        cyclesPost as Handler,
+        jsonRequest(`http://localhost/api/families/${currentFamilyId}/cycles`, 'POST', {
+          action: 'period',
+          startDate,
+          endDate,
+          notes: `${runTag} private period`,
+        }),
+        familyContext(),
+        'Create private period'
+      );
+      const periodId = getId(created, 'Private period creation');
+      createdIds.cyclePeriods.push(periodId);
+
+      const saved = await prisma.cyclePeriod.findUnique({ where: { id: periodId } });
+      ensure(saved?.personId === cycleMember.id, 'Private period was not stored against the signed-in profile');
+      ensure(saved?.notes === `${runTag} private period`, 'Private period notes did not persist');
+      ensure(saved?.calendarEventId === null, 'Private period unexpectedly created a shared calendar event');
+      ensure(
+        await prisma.calendarEvent.count({ where: { familyId: currentFamilyId } }) === sharedCalendarCount,
+        'Private period changed the shared calendar'
+      );
+
+      await call(
+        cyclesPost as Handler,
+        jsonRequest(`http://localhost/api/families/${currentFamilyId}/cycles`, 'POST', {
+          action: 'update-period',
+          id: periodId,
+          startDate: '2088-09-15',
+          endDate,
+          notes: `${runTag} corrected private period`,
+        }),
+        familyContext(),
+        'Edit private period'
+      );
+      const corrected = await prisma.cyclePeriod.findUnique({ where: { id: periodId } });
+      ensure(corrected?.startDate.toISOString().slice(0, 10) === '2088-09-15', 'Private period start date did not update');
+      ensure(corrected?.notes === `${runTag} corrected private period`, 'Private period notes did not update');
+
+      await call(
+        cyclesPost as Handler,
+        jsonRequest(`http://localhost/api/families/${currentFamilyId}/cycles`, 'POST', {
+          action: 'daily-log',
+          logDate: '2087-01-02',
+          flow: 'Light',
+          mood: 'Good',
+          energy: 4,
+          painLevel: 2,
+          sleepHours: 8,
+          symptoms: ['Cramps'],
+        }),
+        familyContext(),
+        'Save historic private check-in'
+      );
+      const historicCheckIn = await call(
+        cyclesGet as Handler,
+        jsonRequest(`http://localhost/api/families/${currentFamilyId}/cycles?logDate=2087-01-02`, 'GET'),
+        familyContext(),
+        'Load exact historic private check-in'
+      );
+      ensure(getField(historicCheckIn, 'dailyLog')?.mood === 'Good', 'Historic private check-in was not loaded exactly');
+
+      const list = await call(
+        cyclesGet as Handler,
+        jsonRequest(`http://localhost/api/families/${currentFamilyId}/cycles`, 'GET'),
+        familyContext(),
+        'List private periods'
+      );
+      const periods = getField(list, 'periods');
+      ensure(Array.isArray(periods) && periods.some((period: any) => period.id === periodId), 'Private period missing from its profile history');
+
+      await call(
+        cyclesDelete as Handler,
+        jsonRequest(`http://localhost/api/families/${currentFamilyId}/cycles?resource=period&id=${periodId}`, 'DELETE'),
+        familyContext(),
+        'Delete private period'
+      );
+      ensure(!(await prisma.cyclePeriod.findUnique({ where: { id: periodId } })), 'Private period still exists after delete');
+    } finally {
+      if (previousMemberId) process.env.TEST_AUTH_FAMILY_MEMBER_ID = previousMemberId;
+      else delete process.env.TEST_AUTH_FAMILY_MEMBER_ID;
+    }
+  });
+
+  await runCheck('Fragrance catalogue links', async () => {
+    const fragranceMember = await prisma.familyMember.create({
+      data: {
+        familyId: currentFamilyId,
+        name: `${runTag} Catalogue Member`,
+        role: 'Parent',
+        ageGroup: 'Adult',
+        color: '#147c72',
+        icon: 'P',
+      },
+    });
+    createdIds.familyMembers.push(fragranceMember.id);
+    const catalogEntry = await prisma.fragranceCatalogEntry.create({
+      data: {
+        slug: fragranceCatalogSlug('Test House', `${runTag} Catalogue Bottle`, 'Eau de Parfum'),
+        house: 'Test House',
+        name: `${runTag} Catalogue Bottle`,
+        concentration: 'Eau de Parfum',
+        olfactiveFamily: 'Woody',
+        notes: ['cedar', 'amber'],
+        sourceName: 'Persistence test source',
+        sourceKind: 'test',
+        catalogueStatus: 'verified',
+      },
+    });
+    createdIds.fragranceCatalogEntries.push(catalogEntry.id);
+
+    const previousMemberId = process.env.TEST_AUTH_FAMILY_MEMBER_ID;
+    process.env.TEST_AUTH_FAMILY_MEMBER_ID = fragranceMember.id;
+    try {
+      const created = await call(
+        fragrancesPost as Handler,
+        jsonRequest(`http://localhost/api/families/${currentFamilyId}/perfumes`, 'POST', { catalogEntryId: catalogEntry.id }),
+        familyContext(),
+        'Add catalogue fragrance to private collection'
+      );
+      const fragranceId = getId(created, 'Catalogue fragrance creation');
+      createdIds.fragrances.push(fragranceId);
+      const stored = await prisma.fragrance.findUnique({ where: { id: fragranceId } });
+      ensure(stored?.personId === fragranceMember.id, 'Catalogue fragrance was not stored in the signed-in profile');
+      ensure(stored?.catalogEntryId === catalogEntry.id, 'Private bottle is not linked to its catalogue release');
+
+      const results = await call(
+        fragranceCatalogGet as Handler,
+        jsonRequest(`http://localhost/api/families/${currentFamilyId}/perfumes/catalog?q=${encodeURIComponent(runTag)}&limit=10`, 'GET'),
+        familyContext(),
+        'Search fragrance catalogue'
+      );
+      ensure(
+        Array.isArray(results) && results.some((entry: any) => entry.id === catalogEntry.id && entry.isInCollection === true),
+        'Catalogue search did not identify the fragrance as part of the private collection'
+      );
+    } finally {
+      if (previousMemberId) process.env.TEST_AUTH_FAMILY_MEMBER_ID = previousMemberId;
+      else delete process.env.TEST_AUTH_FAMILY_MEMBER_ID;
+    }
+  });
+
+  await runCheck('Private perfume bottle photos', async () => {
+    const fragranceMember = await prisma.familyMember.create({
+      data: {
+        familyId: currentFamilyId,
+        name: `${runTag} Perfume Member`,
+        role: 'Parent',
+        ageGroup: 'Adult',
+        color: '#147c72',
+        icon: 'P',
+      },
+    });
+    createdIds.familyMembers.push(fragranceMember.id);
+    const fragrance = await prisma.fragrance.create({
+      data: {
+        personId: fragranceMember.id,
+        house: 'Test House',
+        name: `${runTag} Bottle`,
+      },
+    });
+    createdIds.fragrances.push(fragrance.id);
+
+    const previousMemberId = process.env.TEST_AUTH_FAMILY_MEMBER_ID;
+    process.env.TEST_AUTH_FAMILY_MEMBER_ID = fragranceMember.id;
+    try {
+      const payload = new FormData();
+      payload.set('file', new File([new Uint8Array([137, 80, 78, 71])], 'bottle.png', { type: 'image/png' }));
+      const uploaded = await call(
+        fragrancePhotoPost as Handler,
+        new NextRequest(`http://localhost/api/families/${currentFamilyId}/perfumes/${fragrance.id}/photo`, { method: 'POST', body: payload }),
+        familyContext({ fragranceId: fragrance.id }),
+        'Attach private bottle photo'
+      );
+      ensure(getField(uploaded, 'photoUrl') === `/api/families/${currentFamilyId}/perfumes/${fragrance.id}/photo`, 'Photo upload returned the wrong private URL');
+
+      const stored = await prisma.fragrance.findUnique({
+        where: { id: fragrance.id },
+        select: { personId: true, photoData: true, photoMimeType: true, photoSizeBytes: true },
+      });
+      ensure(stored?.personId === fragranceMember.id, 'Bottle photo was not stored in the signed-in profile collection');
+      ensure(stored?.photoMimeType === 'image/png', 'Bottle photo MIME type did not persist');
+      ensure(stored?.photoSizeBytes === 4 && stored.photoData?.length === 4, 'Bottle photo bytes did not persist');
+    } finally {
+      if (previousMemberId) process.env.TEST_AUTH_FAMILY_MEMBER_ID = previousMemberId;
+      else delete process.env.TEST_AUTH_FAMILY_MEMBER_ID;
+    }
+  });
+
+  await runCheck('Photo-confirmed fragrances join the catalogue', async () => {
+    const fragranceMember = await prisma.familyMember.create({
+      data: {
+        familyId: currentFamilyId,
+        name: `${runTag} Photo Confirm Member`,
+        role: 'Parent',
+        ageGroup: 'Adult',
+        color: '#147c72',
+        icon: 'P',
+      },
+    });
+    createdIds.familyMembers.push(fragranceMember.id);
+    const draft = await prisma.fragranceDraft.create({
+      data: {
+        personId: fragranceMember.id,
+        photoData: new Uint8Array([137, 80, 78, 71]),
+        photoMimeType: 'image/png',
+        photoSizeBytes: 4,
+      },
+    });
+
+    const previousMemberId = process.env.TEST_AUTH_FAMILY_MEMBER_ID;
+    process.env.TEST_AUTH_FAMILY_MEMBER_ID = fragranceMember.id;
+    try {
+      const created = await call(
+        fragranceDraftConfirmPost as Handler,
+        jsonRequest(`http://localhost/api/families/${currentFamilyId}/perfumes/photo-drafts/${draft.id}/confirm`, 'POST', {
+          house: 'Photo Test House',
+          name: `${runTag} Confirmed`,
+          concentration: 'Eau de Parfum',
+        }),
+        familyContext({ draftId: draft.id }),
+        'Confirm bottle photo as private fragrance'
+      );
+      const fragranceId = getId(created, 'Photo-confirmed fragrance');
+      createdIds.fragrances.push(fragranceId);
+      const stored = await prisma.fragrance.findUnique({
+        where: { id: fragranceId },
+        select: { catalogEntryId: true },
+      });
+      ensure(stored?.catalogEntryId, 'Photo-confirmed fragrance was not linked to a catalogue entry');
+      if (stored?.catalogEntryId) {
+        createdIds.fragranceCatalogEntries.push(stored.catalogEntryId);
+        const catalogEntry = await prisma.fragranceCatalogEntry.findUnique({ where: { id: stored.catalogEntryId } });
+        ensure(catalogEntry?.catalogueStatus === 'profile-confirmed', 'Photo-confirmed fragrance did not create a profile-confirmed catalogue entry');
+      }
+    } finally {
+      if (previousMemberId) process.env.TEST_AUTH_FAMILY_MEMBER_ID = previousMemberId;
+      else delete process.env.TEST_AUTH_FAMILY_MEMBER_ID;
+    }
+  });
+
+  await runCheck('Vision bottle reading and household recognition memory', async () => {
+    const fragranceMember = await prisma.familyMember.create({
+      data: {
+        familyId: currentFamilyId,
+        name: `${runTag} Vision Member`,
+        role: 'Parent',
+        ageGroup: 'Adult',
+        color: '#147c72',
+        icon: 'P',
+      },
+    });
+    createdIds.familyMembers.push(fragranceMember.id);
+    const catalogEntry = await prisma.fragranceCatalogEntry.create({
+      data: {
+        slug: fragranceCatalogSlug('Vision House', `${runTag} Vision Bottle`, 'Eau de Parfum'),
+        house: 'Vision House',
+        name: `${runTag} Vision Bottle`,
+        concentration: 'Eau de Parfum',
+        sourceName: 'Persistence test source',
+        sourceKind: 'test',
+        catalogueStatus: 'verified',
+      },
+    });
+    createdIds.fragranceCatalogEntries.push(catalogEntry.id);
+
+    const previousMemberId = process.env.TEST_AUTH_FAMILY_MEMBER_ID;
+    const previousOpenRouterKey = process.env.OPENROUTER_API_KEY;
+    const previousFetch = global.fetch;
+    process.env.TEST_AUTH_FAMILY_MEMBER_ID = fragranceMember.id;
+    process.env.OPENROUTER_API_KEY = 'persistence-test-key';
+    global.fetch = (async () => new Response(JSON.stringify({
+      choices: [{ message: { content: JSON.stringify({
+        house: catalogEntry.house,
+        name: catalogEntry.name,
+        concentration: catalogEntry.concentration,
+        extractedText: `${catalogEntry.house}\n${catalogEntry.name}`,
+        confidence: 0.92,
+      }) } }],
+      usage: { prompt_tokens: 10_000, completion_tokens: 200 },
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } })) as typeof fetch;
+
+    try {
+      const payload = new FormData();
+      payload.set('file', new File([new Uint8Array([137, 80, 78, 71])], 'vision-bottle.png', { type: 'image/png' }));
+      const draft = await call(
+        fragranceDraftPost as Handler,
+        new NextRequest(`http://localhost/api/families/${currentFamilyId}/perfumes/photo-drafts`, { method: 'POST', body: payload }),
+        familyContext(),
+        'Read bottle label with vision'
+      );
+      const draftId = getId(draft, 'Vision draft');
+      ensure(getField(draft, 'ocrStatus') === 'ready', 'Vision draft did not reach a ready state');
+      ensure(getField(draft, 'ocrConfidence') === 0.92, 'Vision confidence did not persist');
+      ensure(Array.isArray(getField(draft, 'matchCandidates')), 'Vision draft did not return catalogue matches');
+
+      const created = await call(
+        fragranceDraftConfirmPost as Handler,
+        jsonRequest(`http://localhost/api/families/${currentFamilyId}/perfumes/photo-drafts/${draftId}/confirm`, 'POST', {
+          house: catalogEntry.house,
+          name: catalogEntry.name,
+          concentration: catalogEntry.concentration,
+        }),
+        familyContext({ draftId }),
+        'Confirm vision bottle label'
+      );
+      createdIds.fragrances.push(getId(created, 'Vision-confirmed fragrance'));
+      const memory = await prisma.fragranceRecognitionMemory.findFirst({
+        where: { familyId: currentFamilyId, catalogEntryId: catalogEntry.id },
+      });
+      ensure(memory?.confirmationCount === 1, 'Confirmed scan did not create household recognition memory');
+      if (memory) createdIds.fragranceRecognitionMemories.push(memory.id);
+    } finally {
+      global.fetch = previousFetch;
+      if (previousOpenRouterKey) process.env.OPENROUTER_API_KEY = previousOpenRouterKey;
+      else delete process.env.OPENROUTER_API_KEY;
+      if (previousMemberId) process.env.TEST_AUTH_FAMILY_MEMBER_ID = previousMemberId;
+      else delete process.env.TEST_AUTH_FAMILY_MEMBER_ID;
+    }
+  });
 
   await runCheck('Calendar events', async () => {
     const created = await call(

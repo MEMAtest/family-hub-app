@@ -1,14 +1,48 @@
-import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
+import { neonAuthMiddleware } from '@neondatabase/neon-js/auth/next/server';
+import { NextResponse, type NextRequest } from 'next/server';
+
+const authMiddleware = process.env.NEON_AUTH_BASE_URL && process.env.NEXT_PUBLIC_E2E !== 'true'
+  ? neonAuthMiddleware({ loginUrl: '/auth/sign-in' })
+  : (_request: NextRequest) => NextResponse.next();
+
+const PUBLIC_PREFIXES = [
+  '/auth',
+  '/api/auth',
+  '/api/inbound/calendar-email',
+  '/api/property',
+  '/api/rss',
+];
+
+const PUBLIC_PATHS = new Set([
+  '/favicon.ico',
+  '/manifest.json',
+  '/offline.html',
+  '/sw.js',
+  '/force-reload.html',
+  '/reset-app.html',
+]);
+
+const isPublicRequest = (pathname: string) => (
+  PUBLIC_PATHS.has(pathname) ||
+  PUBLIC_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))
+);
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  if (pathname.startsWith('/api/families/') && pathname.includes('/budget/statement-import')) {
+  if (isPublicRequest(pathname)) {
     return NextResponse.next();
   }
 
-  return NextResponse.next();
+  try {
+    return await authMiddleware(request as never);
+  } catch (error) {
+    console.error('Neon Auth middleware failed:', error);
+    const signInUrl = request.nextUrl.clone();
+    signInUrl.pathname = '/auth/sign-in';
+    signInUrl.searchParams.set('error', 'auth_unavailable');
+    return NextResponse.redirect(signInUrl);
+  }
 }
 
 export const config = {

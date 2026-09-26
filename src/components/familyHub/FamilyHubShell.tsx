@@ -17,6 +17,8 @@ import {
   Wrench,
   Brain,
   ArrowUp,
+  Flower2,
+  HeartPulse,
 } from 'lucide-react';
 import { FamilyHubNavigation, NavItem } from './FamilyHubNavigation';
 import { FamilyHubHeader } from './FamilyHubHeader';
@@ -32,6 +34,8 @@ import { PropertyView } from './views/PropertyView';
 import { FitnessView } from './views/FitnessView';
 import { ContractorView } from './views/ContractorView';
 import { ProjectBrainView } from './views/ProjectBrainView';
+import { PerfumeView } from './views/PerfumeView';
+import { CycleView } from './views/CycleView';
 import { FamilyHubModals } from './FamilyHubModals';
 import Breadcrumb from '@/components/common/Breadcrumb';
 import SetupWizard from '@/components/common/SetupWizard';
@@ -48,18 +52,20 @@ import { PWAInstallPrompt } from '@/components/pwa/PWAInstallPrompt';
 import { useSearchParams } from 'next/navigation';
 
 const NAV_ITEMS: NavItem[] = [
-  { id: 'dashboard', label: 'Today', icon: Home },
-  { id: 'calendar', label: 'Calendar', icon: CalendarIcon },
-  { id: 'budget', label: 'Money', icon: DollarSign },
-  { id: 'meals', label: 'Meals', icon: UtensilsCrossed },
-  { id: 'shopping', label: 'Basket', icon: ShoppingCart },
-  { id: 'goals', label: 'Quests', icon: Target },
-  { id: 'family', label: 'Family', icon: Users },
-  { id: 'property', label: 'Home', icon: Building2 },
-  { id: 'fitness', label: 'Move', icon: Dumbbell },
-  { id: 'contractors', label: 'Repairs', icon: Wrench },
-  { id: 'brain', label: 'Project Brain', icon: Brain },
-  { id: 'news', label: 'News', icon: Newspaper },
+  { id: 'dashboard', label: 'Dashboard', mobileLabel: 'Today', icon: Home, section: 'Home' },
+  { id: 'calendar', label: 'Calendar', mobileLabel: 'Cal', icon: CalendarIcon, section: 'Home' },
+  { id: 'family', label: 'Family', mobileLabel: 'People', icon: Users, section: 'Home' },
+  { id: 'budget', label: 'Budget', mobileLabel: 'Money', icon: DollarSign, section: 'Plan' },
+  { id: 'meals', label: 'Meals', mobileLabel: 'Meals', icon: UtensilsCrossed, section: 'Plan' },
+  { id: 'shopping', label: 'Shopping', mobileLabel: 'Basket', icon: ShoppingCart, section: 'Plan' },
+  { id: 'goals', label: 'Goals', mobileLabel: 'Quests', icon: Target, section: 'Plan' },
+  { id: 'property', label: 'Property', icon: Building2, section: 'Household' },
+  { id: 'fitness', label: 'Fitness', icon: Dumbbell, section: 'Household' },
+  { id: 'contractors', label: 'Contractors', icon: Wrench, section: 'Household' },
+  { id: 'brain', label: 'Brain', icon: Brain, section: 'Household' },
+  { id: 'news', label: 'News', icon: Newspaper, section: 'More' },
+  { id: 'perfume', label: 'Perfume', icon: Flower2, section: 'Personal' },
+  { id: 'cycle', label: 'Health & Cycle', icon: HeartPulse, section: 'Personal' },
 ];
 
 const SHOULD_SKIP_SETUP =
@@ -70,6 +76,7 @@ export const FamilyHubShell = () => {
   const {
     currentView,
     currentSubView,
+    currentDate,
     setView,
     setSubView,
     isMobileMenuOpen,
@@ -95,6 +102,16 @@ export const FamilyHubShell = () => {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if ('serviceWorker' in navigator) {
+      if (process.env.NODE_ENV !== 'production') {
+        navigator.serviceWorker
+          .getRegistrations()
+          .then((registrations) => Promise.all(registrations.map((registration) => registration.unregister())))
+          .catch((error) => {
+            console.warn('Failed to clear development service worker:', error);
+          });
+        return;
+      }
+
       navigator.serviceWorker.register('/sw.js')
         .then((registration) => {
           if (registration.waiting) {
@@ -107,12 +124,17 @@ export const FamilyHubShell = () => {
     }
   }, []);
 
+  // Keep personal destinations discoverable. Each private view verifies access against
+  // its protected endpoint, rather than relying on a second, potentially stale client check.
+  const navItems = NAV_ITEMS;
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
     const storedName = localStorage.getItem('familyName');
     if (storedName) {
       setFamilyName(storedName);
+      return;
     }
 
     if (!databaseStatus.familyId) return;
@@ -190,6 +212,19 @@ export const FamilyHubShell = () => {
     window.requestAnimationFrame(scrollMainToTop);
   }, [closeMobileMenu, scrollMainToTop, setSubView, setView]);
 
+  const buildCalendarQuickAddSlot = useCallback(() => {
+    const now = new Date();
+    const start = new Date(currentDate);
+    start.setHours(now.getHours(), now.getMinutes(), 0, 0);
+    const end = new Date(start);
+    end.setHours(start.getHours() + 1);
+    return { start, end };
+  }, [currentDate]);
+
+  const openHeaderEventForm = useCallback(() => {
+    openCreateForm(currentView === 'calendar' ? buildCalendarQuickAddSlot() : undefined);
+  }, [buildCalendarQuickAddSlot, currentView, openCreateForm]);
+
   // Check if setup wizard should be shown on mount (client-side only)
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -208,7 +243,7 @@ export const FamilyHubShell = () => {
   const rightContent = useMemo(() => (
     <div className="hidden items-center gap-2 lg:flex">
       <button
-        onClick={() => openCreateForm()}
+        onClick={openHeaderEventForm}
         className="inline-flex items-center gap-2 rounded-lg bg-[#147c72] px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#0f625a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#147c72]/30"
       >
         <Plus className="h-4 w-4" /> Event
@@ -232,7 +267,7 @@ export const FamilyHubShell = () => {
         <ShoppingBag className="h-4 w-4" /> Item
       </button>
     </div>
-  ), [lists, openBudgetForm, openCreateForm, openQuickAppointment, openShoppingForm]);
+  ), [lists, openBudgetForm, openHeaderEventForm, openQuickAppointment, openShoppingForm]);
 
   const subtitle = useMemo(() => {
     if (!isClient || !clientTime) return 'Loading family insights…';
@@ -240,8 +275,8 @@ export const FamilyHubShell = () => {
   }, [clientTime, isClient]);
 
   const headerTitle = useMemo(() => {
-    return 'Omosanya Home';
-  }, []);
+    return familyName || 'Omosanya Home';
+  }, [familyName]);
 
   const content = useMemo(() => {
     switch (currentView) {
@@ -257,6 +292,10 @@ export const FamilyHubShell = () => {
         return <ShoppingView />;
       case 'fitness':
         return <FitnessView />;
+      case 'perfume':
+        return <PerfumeView />;
+      case 'cycle':
+        return <CycleView />;
       case 'contractors':
         return <ContractorView />;
       case 'goals':
@@ -282,8 +321,10 @@ export const FamilyHubShell = () => {
       meals: 'Meals',
       shopping: 'Shopping',
       fitness: 'Fitness',
+      perfume: 'Perfume Hub',
+      cycle: 'Health & Cycle',
       contractors: 'Contractors',
-      goals: 'Quests',
+      goals: 'Goals',
       brain: 'Project Brain',
       family: 'Family',
       news: 'News',
@@ -304,10 +345,11 @@ export const FamilyHubShell = () => {
   return (
     <div className="flex h-screen min-h-0 overflow-x-hidden bg-[#f5f7f1] text-[#18221f] dark:bg-[#0d1215] dark:text-slate-100">
       <FamilyHubNavigation
-        items={NAV_ITEMS}
+        items={navItems}
         activeId={currentView}
         onSelect={handleSelectView}
         isMobileOpen={isMobileMenuOpen}
+        onOpenMobile={openMobileMenu}
         onCloseMobile={closeMobileMenu}
       />
 
@@ -319,7 +361,12 @@ export const FamilyHubShell = () => {
           rightContent={rightContent}
           databaseStatus={databaseStatus}
         />
-        <main ref={mainRef} className="kinboard-main min-h-0 flex-1 overflow-y-auto overflow-x-hidden pb-20 sm:pb-24 lg:pb-0">
+        <main
+          ref={mainRef}
+          className={`kinboard-main min-h-0 flex-1 overflow-y-auto overflow-x-hidden lg:pb-0 ${
+            currentView === 'calendar' ? 'pb-40 sm:pb-44' : 'pb-24 sm:pb-28'
+          }`}
+        >
           {currentView !== 'dashboard' && breadcrumbItems.length > 0 && (
             <div className="px-3 pt-3 sm:px-4 sm:pt-4 lg:px-8">
               <Breadcrumb
@@ -336,7 +383,7 @@ export const FamilyHubShell = () => {
         <button
           type="button"
           onClick={scrollMainToTop}
-          className="fixed bottom-24 right-4 z-40 inline-flex h-11 w-11 items-center justify-center rounded-full border border-[#dde5e0] bg-white/95 text-[#147c72] shadow-lg backdrop-blur transition hover:bg-[#eaf1e7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#147c72]/30 dark:border-slate-700 dark:bg-slate-900/95 dark:text-[#56c6b8] dark:hover:bg-slate-800 lg:bottom-6"
+          className="fixed bottom-24 left-4 z-40 inline-flex h-11 w-11 items-center justify-center rounded-full border border-[#dde5e0] bg-white/95 text-[#147c72] shadow-lg backdrop-blur transition hover:bg-[#eaf1e7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#147c72]/30 dark:border-slate-700 dark:bg-slate-900/95 dark:text-[#56c6b8] dark:hover:bg-slate-800 lg:bottom-6 lg:left-auto lg:right-4"
           aria-label="Back to top"
           title="Back to top"
         >
@@ -345,6 +392,19 @@ export const FamilyHubShell = () => {
       )}
 
       <FamilyHubModals />
+
+      {currentView === 'calendar' && (
+        <button
+          type="button"
+          onClick={openHeaderEventForm}
+          className="fixed bottom-24 right-4 z-40 inline-flex h-12 items-center gap-2 rounded-full bg-[#147c72] px-4 text-sm font-semibold text-white shadow-lg shadow-[#147c72]/20 transition hover:bg-[#0f625a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#147c72]/30 lg:hidden"
+          aria-label="Quick add calendar event"
+        >
+          <Plus className="h-5 w-5" />
+          Quick add
+        </button>
+      )}
+
       {process.env.NEXT_PUBLIC_SHOW_DEBUG_PANEL === 'true' && <DebugPanel />}
       <PWAInstallPrompt />
 

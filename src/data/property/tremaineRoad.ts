@@ -7,6 +7,8 @@ import {
 } from '@/types/property.types';
 
 const createdAt = '2024-01-16T12:00:00Z';
+const BROMLEY_PLANNING_SEARCH_URL =
+  'https://pa.bromley.gov.uk/online-applications/search.do?action=simple&searchType=Application&postcode=SE20%207UA';
 
 export const tremaineRoadBaseline: PropertyBaseline = {
   propertyName: 'Tremaine Improvements',
@@ -800,7 +802,7 @@ export const tremaineRoadAreaWatch: AreaWatchItem[] = [
     description: 'Monitor council planning portal for nearby applications.',
     status: 'monitor',
     impact: 'medium',
-    sourceUrl: 'https://www.planningportal.co.uk',
+    sourceUrl: BROMLEY_PLANNING_SEARCH_URL,
     lastUpdated: '2025-01-10',
     notify: true,
   },

@@ -2,6 +2,8 @@ import type { Metadata } from 'next'
 import { Instrument_Serif, Plus_Jakarta_Sans } from 'next/font/google'
 import './globals.css'
 import { AppProviders } from '@/components/common/AppProviders'
+import Script from 'next/script'
+import { Analytics } from '@vercel/analytics/next'
 
 const plusJakarta = Plus_Jakarta_Sans({
   subsets: ['latin'],
@@ -17,16 +19,19 @@ const instrumentSerif = Instrument_Serif({
   preload: false
 })
 
+const enableOwnedAnalytics =
+  process.env.NODE_ENV === 'production' && process.env.NEXT_PUBLIC_E2E !== 'true'
+
 export const metadata: Metadata = {
   title: 'Omosanya Home',
   description: 'A family command centre for plans, money, meals, shopping, goals, and household moments.',
   keywords: ['family', 'management', 'calendar', 'budget', 'meals', 'shopping', 'goals', 'PWA', 'mobile'],
-  authors: [{ name: 'Omosanya Family Hub Team' }],
+  authors: [{ name: 'Omosanya Home Team' }],
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
-    title: 'Omosanya Hub',
+    title: 'Omosanya Home',
     startupImage: [
       {
         url: '/apple-splash-1170x2532.png',
@@ -71,6 +76,9 @@ export const metadata: Metadata = {
     email: false,
     address: false
   },
+  other: {
+    'mobile-web-app-capable': 'yes'
+  },
   icons: {
     icon: [
       { url: '/icon.svg', type: 'image/svg+xml' },
@@ -85,12 +93,12 @@ export const metadata: Metadata = {
       { url: '/icon-180x180.png', sizes: '180x180', type: 'image/png' }
     ],
     other: [
-      { rel: 'mask-icon', url: '/icon.svg', color: '#2563EB' }
+      { rel: 'mask-icon', url: '/icon.svg', color: '#147C72' }
     ]
   },
   openGraph: {
     type: 'website',
-    siteName: 'Omosanya Family Hub',
+    siteName: 'Omosanya Home',
     title: 'Omosanya Home',
     description: 'A comprehensive family management application with calendar, budget, meals, and more',
     images: [
@@ -98,7 +106,7 @@ export const metadata: Metadata = {
         url: '/og-image.png',
         width: 1200,
         height: 630,
-        alt: 'Omosanya Family Hub'
+        alt: 'Omosanya Home'
       }
     ]
   },
@@ -137,6 +145,14 @@ export default function RootLayout({
         <AppProviders>
           {children}
         </AppProviders>
+        <Analytics />
+        {enableOwnedAnalytics && (
+          <Script
+            src="https://owned-portfolio-analytics.mema-consultants.workers.dev/tracker.js"
+            data-project="family-hub-app"
+            strategy="afterInteractive"
+          />
+        )}
       </body>
     </html>
   )

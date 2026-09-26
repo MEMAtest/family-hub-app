@@ -68,9 +68,25 @@ export type BrainFlowNode = Node<BrainFlowNodeData, 'brainNode'>;
 export type BrainFlowEdgeData = {
   edgeType: BrainEdgeType;
   label?: string | null;
+  source?: 'manual' | 'derived-link';
 };
 
 export type BrainFlowEdge = Edge<BrainFlowEdgeData>;
+
+export interface BrainChecklistItem {
+  id: string;
+  lineIndex: number;
+  text: string;
+  checked: boolean;
+}
+
+export interface BrainResolvedLink {
+  raw: string;
+  title: string;
+  targetId?: string;
+  ambiguous?: boolean;
+  target?: BrainNode;
+}
 
 // ─── Form data ─────────────────────────────────────────────────────────
 export interface CreateProjectFormData {
@@ -83,12 +99,15 @@ export interface CreateProjectFormData {
 
 export interface CreateNodeFormData {
   title: string;
+  content?: string;
   nodeType: BrainNodeType;
   status: BrainNodeStatus;
   priority: BrainNodePriority;
   dueDate?: string;
   positionX?: number;
   positionY?: number;
+  tags?: string[];
+  showOnCalendar?: boolean;
 }
 
 // ─── Display configs ───────────────────────────────────────────────────

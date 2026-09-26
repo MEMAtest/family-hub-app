@@ -3,6 +3,7 @@
 import { Dialog } from '@headlessui/react';
 import { X } from 'lucide-react';
 import { useGoalsContext } from '@/contexts/familyHub/GoalsContext';
+import AIEnhancedField from '@/components/common/AIEnhancedField';
 
 export const QuickActivityModal = () => {
   const {
@@ -22,21 +23,21 @@ export const QuickActivityModal = () => {
     <Dialog open={isQuickActivityFormOpen} onClose={closeQuickActivityForm} className="relative z-40">
       <div className="fixed inset-0 bg-black/40" aria-hidden="true" />
       <div className="fixed inset-0 flex items-center justify-center p-4">
-        <Dialog.Panel className="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl">
+        <Dialog.Panel className="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl dark:bg-slate-900">
           <div className="flex items-center justify-between">
-            <Dialog.Title className="text-lg font-semibold text-gray-900">Log Activity</Dialog.Title>
-            <button onClick={closeQuickActivityForm} className="rounded-md p-2 text-gray-500 hover:bg-gray-100">
+            <Dialog.Title className="text-lg font-semibold text-gray-900 dark:text-slate-100">Log Activity</Dialog.Title>
+            <button onClick={closeQuickActivityForm} className="rounded-md p-2 text-gray-500 hover:bg-gray-100 dark:text-slate-400 dark:hover:bg-slate-800">
               <X className="h-5 w-5" />
             </button>
           </div>
 
           <form onSubmit={handleSubmit} className="mt-4 space-y-4">
             <div>
-              <label className="text-sm font-medium text-gray-700">Activity type</label>
+              <label className="text-sm font-medium text-gray-700 dark:text-slate-300">Activity type</label>
               <select
                 value={quickActivityForm.type}
                 onChange={(event) => setQuickActivityForm({ ...quickActivityForm, type: event.target.value })}
-                className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
               >
                 <option value="gym">Gym Session</option>
                 <option value="running">Running</option>
@@ -49,22 +50,22 @@ export const QuickActivityModal = () => {
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-sm font-medium text-gray-700">Duration (minutes)</label>
+                <label className="text-sm font-medium text-gray-700 dark:text-slate-300">Duration (minutes)</label>
                 <input
                   type="number"
                   min="1"
                   max="300"
                   value={quickActivityForm.duration}
                   onChange={(event) => setQuickActivityForm({ ...quickActivityForm, duration: parseInt(event.target.value, 10) || 0 })}
-                  className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                 />
               </div>
               <div>
-                <label className="text-sm font-medium text-gray-700">Intensity</label>
+                <label className="text-sm font-medium text-gray-700 dark:text-slate-300">Intensity</label>
                 <select
                   value={quickActivityForm.intensity}
                   onChange={(event) => setQuickActivityForm({ ...quickActivityForm, intensity: event.target.value })}
-                  className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                 >
                   <option value="Low">Low</option>
                   <option value="Medium">Medium</option>
@@ -74,12 +75,13 @@ export const QuickActivityModal = () => {
             </div>
 
             <div>
-              <label className="text-sm font-medium text-gray-700">Notes</label>
-              <textarea
-                rows={3}
+              <label className="text-sm font-medium text-gray-700 dark:text-slate-300">Notes</label>
+              <AIEnhancedField
                 value={quickActivityForm.notes}
-                onChange={(event) => setQuickActivityForm({ ...quickActivityForm, notes: event.target.value })}
-                className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                onChange={(value) => setQuickActivityForm({ ...quickActivityForm, notes: value })}
+                rows={3}
+                context="Quick activity notes"
+                className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
               />
             </div>
 
@@ -87,7 +89,7 @@ export const QuickActivityModal = () => {
               <button
                 type="button"
                 onClick={closeQuickActivityForm}
-                className="rounded-md border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+                className="rounded-md border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
               >
                 Cancel
               </button>

@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { nanoid } from "nanoid";
+import { getCurrentSessionIdentity, getOrCreateUserForIdentity } from '@/lib/auth-utils';
 
 export async function POST(request: NextRequest) {
   try {
+    const identity = await getCurrentSessionIdentity(request);
+    if (!identity) {
+      return NextResponse.json({ error: 'Sign in is required.' }, { status: 401 });
+    }
+    const authenticatedUser = await getOrCreateUserForIdentity(identity);
     const body = await request.json();
     const { familyName, memberName, color, icon, displayName, avatarUrl, email } = body;
 
@@ -26,20 +32,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const safeEmail =
-      typeof email === "string" && email.includes("@")
-        ? email
-        : `owner+${nanoid(8)}@family-hub.local`;
+    void email;
 
     // Create owner user, family, and first family member in a transaction.
     const result = await prisma.$transaction(async (tx) => {
-      const user = await tx.user.create({
-        data: {
-          email: safeEmail,
-          displayName: displayName || memberName,
-          avatarUrl: avatarUrl,
-          authProvider: "local",
-        },
+      const user = await tx.user.update({
+        where: { id: authenticatedUser.id },
+        data: { displayName: displayName || memberName, avatarUrl: avatarUrl },
       });
 
       // Create family with unique code

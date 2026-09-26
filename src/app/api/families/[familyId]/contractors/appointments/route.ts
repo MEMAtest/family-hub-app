@@ -76,23 +76,34 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context, _a
       return NextResponse.json({ error: 'Contractor not found' }, { status: 404 });
     }
 
-    const appointment = await prisma.contractorAppointment.create({
-      data: {
-        ...(body.id ? { id: body.id } : {}),
-        familyId,
-        contractorId: body.contractorId,
-        date: body.date,
-        time: body.time,
-        durationMinutes: body.durationMinutes,
-        purpose: body.purpose,
-        location: body.location ?? undefined,
-        notes: body.notes ?? undefined,
-        cost: body.cost ?? undefined,
-        status: body.status ?? 'scheduled',
-        calendarEventId: body.calendarEventId ?? undefined,
-      },
-      include: { contractor: true },
-    });
+    const data = {
+      familyId,
+      contractorId: body.contractorId,
+      date: body.date,
+      time: body.time,
+      durationMinutes: body.durationMinutes,
+      purpose: body.purpose,
+      location: body.location ?? undefined,
+      notes: body.notes ?? undefined,
+      cost: body.cost ?? undefined,
+      status: body.status ?? 'scheduled',
+      calendarEventId: body.calendarEventId ?? undefined,
+    };
+    const appointment = body.id
+      ? await prisma.contractorAppointment.upsert({
+          where: { id: body.id },
+          update: {},
+          create: { id: body.id, ...data },
+          include: { contractor: true },
+        })
+      : await prisma.contractorAppointment.create({
+          data,
+          include: { contractor: true },
+        });
+
+    if (appointment.familyId !== familyId) {
+      return NextResponse.json({ error: 'Appointment id is already in use' }, { status: 409 });
+    }
 
     const { durationMinutes, ...rest } = appointment;
     return NextResponse.json({ ...rest, duration: durationMinutes }, { status: 201 });

@@ -2,8 +2,8 @@
   <defs>
     <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#1E3A8A"/>
-      <stop offset="50%" stop-color="#2563EB"/>
-      <stop offset="100%" stop-color="#7C3AED"/>
+      <stop offset="50%" stop-color="#147C72"/>
+      <stop offset="100%" stop-color="#0D3F3A"/>
     </linearGradient>
     <linearGradient id="orbGradient" x1="0%" y1="0%" x2="70%" y2="100%">
       <stop offset="0%" stop-color="#93C5FD" stop-opacity="0.85"/>
@@ -18,7 +18,7 @@
     <path d="M-120 -200h240c22 0 40 18 40 40v340c0 22-18 40-40 40h-240c-22 0-40-18-40-40v-340c0-22 18-40 40-40z" fill="rgba(255,255,255,0.16)" />
   </g>
   <g font-family="'Inter', 'Segoe UI', system-ui, sans-serif" text-anchor="middle">
-    <text x="585" y="1290" font-size="120" fill="#F8FAFC" font-weight="700">Omosanya Hub</text>
+    <text x="535" y="1290" font-size="120" fill="#F8FAFC" font-weight="700">Omosanya Home</text>
     <text x="585" y="1405" font-size="42" fill="#DBEAFE" opacity="0.9">Organise family life with ease</text>
   </g>
 </svg>

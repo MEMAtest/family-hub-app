@@ -1,0 +1,163 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { google } from 'googleapis';
+import prisma from '@/lib/prisma';
+import { createOAuthClient, decodeGoogleState } from '@/lib/googleCalendarServer';
+
+export const runtime = 'nodejs';
+
+const popupResponse = (
+  type: 'google_calendar_auth_success' | 'google_calendar_auth_error' | 'gmail_auth_success' | 'gmail_auth_error',
+  message?: string,
+) =>
+  new NextResponse(
+    `<!doctype html><html><body><script>
+      if (window.opener) {
+        window.opener.postMessage(${JSON.stringify({ type, message })}, window.location.origin);
+        window.close();
+      } else {
+        document.body.textContent = ${JSON.stringify(message || (type === 'google_calendar_auth_success' ? 'Google Calendar connected.' : type === 'gmail_auth_success' ? 'Gmail connected.' : 'Google connection failed.'))};
+      }
+    </script></body></html>`,
+    { headers: { 'content-type': 'text/html; charset=utf-8' } }
+  );
+
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const code = searchParams.get('code');
+    const state = searchParams.get('state');
+    const error = searchParams.get('error');
+
+    const statePurpose = (() => {
+      if (!state) return 'calendar';
+      try {
+        return decodeGoogleState(state).purpose || 'calendar';
+      } catch {
+        return 'calendar';
+      }
+    })();
+    const authErrorType = statePurpose === 'gmail' ? 'gmail_auth_error' : 'google_calendar_auth_error';
+    if (error) return popupResponse(authErrorType, `Google authorization failed: ${error}`);
+    if (!code || !state) {
+      return popupResponse(authErrorType, 'Missing Google authorization code.');
+    }
+
+    const { familyId, personId, purpose } = decodeGoogleState(state);
+    const oauth2Client = createOAuthClient();
+    const { tokens } = await oauth2Client.getToken(code);
+    oauth2Client.setCredentials(tokens);
+
+    let googleUserEmail: string | null = null;
+    try {
+      const tokenInfo = tokens.access_token
+        ? await oauth2Client.getTokenInfo(tokens.access_token)
+        : null;
+      googleUserEmail = tokenInfo?.email || null;
+    } catch {
+      googleUserEmail = null;
+    }
+
+    if (purpose === 'gmail') {
+      try {
+        const profile = await google.gmail({ version: 'v1', auth: oauth2Client }).users.getProfile({ userId: 'me' });
+        googleUserEmail = profile.data.emailAddress || googleUserEmail;
+      } catch {
+        // Token info remains a valid fallback when Gmail profile lookup is unavailable.
+      }
+
+      const expectedGmailAccount = process.env.GOOGLE_GMAIL_ACCOUNT?.trim().toLowerCase();
+      if (expectedGmailAccount && googleUserEmail?.toLowerCase() !== expectedGmailAccount) {
+        return popupResponse(
+          'gmail_auth_error',
+          `Connect ${expectedGmailAccount} in Google, not ${googleUserEmail || 'the selected account'}.`,
+        );
+      }
+
+      await prisma.gmailConnection.upsert({
+        where: { familyId },
+        create: {
+          familyId,
+          googleUserEmail,
+          accessToken: tokens.access_token || '',
+          refreshToken: tokens.refresh_token || null,
+          tokenType: tokens.token_type || null,
+          scope: tokens.scope || null,
+          expiryDate: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
+          enabled: true,
+        },
+        update: {
+          googleUserEmail,
+          accessToken: tokens.access_token || '',
+          refreshToken: tokens.refresh_token || undefined,
+          tokenType: tokens.token_type || null,
+          scope: tokens.scope || null,
+          expiryDate: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
+          enabled: true,
+        },
+      });
+      return popupResponse('gmail_auth_success', 'Gmail connected.');
+    }
+
+    if (personId) {
+      const member = await prisma.familyMember.findFirst({ where: { id: personId, familyId }, select: { id: true } });
+      if (!member) throw new Error('Private calendar profile is invalid');
+      await prisma.personalGoogleCalendarConnection.upsert({
+        where: { personId },
+        create: {
+          personId,
+          googleUserEmail,
+          accessToken: tokens.access_token || '',
+          refreshToken: tokens.refresh_token || null,
+          tokenType: tokens.token_type || null,
+          scope: tokens.scope || null,
+          expiryDate: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
+          selectedCalendarId: 'primary',
+          selectedCalendarName: 'Personal calendar',
+          enabled: true,
+        },
+        update: {
+          googleUserEmail,
+          accessToken: tokens.access_token || '',
+          refreshToken: tokens.refresh_token || undefined,
+          tokenType: tokens.token_type || null,
+          scope: tokens.scope || null,
+          expiryDate: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
+          selectedCalendarId: 'primary',
+          selectedCalendarName: 'Personal calendar',
+          enabled: true,
+        },
+      });
+      return popupResponse('google_calendar_auth_success', 'Private Google Calendar connected.');
+    }
+
+    await prisma.googleCalendarConnection.upsert({
+      where: { familyId },
+      create: {
+        familyId,
+        googleUserEmail,
+        accessToken: tokens.access_token || '',
+        refreshToken: tokens.refresh_token || null,
+        tokenType: tokens.token_type || null,
+        scope: tokens.scope || null,
+        expiryDate: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
+        syncDirection: 'export',
+        enabled: true,
+      },
+      update: {
+        googleUserEmail,
+        accessToken: tokens.access_token || '',
+        refreshToken: tokens.refresh_token || undefined,
+        tokenType: tokens.token_type || null,
+        scope: tokens.scope || null,
+        expiryDate: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
+        syncDirection: 'export',
+        enabled: true,
+      },
+    });
+
+    return popupResponse('google_calendar_auth_success');
+  } catch (error) {
+    console.error('Google Calendar OAuth callback error:', error);
+    return popupResponse('google_calendar_auth_error', 'Failed to connect Google Calendar.');
+  }
+}

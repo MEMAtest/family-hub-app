@@ -49,6 +49,7 @@ import { getNextSchoolBreak } from '@/utils/schoolBreaks';
 import { UpcomingContractorVisits } from '@/components/contractors';
 import BrainFocusWidget from '@/components/dashboard/BrainFocusWidget';
 import { DEFAULT_DASHBOARD_PREFERENCES, useFamilyStore } from '@/store/familyStore';
+import { useNotifications } from '@/contexts/NotificationContext';
 
 type FeedItem = {
   id: string;
@@ -58,6 +59,23 @@ type FeedItem = {
   timestamp: string;
   severity: 'info' | 'attention' | 'urgent';
   cta?: { label: string; view: string; params?: Record<string, string> };
+};
+
+const feedDedupeKey = (item: FeedItem) => [
+  item.type,
+  item.title.trim().toLowerCase(),
+  item.summary.trim().toLowerCase(),
+  item.timestamp,
+].join(':');
+
+const normalizeFeedItems = (items: FeedItem[]) => {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const key = feedDedupeKey(item);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 };
 
 const DASHBOARD_WIDGETS = [
@@ -209,6 +227,7 @@ export const DashboardView = () => {
   const { members, openForm: openFamilyForm } = useFamilyContext();
   const { goalsData, openQuickActivityForm, personalTracking } = useGoalsContext();
   const { openQuickAppointment } = useContractorContext();
+  const { showNotification } = useNotifications();
   const mealPlanning = mealsContext.mealPlanning;
   const familyId = useFamilyStore((state) => state.databaseStatus.familyId);
   const storedDashboardPreferences = useFamilyStore((state) => state.dashboardPreferences);
@@ -224,13 +243,19 @@ export const DashboardView = () => {
     try {
       setFeedLoading(true);
       setFeedError(null);
-      const response = await fetch(`/api/families/${familyId}/feed?limit=12`);
+      const params = new URLSearchParams({
+        limit: '12',
+        refresh: Date.now().toString(),
+      });
+      const response = await fetch(`/api/families/${familyId}/feed?${params.toString()}`, {
+        cache: 'no-store',
+      });
       if (!response.ok) {
         throw new Error(`Feed request failed (${response.status})`);
       }
       const payload = await response.json();
       const items = Array.isArray(payload) ? payload : [];
-      setFeedItems(items as FeedItem[]);
+      setFeedItems(normalizeFeedItems(items as FeedItem[]));
     } catch (error) {
       console.warn('Failed to load feed:', error);
       setFeedError('Failed to load feed');
@@ -365,8 +390,15 @@ export const DashboardView = () => {
 
   const upcomingMeals = useMemo(() => {
     if (!mealPlanning) return [] as Array<{ date: string; name: string }>;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
     return Object.entries(mealPlanning.planned || {})
       .map(([date, meal]) => ({ date, name: (meal as any).name || `${(meal as any).protein ?? ''} ${(meal as any).carb ?? ''}` }))
+      .filter((meal) => {
+        const mealDate = new Date(`${meal.date}T00:00:00`);
+        return !Number.isNaN(mealDate.getTime()) && mealDate >= today;
+      })
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
       .slice(0, 4);
   }, [mealPlanning]);
@@ -395,6 +427,68 @@ export const DashboardView = () => {
   }, [schoolTerms]);
 
   const nextSchoolBreak = useMemo(() => getNextSchoolBreak(schoolTerms), [schoolTerms]);
+
+  useEffect(() => {
+    if (!familyId) return;
+
+    fetch(`/api/families/${familyId}/notifications/sweep`, {
+      method: 'POST',
+    }).catch((error) => {
+      console.warn('Failed to run notification sweep:', error);
+    });
+  }, [familyId]);
+
+  useEffect(() => {
+    if (!nextSchoolBreak || nextSchoolBreak.isCurrentlyOnBreak || nextSchoolBreak.daysUntilBreak > 21) return;
+
+    const dedupeKey = `school-prep:${nextSchoolBreak.breakStartDate}:${nextSchoolBreak.breakEndDate}`;
+    if (typeof window !== 'undefined' && localStorage.getItem(dedupeKey)) return;
+
+    const title = `${nextSchoolBreak.breakUpName} is coming up`;
+    const message = `${nextSchoolBreak.daysUntilBreak} day${nextSchoolBreak.daysUntilBreak === 1 ? '' : 's'} until break-up. Check childcare, activities, meals, budget, and work cover.`;
+
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(dedupeKey, new Date().toISOString());
+    }
+
+    void showNotification({
+      type: 'reminder',
+      title,
+      message,
+      priority: nextSchoolBreak.daysUntilBreak <= 7 ? 'urgent' : 'high',
+      category: 'event',
+      read: false,
+      actionRequired: true,
+      icon: '🎒',
+      actions: [
+        { id: 'open-calendar', label: 'Open calendar', type: 'primary', action: 'view_calendar', data: { url: '/?view=calendar' } },
+        { id: 'dismiss', label: 'Dismiss', type: 'secondary', action: 'dismiss' },
+      ],
+      metadata: {
+        dedupeKey,
+        type: 'school-break-prep',
+        url: '/?view=calendar',
+      },
+    });
+
+    if (familyId) {
+      fetch(`/api/families/${familyId}/reactive-prompts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title,
+          message,
+          dedupeKey,
+          priority: nextSchoolBreak.daysUntilBreak <= 7 ? 'urgent' : 'high',
+          category: 'event',
+          url: '/?view=calendar',
+          actionLabel: 'Open calendar',
+        }),
+      }).catch((error) => {
+        console.warn('Failed to create school break push prompt:', error);
+      });
+    }
+  }, [familyId, nextSchoolBreak, showNotification]);
 
   const snapshotCards = useMemo(() => ([
     {
@@ -438,19 +532,18 @@ export const DashboardView = () => {
 
   return (
     <div className="space-y-4 overflow-x-hidden p-3 sm:space-y-6 sm:p-4 lg:p-8">
-      <div className="kinboard-soft-card overflow-hidden p-5 sm:p-6 lg:p-8">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-          <div className="max-w-3xl">
-            <p className="kinboard-label">Today · family board</p>
-            <h2 className="kinboard-serif mt-2 text-4xl leading-[0.95] text-[#18221f] dark:text-slate-100 sm:text-5xl">
-              The omosanyas<br />
-              <span className="italic text-[#147c72]">are in sync.</span>
+      <div className="kinboard-soft-card overflow-hidden p-4 sm:p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="max-w-xl">
+            <p className="kinboard-label">Today · {formatDateLong(new Date())}</p>
+            <h2 className="kinboard-serif mt-1 text-2xl leading-tight text-[#18221f] dark:text-slate-100 sm:text-3xl">
+              Omosanya family overview
             </h2>
-            <p className="mt-4 max-w-2xl text-sm leading-6 text-[#5f6a64] dark:text-slate-400">
-              Plans, spending, meals, shopping and family goals are pulled into one calm command centre.
+            <p className="mt-2 text-sm text-[#5f6a64] dark:text-slate-400">
+              The next plans and actions that need attention.
             </p>
           </div>
-          <div className="grid min-w-[220px] gap-2 text-sm text-[#18221f] sm:grid-cols-3 lg:grid-cols-1">
+          <div className="grid min-w-[220px] gap-2 text-sm text-[#18221f] sm:grid-cols-3">
             <div className="rounded-lg border border-[#dde5e0] bg-white/75 p-3">
               <p className="kinboard-label">Next</p>
               <p className="mt-1 font-semibold">{nextEvent?.title ?? 'No events queued'}</p>
@@ -462,7 +555,7 @@ export const DashboardView = () => {
               <p className="text-xs text-[#5f6a64]">Estimated shopping total</p>
             </div>
             <div className="rounded-lg border border-[#dde5e0] bg-white/75 p-3">
-              <p className="kinboard-label">Quests</p>
+              <p className="kinboard-label">Goals</p>
               <p className="mt-1 font-semibold">{totalGoals} active · {avgGoalProgress}%</p>
               <p className="text-xs text-[#5f6a64]">Average progress</p>
             </div>
@@ -472,8 +565,8 @@ export const DashboardView = () => {
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="kinboard-serif text-2xl text-[#18221f] dark:text-slate-100">Today</h2>
-          <p className="text-sm text-[#5f6a64] dark:text-slate-400">Choose what appears here and keep sensitive numbers private.</p>
+          <h2 className="kinboard-serif text-xl text-[#18221f] dark:text-slate-100">Your day</h2>
+          <p className="text-sm text-[#5f6a64] dark:text-slate-400">Open a card to act on it.</p>
         </div>
         <button
           type="button"
@@ -816,6 +909,37 @@ export const DashboardView = () => {
                     )}
                   </>
                 )}
+              </div>
+            </div>
+          )}
+
+          {nextSchoolBreak && !nextSchoolBreak.isCurrentlyOnBreak && nextSchoolBreak.daysUntilBreak <= 21 && (
+            <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-900/20">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">
+                    Prep needed before {nextSchoolBreak.breakUpName.toLowerCase()}
+                  </p>
+                  <p className="mt-1 text-xs text-amber-800 dark:text-amber-200">
+                    Check childcare, activities, meal plans, budget buffer, work cover, and any school forms.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setView('calendar')}
+                    className="inline-flex items-center justify-center rounded-md bg-amber-600 px-3 py-2 text-sm font-semibold text-white hover:bg-amber-700"
+                  >
+                    Open calendar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setView('brain')}
+                    className="inline-flex items-center justify-center rounded-md border border-amber-300 bg-white px-3 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-100 dark:border-amber-700 dark:bg-slate-900 dark:text-amber-100"
+                  >
+                    Prep notes
+                  </button>
+                </div>
               </div>
             </div>
           )}

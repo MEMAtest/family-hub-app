@@ -1,12 +1,13 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { PrismaClient } from '@prisma/client';
+import {
+  createTestPrisma,
+  hasTestDatabase,
+  TEST_DATABASE_REQUIRED,
+} from './test-database';
 
-if (!process.env.DATABASE_URL) {
-  process.env.DATABASE_URL =
-    'postgresql://neondb_owner:npg_FfSTB5lXxPU4@ep-bold-pine-abqy8czb-pooler.eu-west-2.aws.neon.tech/neondb?sslmode=require';
-}
+test.skip(!hasTestDatabase, TEST_DATABASE_REQUIRED);
 
-const prisma = new PrismaClient();
+const prisma = createTestPrisma();
 const runTag = `E2E-FULL-${Date.now()}`;
 
 const createdIds = {
@@ -172,7 +173,20 @@ const waitForNoRecord = async (
     .toBe(false);
 };
 
-const todayIso = () => new Date().toISOString().split('T')[0];
+const toLocalDateInputValue = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const todayIso = () => toLocalDateInputValue(new Date());
+
+const tomorrowIso = () => {
+  const date = new Date();
+  date.setDate(date.getDate() + 1);
+  return toLocalDateInputValue(date);
+};
 
 const isDatabaseConnected = async (page: Page) =>
   page.getByText('Database Connected').first().isVisible().catch(() => false);
@@ -418,7 +432,7 @@ test('all primary sections render and stay connected', async ({ page }) => {
     {
       view: 'Shopping',
       assert: async () => {
-        await expect(page.getByRole('heading', { name: 'Active Shopping Lists' })).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Shopping Lists' }).first()).toBeVisible();
       },
     },
     {
@@ -464,7 +478,7 @@ test('calendar event create and delete persists', async ({ page }) => {
   test.setTimeout(180_000);
 
   const eventTitle = `${runTag} Calendar Event`;
-  const eventDate = todayIso();
+  const eventDate = tomorrowIso();
 
   await page.setViewportSize({ width: 1366, height: 900 });
   await page.goto('/?view=calendar');
@@ -473,8 +487,12 @@ test('calendar event create and delete persists', async ({ page }) => {
   await dismissSetupWizard(page);
   await switchToView(page, 'Calendar');
 
+  await clickVisibleButton(page.getByRole('button', { name: /^Day$/ }), 'calendar day view');
+  await clickVisibleButton(page.getByRole('button', { name: /^Next calendar period$/ }), 'next calendar day');
+
   await clickVisibleButton(page.getByRole('button', { name: /^Event$/ }), 'header create event');
   await expect(page.getByRole('heading', { name: 'New Event' })).toBeVisible({ timeout: 20_000 });
+  await expect(page.locator('input[type="date"]').first()).toHaveValue(eventDate);
 
   await page.getByPlaceholder('Enter event title').fill(eventTitle);
   await selectAssignedPerson(page);
@@ -484,9 +502,18 @@ test('calendar event create and delete persists', async ({ page }) => {
   await page.getByRole('button', { name: 'Save Event' }).click();
   await expect(page.getByRole('heading', { name: 'New Event' })).toBeHidden({ timeout: 20_000 });
 
+  await clickVisibleButton(page.getByRole('button', { name: /^Event$/ }), 'header create event after save');
+  await expect(page.getByRole('heading', { name: 'New Event' })).toBeVisible({ timeout: 20_000 });
+  await expect(page.locator('input[type="date"]').first()).toHaveValue(eventDate);
+  const newEventModal = page.locator('.fixed.inset-0').filter({
+    has: page.getByRole('heading', { name: 'New Event' }),
+  }).last();
+  await newEventModal.locator('button').first().click();
+  await expect(page.getByRole('heading', { name: 'New Event' })).toBeHidden({ timeout: 20_000 });
+
   const databaseConnected = await isDatabaseConnected(page);
   if (!databaseConnected) {
-    await expect(page.getByText(eventTitle, { exact: true })).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText(eventTitle, { exact: true }).first()).toBeVisible({ timeout: 20_000 });
     return;
   }
 
@@ -522,6 +549,87 @@ test('calendar event create and delete persists', async ({ page }) => {
   }
 });
 
+test('calendar assistant imports a timed holiday club range as daily sessions', async ({ page }) => {
+  test.setTimeout(180_000);
+
+  const source = `add ${runTag} Holiday Club 20th to 24th July 2026, 9am to 3pm`;
+  const expectedDates = [
+    '2026-07-20',
+    '2026-07-21',
+    '2026-07-22',
+    '2026-07-23',
+    '2026-07-24',
+  ];
+
+  await page.setViewportSize({ width: 1366, height: 900 });
+  await page.goto('/?view=calendar');
+  await page.waitForLoadState('domcontentloaded');
+  await waitForHubShell(page);
+  await dismissSetupWizard(page);
+  await switchToView(page, 'Calendar');
+  await expect(page.getByRole('button', { name: 'Quick add & import' })).toBeVisible();
+
+  const commandInput = page.getByPlaceholder('Find summer holidays, or create swimming lesson next Tuesday at 5pm');
+  await expect(commandInput).toBeVisible({ timeout: 20_000 });
+  await commandInput.fill(source);
+  await page.getByRole('button', { name: /^Run$/ }).click();
+
+  await expect(page.getByText('Review 5 daily sessions before I add them to the calendar.')).toBeVisible({ timeout: 20_000 });
+  await page.getByRole('button', { name: 'Confirm and add 5' }).click();
+  await expect(page.getByText('Added 5 daily sessions to the calendar.')).toBeVisible({ timeout: 20_000 });
+
+  const createdEvents = await waitForRecord(
+    async () => {
+      const events = await prisma.calendarEvent.findMany({
+        where: { notes: { contains: source } },
+        orderBy: { eventDate: 'asc' },
+      });
+      return events.length === expectedDates.length ? events : null;
+    },
+    'holiday club daily sessions'
+  );
+
+  createdEvents.forEach((event) => createdIds.calendarEvents.add(event.id));
+  expect(createdEvents.map((event) => event.eventDate.toISOString().split('T')[0])).toEqual(expectedDates);
+  expect(createdEvents.every((event) => event.durationMinutes === 360)).toBe(true);
+});
+
+test('calendar refreshes database events created on another device', async ({ page }) => {
+  test.setTimeout(180_000);
+
+  const externalTitle = `${runTag} Angela iPhone Event`;
+  const eventDateTime = new Date(`${todayIso()}T12:00:00Z`);
+
+  await page.setViewportSize({ width: 1366, height: 900 });
+  await page.goto('/?view=calendar');
+  await page.waitForLoadState('domcontentloaded');
+  await waitForHubShell(page);
+  await dismissSetupWizard(page);
+  await switchToView(page, 'Calendar');
+
+  const createdEvent = await prisma.calendarEvent.create({
+    data: {
+      familyId,
+      personId: firstMemberId,
+      title: externalTitle,
+      description: 'Created after the calendar page was already open',
+      eventDate: eventDateTime,
+      eventTime: eventDateTime,
+      durationMinutes: 45,
+      location: 'iPhone',
+      cost: 0,
+      eventType: 'family',
+      recurringPattern: 'none',
+      isRecurring: false,
+      notes: 'Cross-device refresh check',
+    },
+  });
+  createdIds.calendarEvents.add(createdEvent.id);
+
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect(page.getByText(externalTitle, { exact: true }).first()).toBeVisible({ timeout: 20_000 });
+});
+
 test('shopping list and item flows are accessible in UI', async ({ page }) => {
   test.setTimeout(180_000);
 
@@ -531,15 +639,6 @@ test('shopping list and item flows are accessible in UI', async ({ page }) => {
   await waitForHubShell(page);
   await dismissSetupWizard(page);
   await switchToView(page, 'Shopping');
-
-  try {
-    await clickVisibleButton(
-      page.getByRole('button', { name: /^Create New List$/ }),
-      'shopping quick action create list'
-    );
-  } catch {
-    await clickVisibleButton(page.getByRole('button', { name: /^Lists$/ }), 'shopping list tab');
-  }
 
   await expect(page.getByPlaceholder('Search shopping lists...')).toBeVisible({ timeout: 20_000 });
   await clickVisibleButton(page.getByRole('button', { name: /^New List$/ }), 'shopping new list');
@@ -592,12 +691,6 @@ test('contractor quick appointment persists', async ({ page }) => {
   await page.getByRole('button', { name: 'Add Appointment' }).click();
 
   await expect(page.getByRole('heading', { name: 'Quick Appointment' })).toBeHidden({ timeout: 20_000 });
-
-  const databaseConnected = await isDatabaseConnected(page);
-  if (!databaseConnected) {
-    await expect(page.getByText(purpose)).toBeVisible({ timeout: 20_000 });
-    return;
-  }
 
   const createdContractor = await waitForRecord(
     () =>

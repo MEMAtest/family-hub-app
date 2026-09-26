@@ -5,6 +5,7 @@ export interface CalendarEvent {
   title: string;
   person: string;
   date: string; // YYYY-MM-DD
+  endDate?: string; // YYYY-MM-DD, for multi-day events
   time: string; // HH:MM
   duration: number; // minutes
   location?: string;
@@ -19,6 +20,9 @@ export interface CalendarEvent {
   priority: 'low' | 'medium' | 'high';
   status: 'confirmed' | 'tentative' | 'cancelled';
   color?: string;
+  source?: string;
+  sourceId?: string;
+  googleCalendarId?: string;
   googleEventId?: string;
   createdAt: Date;
   updatedAt: Date;
@@ -49,6 +53,50 @@ export interface RecurringPattern {
   dayOfMonth?: number;
   monthOfYear?: number;
 }
+
+/**
+ * A piece of work with a window and a done state — homework, a chore, a form to
+ * return. Deliberately NOT a CalendarEvent: an event happens *at* a time, a task
+ * is set on one day and due by another, and the thing that matters is whether it
+ * is finished before the deadline.
+ */
+export interface CalendarTask {
+  id: string;
+  title: string;
+  /** Plural: homework can be set for both kids, a chore can be shared. */
+  assignees: string[];
+  /** The day it was set, YYYY-MM-DD. */
+  assignedDate: string;
+  /** The day it must be done by, YYYY-MM-DD. Never before assignedDate. */
+  dueDate: string;
+  /** Optional time on the due date, HH:MM — "hand in by 9am". */
+  dueTime?: string;
+  /** ISO timestamp when it was completed; null/undefined while outstanding. */
+  completedAt?: string | null;
+  /** Family member id who marked it done. */
+  completedBy?: string | null;
+  taskType: 'homework' | 'chore' | 'admin' | 'reading' | 'practice' | 'other';
+  /** "Maths", "Spelling" — free text, shown as a chip. */
+  subject?: string;
+  notes?: string;
+  priority: 'low' | 'medium' | 'high';
+  /** Rough minutes of effort, used to suggest when to start. */
+  effortMinutes?: number;
+  /** The lesson or club that generated this, if any. */
+  sourceEventId?: string;
+  /** Set for repeating work: "spellings every Friday, due the next Friday". */
+  recurringPattern?: RecurringPattern;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export type TaskStatus =
+  | 'completed'
+  | 'overdue'
+  | 'due-today'
+  | 'due-soon'
+  | 'in-progress'
+  | 'not-started';
 
 export interface Reminder {
   id: string;
@@ -177,4 +225,5 @@ export interface Person {
   color: string;
   icon: string;
   role: string;
+  ageGroup?: string;
 }

@@ -19,6 +19,9 @@ const dismissSetupWizard = async (page: Page) => {
 const preparePage = async (page: Page) => {
   await page.waitForLoadState('networkidle');
   await dismissSetupWizard(page);
+  await expect(page.getByRole('button', { name: /^Dashboard$/ }).first()).toBeVisible({
+    timeout: 60_000,
+  });
 };
 
 test.beforeEach(async ({ page }) => {
@@ -192,6 +195,14 @@ test.describe('QA Smoke Checklist - Mobile (iPhone 14 - 390x844)', () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(BASE_URL);
     await preparePage(page);
+
+    const bottomNav = page.getByRole('navigation', { name: 'Primary mobile navigation' });
+    await expect(bottomNav).toBeVisible();
+    await expect(page.getByRole('navigation', { name: 'All sections' })).toHaveCount(0);
+
+    for (const label of ['Cal', 'Money', 'Today', 'Meals', 'Basket', 'Personal']) {
+      await expect(bottomNav.getByText(label, { exact: true })).toBeVisible();
+    }
 
     await takeScreenshot(page, 'mobile-390x844-bottom-nav.png');
 

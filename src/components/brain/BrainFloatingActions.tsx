@@ -16,7 +16,7 @@ const BrainFloatingActions = () => {
         right: '16px',
         bottom: 'calc(env(safe-area-inset-bottom, 0px) + 80px)',
       }}
-      aria-label="Add node"
+      aria-label="Add note"
     >
       <Plus className="h-6 w-6" />
     </button>
