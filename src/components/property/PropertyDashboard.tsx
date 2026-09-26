@@ -7,6 +7,7 @@ import { useFamilyStore } from '@/store/familyStore';
 import { createId } from '@/utils/id';
 import { formatDateForInput } from '@/utils/formatDate';
 import { PropertyTabNavigation, type PropertyTabId } from './common/PropertyTabNavigation';
+import { SharedSyncBadge } from '@/components/common/SharedSyncBadge';
 import { PropertyOverviewTab } from './tabs/PropertyOverviewTab';
 import { PropertyTasksTab } from './tabs/PropertyTasksTab';
 import { PropertyIssuesTab } from './tabs/PropertyIssuesTab';
@@ -248,6 +249,11 @@ export const PropertyDashboard = () => {
               <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-400 truncate">
                 {propertyProfile.address}
               </p>
+              {!shareMode && (
+                <div className="mt-1">
+                  <SharedSyncBadge />
+                </div>
+              )}
             </div>
           </div>
 

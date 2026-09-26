@@ -23,6 +23,11 @@ import {
 import { Contractor, ContractorAppointment } from '@/types/contractor.types';
 import { BrainProject, BrainNode, BrainEdge } from '@/types/brain.types';
 import {
+  DEFAULT_DIGEST_PREFERENCES,
+  type DigestPreferences,
+  type KidsEventMark,
+} from '@/lib/sharedDocuments';
+import {
   tremaineRoadAreaWatch,
   tremaineRoadBaseline,
   tremaineRoadComponents,
@@ -292,7 +297,19 @@ interface BrainSlice {
 }
 
 // Combined state
-export type FamilyState = PeopleSlice & CalendarSlice & ViewSlice & BudgetSlice & MealPlanningSlice & ShoppingSlice & GoalsSlice & TimelineSlice & PropertySlice & DatabaseSlice & ContractorSlice & BrainSlice;
+// Shared household data synced through family_documents (see sharedDocumentSync)
+export type SharedSyncStatus = 'local' | 'syncing' | 'synced' | 'offline' | 'unavailable';
+
+interface SharedSlice {
+  kidsEventMarks: KidsEventMark[];
+  toggleKidsEventMark: (eventId: string, kind: KidsEventMark['kind']) => void;
+  digestPreferences: DigestPreferences;
+  setDigestPreferences: (updates: Partial<DigestPreferences>) => void;
+  sharedSyncStatus: SharedSyncStatus;
+  setSharedSyncStatus: (status: SharedSyncStatus) => void;
+}
+
+export type FamilyState = PeopleSlice & CalendarSlice & ViewSlice & BudgetSlice & MealPlanningSlice & ShoppingSlice & GoalsSlice & TimelineSlice & PropertySlice & DatabaseSlice & ContractorSlice & BrainSlice & SharedSlice;
 
 // =================================================================
 // SLICE CREATORS
@@ -345,6 +362,25 @@ const createCalendarSlice: StateCreator<FamilyState, [], [], CalendarSlice> = (s
     set((state) => ({
       eventTemplates: state.eventTemplates.filter((t) => t.id !== id),
     })),
+});
+
+const createSharedSlice: StateCreator<FamilyState, [], [], SharedSlice> = (set) => ({
+  kidsEventMarks: [],
+  toggleKidsEventMark: (eventId, kind) =>
+    set((state) => {
+      const id = `${kind}:${eventId}`;
+      const exists = state.kidsEventMarks.some((mark) => mark.id === id);
+      return {
+        kidsEventMarks: exists
+          ? state.kidsEventMarks.filter((mark) => mark.id !== id)
+          : [...state.kidsEventMarks, { id, eventId, kind, at: new Date().toISOString() }],
+      };
+    }),
+  digestPreferences: DEFAULT_DIGEST_PREFERENCES,
+  setDigestPreferences: (updates) =>
+    set((state) => ({ digestPreferences: { ...state.digestPreferences, ...updates } })),
+  sharedSyncStatus: 'local',
+  setSharedSyncStatus: (status) => set({ sharedSyncStatus: status }),
 });
 
 const createViewSlice: StateCreator<FamilyState, [], [], ViewSlice> = (set) => ({
@@ -1010,6 +1046,7 @@ export const useFamilyStore = create<FamilyState>()(
       ...createDatabaseSlice(...a),
       ...createContractorSlice(...a),
       ...createBrainSlice(...a),
+      ...createSharedSlice(...a),
     }),
     {
       name: 'family-storage',
@@ -1040,6 +1077,9 @@ export const useFamilyStore = create<FamilyState>()(
         contractorAppointments: state.contractorAppointments,
         // Brain (only persist active project selection)
         activeBrainProjectId: state.activeBrainProjectId,
+        // Shared household data: cached here for offline use, synced via family_documents
+        kidsEventMarks: state.kidsEventMarks,
+        digestPreferences: state.digestPreferences,
       }),
       migrate: (persistedState: any, version: number) => {
         // Clear old cache to force fresh load from database
