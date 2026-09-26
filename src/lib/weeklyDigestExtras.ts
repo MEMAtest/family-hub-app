@@ -3,6 +3,8 @@ import { ISSUE_URGENCY_LABELS } from '@/utils/propertyIssueRules';
 import type { DigestPreferences, KidsEventMark } from '@/lib/sharedDocuments';
 import type { PropertyIssue, PropertyIssueUrgency } from '@/types/property.types';
 import type { KidsEvent } from '@/types/kidsEvents.types';
+import type { Staple } from '@/types/kitchen.types';
+import { stockUpList } from '@/utils/staples';
 
 // Optional sections for the Monday email, built from the household's shared
 // documents: a few ideas for the kids and the open home jobs.
@@ -28,14 +30,30 @@ export interface DigestHomeJob {
   safety: boolean;
 }
 
+export interface DigestMeal {
+  day: string; // "Mon"
+  name: string;
+}
+
 export interface DigestExtras {
   kidsIdeas: DigestIdea[];
   homeJobs: DigestHomeJob[];
   homeJobsTotal: number;
   urgentHomeJobs: number;
+  madeLastWeek: DigestMeal[];
+  stockUp: string[]; // "Tissues (out)", "Milk"
 }
 
-export const EMPTY_DIGEST_EXTRAS: DigestExtras = { kidsIdeas: [], homeJobs: [], homeJobsTotal: 0, urgentHomeJobs: 0 };
+export const EMPTY_DIGEST_EXTRAS: DigestExtras = {
+  kidsIdeas: [],
+  homeJobs: [],
+  homeJobsTotal: 0,
+  urgentHomeJobs: 0,
+  madeLastWeek: [],
+  stockUp: [],
+};
+
+const MAX_STOCK_UP = 12;
 
 const MAX_IDEAS = 5;
 const MAX_HOME_JOBS = 5;
@@ -65,11 +83,15 @@ export const buildDigestExtras = ({
   issues,
   marks,
   weekStart,
+  mealsLastWeek = [],
+  staples = [],
 }: {
   preferences: DigestPreferences;
   issues: PropertyIssue[];
   marks: KidsEventMark[];
   weekStart: string; // Monday, YYYY-MM-DD
+  mealsLastWeek?: Array<{ date: string; name: string }>; // meals marked as made
+  staples?: Staple[];
 }): DigestExtras => {
   const monday = parseDate(weekStart);
 
@@ -116,8 +138,25 @@ export const buildDigestExtras = ({
       })
     : [];
 
+  const madeLastWeek: DigestMeal[] = preferences.mealsRecap
+    ? [...mealsLastWeek]
+        .sort((a, b) => a.date.localeCompare(b.date))
+        .map((meal) => ({
+          day: parseDate(meal.date).toLocaleDateString('en-GB', { weekday: 'short', timeZone: 'Europe/London' }),
+          name: meal.name,
+        }))
+    : [];
+
+  const stockUp = preferences.stockUp
+    ? stockUpList(staples, monday, 7)
+        .slice(0, MAX_STOCK_UP)
+        .map(({ staple, status }) => (status.state === 'out' || status.state === 'low' ? `${staple.name} (${status.state})` : staple.name))
+    : [];
+
   return {
     kidsIdeas,
+    madeLastWeek,
+    stockUp,
     homeJobs,
     homeJobsTotal: preferences.homeJobs ? open.length : 0,
     urgentHomeJobs: preferences.homeJobs ? open.filter((issue) => issue.urgency === 'urgent').length : 0,

@@ -3,6 +3,7 @@ import { buildWeeklyDigest } from '../weeklyDigest';
 import { renderWeeklyDigestHtml, renderWeeklyDigestSubject, renderWeeklyDigestText } from '../weeklyDigestEmail';
 import { DEFAULT_DIGEST_PREFERENCES, normalizeDigestPreferences } from '../sharedDocuments';
 import type { PropertyIssue } from '@/types/property.types';
+import { createStaple, flagStaple, recordPurchase } from '@/utils/staples';
 
 const WEEK = '2026-09-28';
 
@@ -76,6 +77,42 @@ describe('buildDigestExtras', () => {
   });
 });
 
+describe('kitchen sections', () => {
+  test('lists last week’s meals in order and what to stock up on', () => {
+    const milk = recordPurchase(createStaple('Milk', { intervalDays: 3 }), new Date(2026, 8, 26, 12)); // due ~29th
+    const rice = recordPurchase(createStaple('Rice', { intervalDays: 60 }), new Date(2026, 8, 26, 12));
+    const tissues = flagStaple(createStaple('Tissues'), 'out');
+    const extras = buildDigestExtras({
+      preferences: DEFAULT_DIGEST_PREFERENCES,
+      issues: [],
+      marks: [],
+      weekStart: WEEK,
+      mealsLastWeek: [{ date: '2026-09-23', name: 'Jollof rice' }, { date: '2026-09-21', name: 'Fish fingers' }],
+      staples: [rice, milk, tissues],
+    });
+    expect(extras.madeLastWeek).toEqual([{ day: 'Mon', name: 'Fish fingers' }, { day: 'Wed', name: 'Jollof rice' }]);
+    expect(extras.stockUp).toEqual(['Tissues (out)', 'Milk']);
+
+    const text = renderWeeklyDigestText(buildWeeklyDigest([], [], [], WEEK), 'Home', extras);
+    expect(text).toContain('WHAT YOU MADE LAST WEEK');
+    expect(text).toContain('  Wed: Jollof rice');
+    expect(text).toContain('Tissues (out), Milk');
+  });
+
+  test('both can be switched off', () => {
+    const extras = buildDigestExtras({
+      preferences: { ...DEFAULT_DIGEST_PREFERENCES, mealsRecap: false, stockUp: false },
+      issues: [],
+      marks: [],
+      weekStart: WEEK,
+      mealsLastWeek: [{ date: '2026-09-23', name: 'Jollof rice' }],
+      staples: [flagStaple(createStaple('Tissues'), 'out')],
+    });
+    expect(extras.madeLastWeek).toEqual([]);
+    expect(extras.stockUp).toEqual([]);
+  });
+});
+
 describe('the email with extra sections', () => {
   const digest = buildWeeklyDigest([], [], [], WEEK);
   const extras = buildDigestExtras({
@@ -97,6 +134,7 @@ describe('the email with extra sections', () => {
     expect(html).toContain('Ideas for the kids');
     expect(html).toContain('Burst &lt;pipe&gt;');
     expect(html).not.toContain('Settings &rarr; Notifications');
+    expect(html).toContain('Monday email button in Kitchen');
   });
 
   test('without extras the email is unchanged apart from the footer', () => {

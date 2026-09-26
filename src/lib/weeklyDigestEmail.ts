@@ -33,7 +33,7 @@ const URGENCY_TONE: Record<string, string> = {
   someday: MUTED,
 };
 
-const FOOTER_TEXT = 'Choose what goes in this email under News > Kids Events > Monday email.';
+const FOOTER_TEXT = 'Choose what goes in this email with the Monday email button in Kitchen or Kids Events.';
 
 export const renderWeeklyDigestSubject = (digest: WeeklyDigest, familyName: string, extras: DigestExtras = EMPTY_DIGEST_EXTRAS) => {
   const urgent = extras.urgentHomeJobs
@@ -72,6 +72,18 @@ export const renderWeeklyDigestText = (digest: WeeklyDigest, familyName: string,
 
   if (digest.eventCount === 0 && digest.tasks.length === 0) {
     lines.push('Nothing scheduled. Enjoy it.', '');
+  }
+
+  if (extras.stockUp.length) {
+    lines.push('WORTH STOCKING UP ON THIS WEEK');
+    lines.push(`  ${extras.stockUp.join(', ')}`);
+    lines.push('');
+  }
+
+  if (extras.madeLastWeek.length) {
+    lines.push('WHAT YOU MADE LAST WEEK');
+    extras.madeLastWeek.forEach((meal) => lines.push(`  ${meal.day}: ${meal.name}`));
+    lines.push('');
   }
 
   if (extras.kidsIdeas.length) {
@@ -153,6 +165,29 @@ export const renderWeeklyDigestHtml = (digest: WeeklyDigest, familyName: string,
       </table>`
     : '';
 
+  const stockBlock = extras.stockUp.length
+    ? `
+      <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;margin-top:24px;border-top:1px solid ${LINE};">
+        <tr><td style="padding-top:18px;">
+          <div style="font-size:13px;font-weight:700;color:${INK};">Worth stocking up on this week</div>
+          <div style="padding-top:8px;font-size:14px;color:${INK};line-height:1.6;">${extras.stockUp.map(escape).join(' &middot; ')}</div>
+        </td></tr>
+      </table>`
+    : '';
+
+  const mealsBlock = extras.madeLastWeek.length
+    ? `
+      <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;margin-top:24px;border-top:1px solid ${LINE};">
+        <tr><td style="padding-top:18px;">
+          <div style="font-size:13px;font-weight:700;color:${INK};">What you made last week</div>
+          ${extras.madeLastWeek
+            .map((meal) => `
+              <div style="padding-top:6px;font-size:14px;color:${INK};"><span style="display:inline-block;width:40px;color:${ACCENT};font-weight:600;">${escape(meal.day)}</span>${escape(meal.name)}</div>`)
+            .join('')}
+        </td></tr>
+      </table>`
+    : '';
+
   const ideasBlock = extras.kidsIdeas.length
     ? `
       <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;margin-top:24px;border-top:1px solid ${LINE};">
@@ -224,10 +259,12 @@ export const renderWeeklyDigestHtml = (digest: WeeklyDigest, familyName: string,
           <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;">${dayRows}</table>
           ${taskBlock}
           ${empty}
+          ${stockBlock}
+          ${mealsBlock}
           ${ideasBlock}
           ${homeBlock}
           <p style="margin:26px 0 0;font-size:11px;color:${MUTED};line-height:1.5;">
-            Sent by Family Hub on Monday morning. Choose what goes in it under News &rarr; Kids Events &rarr; Monday email.
+            Sent by Family Hub on Monday morning. Choose what goes in it with the Monday email button in Kitchen or Kids Events.
           </p>
         </td></tr>
       </table>

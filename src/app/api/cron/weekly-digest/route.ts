@@ -13,6 +13,7 @@ import { GmailSendUnavailable, sendViaGmail } from '@/lib/gmailSend';
 import { buildDigestExtras } from '@/lib/weeklyDigestExtras';
 import { normalizeDigestPreferences, type KidsEventMark } from '@/lib/sharedDocuments';
 import type { PropertyIssue } from '@/types/property.types';
+import type { Staple } from '@/types/kitchen.types';
 
 /**
  * Monday morning digest.
@@ -39,7 +40,9 @@ const authorised = (request: NextRequest) => {
 const toDateKey = (value: Date) => value.toISOString().slice(0, 10);
 
 const loadFamilyDigest = async (familyId: string, weekStart: string) => {
-  const [family, dbEvents, dbTasks, documents] = await Promise.all([
+  const lastMonday = new Date(`${weekStart}T12:00:00Z`);
+  lastMonday.setUTCDate(lastMonday.getUTCDate() - 7);
+  const [family, dbEvents, dbTasks, documents, mealsLastWeek] = await Promise.all([
     prisma.family.findUnique({
       where: { id: familyId },
       include: { members: { orderBy: { createdAt: 'asc' }, include: { user: true } } },
@@ -48,8 +51,16 @@ const loadFamilyDigest = async (familyId: string, weekStart: string) => {
     prisma.calendarTask.findMany({ where: { familyId } }).catch(() => []),
     // Shared household data; missing until the family_documents table exists.
     prisma.familyDocument
-      .findMany({ where: { familyId, key: { in: ['digest.preferences', 'property.issues', 'kids.marks'] } }, select: { key: true, data: true } })
+      .findMany({ where: { familyId, key: { in: ['digest.preferences', 'property.issues', 'kids.marks', 'kitchen.staples'] } }, select: { key: true, data: true } })
       .catch(() => [] as Array<{ key: string; data: unknown }>),
+    // Meals marked as made during the previous Monday-Sunday
+    prisma.mealPlan
+      .findMany({
+        where: { familyId, isEaten: true, mealDate: { gte: new Date(`${toDateKey(lastMonday)}T00:00:00Z`), lt: new Date(`${weekStart}T00:00:00Z`) } },
+        orderBy: { mealDate: 'asc' },
+        select: { mealName: true, mealDate: true },
+      })
+      .catch(() => [] as Array<{ mealName: string; mealDate: Date }>),
   ]);
 
   if (!family) return null;
@@ -93,6 +104,8 @@ const loadFamilyDigest = async (familyId: string, weekStart: string) => {
     issues: asList<PropertyIssue>(doc('property.issues')),
     marks: asList<KidsEventMark>(doc('kids.marks')),
     weekStart,
+    mealsLastWeek: mealsLastWeek.map((meal) => ({ date: toDateKey(meal.mealDate), name: meal.mealName })),
+    staples: asList<Staple>(doc('kitchen.staples')),
   });
 
   // Adults with a linked account, plus any extra addresses the household added.
@@ -157,7 +170,7 @@ export async function GET(request: NextRequest) {
       }
 
       if (dryRun) {
-        results.push({ familyId: id, subject, recipients: recipients.map((r) => r.email), events: digest.eventCount, tasks: digest.tasks.length, clashes: digest.clashes.length, kidsIdeas: extras.kidsIdeas.length, homeJobs: extras.homeJobsTotal, sent: false });
+        results.push({ familyId: id, subject, recipients: recipients.map((r) => r.email), events: digest.eventCount, tasks: digest.tasks.length, clashes: digest.clashes.length, kidsIdeas: extras.kidsIdeas.length, homeJobs: extras.homeJobsTotal, mealsLastWeek: extras.madeLastWeek.length, stockUp: extras.stockUp.length, sent: false });
         continue;
       }
 
@@ -203,6 +216,8 @@ export async function GET(request: NextRequest) {
         clashes: digest.clashes.length,
         kidsIdeas: extras.kidsIdeas.length,
         homeJobs: extras.homeJobsTotal,
+        mealsLastWeek: extras.madeLastWeek.length,
+        stockUp: extras.stockUp.length,
       });
     }
 
