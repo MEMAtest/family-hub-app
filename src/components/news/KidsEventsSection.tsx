@@ -646,7 +646,6 @@ export const KidsEventsSection: React.FC<KidsEventsSectionProps> = ({
                 <option key={key} value={key}>{label}</option>
               ))}
             </select>
-          </div>
 
           <select
             value={selectedAgeRange}

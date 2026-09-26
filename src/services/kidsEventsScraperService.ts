@@ -253,51 +253,6 @@ class KidsEventsScraperService {
   }
 
   /**
-   * Fetch events from Eventbrite API
-   */
-  async fetchEventbriteEvents(): Promise<KidsEvent[]> {
-    try {
-      const response = await fetch('/api/events/scrape?source=eventbrite');
-      if (!response.ok) throw new Error('Failed to fetch Eventbrite events');
-      const data = await response.json();
-      return data.events || [];
-    } catch (error) {
-      console.error('Eventbrite scrape failed:', error);
-      return [];
-    }
-  }
-
-  /**
-   * Fetch events from TimeOut London
-   */
-  async fetchTimeoutEvents(): Promise<KidsEvent[]> {
-    try {
-      const response = await fetch('/api/events/scrape?source=timeout');
-      if (!response.ok) throw new Error('Failed to fetch TimeOut events');
-      const data = await response.json();
-      return data.events || [];
-    } catch (error) {
-      console.error('TimeOut scrape failed:', error);
-      return [];
-    }
-  }
-
-  /**
-   * Fetch events from Visit London
-   */
-  async fetchVisitLondonEvents(): Promise<KidsEvent[]> {
-    try {
-      const response = await fetch('/api/events/scrape?source=visitlondon');
-      if (!response.ok) throw new Error('Failed to fetch Visit London events');
-      const data = await response.json();
-      return data.events || [];
-    } catch (error) {
-      console.error('Visit London scrape failed:', error);
-      return [];
-    }
-  }
-
-  /**
    * Get curated summer events (fallback/supplement data)
    */
   getCuratedSummerEvents(): KidsEvent[] {
@@ -623,29 +578,9 @@ class KidsEventsScraperService {
    * Fetch all events from all sources
    */
   async fetchAllEvents(filters?: EventFilters): Promise<KidsEvent[]> {
-    // Start with curated events (always available)
+    // Curated list only for now. Live sources (Eventbrite, TimeOut, Visit London)
+    // need API keys and are not connected yet.
     let allEvents = this.getCuratedSummerEvents();
-
-    // Try to fetch from external sources
-    try {
-      const [eventbriteEvents, timeoutEvents, visitLondonEvents] = await Promise.allSettled([
-        this.fetchEventbriteEvents(),
-        this.fetchTimeoutEvents(),
-        this.fetchVisitLondonEvents(),
-      ]);
-
-      if (eventbriteEvents.status === 'fulfilled') {
-        allEvents = [...allEvents, ...eventbriteEvents.value];
-      }
-      if (timeoutEvents.status === 'fulfilled') {
-        allEvents = [...allEvents, ...timeoutEvents.value];
-      }
-      if (visitLondonEvents.status === 'fulfilled') {
-        allEvents = [...allEvents, ...visitLondonEvents.value];
-      }
-    } catch (error) {
-      console.error('Error fetching external events:', error);
-    }
 
     // Apply filters
     if (filters) {
