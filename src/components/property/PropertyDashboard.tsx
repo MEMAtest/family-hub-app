@@ -9,6 +9,7 @@ import { formatDateForInput } from '@/utils/formatDate';
 import { PropertyTabNavigation, type PropertyTabId } from './common/PropertyTabNavigation';
 import { PropertyOverviewTab } from './tabs/PropertyOverviewTab';
 import { PropertyTasksTab } from './tabs/PropertyTasksTab';
+import { PropertyIssuesTab } from './tabs/PropertyIssuesTab';
 import { PropertyProjectsTab } from './tabs/PropertyProjectsTab';
 import { PropertyDigitalTwinTab } from './tabs/PropertyDigitalTwinTab';
 import { PropertyAnalyticsTab } from './tabs/PropertyAnalyticsTab';
@@ -301,6 +302,10 @@ export const PropertyDashboard = () => {
               onImportSurvey={() => {/* TODO: Import survey handler */}}
               onExport={() => {/* TODO: Export handler */}}
             />
+          )}
+
+          {activeTab === 'issues' && (
+            <PropertyIssuesTab isReadOnly={isReadOnly} />
           )}
 
           {activeTab === 'tasks' && (

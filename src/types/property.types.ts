@@ -287,3 +287,58 @@ export interface PropertyProject {
   createdAt: string;
   updatedAt: string;
 }
+
+// =================================================================
+// ISSUES LOG (quick-capture things that need fixing or doing)
+// =================================================================
+
+export type PropertyIssueStatus = 'open' | 'scheduled' | 'done' | 'dismissed';
+
+export type PropertyIssueUrgency = 'urgent' | 'soon' | 'routine' | 'someday';
+
+export type PropertyIssueArea =
+  | 'roof_gutters'
+  | 'windows_doors'
+  | 'exterior'
+  | 'garden'
+  | 'plumbing'
+  | 'heating'
+  | 'electrical'
+  | 'damp'
+  | 'interior'
+  | 'kitchen'
+  | 'bathroom'
+  | 'cleaning'
+  | 'pests'
+  | 'safety'
+  | 'appliances'
+  | 'other';
+
+// What the AI (or the built-in rules) makes of a single note like "gutters need looking at"
+export interface PropertyIssueDraft {
+  title: string;
+  area: PropertyIssueArea;
+  urgency: PropertyIssueUrgency;
+  trade: string;
+  diy: boolean;
+  costRange?: CostRange;
+  suggestedDate?: string; // YYYY-MM-DD
+  recurrence?: { interval: number; unit: 'month' | 'year' };
+  steps: string[];
+  safetyNote?: string;
+  room?: string;
+  sourceText: string;
+}
+
+export interface PropertyIssue extends PropertyIssueDraft {
+  id: string;
+  status: PropertyIssueStatus;
+  enhancedBy: 'ai' | 'rules' | 'manual';
+  scheduledDate?: string; // YYYY-MM-DD
+  scheduledTime?: string; // HH:MM
+  calendarEventId?: string;
+  linkedTaskId?: string;
+  createdAt: string;
+  updatedAt: string;
+  completedAt?: string;
+}

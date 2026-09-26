@@ -504,6 +504,37 @@ Only output the JSON object.`;
   }
 
   /**
+   * Turn a quick home-maintenance note into structured jobs
+   */
+  async enhancePropertyIssues(text: string, today: string): Promise<string> {
+    const systemPrompt = `Property issues log assistant. You turn quick notes from a UK homeowner (London, Victorian/Edwardian terrace area) into clear, practical home maintenance jobs. Be realistic about UK trades and 2026 London prices in GBP. Safety first: gas smells, sparking, burst pipes and insecure doors are urgent. Always return valid JSON only.`;
+
+    const userPrompt = `Today: ${today}
+Note from the homeowner:
+"""
+${text}
+"""
+
+Split the note into separate jobs if it mentions more than one thing. For each job return:
+- title: short action title, max 60 chars (e.g. "Clear and check back gutters")
+- area: one of roof_gutters, windows_doors, exterior, garden, plumbing, heating, electrical, damp, interior, kitchen, bathroom, cleaning, pests, safety, appliances, other
+- urgency: one of urgent (within 24h), soon (this week), routine (next few weeks), someday (when convenient)
+- trade: who should do it (e.g. "Gutter cleaner", "Plumber", "Gas Safe engineer", "DIY")
+- diy: true if a typical homeowner could reasonably do it themselves
+- costRange: { "min": number, "max": number } in GBP including labour
+- suggestedDate: YYYY-MM-DD on or after ${today}; DIY on a weekend, trades on a weekday
+- recurrence: { "interval": number, "unit": "month" | "year" } if it should repeat (gutters yearly, windows every 1-2 months, boiler service yearly), else null
+- steps: 2-4 short practical next steps
+- safetyNote: one sentence if there is a safety risk, else null
+- room: the room or part of the house if mentioned, else null
+- sourceText: the part of the note this job came from
+
+Return: { "issues": [ ... ] }`;
+
+    return await this.chat(systemPrompt, userPrompt, 1500);
+  }
+
+  /**
    * Provide personalised goal coaching insights
    */
   async coachGoals(data: {

@@ -18,6 +18,7 @@ import {
   ProjectEmail,
   ProjectTask,
   ProjectMilestone,
+  PropertyIssue,
 } from '@/types/property.types';
 import { Contractor, ContractorAppointment } from '@/types/contractor.types';
 import { BrainProject, BrainNode, BrainEdge } from '@/types/brain.types';
@@ -208,6 +209,11 @@ interface PropertySlice {
   addTaskFollowUp: (taskId: string, followUp: TaskFollowUp) => void;
   updateTaskFollowUp: (taskId: string, followUpId: string, updates: Partial<TaskFollowUp>) => void;
   removeTaskFollowUp: (taskId: string, followUpId: string) => void;
+  // Issues log
+  propertyIssues: PropertyIssue[];
+  addPropertyIssues: (issues: PropertyIssue[]) => void;
+  updatePropertyIssue: (id: string, updates: Partial<PropertyIssue>) => void;
+  removePropertyIssue: (id: string) => void;
   // Projects
   propertyProjects: PropertyProject[];
   activeProjectId: string | null;
@@ -655,6 +661,18 @@ const createPropertySlice: StateCreator<FamilyState, [], [], PropertySlice> = (s
           : task
       ),
     })),
+  // Issues log
+  propertyIssues: [],
+  addPropertyIssues: (issues) =>
+    set((state) => ({ propertyIssues: [...issues, ...state.propertyIssues] })),
+  updatePropertyIssue: (id, updates) =>
+    set((state) => ({
+      propertyIssues: state.propertyIssues.map((issue) =>
+        issue.id === id ? { ...issue, ...updates, updatedAt: new Date().toISOString() } : issue
+      ),
+    })),
+  removePropertyIssue: (id) =>
+    set((state) => ({ propertyIssues: state.propertyIssues.filter((issue) => issue.id !== id) })),
   // Projects
   propertyProjects: [],
   activeProjectId: null,
@@ -1013,6 +1031,7 @@ export const useFamilyStore = create<FamilyState>()(
         areaWatchItems: state.areaWatchItems,
         propertyComponents: state.propertyComponents,
         propertyRole: state.propertyRole,
+        propertyIssues: state.propertyIssues,
         // Projects
         propertyProjects: state.propertyProjects,
         activeProjectId: state.activeProjectId,

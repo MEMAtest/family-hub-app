@@ -1,9 +1,9 @@
 'use client';
 
-import { LayoutDashboard, ClipboardList, Box, BarChart3, FolderKanban, Eye } from 'lucide-react';
+import { LayoutDashboard, ClipboardList, Box, BarChart3, FolderKanban, Eye, MessageSquareWarning } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
-export type PropertyTabId = 'overview' | 'tasks' | 'projects' | 'digital-twin' | 'analytics' | 'awareness';
+export type PropertyTabId = 'overview' | 'issues' | 'tasks' | 'projects' | 'digital-twin' | 'analytics' | 'awareness';
 
 interface PropertyTab {
   id: PropertyTabId;
@@ -13,6 +13,7 @@ interface PropertyTab {
 
 const tabs: PropertyTab[] = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
+  { id: 'issues', label: 'Issues', icon: MessageSquareWarning },
   { id: 'tasks', label: 'Tasks', icon: ClipboardList },
   { id: 'projects', label: 'Projects', icon: FolderKanban },
   { id: 'digital-twin', label: 'Digital Twin', icon: Box },
