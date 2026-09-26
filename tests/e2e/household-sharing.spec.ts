@@ -13,6 +13,8 @@ test.describe.configure({ mode: 'serial' });
 
 const prisma = createTestPrisma();
 let familyId = '';
+// Only this spec's documents, so it can't disturb others running alongside it.
+const OWN_KEYS = ['property.issues', 'property.tasks', 'kids.marks', 'digest.preferences'];
 
 const skipSetupWizard = () => {
   localStorage.setItem('familyHub_setupComplete', 'skipped');
@@ -75,11 +77,11 @@ test.beforeAll(async () => {
     });
   }
   familyId = family.id;
-  await prisma.familyDocument.deleteMany({ where: { familyId } });
+  await prisma.familyDocument.deleteMany({ where: { familyId, key: { in: OWN_KEYS } } });
 });
 
 test.afterAll(async () => {
-  await prisma.familyDocument.deleteMany({ where: { familyId } });
+  await prisma.familyDocument.deleteMany({ where: { familyId, key: { in: OWN_KEYS } } });
   await prisma.$disconnect();
 });
 
