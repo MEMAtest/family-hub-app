@@ -49,6 +49,9 @@ interface KidsEventsSectionProps {
   onSave?: (eventId: string) => void;
 }
 
+const IMAGE_FALLBACK =
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 5'%3E%3Cdefs%3E%3ClinearGradient id='g' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23c4b5fd'/%3E%3Cstop offset='1' stop-color='%23f9a8d4'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='8' height='5' fill='url(%23g)'/%3E%3C/svg%3E";
+
 const getCategoryIcon = (category: EventCategory) => {
   const icons: Record<EventCategory, React.ComponentType<any>> = {
     'free': Sparkles,
@@ -112,8 +115,8 @@ export const KidsEventsSection: React.FC<KidsEventsSectionProps> = ({
   const [digestIncludeLondon, setDigestIncludeLondon] = useState(true);
   const [digestOnlyFree, setDigestOnlyFree] = useState(false);
 
+  // Events are fetched by the filter effect below, which also runs on mount.
   useEffect(() => {
-    fetchEvents();
     loadSavedState();
     loadDigestSettings();
   }, []);
@@ -288,7 +291,9 @@ export const KidsEventsSection: React.FC<KidsEventsSectionProps> = ({
               alt={event.title}
               className={`w-full object-cover ${featured ? 'h-64' : 'h-48'}`}
               onError={(e) => {
-                (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1503454537195-1dcabb73ffb9?w=800';
+                // Inline placeholder can't fail, so this runs at most once per image.
+                const img = e.currentTarget;
+                if (img.src !== IMAGE_FALLBACK) img.src = IMAGE_FALLBACK;
               }}
             />
             <div className="absolute top-3 left-3 flex flex-wrap gap-2">

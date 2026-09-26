@@ -8,6 +8,14 @@ import type { Message } from '@anthropic-ai/sdk/resources/messages';
 import { logAIUsage } from '@/utils/aiTelemetry';
 import { redactSensitiveData } from '@/utils/privacy';
 
+// Per-call limits for features where the user is waiting on screen and a
+// built-in fallback exists, so failing fast beats retrying for a long time.
+interface ChatLimits {
+  retries?: number;
+  sdkRetries?: number;
+  timeoutMs?: number;
+}
+
 export class AIService {
   private anthropic: Anthropic | null;
   private readonly anthropicApiKey: string;
@@ -39,7 +47,8 @@ export class AIService {
   private async chat(
     systemPrompt: string,
     userPrompt: string,
-    maxTokens = 1024
+    maxTokens = 1024,
+    limits: ChatLimits = {}
   ): Promise<string> {
     const safeSystemPrompt = this.sanitisePrompt(systemPrompt);
     const safeUserPrompt = this.sanitisePrompt(userPrompt);
@@ -47,19 +56,19 @@ export class AIService {
 
     if (this.anthropic) {
       try {
-        return await this.chatWithAnthropic(feature, safeSystemPrompt, safeUserPrompt, maxTokens);
+        return await this.chatWithAnthropic(feature, safeSystemPrompt, safeUserPrompt, maxTokens, limits);
       } catch (error) {
         if (!this.openRouterApiKey) {
           throw error;
         }
 
         console.warn('Anthropic AI call failed; using OpenRouter fallback:', error instanceof Error ? error.message : 'Unknown error');
-        return await this.chatWithOpenRouter(feature, safeSystemPrompt, safeUserPrompt, maxTokens);
+        return await this.chatWithOpenRouter(feature, safeSystemPrompt, safeUserPrompt, maxTokens, limits);
       }
     }
 
     if (this.openRouterApiKey) {
-      return await this.chatWithOpenRouter(feature, safeSystemPrompt, safeUserPrompt, maxTokens);
+      return await this.chatWithOpenRouter(feature, safeSystemPrompt, safeUserPrompt, maxTokens, limits);
     }
 
     throw new Error('No AI provider key configured');
@@ -69,13 +78,15 @@ export class AIService {
     feature: string,
     safeSystemPrompt: string,
     safeUserPrompt: string,
-    maxTokens: number
+    maxTokens: number,
+    limits: ChatLimits = {}
   ): Promise<string> {
 
+    const maxRetries = limits.retries ?? this.maxRetries;
     let attempt = 0;
     let lastError: unknown = null;
 
-    while (attempt <= this.maxRetries) {
+    while (attempt <= maxRetries) {
       const startedAt = Date.now();
 
       try {
@@ -90,8 +101,8 @@ export class AIService {
                 content: safeUserPrompt,
               },
             ],
-          }),
-          this.timeoutPromise(),
+          }, limits.sdkRetries === undefined ? undefined : { maxRetries: limits.sdkRetries }),
+          this.timeoutPromise(limits.timeoutMs),
         ]) as Message;
 
         const content = message.content[0];
@@ -113,7 +124,7 @@ export class AIService {
         lastError = error;
         attempt += 1;
 
-        if (attempt > this.maxRetries || !this.shouldRetryAnthropic(error)) {
+        if (attempt > maxRetries || !this.shouldRetryAnthropic(error)) {
           break;
         }
 
@@ -139,7 +150,8 @@ export class AIService {
     feature: string,
     safeSystemPrompt: string,
     safeUserPrompt: string,
-    maxTokens: number
+    maxTokens: number,
+    limits: ChatLimits = {}
   ): Promise<string> {
     const startedAt = Date.now();
 
@@ -162,7 +174,7 @@ export class AIService {
           temperature: 0.2,
         }),
       }),
-      this.timeoutPromise(),
+      this.timeoutPromise(limits.timeoutMs),
     ]);
 
     const responseText = await response.text();
@@ -223,11 +235,11 @@ export class AIService {
     return !status || status === 429 || status >= 500;
   }
 
-  private timeoutPromise() {
+  private timeoutPromise(timeoutMs = this.requestTimeoutMs) {
     return new Promise<never>((_, reject) => {
       setTimeout(() => {
         reject(new Error('AI request timed out'));
-      }, this.requestTimeoutMs);
+      }, timeoutMs);
     });
   }
 
@@ -531,7 +543,8 @@ Split the note into separate jobs if it mentions more than one thing. For each j
 
 Return: { "issues": [ ... ] }`;
 
-    return await this.chat(systemPrompt, userPrompt, 1500);
+    // The user is waiting and the rules fallback is good, so fail fast.
+    return await this.chat(systemPrompt, userPrompt, 1500, { retries: 0, sdkRetries: 1, timeoutMs: 8000 });
   }
 
   /**

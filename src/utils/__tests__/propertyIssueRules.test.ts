@@ -1,4 +1,5 @@
 import {
+  taskCategoryFor,
   classifyIssue,
   classifyIssues,
   normalizeIssueDraft,
@@ -128,6 +129,30 @@ describe('normalizeIssueDraft', () => {
     expect((draft.suggestedDate ?? '') >= '2026-09-25').toBe(true);
     expect(draft.steps.length).toBeGreaterThan(0);
     expect(draft.safetyNote).toBeTruthy();
+  });
+
+  test('never lets the AI mark a safety job as DIY', () => {
+    const draft = normalizeIssueDraft({ area: 'electrical', urgency: 'routine', diy: true }, 'socket has scorch marks', TODAY);
+    expect(draft.diy).toBe(false);
+    expect(draft.urgency).toBe('urgent');
+  });
+});
+
+describe('taskCategoryFor', () => {
+  const survey = ['Roof', 'Windows', 'Doors', 'Damp', 'Electrics', 'Drainage', 'Plumbing', 'Gas', 'Fire safety'];
+
+  test('reuses existing survey categories', () => {
+    expect(taskCategoryFor(classifyIssue('gutters need clearing', TODAY), survey)).toBe('Roof');
+    expect(taskCategoryFor(classifyIssue('black mould on the bedroom wall', TODAY), survey)).toBe('Damp');
+    expect(taskCategoryFor(classifyIssue('blocked drain outside', TODAY), survey)).toBe('Drainage');
+    expect(taskCategoryFor(classifyIssue('back door lock is stiff', TODAY), survey)).toBe('Doors');
+    expect(taskCategoryFor(classifyIssue('smell of gas in the kitchen', TODAY), survey)).toBe('Gas');
+    expect(taskCategoryFor(classifyIssue('socket sparking', TODAY), survey)).toBe('Electrics');
+  });
+
+  test('falls back to the area label when there is no match', () => {
+    expect(taskCategoryFor(classifyIssue('mow the lawn', TODAY), survey)).toBe('Garden');
+    expect(taskCategoryFor(classifyIssue('gutters need clearing', TODAY), [])).toBe('Roof & gutters');
   });
 });
 

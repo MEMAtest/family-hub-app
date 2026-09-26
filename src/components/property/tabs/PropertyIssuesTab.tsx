@@ -22,6 +22,7 @@ import {
   ISSUE_AREA_LABELS,
   ISSUE_URGENCIES,
   ISSUE_URGENCY_LABELS,
+  taskCategoryFor,
   toYMD,
 } from '@/utils/propertyIssueRules';
 import type {
@@ -213,7 +214,7 @@ export const PropertyIssuesTab = ({ isReadOnly }: PropertyIssuesTabProps) => {
     return {
       id: createId('task'),
       title: issue.title,
-      category: ISSUE_AREA_LABELS[issue.area],
+      category: taskCategoryFor(issue, useFamilyStore.getState().propertyTasks.map((task) => task.category)),
       conditionRating: issue.urgency === 'urgent' ? 3 : issue.urgency === 'soon' ? 2 : 1,
       priority: TASK_PRIORITY[issue.urgency],
       impact: issue.safetyNote || issue.sourceText,

@@ -462,7 +462,9 @@ export const normalizeIssueDraft = (
   // Never let the AI downgrade something the rules consider a safety emergency.
   const aiUrgency = ISSUE_URGENCIES.includes(data.urgency as PropertyIssueUrgency) ? (data.urgency as PropertyIssueUrgency) : base.urgency;
   const urgency = base.urgency === 'urgent' ? 'urgent' : aiUrgency;
-  const diy = typeof data.diy === 'boolean' ? data.diy : base.diy;
+  // Gas, electrical faults and other safety jobs always need a professional.
+  const needsProfessional = base.area === 'safety' && !base.diy;
+  const diy = needsProfessional ? false : typeof data.diy === 'boolean' ? data.diy : base.diy;
 
   const todayYmd = toYMD(today);
   const suggested = asString(data.suggestedDate, 10);
@@ -495,4 +497,39 @@ export const normalizeIssueDraft = (
     room: asString(data.room, 40) || base.room,
     sourceText: sourceText || base.sourceText,
   };
+};
+
+// Existing task categories (e.g. from a survey) to reuse for each area, most specific first,
+// so logged issues sit alongside related survey tasks instead of in near-duplicate groups.
+const TASK_CATEGORY_CANDIDATES: Partial<Record<PropertyIssueArea, string[]>> = {
+  roof_gutters: ['Roof', 'Roof & gutters', 'Gutters'],
+  windows_doors: ['Windows', 'Doors'],
+  exterior: ['External walls', 'Structure', 'Exterior'],
+  plumbing: ['Plumbing', 'Drainage'],
+  heating: ['Heating', 'Gas'],
+  electrical: ['Electrics', 'Electrical'],
+  damp: ['Damp', 'Ventilation'],
+  safety: ['Fire safety', 'Safety'],
+  pests: ['Pests'],
+  garden: ['Garden'],
+  cleaning: ['Cleaning'],
+};
+
+export const taskCategoryFor = (
+  issue: Pick<PropertyIssueDraft, 'area' | 'title' | 'sourceText'>,
+  existingCategories: string[]
+): string => {
+  const text = `${issue.title} ${issue.sourceText}`.toLowerCase();
+  let candidates = TASK_CATEGORY_CANDIDATES[issue.area] ?? [];
+  if (issue.area === 'windows_doors' && /\bdoors?\b|\block/.test(text)) candidates = ['Doors', 'Windows'];
+  if (issue.area === 'plumbing' && /drain|sewage|manhole/.test(text)) candidates = ['Drainage', 'Plumbing'];
+  if (issue.area === 'safety' && /\bgas\b|boiler|carbon monoxide/.test(text)) candidates = ['Gas', ...candidates];
+  if (issue.area === 'safety' && /spark|socket|wir|electric|scorch/.test(text)) candidates = ['Electrics', ...candidates];
+
+  const byLower = new Map(existingCategories.map((category) => [category.toLowerCase(), category]));
+  for (const candidate of candidates) {
+    const existing = byLower.get(candidate.toLowerCase());
+    if (existing) return existing;
+  }
+  return ISSUE_AREA_LABELS[issue.area];
 };
