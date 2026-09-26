@@ -5,6 +5,7 @@ import { NewsArticle, NewsCategory, NewsPreferences, NewsDigest, NewsAlert } fro
 import { rssNewsService } from '@/services/rssNewsService';
 import { NewsSettings } from './NewsSettings';
 import { KidsEventsSection } from './KidsEventsSection';
+import { SEASON_LABELS, seasonOf } from '@/services/kidsActivitiesService';
 import {
   Newspaper,
   Clock,
@@ -453,7 +454,7 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({
               <p className="text-sm text-gray-600 dark:text-slate-400">
                 {activeTab === 'news'
                   ? `${stats.unreadArticles} unread • ${stats.familyRelevant} family relevant`
-                  : 'Summer activities for kids in London & SE20'
+                  : 'Things to do with the kids near SE20 and across London'
                 }
               </p>
             </div>
@@ -505,7 +506,7 @@ export const NewsDashboard: React.FC<NewsDashboardProps> = ({
             <Baby className="w-4 h-4" />
             Kids Events
             <span className="px-1.5 py-0.5 text-xs bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-full">
-              Summer
+              {SEASON_LABELS[seasonOf(new Date())]}
             </span>
           </button>
         </div>

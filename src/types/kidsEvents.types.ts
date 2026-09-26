@@ -109,6 +109,7 @@ export interface KidsEvent {
   // Features
   features?: string[]; // e.g., "Buggy friendly", "Cafe on-site", "Parking"
   highlights?: string[]; // Key selling points
+  weatherDependent?: boolean; // outdoor, best on a dry day
 
   // User interaction
   isSubscribed?: boolean;
@@ -120,38 +121,35 @@ export interface KidsEvent {
   expiresAt?: string;
 }
 
-// Subscription for email digests
-export interface EventSubscription {
-  id: string;
-  eventId: string;
-  userId?: string;
-  email: string;
-  subscribedAt: string;
-  notificationSent?: boolean;
+// A place or regular activity in the curated catalogue. Unlike a dated event it
+// has no fixed date; the next date is worked out from today.
+export interface KidsActivitySchedule {
+  type: 'open' | 'sessions'; // open = drop in any day it's open; sessions = set times, check listings
+  pattern: string; // shown to the user, e.g. "Open every day"
+  days?: number[]; // 0 = Sunday ... 6 = Saturday; omitted = every day
+  months?: number[]; // 1-12; omitted = all year
 }
 
-// User preferences for email digest
-export interface EventDigestPreferences {
-  id: string;
-  emails: string[]; // Multiple recipients (you + wife)
-  sendDay: 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
-  sendTime: string; // HH:MM, default "08:00"
-  includeLocal: boolean;
-  includeLondon: boolean;
-  maxDistance?: number; // miles
-  categories?: EventCategory[];
-  budgetMax?: CostBracket;
-  onlyFree?: boolean;
-  enabled: boolean;
-}
-
-// Saved events
-export interface SavedEvent {
-  id: string;
-  eventId: string;
-  savedAt: string;
-  notes?: string;
-  reminder?: string; // Date to remind
+export interface KidsActivity {
+  slug: string;
+  title: string;
+  description: string;
+  shortDescription: string;
+  category: EventCategory;
+  categories: EventCategory[];
+  location: EventLocation;
+  isLocal: boolean;
+  schedule: KidsActivitySchedule;
+  pricing: EventPricing;
+  costBracket: CostBracket;
+  suitableForToddlers: boolean;
+  suitableForPreschool: boolean;
+  minAge?: number;
+  maxAge?: number;
+  features: string[];
+  highlights: string[];
+  sourceUrl: string;
+  weatherDependent?: boolean;
 }
 
 // API response types
@@ -175,19 +173,6 @@ export interface EventFilters {
   dateFrom?: string;
   dateTo?: string;
   isLocal?: boolean;
-}
-
-// Email digest content
-export interface WeeklyDigest {
-  id: string;
-  generatedAt: string;
-  weekStarting: string;
-  localEvents: KidsEvent[];
-  londonEvents: KidsEvent[];
-  savedEvents: KidsEvent[];
-  topPicks: KidsEvent[];
-  freeEvents: KidsEvent[];
-  newThisWeek: KidsEvent[];
 }
 
 // Helper constants

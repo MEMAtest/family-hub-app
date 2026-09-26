@@ -1,786 +1,459 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import toast from 'react-hot-toast';
 import {
-  Calendar,
-  MapPin,
-  Clock,
-  Star,
-  Heart,
-  Bookmark,
-  ExternalLink,
-  Filter,
-  RefreshCw,
-  Users,
-  Ticket,
-  Baby,
-  TreePine,
-  Palette,
-  Music,
-  Microscope,
-  Building2,
-  Theater,
-  Dumbbell,
-  Waves,
-  Tent,
-  Warehouse,
-  Sparkles,
-  ChevronRight,
-  Mail,
   Bell,
-  Settings,
-  CheckCircle2
+  Bookmark,
+  CalendarDays,
+  CheckCircle2,
+  CloudSun,
+  ExternalLink,
+  Home,
+  Mail,
+  MapPin,
+  Search,
+  Sparkles,
+  Users,
+  X,
 } from 'lucide-react';
+import { useFamilyStore } from '@/store/familyStore';
+import { getKidsActivities, seasonOf, SEASON_LABELS, toDateKey } from '@/services/kidsActivitiesService';
 import {
-  KidsEvent,
-  EventCategory,
-  AgeRange,
-  CostBracket,
-  CATEGORY_LABELS,
+  MAX_EXTRA_RECIPIENTS,
+  normalizeDigestPreferences,
+  type KidsEventMark,
+} from '@/lib/sharedDocuments';
+import {
   CATEGORY_ICONS,
-  COST_BRACKET_LABELS,
+  CATEGORY_LABELS,
   COST_BRACKET_COLORS,
-  AGE_RANGE_LABELS,
-  DISTANCE_THRESHOLDS
+  COST_BRACKET_LABELS,
+  type AgeRange,
+  type EventCategory,
+  type KidsEvent,
 } from '@/types/kidsEvents.types';
+import { SharedSyncBadge } from '@/components/common/SharedSyncBadge';
 
-interface KidsEventsSectionProps {
-  onSubscribe?: (eventId: string) => void;
-  onSave?: (eventId: string) => void;
-}
-
-const IMAGE_FALLBACK =
-  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 5'%3E%3Cdefs%3E%3ClinearGradient id='g' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23c4b5fd'/%3E%3Cstop offset='1' stop-color='%23f9a8d4'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='8' height='5' fill='url(%23g)'/%3E%3C/svg%3E";
-
-const getCategoryIcon = (category: EventCategory) => {
-  const icons: Record<EventCategory, React.ComponentType<any>> = {
-    'free': Sparkles,
-    'museum': Building2,
-    'theatre': Theater,
-    'sports': Dumbbell,
-    'arts': Palette,
-    'swimming': Waves,
-    'nature': TreePine,
-    'science': Microscope,
-    'music': Music,
-    'festival': Sparkles,
-    'workshop': Palette,
-    'outdoor': Tent,
-    'indoor': Warehouse,
-    'other': Calendar
-  };
-  return icons[category] || Calendar;
+// Soft gradients per category for the card header (no stock photos, which
+// would suggest the place looks like something it may not).
+const CATEGORY_GRADIENTS: Record<EventCategory, string> = {
+  free: 'from-emerald-200 to-teal-200 dark:from-emerald-900/60 dark:to-teal-900/60',
+  museum: 'from-amber-200 to-orange-200 dark:from-amber-900/60 dark:to-orange-900/60',
+  theatre: 'from-purple-200 to-fuchsia-200 dark:from-purple-900/60 dark:to-fuchsia-900/60',
+  sports: 'from-sky-200 to-blue-200 dark:from-sky-900/60 dark:to-blue-900/60',
+  arts: 'from-pink-200 to-rose-200 dark:from-pink-900/60 dark:to-rose-900/60',
+  swimming: 'from-cyan-200 to-sky-200 dark:from-cyan-900/60 dark:to-sky-900/60',
+  nature: 'from-green-200 to-lime-200 dark:from-green-900/60 dark:to-lime-900/60',
+  science: 'from-indigo-200 to-violet-200 dark:from-indigo-900/60 dark:to-violet-900/60',
+  music: 'from-rose-200 to-pink-200 dark:from-rose-900/60 dark:to-pink-900/60',
+  festival: 'from-orange-200 to-yellow-200 dark:from-orange-900/60 dark:to-yellow-900/60',
+  workshop: 'from-violet-200 to-purple-200 dark:from-violet-900/60 dark:to-purple-900/60',
+  outdoor: 'from-lime-200 to-emerald-200 dark:from-lime-900/60 dark:to-emerald-900/60',
+  indoor: 'from-slate-200 to-gray-200 dark:from-slate-800 dark:to-gray-800',
+  other: 'from-gray-200 to-slate-200 dark:from-gray-800 dark:to-slate-800',
 };
 
-const getCategoryStyles = (category: EventCategory): { bg: string; text: string; darkBg: string; darkText: string } => {
-  const styles: Record<EventCategory, { bg: string; text: string; darkBg: string; darkText: string }> = {
-    'free': { bg: 'bg-emerald-100', text: 'text-emerald-700', darkBg: 'dark:bg-emerald-900/50', darkText: 'dark:text-emerald-300' },
-    'museum': { bg: 'bg-amber-100', text: 'text-amber-700', darkBg: 'dark:bg-amber-900/50', darkText: 'dark:text-amber-300' },
-    'theatre': { bg: 'bg-purple-100', text: 'text-purple-700', darkBg: 'dark:bg-purple-900/50', darkText: 'dark:text-purple-300' },
-    'sports': { bg: 'bg-blue-100', text: 'text-blue-700', darkBg: 'dark:bg-blue-900/50', darkText: 'dark:text-blue-300' },
-    'arts': { bg: 'bg-pink-100', text: 'text-pink-700', darkBg: 'dark:bg-pink-900/50', darkText: 'dark:text-pink-300' },
-    'swimming': { bg: 'bg-cyan-100', text: 'text-cyan-700', darkBg: 'dark:bg-cyan-900/50', darkText: 'dark:text-cyan-300' },
-    'nature': { bg: 'bg-green-100', text: 'text-green-700', darkBg: 'dark:bg-green-900/50', darkText: 'dark:text-green-300' },
-    'science': { bg: 'bg-indigo-100', text: 'text-indigo-700', darkBg: 'dark:bg-indigo-900/50', darkText: 'dark:text-indigo-300' },
-    'music': { bg: 'bg-rose-100', text: 'text-rose-700', darkBg: 'dark:bg-rose-900/50', darkText: 'dark:text-rose-300' },
-    'festival': { bg: 'bg-orange-100', text: 'text-orange-700', darkBg: 'dark:bg-orange-900/50', darkText: 'dark:text-orange-300' },
-    'workshop': { bg: 'bg-violet-100', text: 'text-violet-700', darkBg: 'dark:bg-violet-900/50', darkText: 'dark:text-violet-300' },
-    'outdoor': { bg: 'bg-lime-100', text: 'text-lime-700', darkBg: 'dark:bg-lime-900/50', darkText: 'dark:text-lime-300' },
-    'indoor': { bg: 'bg-slate-100', text: 'text-slate-700', darkBg: 'dark:bg-slate-900/50', darkText: 'dark:text-slate-300' },
-    'other': { bg: 'bg-gray-100', text: 'text-gray-700', darkBg: 'dark:bg-gray-900/50', darkText: 'dark:text-gray-300' }
-  };
-  return styles[category] || styles['other'];
+const AGE_FILTERS: Array<{ value: AgeRange | 'all'; label: string }> = [
+  { value: 'all', label: 'Any age' },
+  { value: 'toddler', label: 'Good for toddlers' },
+  { value: 'preschool', label: 'Good for 3–6s' },
+  { value: 'all-ages', label: 'Good for both' },
+];
+
+const CHILD_AGE_GROUPS = new Set(['Toddler', 'Preschool', 'Child']);
+
+const ageInYears = (dateOfBirth: string, today: Date) => {
+  const dob = new Date(`${dateOfBirth.slice(0, 10)}T12:00:00`);
+  if (Number.isNaN(dob.getTime())) return null;
+  let years = today.getFullYear() - dob.getFullYear();
+  const beforeBirthday = today.getMonth() < dob.getMonth()
+    || (today.getMonth() === dob.getMonth() && today.getDate() < dob.getDate());
+  if (beforeBirthday) years -= 1;
+  return years >= 0 ? years : null;
 };
 
-export const KidsEventsSection: React.FC<KidsEventsSectionProps> = ({
-  onSubscribe,
-  onSave
-}) => {
-  const [events, setEvents] = useState<KidsEvent[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState<EventCategory | 'all'>('all');
-  const [selectedAgeRange, setSelectedAgeRange] = useState<AgeRange | 'all'>('all');
-  const [showLocalOnly, setShowLocalOnly] = useState(false);
-  const [showFreeOnly, setShowFreeOnly] = useState(false);
-  const [savedEvents, setSavedEvents] = useState<Set<string>>(new Set());
-  const [subscribedEvents, setSubscribedEvents] = useState<Set<string>>(new Set());
+const listNames = (names: string[]) =>
+  names.length <= 1 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+
+const nextDateLabel = (date: string, today: Date) => {
+  const todayKey = toDateKey(today);
+  const tomorrow = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+  if (date === todayKey) return 'Today';
+  if (date === toDateKey(tomorrow)) return 'Tomorrow';
+  return new Date(`${date}T12:00:00`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+};
+
+const markId = (kind: KidsEventMark['kind'], eventId: string) => `${kind}:${eventId}`;
+
+export const KidsEventsSection = () => {
+  const people = useFamilyStore((state) => state.people);
+  const marks = useFamilyStore((state) => state.kidsEventMarks);
+  const toggleMark = useFamilyStore((state) => state.toggleKidsEventMark);
+
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
+  const [category, setCategory] = useState<EventCategory | 'all'>('all');
+  const [ageRange, setAgeRange] = useState<AgeRange | 'all'>('all');
+  const [localOnly, setLocalOnly] = useState(false);
+  const [freeOnly, setFreeOnly] = useState(false);
+  const [savedOnly, setSavedOnly] = useState(false);
   const [showDigestSettings, setShowDigestSettings] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [digestEmails, setDigestEmails] = useState('ademola@memaconsultants.com');
-  const [digestDay, setDigestDay] = useState('saturday');
-  const [digestTime, setDigestTime] = useState('08:00');
-  const [digestIncludeLocal, setDigestIncludeLocal] = useState(true);
-  const [digestIncludeLondon, setDigestIncludeLondon] = useState(true);
-  const [digestOnlyFree, setDigestOnlyFree] = useState(false);
-
-  // Events are fetched by the filter effect below, which also runs on mount.
-  useEffect(() => {
-    loadSavedState();
-    loadDigestSettings();
-  }, []);
-
-  const loadSavedState = () => {
-    if (typeof window === 'undefined') return;
-    try {
-      const saved = localStorage.getItem('kidsEvents_saved');
-      const subscribed = localStorage.getItem('kidsEvents_subscribed');
-      if (saved) setSavedEvents(new Set<string>(JSON.parse(saved)));
-      if (subscribed) setSubscribedEvents(new Set<string>(JSON.parse(subscribed)));
-    } catch (e) {
-      console.warn('Failed to load saved state:', e);
-    }
-  };
-
-  const saveSavedState = (saved: Set<string>, subscribed: Set<string>) => {
-    if (typeof window === 'undefined') return;
-    try {
-      localStorage.setItem('kidsEvents_saved', JSON.stringify([...saved]));
-      localStorage.setItem('kidsEvents_subscribed', JSON.stringify([...subscribed]));
-    } catch (e) {
-      console.warn('Failed to save state:', e);
-    }
-  };
-
-  const loadDigestSettings = () => {
-    if (typeof window === 'undefined') return;
-    try {
-      const settings = localStorage.getItem('kidsEvents_digestSettings');
-      if (settings) {
-        const parsed = JSON.parse(settings);
-        setDigestEmails(parsed.emails || 'ademola@memaconsultants.com');
-        setDigestDay(parsed.day || 'saturday');
-        setDigestTime(parsed.time || '08:00');
-        setDigestIncludeLocal(parsed.includeLocal ?? true);
-        setDigestIncludeLondon(parsed.includeLondon ?? true);
-        setDigestOnlyFree(parsed.onlyFree ?? false);
-      }
-    } catch (e) {
-      console.warn('Failed to load digest settings:', e);
-    }
-  };
-
-  const saveDigestSettings = () => {
-    if (typeof window === 'undefined') return;
-    try {
-      localStorage.setItem('kidsEvents_digestSettings', JSON.stringify({
-        emails: digestEmails,
-        day: digestDay,
-        time: digestTime,
-        includeLocal: digestIncludeLocal,
-        includeLondon: digestIncludeLondon,
-        onlyFree: digestOnlyFree
-      }));
-    } catch (e) {
-      console.warn('Failed to save digest settings:', e);
-    }
-  };
-
-  const fetchEvents = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams();
-      if (selectedCategory !== 'all') params.set('categories', selectedCategory);
-      if (selectedAgeRange !== 'all') params.set('ageRange', selectedAgeRange);
-      if (showLocalOnly) params.set('isLocal', 'true');
-      if (showFreeOnly) params.set('isFree', 'true');
-      if (searchTerm.trim()) params.set('search', searchTerm.trim());
-
-      const response = await fetch(`/api/events/kids?${params.toString()}`);
-      const data = await response.json();
-
-      if (data.success) {
-        setEvents(data.events);
-      } else {
-        setError(data.error || 'Failed to load events');
-      }
-    } catch (err) {
-      console.error('Failed to fetch events:', err);
-      setError('Failed to load events. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    try {
-      const response = await fetch('/api/events/kids', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'refresh' })
-      });
-      const data = await response.json();
-      if (data.success) {
-        setEvents(data.events);
-      }
-    } catch (error) {
-      console.error('Failed to refresh events:', error);
-    } finally {
-      setRefreshing(false);
-    }
-  };
-
-  const toggleSave = (eventId: string) => {
-    const newSaved = new Set(savedEvents);
-    if (newSaved.has(eventId)) {
-      newSaved.delete(eventId);
-    } else {
-      newSaved.add(eventId);
-    }
-    setSavedEvents(newSaved);
-    saveSavedState(newSaved, subscribedEvents);
-    onSave?.(eventId);
-  };
-
-  const toggleSubscribe = (eventId: string) => {
-    const newSubscribed = new Set(subscribedEvents);
-    if (newSubscribed.has(eventId)) {
-      newSubscribed.delete(eventId);
-    } else {
-      newSubscribed.add(eventId);
-    }
-    setSubscribedEvents(newSubscribed);
-    saveSavedState(savedEvents, newSubscribed);
-    onSubscribe?.(eventId);
-  };
 
   useEffect(() => {
-    const debounceTimer = setTimeout(() => {
-      fetchEvents();
-    }, searchTerm ? 300 : 0);
-    return () => clearTimeout(debounceTimer);
-  }, [selectedCategory, selectedAgeRange, showLocalOnly, showFreeOnly, searchTerm]);
+    const timer = setTimeout(() => setSearch(searchInput.trim()), 250);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
 
-  const filteredEvents = events;
+  const today = useMemo(() => new Date(), []);
+  const season = SEASON_LABELS[seasonOf(today)];
 
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('en-GB', {
-      weekday: 'short',
-      day: 'numeric',
-      month: 'short'
-    });
+  const kids = useMemo(() => people
+    .filter((person) => CHILD_AGE_GROUPS.has(person.ageGroup))
+    .map((person) => {
+      const age = person.dateOfBirth ? ageInYears(person.dateOfBirth, today) : null;
+      return age === null ? person.name : `${person.name} (${age})`;
+    }), [people, today]);
+
+  const markSet = useMemo(() => new Set(marks.map((mark) => mark.id)), [marks]);
+  const isMarked = (kind: KidsEventMark['kind'], eventId: string) => markSet.has(markId(kind, eventId));
+
+  const events = useMemo(() => getKidsActivities({
+    search: search || undefined,
+    categories: category === 'all' ? undefined : [category],
+    ageRange: ageRange === 'all' ? undefined : ageRange,
+    isLocal: localOnly || undefined,
+    isFree: freeOnly || undefined,
+  }, today).filter((event) => !savedOnly || markSet.has(markId('saved', event.id))), [search, category, ageRange, localOnly, freeOnly, savedOnly, markSet, today]);
+
+  const categoriesInUse = useMemo(() => {
+    const used = new Set(getKidsActivities({}, today).flatMap((event) => event.categories || [event.category]));
+    return (Object.keys(CATEGORY_LABELS) as EventCategory[]).filter((cat) => used.has(cat));
+  }, [today]);
+
+  const savedCount = marks.filter((mark) => mark.kind === 'saved').length;
+  const emailCount = marks.filter((mark) => mark.kind === 'subscribed').length;
+  const localEvents = events.filter((event) => event.isLocal);
+  const londonEvents = events.filter((event) => !event.isLocal);
+
+  const handleToggle = (event: KidsEvent, kind: KidsEventMark['kind']) => {
+    const wasMarked = isMarked(kind, event.id);
+    toggleMark(event.id, kind);
+    if (kind === 'subscribed') {
+      toast.success(wasMarked ? 'Removed from the Monday email' : 'Will feature in the Monday email');
+    }
   };
 
-  const formatTime = (time?: string) => {
-    if (!time) return '';
-    const [hours, minutes] = time.split(':');
-    const h = parseInt(hours, 10);
-    const ampm = h >= 12 ? 'pm' : 'am';
-    const h12 = h % 12 || 12;
-    return `${h12}:${minutes}${ampm}`;
-  };
-
-  const EventCard: React.FC<{ event: KidsEvent; featured?: boolean }> = ({ event, featured }) => {
-    const CategoryIcon = getCategoryIcon(event.category);
-    const catStyles = getCategoryStyles(event.category);
-    const isSaved = savedEvents.has(event.id);
-    const isSubscribed = subscribedEvents.has(event.id);
-
+  const EventCard = ({ event }: { event: KidsEvent }) => {
+    const saved = isMarked('saved', event.id);
+    const inEmail = isMarked('subscribed', event.id);
     return (
-      <article className={`bg-white dark:bg-slate-800 rounded-xl overflow-hidden border border-gray-200 dark:border-slate-700 hover:shadow-lg transition-all duration-300 ${
-        featured ? 'md:col-span-2 md:row-span-2' : ''
-      }`}>
-        {event.imageUrl && (
-          <div className="relative">
-            <img
-              src={event.imageUrl}
-              alt={event.title}
-              className={`w-full object-cover ${featured ? 'h-64' : 'h-48'}`}
-              onError={(e) => {
-                // Inline placeholder can't fail, so this runs at most once per image.
-                const img = e.currentTarget;
-                if (img.src !== IMAGE_FALLBACK) img.src = IMAGE_FALLBACK;
-              }}
-            />
-            <div className="absolute top-3 left-3 flex flex-wrap gap-2">
-              <span className={`px-2 py-1 rounded-full text-xs font-medium ${catStyles.bg} ${catStyles.darkBg} ${catStyles.text} ${catStyles.darkText} flex items-center gap-1`}>
-                <CategoryIcon className="w-3 h-3" />
-                {CATEGORY_LABELS[event.category]}
+      <article className="flex flex-col overflow-hidden rounded-xl border border-gray-200 bg-white transition-shadow hover:shadow-md dark:border-slate-700 dark:bg-slate-800">
+        <div className={`relative flex h-28 items-end bg-gradient-to-br p-4 ${CATEGORY_GRADIENTS[event.category]}`}>
+          <span className="absolute right-4 top-3 text-4xl" aria-hidden>{CATEGORY_ICONS[event.category]}</span>
+          <div className="flex flex-wrap gap-1.5">
+            <span className="rounded-full bg-white/80 px-2 py-0.5 text-xs font-medium text-gray-800 dark:bg-slate-900/70 dark:text-slate-100">
+              {CATEGORY_LABELS[event.category]}
+            </span>
+            {event.pricing.isFree && (
+              <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-xs font-semibold text-white">Free</span>
+            )}
+            {event.isLocal && (
+              <span className="flex items-center gap-1 rounded-full bg-blue-600 px-2 py-0.5 text-xs font-semibold text-white">
+                <MapPin className="h-3 w-3" /> Local
               </span>
-              {event.pricing.isFree && (
-                <span className="px-2 py-1 rounded-full text-xs font-medium bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300">
-                  FREE
-                </span>
-              )}
-            </div>
-            <div className="absolute top-3 right-3 flex flex-col gap-1">
-              {event.isLocal && (
-                <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 flex items-center gap-1">
-                  <MapPin className="w-3 h-3" />
-                  Local
-                </span>
-              )}
-            </div>
-            <div className="absolute bottom-3 left-3 flex gap-1">
-              {event.suitableForToddlers && (
-                <span className="px-2 py-1 rounded-full text-xs font-medium bg-pink-100 dark:bg-pink-900/50 text-pink-700 dark:text-pink-300">
-                  2.5yo+
-                </span>
-              )}
-              {event.suitableForPreschool && !event.suitableForToddlers && (
-                <span className="px-2 py-1 rounded-full text-xs font-medium bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300">
-                  5.5yo+
-                </span>
-              )}
-            </div>
-          </div>
-        )}
-
-        <div className="p-5">
-          <div className="flex items-start justify-between gap-3 mb-3">
-            <h3 className={`font-semibold text-gray-900 dark:text-slate-100 line-clamp-2 ${featured ? 'text-xl' : 'text-lg'}`}>
-              {event.title}
-            </h3>
-            {event.averageRating && (
-              <div className="flex items-center gap-1 text-amber-500 shrink-0">
-                <Star className="w-4 h-4 fill-current" />
-                <span className="text-sm font-medium">{event.averageRating.toFixed(1)}</span>
-              </div>
             )}
           </div>
+        </div>
 
-          <p className={`text-gray-600 dark:text-slate-400 mb-4 ${featured ? 'line-clamp-3' : 'line-clamp-2'} text-sm`}>
-            {event.shortDescription || event.description}
-          </p>
+        <div className="flex flex-1 flex-col p-4">
+          <h4 className="text-base font-semibold text-gray-900 dark:text-slate-100">{event.title}</h4>
+          <p className="mt-1 text-sm text-gray-600 dark:text-slate-300">{event.description}</p>
 
-          <div className="space-y-2 mb-4">
-            <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
-              <Calendar className="w-4 h-4 text-blue-500" />
-              <span>{formatDate(event.timing.date)}</span>
-              {event.timing.startTime && (
-                <>
-                  <Clock className="w-4 h-4 text-blue-500 ml-2" />
-                  <span>{formatTime(event.timing.startTime)}</span>
-                </>
-              )}
-              {event.timing.isRecurring && (
-                <span className="text-xs bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-2 py-0.5 rounded">
-                  {event.timing.recurringPattern}
-                </span>
-              )}
+          <dl className="mt-3 space-y-1.5 text-sm text-gray-600 dark:text-slate-300">
+            <div className="flex items-start gap-2">
+              <CalendarDays className="mt-0.5 h-4 w-4 flex-shrink-0 text-purple-500" />
+              <dd>
+                {event.timing.isAllDay ? (
+                  <><span className="font-medium text-gray-900 dark:text-slate-100">{nextDateLabel(event.timing.date, today)}</span> · {event.timing.recurringPattern}</>
+                ) : (
+                  event.timing.recurringPattern
+                )}
+              </dd>
             </div>
-
-            <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
-              <MapPin className="w-4 h-4 text-rose-500" />
-              <span className="truncate">{event.location.name}</span>
-              {event.location.distanceFromSE20 !== undefined && (
-                <span className="text-xs text-gray-500 dark:text-slate-500">
-                  ({event.location.distanceFromSE20.toFixed(1)} miles)
-                </span>
-              )}
+            <div className="flex items-start gap-2">
+              <MapPin className="mt-0.5 h-4 w-4 flex-shrink-0 text-rose-500" />
+              <dd>
+                {event.location.name}, {event.location.postcode}
+                {event.location.distanceFromSE20 !== undefined && (
+                  <span className="text-gray-400 dark:text-slate-500"> · about {event.location.distanceFromSE20} mi</span>
+                )}
+              </dd>
             </div>
-
-            <div className="flex items-center gap-3 text-sm">
-              <div className="flex items-center gap-1">
-                <Users className="w-4 h-4 text-purple-500" />
-                <span className="text-gray-600 dark:text-slate-400">
-                  {AGE_RANGE_LABELS[event.ageRange]}
-                </span>
-              </div>
-
-              <div className={`px-2 py-0.5 rounded text-xs font-medium ${COST_BRACKET_COLORS[event.costBracket]}`}>
-                {event.pricing.isFree
-                  ? 'Free'
-                  : event.pricing.familyPrice
-                    ? `Family: £${event.pricing.familyPrice}`
-                    : event.pricing.childPrice
-                      ? `Child: £${event.pricing.childPrice}`
-                      : COST_BRACKET_LABELS[event.costBracket]
-                }
-              </div>
+            <div className="flex items-start gap-2">
+              <Users className="mt-0.5 h-4 w-4 flex-shrink-0 text-blue-500" />
+              <dd>
+                {event.suitableForToddlers && event.suitableForPreschool
+                  ? 'Toddlers and older'
+                  : event.suitableForPreschool ? 'Better for 3+' : 'Best for toddlers'}
+                {event.maxAge !== undefined ? ` · up to ${event.maxAge}` : ''}
+              </dd>
             </div>
+          </dl>
+
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            <span className={`rounded px-2 py-0.5 text-xs font-medium ${COST_BRACKET_COLORS[event.costBracket]}`}>
+              {event.pricing.isFree ? 'Free' : COST_BRACKET_LABELS[event.costBracket]}
+            </span>
+            {event.weatherDependent && (
+              <span className="flex items-center gap-1 rounded bg-sky-50 px-2 py-0.5 text-xs text-sky-700 dark:bg-sky-500/10 dark:text-sky-300">
+                <CloudSun className="h-3 w-3" /> Best on a dry day
+              </span>
+            )}
+            {(event.features || []).slice(0, 3).map((feature) => (
+              <span key={feature} className="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-600 dark:bg-slate-700 dark:text-slate-300">
+                {feature}
+              </span>
+            ))}
           </div>
-
-          {event.features && event.features.length > 0 && (
-            <div className="flex flex-wrap gap-1 mb-4">
-              {event.features.slice(0, 3).map((feature, idx) => (
-                <span
-                  key={idx}
-                  className="text-xs px-2 py-1 bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300 rounded-full"
-                >
-                  {feature}
-                </span>
-              ))}
-              {event.features.length > 3 && (
-                <span className="text-xs px-2 py-1 text-gray-500 dark:text-slate-400">
-                  +{event.features.length - 3} more
-                </span>
-              )}
-            </div>
+          {event.pricing.priceNotes && (
+            <p className="mt-2 text-xs text-gray-500 dark:text-slate-400">{event.pricing.priceNotes}</p>
           )}
 
-          <div className="flex items-center justify-between pt-3 border-t border-gray-100 dark:border-slate-700">
-            <div className="flex items-center gap-2">
+          <div className="mt-auto flex items-center justify-between gap-2 border-t border-gray-100 pt-3 dark:border-slate-700">
+            <div className="flex gap-1.5">
               <button
-                onClick={() => toggleSave(event.id)}
-                className={`p-2 rounded-lg transition-colors ${
-                  isSaved
-                    ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400'
-                    : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-slate-400 hover:bg-gray-200 dark:hover:bg-slate-600'
-                }`}
-                title={isSaved ? 'Remove from saved' : 'Save for later'}
+                onClick={() => handleToggle(event, 'saved')}
+                className={`rounded-lg p-2 transition-colors ${saved ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300' : 'bg-gray-100 text-gray-500 hover:bg-gray-200 dark:bg-slate-700 dark:text-slate-300'}`}
+                aria-pressed={saved}
+                aria-label={saved ? `Unsave ${event.title}` : `Save ${event.title}`}
+                title={saved ? 'Saved for the family' : 'Save for the family'}
               >
-                <Bookmark className={`w-4 h-4 ${isSaved ? 'fill-current' : ''}`} />
+                <Bookmark className={`h-4 w-4 ${saved ? 'fill-current' : ''}`} />
               </button>
               <button
-                onClick={() => toggleSubscribe(event.id)}
-                className={`p-2 rounded-lg transition-colors ${
-                  isSubscribed
-                    ? 'bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400'
-                    : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-slate-400 hover:bg-gray-200 dark:hover:bg-slate-600'
-                }`}
-                title={isSubscribed ? 'Unsubscribe from updates' : 'Get email updates'}
+                onClick={() => handleToggle(event, 'subscribed')}
+                className={`rounded-lg p-2 transition-colors ${inEmail ? 'bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300' : 'bg-gray-100 text-gray-500 hover:bg-gray-200 dark:bg-slate-700 dark:text-slate-300'}`}
+                aria-pressed={inEmail}
+                aria-label={inEmail ? `Remove ${event.title} from the Monday email` : `Add ${event.title} to the Monday email`}
+                title={inEmail ? 'In the Monday email' : 'Add to the Monday email'}
               >
-                <Bell className={`w-4 h-4 ${isSubscribed ? 'fill-current' : ''}`} />
+                <Bell className={`h-4 w-4 ${inEmail ? 'fill-current' : ''}`} />
               </button>
             </div>
-
-            <div className="flex items-center gap-2">
-              {event.pricing.bookingUrl && (
-                <a
-                  href={event.pricing.bookingUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
-                >
-                  <Ticket className="w-4 h-4" />
-                  Book
-                </a>
-              )}
-              <a
-                href={event.sourceUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium"
-              >
-                Details
-                <ExternalLink className="w-4 h-4" />
-              </a>
-            </div>
+            <a
+              href={event.sourceUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 text-sm font-medium text-purple-700 hover:text-purple-800 dark:text-purple-300"
+            >
+              Check times &amp; prices
+              <ExternalLink className="h-3.5 w-3.5" />
+            </a>
           </div>
         </div>
       </article>
     );
   };
 
-  const handleSaveDigestSettings = () => {
-    saveDigestSettings();
-    setShowDigestSettings(false);
+  const section = (title: string, icon: typeof Home, items: KidsEvent[]) => {
+    if (items.length === 0) return null;
+    const Icon = icon;
+    return (
+      <section>
+        <h3 className="mb-3 flex items-center gap-2 text-lg font-semibold text-gray-900 dark:text-slate-100">
+          <Icon className="h-5 w-5 text-purple-600 dark:text-purple-300" />
+          {title}
+          <span className="rounded-full bg-purple-100 px-2 py-0.5 text-sm text-purple-700 dark:bg-purple-500/20 dark:text-purple-300">{items.length}</span>
+        </h3>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {items.map((event) => <EventCard key={event.id} event={event} />)}
+        </div>
+      </section>
+    );
   };
 
-  const DigestSettingsModal = () => (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowDigestSettings(false)}>
-      <div className="bg-white dark:bg-slate-800 rounded-xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-6">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">
-            Weekly Digest Settings
-          </h3>
+  return (
+    <div className="space-y-5">
+      <div className="rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 p-5 text-white">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-medium uppercase tracking-wide text-purple-100">{season} · things to do</p>
+            <h2 className="mt-1 text-2xl font-bold">
+              {kids.length > 0 ? `Ideas for ${listNames(kids)}` : 'Ideas for the little ones'}
+            </h2>
+            <p className="mt-1 text-sm text-purple-100">
+              Near SE20 first, then further afield in London. Times and prices change, so check before you go.
+            </p>
+          </div>
           <button
-            onClick={() => setShowDigestSettings(false)}
-            className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg text-gray-500"
+            onClick={() => setShowDigestSettings(true)}
+            className="flex items-center gap-2 rounded-lg bg-white/20 px-4 py-2 text-sm font-medium transition-colors hover:bg-white/30"
           >
-            ×
+            <Mail className="h-4 w-4" />
+            Monday email
+          </button>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative min-w-[180px] flex-1 sm:max-w-xs">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <input
+              type="search"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Search places..."
+              aria-label="Search places"
+              className="w-full rounded-lg border border-gray-300 bg-white py-2 pl-9 pr-3 text-sm text-gray-900 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100"
+            />
+          </div>
+          <select
+            value={category}
+            onChange={(e) => setCategory(e.target.value as EventCategory | 'all')}
+            aria-label="Type of activity"
+            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100"
+          >
+            <option value="all">All types</option>
+            {categoriesInUse.map((cat) => <option key={cat} value={cat}>{CATEGORY_LABELS[cat]}</option>)}
+          </select>
+          <select
+            value={ageRange}
+            onChange={(e) => setAgeRange(e.target.value as AgeRange | 'all')}
+            aria-label="Age"
+            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100"
+          >
+            {AGE_FILTERS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+          </select>
+          {[
+            { label: 'Local only', checked: localOnly, set: setLocalOnly },
+            { label: 'Free only', checked: freeOnly, set: setFreeOnly },
+            { label: `Saved (${savedCount})`, checked: savedOnly, set: setSavedOnly },
+          ].map(({ label, checked, set }) => (
+            <label key={label} className="flex cursor-pointer items-center gap-2 text-sm text-gray-700 dark:text-slate-300">
+              <input type="checkbox" checked={checked} onChange={(e) => set(e.target.checked)} className="rounded text-purple-600" />
+              {label}
+            </label>
+          ))}
+          <div className="ml-auto flex items-center gap-3 text-xs text-gray-500 dark:text-slate-400">
+            <span className="flex items-center gap-1"><Bell className="h-3.5 w-3.5" /> {emailCount} in Monday email</span>
+            <SharedSyncBadge />
+          </div>
+        </div>
+      </div>
+
+      {section('Near home', Home, localEvents)}
+      {section('Further afield in London', Sparkles, londonEvents)}
+
+      {events.length === 0 && (
+        <div className="rounded-xl border border-dashed border-gray-300 py-10 text-center dark:border-slate-700">
+          <CalendarDays className="mx-auto mb-2 h-10 w-10 text-gray-300 dark:text-slate-600" />
+          <p className="font-medium text-gray-700 dark:text-slate-200">
+            {savedOnly ? 'Nothing saved yet' : 'No matches'}
+          </p>
+          <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">
+            {savedOnly ? 'Tap the bookmark on a place to save it for the family.' : 'Try clearing a filter.'}
+          </p>
+        </div>
+      )}
+
+      {showDigestSettings && <DigestSettingsModal onClose={() => setShowDigestSettings(false)} />}
+    </div>
+  );
+};
+
+const DigestSettingsModal = ({ onClose }: { onClose: () => void }) => {
+  const preferences = useFamilyStore((state) => state.digestPreferences);
+  const setPreferences = useFamilyStore((state) => state.setDigestPreferences);
+  const [draft, setDraft] = useState(preferences);
+  const [extraInput, setExtraInput] = useState(preferences.extraRecipients.join(', '));
+
+  const save = () => {
+    const requested = extraInput.split(/[,;\s]+/).map((email) => email.trim()).filter(Boolean);
+    const next = normalizeDigestPreferences({ ...draft, extraRecipients: requested });
+    const rejected = requested.length - next.extraRecipients.length;
+    setPreferences(next);
+    if (rejected > 0) {
+      toast.error(`${rejected} email address${rejected === 1 ? '' : 'es'} skipped (invalid, duplicate, or over the limit of ${MAX_EXTRA_RECIPIENTS})`);
+    } else {
+      toast.success('Monday email settings saved for the family');
+    }
+    onClose();
+  };
+
+  const toggle = (field: 'kidsIdeas' | 'kidsLocalOnly' | 'kidsFreeOnly' | 'homeJobs', label: string, hint?: string) => (
+    <label className="flex cursor-pointer items-start gap-3">
+      <input
+        type="checkbox"
+        checked={draft[field]}
+        onChange={(e) => setDraft({ ...draft, [field]: e.target.checked })}
+        className="mt-0.5 rounded text-purple-600"
+      />
+      <span>
+        <span className="text-sm font-medium text-gray-800 dark:text-slate-200">{label}</span>
+        {hint && <span className="block text-xs text-gray-500 dark:text-slate-400">{hint}</span>}
+      </span>
+    </label>
+  );
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 sm:items-center" onClick={onClose}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="digest-settings-title"
+        className="w-full max-w-md rounded-xl bg-white p-5 dark:bg-slate-800"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 id="digest-settings-title" className="text-lg font-semibold text-gray-900 dark:text-slate-100">Monday email</h3>
+            <p className="mt-1 text-sm text-gray-600 dark:text-slate-400">
+              Sent on Monday mornings (8am in summer, 7am in winter) to everyone in the household who signs in, alongside the week&apos;s calendar.
+            </p>
+          </div>
+          <button onClick={onClose} className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-700" aria-label="Close">
+            <X className="h-5 w-5" />
           </button>
         </div>
 
-        <div className="space-y-4">
+        <div className="mt-4 space-y-3">
+          {toggle('kidsIdeas', 'Ideas for the kids', 'A few places to go this week, plus any you’ve added with the bell.')}
+          <div className="space-y-3 pl-7">
+            {toggle('kidsLocalOnly', 'Only near home')}
+            {toggle('kidsFreeOnly', 'Only free ones')}
+          </div>
+          {toggle('homeJobs', 'Home jobs', 'Open issues from the property log, most urgent first.')}
+
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
-              Email Addresses
+            <label htmlFor="digest-extra" className="block text-sm font-medium text-gray-800 dark:text-slate-200">
+              Also send to
             </label>
             <input
+              id="digest-extra"
               type="text"
-              value={digestEmails}
-              onChange={(e) => setDigestEmails(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
-              placeholder="Enter email addresses (comma separated)"
+              value={extraInput}
+              onChange={(e) => setExtraInput(e.target.value)}
+              placeholder="e.g. someone without a login"
+              className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100"
             />
-            <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">
-              Separate multiple emails with commas (e.g., you@email.com, wife@email.com)
+            <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">
+              Optional. Up to {MAX_EXTRA_RECIPIENTS} addresses, separated by commas.
             </p>
           </div>
+        </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
-                Send Day
-              </label>
-              <select
-                value={digestDay}
-                onChange={(e) => setDigestDay(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
-              >
-                <option value="monday">Monday</option>
-                <option value="tuesday">Tuesday</option>
-                <option value="wednesday">Wednesday</option>
-                <option value="thursday">Thursday</option>
-                <option value="friday">Friday</option>
-                <option value="saturday">Saturday</option>
-                <option value="sunday">Sunday</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
-                Send Time
-              </label>
-              <select
-                value={digestTime}
-                onChange={(e) => setDigestTime(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
-              >
-                <option value="07:00">7:00 AM</option>
-                <option value="08:00">8:00 AM</option>
-                <option value="09:00">9:00 AM</option>
-                <option value="10:00">10:00 AM</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={digestIncludeLocal}
-                onChange={(e) => setDigestIncludeLocal(e.target.checked)}
-                className="rounded text-blue-600"
-              />
-              <span className="text-sm text-gray-700 dark:text-slate-300">Include local events (SE20 area)</span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={digestIncludeLondon}
-                onChange={(e) => setDigestIncludeLondon(e.target.checked)}
-                className="rounded text-blue-600"
-              />
-              <span className="text-sm text-gray-700 dark:text-slate-300">Include wider London events</span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={digestOnlyFree}
-                onChange={(e) => setDigestOnlyFree(e.target.checked)}
-                className="rounded text-emerald-600"
-              />
-              <span className="text-sm text-gray-700 dark:text-slate-300">Only show free events</span>
-            </label>
-          </div>
-
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200 dark:border-slate-700">
-            <button
-              onClick={() => setShowDigestSettings(false)}
-              className="px-4 py-2 text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleSaveDigestSettings}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 transition-colors"
-            >
-              <CheckCircle2 className="w-4 h-4" />
-              Save Settings
-            </button>
-          </div>
+        <div className="mt-5 flex justify-end gap-2 border-t border-gray-200 pt-4 dark:border-slate-700">
+          <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 dark:text-slate-300 dark:hover:bg-slate-700">
+            Cancel
+          </button>
+          <button onClick={save} className="flex items-center gap-2 rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700">
+            <CheckCircle2 className="h-4 w-4" />
+            Save
+          </button>
         </div>
       </div>
-    </div>
-  );
-
-  const localEvents = filteredEvents.filter(e => e.isLocal);
-  const londonEvents = filteredEvents.filter(e => !e.isLocal);
-
-  return (
-    <div className="space-y-6">
-      <div className="bg-gradient-to-r from-purple-600 to-pink-600 rounded-xl p-6 text-white">
-        <div className="flex items-center justify-between flex-wrap gap-4">
-          <div className="flex items-center gap-3">
-            <div className="p-3 bg-white/20 rounded-xl">
-              <Baby className="w-8 h-8" />
-            </div>
-            <div>
-              <h2 className="text-2xl font-bold">Summer Kids Events</h2>
-              <p className="text-purple-100">
-                Fun activities for ages 2.5-5.5 in London & SE20 area
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowDigestSettings(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors"
-            >
-              <Mail className="w-4 h-4" />
-              Weekly Digest
-            </button>
-            <button
-              onClick={handleRefresh}
-              disabled={refreshing}
-              className="flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors disabled:opacity-50"
-            >
-              <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-              Refresh
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-white dark:bg-slate-800 rounded-xl p-4 border border-gray-200 dark:border-slate-700">
-        <div className="flex flex-wrap items-center gap-4">
-          <div className="relative flex-1 min-w-[200px] max-w-xs">
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search events..."
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 placeholder-gray-400"
-            />
-            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          </div>
-
-          <select
-              value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value as any)}
-              className="px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
-            >
-              <option value="all">All Categories</option>
-              {Object.entries(CATEGORY_LABELS).map(([key, label]) => (
-                <option key={key} value={key}>{label}</option>
-              ))}
-            </select>
-
-          <select
-            value={selectedAgeRange}
-            onChange={(e) => setSelectedAgeRange(e.target.value as any)}
-            className="px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100"
-          >
-            <option value="all">All Ages</option>
-            {Object.entries(AGE_RANGE_LABELS).map(([key, label]) => (
-              <option key={key} value={key}>{label}</option>
-            ))}
-          </select>
-
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={showLocalOnly}
-              onChange={(e) => setShowLocalOnly(e.target.checked)}
-              className="rounded text-blue-600"
-            />
-            <span className="text-sm text-gray-700 dark:text-slate-300">Local only</span>
-          </label>
-
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={showFreeOnly}
-              onChange={(e) => setShowFreeOnly(e.target.checked)}
-              className="rounded text-emerald-600"
-            />
-            <span className="text-sm text-gray-700 dark:text-slate-300">Free only</span>
-          </label>
-
-          <div className="ml-auto flex items-center gap-4 text-sm text-gray-600 dark:text-slate-400">
-            <span className="flex items-center gap-1">
-              <Bookmark className="w-4 h-4" />
-              {savedEvents.size} saved
-            </span>
-            <span className="flex items-center gap-1">
-              <Bell className="w-4 h-4" />
-              {subscribedEvents.size} subscribed
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {error && (
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4 flex items-center gap-3">
-          <div className="p-2 bg-red-100 dark:bg-red-900/50 rounded-full">
-            <Calendar className="w-5 h-5 text-red-600 dark:text-red-400" />
-          </div>
-          <div>
-            <p className="text-red-800 dark:text-red-200 font-medium">{error}</p>
-            <button
-              onClick={fetchEvents}
-              className="text-sm text-red-600 dark:text-red-400 hover:underline mt-1"
-            >
-              Try again
-            </button>
-          </div>
-        </div>
-      )}
-
-      {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {[1, 2, 3, 4, 5, 6].map((i) => (
-            <div key={i} className="bg-white dark:bg-slate-800 rounded-xl overflow-hidden border border-gray-200 dark:border-slate-700 animate-pulse">
-              <div className="h-48 bg-gray-200 dark:bg-slate-700" />
-              <div className="p-5 space-y-3">
-                <div className="h-6 bg-gray-200 dark:bg-slate-700 rounded w-3/4" />
-                <div className="h-4 bg-gray-200 dark:bg-slate-700 rounded w-full" />
-                <div className="h-4 bg-gray-200 dark:bg-slate-700 rounded w-2/3" />
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <>
-          {localEvents.length > 0 && (
-            <section>
-              <div className="flex items-center gap-2 mb-4">
-                <MapPin className="w-5 h-5 text-blue-600" />
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">
-                  Local Events (SE20 Area)
-                </h3>
-                <span className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-sm rounded-full">
-                  {localEvents.length}
-                </span>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {localEvents.map((event, idx) => (
-                  <EventCard key={event.id} event={event} featured={idx === 0} />
-                ))}
-              </div>
-            </section>
-          )}
-
-          {londonEvents.length > 0 && (
-            <section>
-              <div className="flex items-center gap-2 mb-4">
-                <Building2 className="w-5 h-5 text-purple-600" />
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">
-                  London Events
-                </h3>
-                <span className="px-2 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-sm rounded-full">
-                  {londonEvents.length}
-                </span>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {londonEvents.map((event) => (
-                  <EventCard key={event.id} event={event} />
-                ))}
-              </div>
-            </section>
-          )}
-
-          {filteredEvents.length === 0 && (
-            <div className="text-center py-12 bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700">
-              <Calendar className="w-16 h-16 mx-auto text-gray-300 dark:text-slate-600 mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 dark:text-slate-100 mb-2">
-                No Events Found
-              </h3>
-              <p className="text-gray-600 dark:text-slate-400">
-                Try adjusting your filters or check back later for new events.
-              </p>
-            </div>
-          )}
-        </>
-      )}
-
-      {showDigestSettings && <DigestSettingsModal />}
     </div>
   );
 };
