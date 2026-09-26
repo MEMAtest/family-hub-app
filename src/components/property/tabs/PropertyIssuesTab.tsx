@@ -63,7 +63,10 @@ interface ReviewDraft extends PropertyIssueDraft {
   time: string;
   addToCalendar: boolean;
   addToTasks: boolean;
+  alreadyLogged?: string; // date an open issue with the same title was logged
 }
+
+const sameJob = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
 
 type ListFilter = 'open' | 'done' | 'all';
 
@@ -184,15 +187,24 @@ export const PropertyIssuesTab = ({ isReadOnly }: PropertyIssuesTabProps) => {
     try {
       const result = await enhanceIssueText(note);
       setDraftSource(result.source);
+      const stillOpen = useFamilyStore.getState().propertyIssues
+        .filter((issue) => issue.status === 'open' || issue.status === 'scheduled');
       setDrafts(
-        result.drafts.map((draft) => ({
-          ...draft,
-          key: createId('draft'),
-          time: draft.diy ? '10:00' : '09:00',
-          // Only put pressing jobs straight into the calendar; everything goes on the task list.
-          addToCalendar: draft.urgency === 'urgent' || draft.urgency === 'soon',
-          addToTasks: true,
-        }))
+        result.drafts.map((draft) => {
+          const existing = stillOpen.find((issue) => sameJob(issue.title, draft.title) || sameJob(issue.sourceText, draft.sourceText));
+          return {
+            ...draft,
+            key: createId('draft'),
+            time: draft.diy ? '10:00' : '09:00',
+            // Only put pressing jobs straight into the calendar; everything goes on the task list.
+            // A repeat of an open issue is not synced again unless ticked.
+            addToCalendar: !existing && (draft.urgency === 'urgent' || draft.urgency === 'soon'),
+            addToTasks: !existing,
+            alreadyLogged: existing
+              ? new Date(existing.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+              : undefined,
+          };
+        })
       );
       setText('');
     } finally {
@@ -597,6 +609,12 @@ export const PropertyIssuesTab = ({ isReadOnly }: PropertyIssuesTabProps) => {
                     <X className="h-4 w-4" />
                   </button>
                 </div>
+
+                {draft.alreadyLogged && (
+                  <p className="mt-2 rounded-md bg-amber-50 p-2 text-xs text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">
+                    Looks like one you already logged on {draft.alreadyLogged} and is still open. Remove it with the × or save it again on purpose.
+                  </p>
+                )}
 
                 {draft.safetyNote && (
                   <div className="mt-2 flex gap-2 rounded-md bg-red-50 p-2 text-xs text-red-800 dark:bg-red-500/10 dark:text-red-200">

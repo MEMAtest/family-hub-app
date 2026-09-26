@@ -193,6 +193,18 @@ describe('PropertyIssuesTab', () => {
     expect(useFamilyStore.getState().propertyIssues).toHaveLength(0);
   });
 
+  test('warns when the same job is already open and does not sync it twice', async () => {
+    render(<PropertyIssuesTab isReadOnly={false} />);
+    await logIssue('burst pipe in the loft');
+    await saveDrafts();
+    expect(createEvent).toHaveBeenCalledTimes(1);
+
+    await logIssue('burst pipe in the loft');
+    expect(screen.getByText(/already logged/i)).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: /add to calendar/i })).not.toBeChecked();
+    expect(screen.getByRole('checkbox', { name: /add to tasks/i })).not.toBeChecked();
+  });
+
   test('viewers can see issues but not log or change them', () => {
     useFamilyStore.setState({
       propertyIssues: [{
