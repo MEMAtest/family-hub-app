@@ -17,6 +17,7 @@ import { useFamilyStore } from '@/store/familyStore';
 import { useCalendarContext } from '@/contexts/familyHub/CalendarContext';
 import { createId } from '@/utils/id';
 import { enhanceIssueText } from '@/services/propertyIssueService';
+import { useSpeechInput } from '@/hooks/useSpeechInput';
 import {
   ISSUE_AREAS,
   ISSUE_AREA_LABELS,
@@ -70,24 +71,6 @@ const sameJob = (a: string, b: string) => a.trim().toLowerCase() === b.trim().to
 
 type ListFilter = 'open' | 'done' | 'all';
 
-// Minimal typing for the browser speech API (not in the TS DOM lib)
-type SpeechRecognitionLike = {
-  lang: string;
-  interimResults: boolean;
-  continuous: boolean;
-  start: () => void;
-  stop: () => void;
-  onresult: ((event: any) => void) | null;
-  onend: (() => void) | null;
-  onerror: ((event: any) => void) | null;
-};
-
-const getSpeechRecognition = (): (new () => SpeechRecognitionLike) | null => {
-  if (typeof window === 'undefined') return null;
-  const w = window as any;
-  return w.SpeechRecognition || w.webkitSpeechRecognition || null;
-};
-
 const inputClass =
   'w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100';
 
@@ -114,13 +97,15 @@ export const PropertyIssuesTab = ({ isReadOnly }: PropertyIssuesTabProps) => {
   const [draftSource, setDraftSource] = useState<'ai' | 'rules'>('rules');
   const [filter, setFilter] = useState<ListFilter>('open');
   const [areaFilter, setAreaFilter] = useState<PropertyIssueArea | 'all'>('all');
-  const [listening, setListening] = useState(false);
   const [assigneeId, setAssigneeId] = useState('');
-  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const today = toYMD(new Date());
-  const speechSupported = useMemo(() => Boolean(getSpeechRecognition()), []);
+  const speech = useSpeechInput((transcript) =>
+    setText((current) => (current ? `${current.trim()}\n${transcript}` : transcript))
+  );
+  const speechSupported = speech.supported;
+  const listening = speech.listening;
 
   const adults = useMemo(() => {
     const grownUps = people.filter((person) => person.ageGroup === 'Adult' || person.role === 'Parent');
@@ -130,8 +115,6 @@ export const PropertyIssuesTab = ({ isReadOnly }: PropertyIssuesTabProps) => {
   useEffect(() => {
     if (!assigneeId && adults.length > 0) setAssigneeId(adults[0].id);
   }, [adults, assigneeId]);
-
-  useEffect(() => () => recognitionRef.current?.stop(), []);
 
   const postcode = useMemo(
     () => profile.address?.match(/[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}/i)?.[0] ?? 'SE20',
@@ -147,42 +130,12 @@ export const PropertyIssuesTab = ({ isReadOnly }: PropertyIssuesTabProps) => {
   // Capture
   // ---------------------------------------------------------------
 
-  const toggleListening = () => {
-    if (listening) {
-      recognitionRef.current?.stop();
-      return;
-    }
-    const Recognition = getSpeechRecognition();
-    if (!Recognition) return;
-
-    const recognition = new Recognition();
-    recognition.lang = 'en-GB';
-    recognition.interimResults = false;
-    recognition.continuous = false;
-    recognition.onresult = (event: any) => {
-      const transcript = Array.from(event.results as ArrayLike<any>)
-        .map((result: any) => result[0]?.transcript ?? '')
-        .join(' ')
-        .trim();
-      if (transcript) {
-        setText((current) => (current ? `${current.trim()}\n${transcript}` : transcript));
-      }
-    };
-    recognition.onerror = (event: any) => {
-      if (event?.error !== 'aborted' && event?.error !== 'no-speech') {
-        toast.error('Could not use the microphone. Check browser permissions.');
-      }
-    };
-    recognition.onend = () => setListening(false);
-    recognitionRef.current = recognition;
-    setListening(true);
-    recognition.start();
-  };
+  const toggleListening = speech.toggle;
 
   const handleEnhance = async () => {
     const note = text.trim();
     if (!note || enhancing) return;
-    recognitionRef.current?.stop();
+    speech.stop();
     setEnhancing(true);
     try {
       const result = await enhanceIssueText(note);
