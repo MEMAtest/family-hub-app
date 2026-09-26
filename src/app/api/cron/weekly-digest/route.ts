@@ -10,6 +10,9 @@ import {
 import type { CalendarEvent, CalendarTask, Person } from '@/types/calendar.types';
 import { emailService } from '@/services/emailService';
 import { GmailSendUnavailable, sendViaGmail } from '@/lib/gmailSend';
+import { buildDigestExtras } from '@/lib/weeklyDigestExtras';
+import { normalizeDigestPreferences, type KidsEventMark } from '@/lib/sharedDocuments';
+import type { PropertyIssue } from '@/types/property.types';
 
 /**
  * Monday morning digest.
@@ -36,13 +39,17 @@ const authorised = (request: NextRequest) => {
 const toDateKey = (value: Date) => value.toISOString().slice(0, 10);
 
 const loadFamilyDigest = async (familyId: string, weekStart: string) => {
-  const [family, dbEvents, dbTasks] = await Promise.all([
+  const [family, dbEvents, dbTasks, documents] = await Promise.all([
     prisma.family.findUnique({
       where: { id: familyId },
       include: { members: { orderBy: { createdAt: 'asc' }, include: { user: true } } },
     }),
     prisma.calendarEvent.findMany({ where: { familyId } }),
     prisma.calendarTask.findMany({ where: { familyId } }).catch(() => []),
+    // Shared household data; missing until the family_documents table exists.
+    prisma.familyDocument
+      .findMany({ where: { familyId, key: { in: ['digest.preferences', 'property.issues', 'kids.marks'] } }, select: { key: true, data: true } })
+      .catch(() => [] as Array<{ key: string; data: unknown }>),
   ]);
 
   if (!family) return null;
@@ -78,12 +85,29 @@ const loadFamilyDigest = async (familyId: string, weekStart: string) => {
 
   const digest = buildWeeklyDigest(events, tasks, people, weekStart);
 
-  // Only adults with a linked account have somewhere to send it.
+  const doc = (key: string) => documents.find((d) => d.key === key)?.data;
+  const preferences = normalizeDigestPreferences(doc('digest.preferences'));
+  const asList = <T,>(value: unknown) => (Array.isArray(value) ? (value as T[]) : []);
+  const extras = buildDigestExtras({
+    preferences,
+    issues: asList<PropertyIssue>(doc('property.issues')),
+    marks: asList<KidsEventMark>(doc('kids.marks')),
+    weekStart,
+  });
+
+  // Adults with a linked account, plus any extra addresses the household added.
   const recipients = family.members
     .filter((member) => member.user?.email)
     .map((member) => ({ email: member.user!.email, name: member.name }));
+  const known = new Set(recipients.map((r) => r.email.toLowerCase()));
+  for (const email of preferences.extraRecipients) {
+    if (!known.has(email)) {
+      recipients.push({ email, name: email });
+      known.add(email);
+    }
+  }
 
-  return { family, digest, recipients };
+  return { family, digest, extras, recipients };
 };
 
 export async function GET(request: NextRequest) {
@@ -115,7 +139,7 @@ export async function GET(request: NextRequest) {
         continue;
       }
 
-      const { family, digest } = loaded;
+      const { family, digest, extras } = loaded;
       const recipients = only
         ? loaded.recipients.filter((r) => r.email.toLowerCase() === only)
         : loaded.recipients;
@@ -124,16 +148,16 @@ export async function GET(request: NextRequest) {
         results.push({ familyId: id, skipped: `"${only}" is not a recipient of this household` });
         continue;
       }
-      const subject = renderWeeklyDigestSubject(digest, family.familyName);
-      const html = renderWeeklyDigestHtml(digest, family.familyName);
-      const text = renderWeeklyDigestText(digest, family.familyName);
+      const subject = renderWeeklyDigestSubject(digest, family.familyName, extras);
+      const html = renderWeeklyDigestHtml(digest, family.familyName, extras);
+      const text = renderWeeklyDigestText(digest, family.familyName, extras);
 
       if (preview) {
         return new NextResponse(html, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
       }
 
       if (dryRun) {
-        results.push({ familyId: id, subject, recipients: recipients.map((r) => r.email), events: digest.eventCount, tasks: digest.tasks.length, clashes: digest.clashes.length, sent: false });
+        results.push({ familyId: id, subject, recipients: recipients.map((r) => r.email), events: digest.eventCount, tasks: digest.tasks.length, clashes: digest.clashes.length, kidsIdeas: extras.kidsIdeas.length, homeJobs: extras.homeJobsTotal, sent: false });
         continue;
       }
 
@@ -177,6 +201,8 @@ export async function GET(request: NextRequest) {
         events: digest.eventCount,
         tasks: digest.tasks.length,
         clashes: digest.clashes.length,
+        kidsIdeas: extras.kidsIdeas.length,
+        homeJobs: extras.homeJobsTotal,
       });
     }
 

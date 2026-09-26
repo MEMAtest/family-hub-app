@@ -1,4 +1,5 @@
 import type { WeeklyDigest } from '@/lib/weeklyDigest';
+import { EMPTY_DIGEST_EXTRAS, type DigestExtras } from '@/lib/weeklyDigestExtras';
 
 /**
  * Renders the weekly digest as an email.
@@ -25,17 +26,29 @@ const statusTone: Record<string, string> = {
   completed: MUTED,
 };
 
-export const renderWeeklyDigestSubject = (digest: WeeklyDigest, familyName: string) => {
+const URGENCY_TONE: Record<string, string> = {
+  urgent: '#b91c1c',
+  soon: '#b45309',
+  routine: '#1d4ed8',
+  someday: MUTED,
+};
+
+const FOOTER_TEXT = 'Choose what goes in this email under News > Kids Events > Monday email.';
+
+export const renderWeeklyDigestSubject = (digest: WeeklyDigest, familyName: string, extras: DigestExtras = EMPTY_DIGEST_EXTRAS) => {
+  const urgent = extras.urgentHomeJobs
+    ? `, ${extras.urgentHomeJobs} urgent home job${extras.urgentHomeJobs === 1 ? '' : 's'}`
+    : '';
   if (digest.eventCount === 0 && digest.tasks.length === 0) {
-    return `${familyName}: a clear week (${digest.rangeLabel})`;
+    return `${familyName}: a clear week (${digest.rangeLabel})${urgent}`;
   }
   const bits = [`${digest.eventCount} ${digest.eventCount === 1 ? 'thing' : 'things'} on`];
   if (digest.tasks.length) bits.push(`${digest.tasks.length} due`);
   if (digest.clashes.length) bits.push(`${digest.clashes.length} clash${digest.clashes.length === 1 ? '' : 'es'}`);
-  return `${familyName} this week: ${bits.join(', ')}`;
+  return `${familyName} this week: ${bits.join(', ')}${urgent}`;
 };
 
-export const renderWeeklyDigestText = (digest: WeeklyDigest, familyName: string) => {
+export const renderWeeklyDigestText = (digest: WeeklyDigest, familyName: string, extras: DigestExtras = EMPTY_DIGEST_EXTRAS) => {
   const lines: string[] = [`${familyName} - week of ${digest.rangeLabel}`, ''];
 
   if (digest.clashes.length) {
@@ -58,13 +71,27 @@ export const renderWeeklyDigestText = (digest: WeeklyDigest, familyName: string)
   }
 
   if (digest.eventCount === 0 && digest.tasks.length === 0) {
-    lines.push('Nothing scheduled. Enjoy it.');
+    lines.push('Nothing scheduled. Enjoy it.', '');
   }
 
+  if (extras.kidsIdeas.length) {
+    lines.push('IDEAS FOR THE KIDS');
+    extras.kidsIdeas.forEach((idea) => lines.push(`  ${idea.title}${idea.free ? ' (free)' : ''} - ${idea.where}. ${idea.pattern}. ${idea.url}`));
+    lines.push('');
+  }
+
+  if (extras.homeJobs.length) {
+    lines.push(`HOME JOBS (${extras.homeJobsTotal} open)`);
+    extras.homeJobs.forEach((job) => lines.push(`  [${job.urgencyLabel}] ${job.title} - ${job.who}${job.when ? `, ${job.overdue ? 'overdue since ' : ''}${job.when}` : ''}`));
+    if (extras.homeJobsTotal > extras.homeJobs.length) lines.push(`  ...and ${extras.homeJobsTotal - extras.homeJobs.length} more in the app`);
+    lines.push('');
+  }
+
+  lines.push(FOOTER_TEXT);
   return lines.join('\n');
 };
 
-export const renderWeeklyDigestHtml = (digest: WeeklyDigest, familyName: string) => {
+export const renderWeeklyDigestHtml = (digest: WeeklyDigest, familyName: string, extras: DigestExtras = EMPTY_DIGEST_EXTRAS) => {
   const dayRows = digest.days
     .filter((day) => day.entries.length > 0)
     .map((day) => {
@@ -126,6 +153,47 @@ export const renderWeeklyDigestHtml = (digest: WeeklyDigest, familyName: string)
       </table>`
     : '';
 
+  const ideasBlock = extras.kidsIdeas.length
+    ? `
+      <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;margin-top:24px;border-top:1px solid ${LINE};">
+        <tr><td style="padding-top:18px;">
+          <div style="font-size:13px;font-weight:700;color:${INK};">Ideas for the kids</div>
+          ${extras.kidsIdeas
+            .map(
+              (idea) => `
+              <div style="padding-top:10px;font-size:14px;color:${INK};">
+                <a href="${escape(idea.url)}" style="color:${ACCENT};font-weight:600;text-decoration:none;">${escape(idea.title)}</a>${idea.free ? ` <span style="font-size:11px;font-weight:700;color:#047857;">FREE</span>` : ''}${idea.pinned ? ` <span style="font-size:11px;color:${MUTED};">&#9733; picked by you</span>` : ''}
+                <div style="font-size:13px;color:${INK};padding-top:2px;">${escape(idea.summary)}</div>
+                <div style="font-size:12px;color:${MUTED};padding-top:2px;">${escape(idea.where)} &middot; ${escape(idea.pattern)}</div>
+              </div>`
+            )
+            .join('')}
+          <div style="font-size:11px;color:${MUTED};padding-top:10px;">Times and prices change, so check the venue before you go.</div>
+        </td></tr>
+      </table>`
+    : '';
+
+  const homeBlock = extras.homeJobs.length
+    ? `
+      <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;margin-top:24px;border-top:1px solid ${LINE};">
+        <tr><td style="padding-top:18px;">
+          <div style="font-size:13px;font-weight:700;color:${INK};">Home jobs <span style="font-weight:400;color:${MUTED};">(${extras.homeJobsTotal} open)</span></div>
+          ${extras.homeJobs
+            .map(
+              (job) => `
+              <div style="padding-top:8px;font-size:14px;color:${INK};">
+                ${job.safety ? '&#9888;&#65039; ' : ''}${escape(job.title)}
+                <div style="font-size:12px;padding-top:2px;color:${URGENCY_TONE[job.urgency] ?? MUTED};">
+                  ${escape(job.urgencyLabel)} &middot; ${escape(job.who)}${job.when ? ` &middot; ${job.overdue ? 'overdue, ' : ''}${escape(job.when)}` : ''}
+                </div>
+              </div>`
+            )
+            .join('')}
+          ${extras.homeJobsTotal > extras.homeJobs.length ? `<div style="font-size:12px;color:${MUTED};padding-top:8px;">&hellip;and ${extras.homeJobsTotal - extras.homeJobs.length} more in the app.</div>` : ''}
+        </td></tr>
+      </table>`
+    : '';
+
   const summary = [
     `${digest.eventCount} ${digest.eventCount === 1 ? 'thing' : 'things'} on`,
     digest.busiestDay ? `busiest is ${escape(digest.busiestDay.label)}` : null,
@@ -156,8 +224,10 @@ export const renderWeeklyDigestHtml = (digest: WeeklyDigest, familyName: string)
           <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;">${dayRows}</table>
           ${taskBlock}
           ${empty}
+          ${ideasBlock}
+          ${homeBlock}
           <p style="margin:26px 0 0;font-size:11px;color:${MUTED};line-height:1.5;">
-            Sent by Family Hub on Monday morning. Turn this off in Settings &rarr; Notifications.
+            Sent by Family Hub on Monday morning. Choose what goes in it under News &rarr; Kids Events &rarr; Monday email.
           </p>
         </td></tr>
       </table>
