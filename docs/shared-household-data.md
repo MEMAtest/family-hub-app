@@ -1,7 +1,7 @@
 # Shared household data
 
-Property records, the issues log, kids-activity bookmarks and the Monday email
-settings used to live only in the browser (`family-storage` in localStorage), so
+Property records, the issues log, kids-activity bookmarks, Kitchen usuals and
+fridge checks, and the Monday email settings used to live only in the browser (`family-storage` in localStorage), so
 each parent saw a different copy. They are now stored per family in the
 `family_documents` table and synced to every signed-in device.
 
@@ -39,6 +39,10 @@ changes to **Shared with family**.
   and a device whose local cache was reset never deletes shared data.
 - Devices pull on start, on focus, when coming back online and every minute,
   and push about a second after a change.
+
+Not everything goes through documents: the Kitchen's **Top-ups** shopping list
+uses the normal shopping list tables, and the meal log uses `meal_plans`
+(meals marked as made), so both also show up in Shopping and Meals.
 
 ## Tests
 

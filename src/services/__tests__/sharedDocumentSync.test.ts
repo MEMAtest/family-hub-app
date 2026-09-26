@@ -46,6 +46,8 @@ const createDeviceStore = (overrides: Record<string, unknown> = {}) =>
     propertyIssues: [],
     kidsEventMarks: [],
     digestPreferences: { kidsIdeas: true },
+    kitchenStaples: [],
+    fridgeChecks: [],
     sharedSyncStatus: 'local',
     setSharedSyncStatus: (status: string) => set({ sharedSyncStatus: status }),
     ...overrides,

@@ -28,6 +28,8 @@ const FIELD_FOR_KEY: Record<SharedDocumentKey, keyof FamilyState> = {
   'property.issues': 'propertyIssues',
   'kids.marks': 'kidsEventMarks',
   'digest.preferences': 'digestPreferences',
+  'kitchen.staples': 'kitchenStaples',
+  'kitchen.fridgeChecks': 'fridgeChecks',
 };
 
 const KEYS = Object.keys(FIELD_FOR_KEY) as SharedDocumentKey[];

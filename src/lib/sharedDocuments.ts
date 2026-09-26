@@ -12,6 +12,8 @@ export const SHARED_DOCUMENTS = {
   'property.issues': 'collection',
   'kids.marks': 'collection',
   'digest.preferences': 'object',
+  'kitchen.staples': 'collection',
+  'kitchen.fridgeChecks': 'collection',
 } as const;
 
 export type SharedDocumentKey = keyof typeof SHARED_DOCUMENTS;
@@ -43,6 +45,8 @@ export interface DigestPreferences {
   kidsLocalOnly: boolean;
   kidsFreeOnly: boolean;
   homeJobs: boolean;
+  mealsRecap: boolean; // what we made last week
+  stockUp: boolean; // usuals due to run out this week
   extraRecipients: string[]; // e.g. a partner without their own login
 }
 
@@ -51,6 +55,8 @@ export const DEFAULT_DIGEST_PREFERENCES: DigestPreferences = {
   kidsLocalOnly: false,
   kidsFreeOnly: false,
   homeJobs: true,
+  mealsRecap: true,
+  stockUp: true,
   extraRecipients: [],
 };
 
@@ -67,6 +73,8 @@ export const normalizeDigestPreferences = (raw: unknown): DigestPreferences => {
     kidsLocalOnly: bool(data.kidsLocalOnly, DEFAULT_DIGEST_PREFERENCES.kidsLocalOnly),
     kidsFreeOnly: bool(data.kidsFreeOnly, DEFAULT_DIGEST_PREFERENCES.kidsFreeOnly),
     homeJobs: bool(data.homeJobs, DEFAULT_DIGEST_PREFERENCES.homeJobs),
+    mealsRecap: bool(data.mealsRecap, DEFAULT_DIGEST_PREFERENCES.mealsRecap),
+    stockUp: bool(data.stockUp, DEFAULT_DIGEST_PREFERENCES.stockUp),
     extraRecipients: Array.from(new Set(
       extras
         .filter((email): email is string => typeof email === 'string')

@@ -22,6 +22,7 @@ import {
 } from '@/types/property.types';
 import { Contractor, ContractorAppointment } from '@/types/contractor.types';
 import { BrainProject, BrainNode, BrainEdge } from '@/types/brain.types';
+import type { FridgeCheck, Staple } from '@/types/kitchen.types';
 import {
   DEFAULT_DIGEST_PREFERENCES,
   type DigestPreferences,
@@ -307,6 +308,11 @@ interface SharedSlice {
   setDigestPreferences: (updates: Partial<DigestPreferences>) => void;
   sharedSyncStatus: SharedSyncStatus;
   setSharedSyncStatus: (status: SharedSyncStatus) => void;
+  kitchenStaples: Staple[];
+  setKitchenStaples: (staples: Staple[]) => void;
+  updateKitchenStaples: (updater: (staples: Staple[]) => Staple[]) => void;
+  fridgeChecks: FridgeCheck[];
+  addFridgeCheck: (check: FridgeCheck) => void;
 }
 
 export type FamilyState = PeopleSlice & CalendarSlice & ViewSlice & BudgetSlice & MealPlanningSlice & ShoppingSlice & GoalsSlice & TimelineSlice & PropertySlice & DatabaseSlice & ContractorSlice & BrainSlice & SharedSlice;
@@ -381,6 +387,12 @@ const createSharedSlice: StateCreator<FamilyState, [], [], SharedSlice> = (set) 
     set((state) => ({ digestPreferences: { ...state.digestPreferences, ...updates } })),
   sharedSyncStatus: 'local',
   setSharedSyncStatus: (status) => set({ sharedSyncStatus: status }),
+  kitchenStaples: [],
+  setKitchenStaples: (staples) => set({ kitchenStaples: staples }),
+  updateKitchenStaples: (updater) => set((state) => ({ kitchenStaples: updater(state.kitchenStaples) })),
+  fridgeChecks: [],
+  // Keep the last few checks; older photos' readings aren't useful.
+  addFridgeCheck: (check) => set((state) => ({ fridgeChecks: [check, ...state.fridgeChecks].slice(0, 8) })),
 });
 
 const createViewSlice: StateCreator<FamilyState, [], [], ViewSlice> = (set) => ({
@@ -1080,6 +1092,8 @@ export const useFamilyStore = create<FamilyState>()(
         // Shared household data: cached here for offline use, synced via family_documents
         kidsEventMarks: state.kidsEventMarks,
         digestPreferences: state.digestPreferences,
+        kitchenStaples: state.kitchenStaples,
+        fridgeChecks: state.fridgeChecks,
       }),
       migrate: (persistedState: any, version: number) => {
         // Clear old cache to force fresh load from database
