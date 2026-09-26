@@ -18,9 +18,16 @@ import {
   ProjectEmail,
   ProjectTask,
   ProjectMilestone,
+  PropertyIssue,
 } from '@/types/property.types';
 import { Contractor, ContractorAppointment } from '@/types/contractor.types';
 import { BrainProject, BrainNode, BrainEdge } from '@/types/brain.types';
+import type { FridgeCheck, Staple } from '@/types/kitchen.types';
+import {
+  DEFAULT_DIGEST_PREFERENCES,
+  type DigestPreferences,
+  type KidsEventMark,
+} from '@/lib/sharedDocuments';
 import {
   tremaineRoadAreaWatch,
   tremaineRoadBaseline,
@@ -208,6 +215,11 @@ interface PropertySlice {
   addTaskFollowUp: (taskId: string, followUp: TaskFollowUp) => void;
   updateTaskFollowUp: (taskId: string, followUpId: string, updates: Partial<TaskFollowUp>) => void;
   removeTaskFollowUp: (taskId: string, followUpId: string) => void;
+  // Issues log
+  propertyIssues: PropertyIssue[];
+  addPropertyIssues: (issues: PropertyIssue[]) => void;
+  updatePropertyIssue: (id: string, updates: Partial<PropertyIssue>) => void;
+  removePropertyIssue: (id: string) => void;
   // Projects
   propertyProjects: PropertyProject[];
   activeProjectId: string | null;
@@ -286,7 +298,24 @@ interface BrainSlice {
 }
 
 // Combined state
-export type FamilyState = PeopleSlice & CalendarSlice & ViewSlice & BudgetSlice & MealPlanningSlice & ShoppingSlice & GoalsSlice & TimelineSlice & PropertySlice & DatabaseSlice & ContractorSlice & BrainSlice;
+// Shared household data synced through family_documents (see sharedDocumentSync)
+export type SharedSyncStatus = 'local' | 'syncing' | 'synced' | 'offline' | 'unavailable';
+
+interface SharedSlice {
+  kidsEventMarks: KidsEventMark[];
+  toggleKidsEventMark: (eventId: string, kind: KidsEventMark['kind']) => void;
+  digestPreferences: DigestPreferences;
+  setDigestPreferences: (updates: Partial<DigestPreferences>) => void;
+  sharedSyncStatus: SharedSyncStatus;
+  setSharedSyncStatus: (status: SharedSyncStatus) => void;
+  kitchenStaples: Staple[];
+  setKitchenStaples: (staples: Staple[]) => void;
+  updateKitchenStaples: (updater: (staples: Staple[]) => Staple[]) => void;
+  fridgeChecks: FridgeCheck[];
+  addFridgeCheck: (check: FridgeCheck) => void;
+}
+
+export type FamilyState = PeopleSlice & CalendarSlice & ViewSlice & BudgetSlice & MealPlanningSlice & ShoppingSlice & GoalsSlice & TimelineSlice & PropertySlice & DatabaseSlice & ContractorSlice & BrainSlice & SharedSlice;
 
 // =================================================================
 // SLICE CREATORS
@@ -339,6 +368,31 @@ const createCalendarSlice: StateCreator<FamilyState, [], [], CalendarSlice> = (s
     set((state) => ({
       eventTemplates: state.eventTemplates.filter((t) => t.id !== id),
     })),
+});
+
+const createSharedSlice: StateCreator<FamilyState, [], [], SharedSlice> = (set) => ({
+  kidsEventMarks: [],
+  toggleKidsEventMark: (eventId, kind) =>
+    set((state) => {
+      const id = `${kind}:${eventId}`;
+      const exists = state.kidsEventMarks.some((mark) => mark.id === id);
+      return {
+        kidsEventMarks: exists
+          ? state.kidsEventMarks.filter((mark) => mark.id !== id)
+          : [...state.kidsEventMarks, { id, eventId, kind, at: new Date().toISOString() }],
+      };
+    }),
+  digestPreferences: DEFAULT_DIGEST_PREFERENCES,
+  setDigestPreferences: (updates) =>
+    set((state) => ({ digestPreferences: { ...state.digestPreferences, ...updates } })),
+  sharedSyncStatus: 'local',
+  setSharedSyncStatus: (status) => set({ sharedSyncStatus: status }),
+  kitchenStaples: [],
+  setKitchenStaples: (staples) => set({ kitchenStaples: staples }),
+  updateKitchenStaples: (updater) => set((state) => ({ kitchenStaples: updater(state.kitchenStaples) })),
+  fridgeChecks: [],
+  // Keep the last few checks; older photos' readings aren't useful.
+  addFridgeCheck: (check) => set((state) => ({ fridgeChecks: [check, ...state.fridgeChecks].slice(0, 8) })),
 });
 
 const createViewSlice: StateCreator<FamilyState, [], [], ViewSlice> = (set) => ({
@@ -655,6 +709,18 @@ const createPropertySlice: StateCreator<FamilyState, [], [], PropertySlice> = (s
           : task
       ),
     })),
+  // Issues log
+  propertyIssues: [],
+  addPropertyIssues: (issues) =>
+    set((state) => ({ propertyIssues: [...issues, ...state.propertyIssues] })),
+  updatePropertyIssue: (id, updates) =>
+    set((state) => ({
+      propertyIssues: state.propertyIssues.map((issue) =>
+        issue.id === id ? { ...issue, ...updates, updatedAt: new Date().toISOString() } : issue
+      ),
+    })),
+  removePropertyIssue: (id) =>
+    set((state) => ({ propertyIssues: state.propertyIssues.filter((issue) => issue.id !== id) })),
   // Projects
   propertyProjects: [],
   activeProjectId: null,
@@ -992,6 +1058,7 @@ export const useFamilyStore = create<FamilyState>()(
       ...createDatabaseSlice(...a),
       ...createContractorSlice(...a),
       ...createBrainSlice(...a),
+      ...createSharedSlice(...a),
     }),
     {
       name: 'family-storage',
@@ -1013,6 +1080,7 @@ export const useFamilyStore = create<FamilyState>()(
         areaWatchItems: state.areaWatchItems,
         propertyComponents: state.propertyComponents,
         propertyRole: state.propertyRole,
+        propertyIssues: state.propertyIssues,
         // Projects
         propertyProjects: state.propertyProjects,
         activeProjectId: state.activeProjectId,
@@ -1021,6 +1089,11 @@ export const useFamilyStore = create<FamilyState>()(
         contractorAppointments: state.contractorAppointments,
         // Brain (only persist active project selection)
         activeBrainProjectId: state.activeBrainProjectId,
+        // Shared household data: cached here for offline use, synced via family_documents
+        kidsEventMarks: state.kidsEventMarks,
+        digestPreferences: state.digestPreferences,
+        kitchenStaples: state.kitchenStaples,
+        fridgeChecks: state.fridgeChecks,
       }),
       migrate: (persistedState: any, version: number) => {
         // Clear old cache to force fresh load from database

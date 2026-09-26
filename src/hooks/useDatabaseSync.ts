@@ -233,7 +233,7 @@ const buildMealPlanningFromMeals = (meals: any[], base?: MealPlanning | null): M
   return planning;
 };
 
-const normaliseShoppingLists = (lists: any[]): ShoppingList[] => {
+export const normaliseShoppingLists = (lists: any[]): ShoppingList[] => {
   return lists.map((list, index) => {
     const items = Array.isArray(list?.items) ? list.items : [];
     const mappedItems = items.map((item: any, itemIndex: number) => ({

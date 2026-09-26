@@ -7,6 +7,7 @@ import {
   Home,
   Building2,
   ShoppingCart,
+  Refrigerator,
   UtensilsCrossed,
   Users,
   Target,
@@ -27,6 +28,7 @@ import { CalendarView } from './views/CalendarView';
 import { BudgetView } from './views/BudgetView';
 import { MealsView } from './views/MealsView';
 import { ShoppingView } from './views/ShoppingView';
+import { KitchenView } from './views/KitchenView';
 import { GoalsView } from './views/GoalsView';
 import { FamilyView } from './views/FamilyView';
 import { NewsView } from './views/NewsView';
@@ -58,6 +60,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'budget', label: 'Budget', mobileLabel: 'Money', icon: DollarSign, section: 'Plan' },
   { id: 'meals', label: 'Meals', mobileLabel: 'Meals', icon: UtensilsCrossed, section: 'Plan' },
   { id: 'shopping', label: 'Shopping', mobileLabel: 'Basket', icon: ShoppingCart, section: 'Plan' },
+  { id: 'kitchen', label: 'Kitchen', mobileLabel: 'Kitchen', icon: Refrigerator, section: 'Plan' },
   { id: 'goals', label: 'Goals', mobileLabel: 'Quests', icon: Target, section: 'Plan' },
   { id: 'property', label: 'Property', icon: Building2, section: 'Household' },
   { id: 'fitness', label: 'Fitness', icon: Dumbbell, section: 'Household' },
@@ -290,6 +293,8 @@ export const FamilyHubShell = () => {
         return <MealsView />;
       case 'shopping':
         return <ShoppingView />;
+      case 'kitchen':
+        return <KitchenView />;
       case 'fitness':
         return <FitnessView />;
       case 'perfume':
@@ -320,6 +325,7 @@ export const FamilyHubShell = () => {
       budget: 'Budget',
       meals: 'Meals',
       shopping: 'Shopping',
+      kitchen: 'Kitchen',
       fitness: 'Fitness',
       perfume: 'Perfume Hub',
       cycle: 'Health & Cycle',

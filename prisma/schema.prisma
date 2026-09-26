@@ -64,6 +64,7 @@ model Family {
   calendarEmailIntakes  CalendarEmailIntake[]
   googleCalendarConnections GoogleCalendarConnection[]
   gmailConnection       GmailConnection?
+  sharedDocuments       FamilyDocument[]
   householdInvites      HouseholdInvite[]
   budgetAccounts        BudgetAccount[]
   statementImports      StatementImport[]
@@ -1162,4 +1163,24 @@ model BrainEdge {
   @@unique([sourceNodeId, targetNodeId])
   @@index([projectId])
   @@map("brain_edges")
+}
+
+// Household data that is edited as a whole on the client (property records,
+// issues log, kids-activity bookmarks, digest preferences) and shared between
+// every signed-in device. `version` gives optimistic concurrency: a write must
+// name the version it was based on, otherwise the client merges and retries.
+model FamilyDocument {
+  id        String   @id @default(cuid())
+  familyId  String   @map("family_id")
+  key       String
+  data      Json
+  version   Int      @default(1)
+  updatedBy String?  @map("updated_by")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  family Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  @@unique([familyId, key])
+  @@map("family_documents")
 }

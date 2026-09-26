@@ -4,6 +4,7 @@ import { FamilyHubProviders } from '@/contexts/familyHub/FamilyHubProviders';
 import { FamilyHubShell } from './familyHub/FamilyHubShell';
 import { useHydration } from '@/hooks/useHydration';
 import { useDatabaseSync } from '@/hooks/useDatabaseSync';
+import { useSharedDocumentSync } from '@/hooks/useSharedDocumentSync';
 import type { DatabaseBootstrapFamily } from '@/services/databaseService';
 
 interface FamilyHubAppProps {
@@ -15,6 +16,8 @@ const FamilyHubAppContent = ({ bootstrapFamily }: FamilyHubAppProps) => {
   useHydration();
   // Sync data from database
   useDatabaseSync(bootstrapFamily);
+  // Share property data, kids bookmarks and digest settings across devices
+  useSharedDocumentSync();
 
   return <FamilyHubShell />;
 };

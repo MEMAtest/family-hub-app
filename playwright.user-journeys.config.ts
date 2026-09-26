@@ -13,6 +13,8 @@ export default defineConfig({
     'calendar-mobile.spec.ts',
     'calendar-school-document.spec.ts',
     'full-app-critical.spec.ts',
+    'household-sharing.spec.ts',
+    'kitchen.spec.ts',
     'mobile-persistence.spec.ts',
     'personal-hubs.spec.ts',
     'polish-navigation.spec.ts',
