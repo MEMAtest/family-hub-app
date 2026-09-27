@@ -25,7 +25,7 @@ const openKitchen = async (page: Page) => {
   await page.goto('/');
   await expect(page.getByRole('button', { name: /^Dashboard$/ }).first()).toBeVisible({ timeout: 90_000 });
   await page.locator('nav, aside').getByRole('button', { name: /^Kitchen$/ }).first().click();
-  await expect(page.getByLabel('Running low on something?')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByLabel(/What have you got/)).toBeVisible({ timeout: 30_000 });
 };
 
 const cleanUp = async () => {
@@ -81,6 +81,58 @@ test('one tap on one phone puts it on the list, and the other phone sees it', as
     where: { itemName: 'Bread', isCompleted: false, list: { familyId, listName: 'Top-ups' } },
   }), { timeout: 30_000 }).toBe(1);
   expect(await prisma.shoppingList.count({ where: { familyId, listName: 'Top-ups' } })).toBe(1);
+
+  await first.context.close();
+  await second.context.close();
+});
+
+test('saying what we have sets counts and run-out dates that the other phone sees', async ({ browser }) => {
+  const first = await newDevice(browser);
+  // The AI's reading is stood in for here (CI has no key); the live AI is checked separately.
+  await first.page.route('**/kitchen/stock-note', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ items: [
+      { name: 'Toilet roll', usual: 'Toilet roll', status: 'count', quantity: 20, unit: 'roll', unitContents: null, daysPerUnit: 2, rateSource: 'stated', assumption: 'You said one roll lasts about 2 days.', question: null, category: 'household' },
+      { name: 'Baby wipes', usual: 'Baby wipes', status: 'count', quantity: 12, unit: 'pack', unitContents: 'about 80 wipes', daysPerUnit: 3, rateSource: 'estimated', assumption: 'Read as a box of 12 packs.', question: 'How many wipes are in each pack?', category: 'kids' },
+      { name: 'Nappies', usual: null, status: 'count', quantity: 2, unit: 'pack', unitContents: 'about 50 nappies', daysPerUnit: 9, rateSource: 'estimated', assumption: 'About 50 nappies a pack.', question: null, category: 'kids' },
+    ] }),
+  }));
+  await openKitchen(first.page);
+  await first.page.getByLabel(/What have you got/).fill('we have 20 toilet tissue from costco, one lasts about 2 days, a box of 12 wipes, 2 diaper sets');
+  await first.page.getByRole('button', { name: 'Add', exact: true }).click();
+
+  const review = first.page.getByRole('region', { name: 'Check the stock note' });
+  await expect(review.getByTestId('stock-note-item')).toHaveCount(3, { timeout: 30_000 });
+  await expect(review.getByText(/Lasts about 40 days/)).toBeVisible();
+  await review.getByLabel('How many Nappies').fill('3');
+  await expect(review.getByText(/Lasts about 27 days/)).toBeVisible();
+  await review.getByRole('button', { name: 'Save' }).click();
+  await expect(review).toBeHidden();
+
+  await expect.poll(async () => {
+    const doc = await prisma.familyDocument.findUnique({ where: { familyId_key: { familyId, key: 'kitchen.staples' } } });
+    const staples = (doc?.data as any[] | undefined) ?? [];
+    return ['Toilet roll', 'Baby wipes', 'Nappies'].map((name) => staples.find((s) => s.name === name)?.stock?.countedQuantity ?? null);
+  }, { timeout: 30_000 }).toEqual([20, 12, 3]);
+
+  const second = await newDevice(browser);
+  await openKitchen(second.page);
+  // Counts show without opening every usual
+  const got = second.page.getByRole('list', { name: "What you've got" });
+  await expect(got.getByText(/About 20 rolls left · 40 days/)).toBeVisible({ timeout: 30_000 });
+  await expect(got.getByText(/About 3 packs left/)).toBeVisible();
+  await expect(got.getByText(/one roll ≈ 2 days \(you said\)/)).toBeVisible();
+
+  // Bought more on the second phone: it asks how many
+  await second.page.getByRole('button', { name: 'Bought Toilet roll' }).first().click();
+  await second.page.getByLabel('How many rolls of Toilet roll did you buy').fill('9');
+  await second.page.getByRole('button', { name: 'Add bought Toilet roll' }).click();
+  await expect(second.page.getByText(/About 29 rolls left/).first()).toBeVisible();
+  await expect.poll(async () => {
+    const doc = await prisma.familyDocument.findUnique({ where: { familyId_key: { familyId, key: 'kitchen.staples' } } });
+    return (doc?.data as any[] | undefined)?.find((s) => s.name === 'Toilet roll')?.stock?.addedSince;
+  }, { timeout: 30_000 }).toBe(9);
 
   await first.context.close();
   await second.context.close();

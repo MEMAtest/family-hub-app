@@ -150,7 +150,15 @@ export const buildDigestExtras = ({
   const stockUp = preferences.stockUp
     ? stockUpList(staples, monday, 7)
         .slice(0, MAX_STOCK_UP)
-        .map(({ staple, status }) => (status.state === 'out' || status.state === 'low' ? `${staple.name} (${status.state})` : staple.name))
+        .map(({ staple, status }) => {
+          if (status.state === 'out' || status.state === 'low') return `${staple.name} (${status.state})`;
+          // Counted stock knows its date: "Bread (runs out Sun 4 Oct)".
+          if (status.runsOutOn) {
+            const day = new Date(`${status.runsOutOn}T12:00:00Z`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Europe/London' });
+            return `${staple.name} (runs out ${day})`;
+          }
+          return staple.name;
+        })
     : [];
 
   return {

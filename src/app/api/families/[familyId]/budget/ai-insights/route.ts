@@ -1,13 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import Anthropic from '@anthropic-ai/sdk';
 import { deduplicateRecurringItems, filterBudgetItemsByMonth } from '@/utils/budgetMonthFilter';
 import prisma from '@/lib/prisma';
 import { requireFamilyAccess } from '@/lib/auth-utils';
+import { askVision } from '@/lib/visionAI';
 
-// Initialize Anthropic client
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY || '',
-});
+export const maxDuration = 60;
 
 export const GET = requireFamilyAccess(async (request: NextRequest, context, _authUser) => {
   try {
@@ -105,20 +102,12 @@ Keep the response concise, practical, and encouraging. Focus on specific, action
 
     try {
       // Get insights from Claude
-      const response = await anthropic.messages.create({
-        model: 'claude-3-haiku-20240307',
-        max_tokens: 1000,
-        messages: [
-          {
-            role: 'user',
-            content: prompt
-          }
-        ]
+      const insights = await askVision({
+        system: 'You are a practical, encouraging UK family budgeting adviser.',
+        prompt,
+        maxTokens: 1000,
+        effort: 'low',
       });
-
-      const insights = response.content[0].type === 'text'
-        ? response.content[0].text
-        : 'Unable to generate insights at this time.';
 
       return NextResponse.json({
         insights,

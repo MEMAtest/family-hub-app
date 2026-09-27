@@ -1,3 +1,4 @@
+import type { StockNoteItem } from '@/types/kitchen.types';
 import { resizeImage } from '@/utils/imageResize';
 
 export class PhotoReadError extends Error {
@@ -36,6 +37,32 @@ export const uploadKitchenPhoto = async <T,>(
     if (error instanceof PhotoReadError) throw error;
     throw new PhotoReadError((error as Error)?.name === 'AbortError'
       ? 'That took too long. Try again on a better connection.'
+      : 'Could not reach the server. Check your connection.');
+  } finally {
+    clearTimeout(timer);
+  }
+};
+
+// Sends a typed or spoken "what we've got" note to be read into counts and usage rates.
+export const readStockNote = async (familyId: string, text: string, usuals: string[]): Promise<StockNoteItem[]> => {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 60_000);
+  try {
+    const response = await fetch(`/api/families/${encodeURIComponent(familyId)}/kitchen/stock-note`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, usuals }),
+      signal: controller.signal,
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new PhotoReadError(body?.error || "Couldn't work that out just now.", Boolean(body?.unavailable));
+    }
+    return Array.isArray(body?.items) ? body.items : [];
+  } catch (error) {
+    if (error instanceof PhotoReadError) throw error;
+    throw new PhotoReadError((error as Error)?.name === 'AbortError'
+      ? 'That took too long. Try again in a moment.'
       : 'Could not reach the server. Check your connection.');
   } finally {
     clearTimeout(timer);

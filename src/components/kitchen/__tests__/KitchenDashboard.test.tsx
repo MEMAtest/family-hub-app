@@ -91,12 +91,83 @@ describe('usuals', () => {
   test('a typed note flags several things, and learns new ones', async () => {
     useFamilyStore.setState({ kitchenStaples: createStarterStaples() });
     render(<KitchenDashboard />);
-    fireEvent.change(screen.getByLabelText('Running low on something?'), { target: { value: 'out of eggs, low on nappies' } });
+    fireEvent.change(screen.getByLabelText(/What have you got/), { target: { value: 'out of eggs, low on nappies' } });
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Add' })); });
 
     expect(staple('Eggs').flag).toBe('out');
     expect(staple('Nappies')).toMatchObject({ flag: 'low', category: 'kids' });
     expect(topUps()!.items.map((i: any) => i.name)).toEqual(['Eggs', 'Nappies']);
+  });
+
+  test('a stock note is read by the AI, checked, edited, then saved as counts', async () => {
+    useFamilyStore.setState({ kitchenStaples: createStarterStaples() });
+    (global.fetch as jest.Mock).mockResolvedValueOnce(jsonResponse(200, { items: [
+      { name: 'Toilet roll', usual: 'Toilet roll', status: 'count', quantity: 20, unit: 'roll', unitContents: null, daysPerUnit: 2, rateSource: 'stated', assumption: 'You said 2 days a roll.', question: null, category: 'household' },
+      { name: 'Baby wipes', usual: 'Baby wipes', status: 'count', quantity: 12, unit: 'pack', unitContents: 'about 80 wipes', daysPerUnit: 3, rateSource: 'estimated', assumption: 'Read as 12 packs.', question: 'How many wipes per pack?', category: 'kids' },
+      { name: 'Nappies', usual: null, status: 'count', quantity: 2, unit: 'pack', unitContents: 'about 50 nappies', daysPerUnit: 9, rateSource: 'estimated', assumption: 'About 50 a pack.', question: null, category: 'kids' },
+      { name: 'Milk', usual: 'Milk', status: 'low', quantity: null, unit: 'bottle', unitContents: null, daysPerUnit: null, rateSource: 'estimated', assumption: null, question: null, category: 'food' },
+    ] }));
+    render(<KitchenDashboard />);
+    fireEvent.change(screen.getByLabelText(/What have you got/), { target: { value: 'we have 20 toilet tissue, one lasts 2 days, a box of 12 wipes, 2 diaper sets, low on milk' } });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Add' })); });
+
+    const [url, init] = (global.fetch as jest.Mock).mock.calls[0];
+    expect(url).toBe('/api/families/fam-1/kitchen/stock-note');
+    expect(JSON.parse(init.body)).toMatchObject({ text: expect.stringContaining('20 toilet tissue'), usuals: expect.arrayContaining(['Toilet roll']) });
+
+    const review = await screen.findByRole('region', { name: 'Check the stock note' });
+    expect(within(review).getAllByTestId('stock-note-item')).toHaveLength(4);
+    expect(within(review).getByText(/Lasts about 40 days/)).toBeInTheDocument();
+    expect(within(review).getByText('How many wipes per pack? Change the numbers above if you know.')).toBeInTheDocument();
+    // Nothing is saved until they confirm
+    expect(staple('Toilet roll').stock).toBeUndefined();
+
+    // They know better: 60-wipe packs go every 2 days
+    fireEvent.change(within(review).getByLabelText('Days one pack of Baby wipes lasts'), { target: { value: '2' } });
+    expect(within(review).getByText(/Lasts about 24 days/)).toBeInTheDocument();
+    await act(async () => { fireEvent.click(within(review).getByRole('button', { name: 'Save' })); });
+
+    expect(screen.queryByRole('region', { name: 'Check the stock note' })).not.toBeInTheDocument();
+    expect(staple('Toilet roll').stock).toMatchObject({ countedQuantity: 20, daysPerUnit: 2, unit: 'roll', rateSource: 'stated' });
+    expect(staple('Baby wipes').stock).toMatchObject({ countedQuantity: 12, daysPerUnit: 2, rateSource: 'stated' });
+    expect(staple('Nappies')).toMatchObject({ category: 'kids', stock: expect.objectContaining({ countedQuantity: 2, daysPerUnit: 9 }) });
+    expect(staple('Milk').flag).toBe('low');
+    expect(topUps()!.items.map((i: any) => i.name)).toEqual(['Milk']);
+  });
+
+  test('if the AI is down, a note that says "low" still marks things low', async () => {
+    useFamilyStore.setState({ kitchenStaples: createStarterStaples() });
+    (global.fetch as jest.Mock).mockResolvedValueOnce(jsonResponse(503, { error: 'Working out stock needs an AI key.', unavailable: true }));
+    render(<KitchenDashboard />);
+    fireEvent.change(screen.getByLabelText(/What have you got/), { target: { value: 'only 2 eggs left, low on bread' } });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Add' })); });
+    await waitFor(() => expect(staple('Bread').flag).toBe('low'));
+    expect(screen.queryByRole('region', { name: 'Check the stock note' })).not.toBeInTheDocument();
+  });
+
+  test('a plain "low on" note never waits for the AI', async () => {
+    useFamilyStore.setState({ kitchenStaples: createStarterStaples() });
+    render(<KitchenDashboard />);
+    fireEvent.change(screen.getByLabelText(/What have you got/), { target: { value: 'low on bread' } });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Add' })); });
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(staple('Bread').flag).toBe('low');
+  });
+
+  test('"Bought" on counted stock asks how many and adds them', async () => {
+    const counted = createStarterStaples().map((s) => (s.name === 'Toilet roll'
+      ? { ...s, stock: { unit: 'roll', daysPerUnit: 2, rateSource: 'stated' as const, countedQuantity: 4, countedAt: new Date().toISOString(), addedSince: 0, lastBoughtUnits: 9 } }
+      : s));
+    useFamilyStore.setState({ kitchenStaples: counted });
+    render(<KitchenDashboard />);
+    fireEvent.click(screen.getByRole('button', { name: /All \d+ usuals/ }));
+    fireEvent.click(screen.getAllByRole('button', { name: 'Bought Toilet roll' })[0]);
+    const input = screen.getByLabelText('How many rolls of Toilet roll did you buy') as HTMLInputElement;
+    expect(input.value).toBe('9');
+    fireEvent.change(input, { target: { value: '12' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add bought Toilet roll' }));
+    expect(staple('Toilet roll').stock).toMatchObject({ addedSince: 12, lastBoughtUnits: 12 });
+    expect(screen.getAllByText(/About 16 rolls left/).length).toBeGreaterThan(0);
   });
 
   test('ticking it off the shopping list counts as buying it', async () => {
@@ -200,6 +271,44 @@ describe('receipt restock', () => {
     expect(useFamilyStore.getState().kitchenStaples.some((s) => /candles/i.test(s.name))).toBe(false);
     const budgetCall = (global.fetch as jest.Mock).mock.calls.find(([url]) => String(url).includes('budget/expenses'));
     expect(JSON.parse(budgetCall[1].body)).toMatchObject({ expenseName: 'Tesco', amount: 23.5, category: 'Food & Dining' });
+  });
+
+  test('counted stock goes up by what the receipt says: a 9-pack is 9 rolls, not a whole usual shop', async () => {
+    const counted = createStarterStaples().map((s) => (s.name === 'Toilet roll'
+      ? { ...s, stock: { unit: 'roll', daysPerUnit: 2, rateSource: 'stated' as const, countedQuantity: 4, countedAt: new Date().toISOString(), addedSince: 0, lastBoughtUnits: 20 } }
+      : s));
+    useFamilyStore.setState({ kitchenStaples: counted });
+    (global.fetch as jest.Mock).mockResolvedValue(jsonResponse(200, {
+      store: 'Corner Superstore', date: null, total: null,
+      lines: [{ name: 'Andrex toilet tissue 9 pack', quantity: 1, usual: 'Toilet roll', units: 9 }],
+    }));
+    render(<KitchenDashboard />);
+    const file = new File([new Uint8Array(20)], 'receipt.jpg', { type: 'image/jpeg' });
+    await act(async () => { fireEvent.change(screen.getByLabelText('Receipt photo'), { target: { files: [file] } }); });
+
+    const form = (global.fetch as jest.Mock).mock.calls[0][1].body as FormData;
+    expect(JSON.parse(String(form.get('counted')))).toEqual({ 'Toilet roll': 'roll' });
+    expect(await screen.findByText('+9 rolls')).toBeInTheDocument();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Restock' })); });
+    expect(staple('Toilet roll').stock).toMatchObject({ addedSince: 9, lastBoughtUnits: 9 });
+  });
+
+  test('an older receipt than the count says it is already counted, and adds nothing', async () => {
+    const countedAt = new Date().toISOString();
+    const counted = createStarterStaples().map((s) => (s.name === 'Toilet roll'
+      ? { ...s, stock: { unit: 'roll', daysPerUnit: 2, rateSource: 'stated' as const, countedQuantity: 20, countedAt, addedSince: 0, lastBoughtUnits: 20 } }
+      : s));
+    useFamilyStore.setState({ kitchenStaples: counted });
+    (global.fetch as jest.Mock).mockResolvedValue(jsonResponse(200, {
+      store: 'Corner Superstore', date: '2026-01-02', total: null,
+      lines: [{ name: 'Andrex 9 pack', quantity: 1, usual: 'Toilet roll', units: 9 }],
+    }));
+    render(<KitchenDashboard />);
+    const file = new File([new Uint8Array(20)], 'receipt.jpg', { type: 'image/jpeg' });
+    await act(async () => { fireEvent.change(screen.getByLabelText('Receipt photo'), { target: { files: [file] } }); });
+    expect(await screen.findByText('already in your count')).toBeInTheDocument();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Restock' })); });
+    expect(staple('Toilet roll').stock).toMatchObject({ countedQuantity: 20, addedSince: 0 });
   });
 });
 

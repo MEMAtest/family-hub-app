@@ -67,19 +67,21 @@ export const parseFridgeReply = (reply: string): FridgeReading => {
 export const RECEIPT_SYSTEM =
   'You read UK supermarket receipts. Copy item lines faithfully and never invent items, prices or dates. Reply with JSON only.';
 
-export const receiptPrompt = (usuals: string[]) => `Read every product line on this receipt.
+// counted: usuals the household counts in a unit, e.g. { 'Toilet roll': 'roll' }.
+export const receiptPrompt = (usuals: string[], counted: Record<string, string> = {}) => `Read every product line on this receipt.
 
 The household tracks these "usuals": ${usuals.length ? usuals.join(', ') : '(none)'}.
-
+${Object.keys(counted).length ? `Some usuals are counted in a unit: ${Object.entries(counted).map(([name, unit]) => `${name} (in ${unit}s)`).join(', ')}.\n` : ''}
 Return JSON:
 {
   "store": "shop name or null",
   "date": "YYYY-MM-DD or null",
   "total": number or null,
-  "lines": [ { "name": "product as a plain name, e.g. 'Andrex toilet roll 9 pack'", "quantity": number, "usual": "the matching name from the usuals list, or null" } ]
+  "lines": [ { "name": "product as a plain name, e.g. 'Andrex toilet roll 9 pack'", "quantity": number, "usual": "the matching name from the usuals list, or null", "units": number or null } ]
 }
 
-Skip totals, discounts, bag charges, payment and loyalty lines. Combine repeated products into one line with a quantity.`;
+Skip totals, discounts, bag charges, payment and loyalty lines. Combine repeated products into one line with a quantity.
+"units" is only for a usual counted in a unit: how many of that unit the line adds in total, counting the quantity. E.g. one "Andrex 9 pack" for a usual counted in rolls = 9; "WaterWipes 4x60" for one counted in packs = 4. Otherwise null.`;
 
 const receiptSchema = z.object({
   store: z.string().trim().max(60).nullish().catch(null),
@@ -89,6 +91,7 @@ const receiptSchema = z.object({
     name: text(80),
     quantity: z.number().int().min(1).max(99).catch(1),
     usual: z.string().trim().max(60).nullish().catch(null),
+    units: z.number().positive().max(9999).nullish().catch(null),
   }).catch(null as never)).catch([]),
 });
 
@@ -96,6 +99,7 @@ export interface ReceiptReplyLine {
   name: string;
   quantity: number;
   usual: string | null;
+  units: number | null; // in the usual's counting unit, when it has one
 }
 
 export interface ReceiptReply {
@@ -111,12 +115,11 @@ export const parseReceiptReply = (reply: string, usuals: string[], today: Date =
   const lines = parsed.lines
     .filter((line): line is NonNullable<typeof line> => !!line && !!line.name)
     .slice(0, 80)
-    .map((line) => ({
-      name: line.name,
-      quantity: line.quantity,
+    .map((line) => {
       // Only accept a usual the household actually has.
-      usual: line.usual ? known.get(line.usual.toLowerCase()) ?? null : null,
-    }));
+      const usual = line.usual ? known.get(line.usual.toLowerCase()) ?? null : null;
+      return { name: line.name, quantity: line.quantity, usual, units: usual ? line.units ?? null : null };
+    });
   if (lines.length === 0) throw new Error('No items could be read from that receipt');
   const todayKey = today.toISOString().slice(0, 10);
   return {

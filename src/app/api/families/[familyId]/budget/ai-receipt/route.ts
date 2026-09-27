@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import Anthropic from '@anthropic-ai/sdk';
 import { requireFamilyAccess } from '@/lib/auth-utils';
+import { askVision, extractJsonObject, isSupportedImageType, VisionUnavailableError } from '@/lib/visionAI';
 
-// Initialize Anthropic client
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY || '',
-});
+export const runtime = 'nodejs';
+export const maxDuration = 60;
 
 export const POST = requireFamilyAccess(async (request: NextRequest, _context, _authUser) => {
   try {
@@ -32,17 +30,12 @@ export const POST = requireFamilyAccess(async (request: NextRequest, _context, _
     }
 
     try {
-      // Use Claude to analyze the receipt
-      const response = await anthropic.messages.create({
-        model: 'claude-3-haiku-20240307',
-        max_tokens: 1000,
-        messages: [
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'text',
-                text: `Analyze this receipt image and extract the following information. Return ONLY a JSON object with these fields:
+      if (!isSupportedImageType(mimeType)) {
+        return NextResponse.json({ error: 'Use a JPEG, PNG or WebP photo' }, { status: 415 });
+      }
+      const reply = await askVision({
+        system: 'You read UK receipts. Never invent a shop, amount or date. Reply with JSON only.',
+        prompt: `Analyze this receipt image and extract the following information. Return ONLY a JSON object with these fields:
 
 {
   "name": "store or vendor name",
@@ -52,58 +45,23 @@ export const POST = requireFamilyAccess(async (request: NextRequest, _context, _
   "items": array of item names (optional, max 5 main items)
 }
 
-If you cannot clearly read any field, use reasonable defaults:
-- name: "Receipt Scan"
-- amount: 0
-- category: "Other"
-- paymentDate: today's date
-- items: []
+If you cannot clearly read a field, use null for it (items: []). Do not guess.
 
-Important: Return ONLY the JSON object, no other text.`
-              },
-              {
-                type: 'image',
-                source: {
-                  type: 'base64',
-                  media_type: mimeType as any,
-                  data: base64Image
-                }
-              }
-            ]
-          }
-        ]
+Important: Return ONLY the JSON object, no other text.`,
+        image: Buffer.from(base64Image, 'base64'),
+        mimeType,
+        maxTokens: 1000,
+        effort: 'low',
       });
-
-      const content = response.content[0].type === 'text'
-        ? response.content[0].text
-        : '{}';
-
-      // Try to parse the JSON response
-      let extractedData;
-      try {
-        // Clean the response in case there's extra text
-        const jsonMatch = content.match(/\{[\s\S]*\}/);
-        const jsonStr = jsonMatch ? jsonMatch[0] : content;
-        extractedData = JSON.parse(jsonStr);
-      } catch (parseError) {
-        console.error('Failed to parse AI response:', content);
-
-        // Provide fallback data
-        extractedData = {
-          name: 'Receipt Scan',
-          amount: 0,
-          category: 'Other',
-          paymentDate: new Date().toISOString().split('T')[0],
-          items: []
-        };
-      }
+      const extractedData = extractJsonObject(reply) as Record<string, any>;
 
       // Ensure all required fields exist and are valid
       const validatedData = {
-        name: extractedData.name || 'Receipt Scan',
-        amount: parseFloat(extractedData.amount) || 0,
+        // Unreadable fields stay null so the form keeps what the user already typed.
+        name: typeof extractedData.name === 'string' && extractedData.name.trim() ? extractedData.name.trim() : null,
+        amount: Number.isFinite(parseFloat(extractedData.amount)) ? parseFloat(extractedData.amount) : null,
         category: extractedData.category || 'Other',
-        paymentDate: extractedData.paymentDate || new Date().toISOString().split('T')[0],
+        paymentDate: /^\d{4}-\d{2}-\d{2}$/.test(String(extractedData.paymentDate || '')) ? extractedData.paymentDate : null,
         items: Array.isArray(extractedData.items) ? extractedData.items : []
       };
 
@@ -120,18 +78,12 @@ Important: Return ONLY the JSON object, no other text.`
       return NextResponse.json(validatedData);
 
     } catch (aiError) {
-      console.error('AI API Error:', aiError);
-
-      // Return a mock response for testing when AI fails
-      const mockData = {
-        name: 'Test Receipt',
-        amount: 25.99,
-        category: 'Groceries',
-        paymentDate: new Date().toISOString().split('T')[0],
-        items: ['Item 1', 'Item 2']
-      };
-
-      return NextResponse.json(mockData);
+      // Never hand back made-up figures: the form would be pre-filled with them.
+      console.error('Receipt AI failed:', aiError);
+      if (aiError instanceof VisionUnavailableError) {
+        return NextResponse.json({ error: aiError.message, unavailable: true }, { status: 503 });
+      }
+      return NextResponse.json({ error: "Couldn't read that receipt. Try a clearer, well-lit photo, or fill it in by hand." }, { status: 502 });
     }
   } catch (error) {
     console.error('Receipt scanning error:', error);
