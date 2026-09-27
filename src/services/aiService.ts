@@ -14,7 +14,7 @@ import {
   openRouterModel,
   supportsEffort,
   THINKING_HEADROOM_TOKENS,
-  withRefusalFallback,
+  withModelFallback,
   type AIEffort,
 } from '@/lib/aiModels';
 import { logAIUsage } from '@/utils/aiTelemetry';
@@ -68,32 +68,31 @@ export class AIService {
     const safeUserPrompt = this.sanitisePrompt(userPrompt);
     const feature = systemPrompt.split('\n')[0]?.slice(0, 60) || 'ai.chat';
 
-    if (this.anthropic) {
+    // OpenRouter first: its default models are far cheaper (see aiModels.ts).
+    if (this.openRouterApiKey) {
       try {
-        return await withRefusalFallback(
-          (model) => this.chatWithAnthropic(feature, safeSystemPrompt, safeUserPrompt, maxTokens, limits, model),
-          this.anthropicModel,
-          anthropicFallbackModel()
-        );
+        return await this.openRouterWithFallback(feature, safeSystemPrompt, safeUserPrompt, maxTokens, limits);
       } catch (error) {
-        if (!this.openRouterApiKey) {
+        if (!this.anthropic) {
           throw error;
         }
-
-        console.warn('Anthropic AI call failed; using OpenRouter fallback:', error instanceof Error ? error.message : 'Unknown error');
-        return await this.openRouterWithFallback(feature, safeSystemPrompt, safeUserPrompt, maxTokens, limits);
+        console.warn('OpenRouter AI call failed; using Anthropic fallback:', error instanceof Error ? error.message : 'Unknown error');
       }
     }
 
-    if (this.openRouterApiKey) {
-      return await this.openRouterWithFallback(feature, safeSystemPrompt, safeUserPrompt, maxTokens, limits);
+    if (this.anthropic) {
+      return await withModelFallback(
+        (model) => this.chatWithAnthropic(feature, safeSystemPrompt, safeUserPrompt, maxTokens, limits, model),
+        this.anthropicModel,
+        anthropicFallbackModel()
+      );
     }
 
     throw new Error('No AI provider key configured');
   }
 
   private openRouterWithFallback(feature: string, system: string, user: string, maxTokens: number, limits: ChatLimits) {
-    return withRefusalFallback(
+    return withModelFallback(
       (model) => this.chatWithOpenRouter(feature, system, user, maxTokens, limits, model),
       this.openRouterModel,
       openRouterFallbackModel()

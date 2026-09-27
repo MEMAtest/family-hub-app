@@ -8,7 +8,7 @@ import {
   openRouterVisionModel,
   supportsEffort,
   THINKING_HEADROOM_TOKENS,
-  withRefusalFallback,
+  withModelFallback,
   type AIEffort,
 } from '@/lib/aiModels';
 
@@ -111,18 +111,19 @@ export const askVision = async (req: VisionRequest): Promise<string> => {
   if (!anthropicKey && !openRouterKey) {
     throw new VisionUnavailableError('Reading photos needs an AI key (ANTHROPIC_API_KEY or OPENROUTER_API_KEY).');
   }
-  if (anthropicKey) {
+  // OpenRouter first: its default models are far cheaper (see aiModels.ts).
+  if (openRouterKey) {
     try {
-      return await withRefusalFallback(
-        (model) => withAnthropic(request, anthropicKey, model), anthropicVisionModel(), anthropicFallbackModel()
+      return await withModelFallback(
+        (model) => withOpenRouter(request, openRouterKey, model), openRouterVisionModel(), openRouterFallbackModel()
       );
     } catch (error) {
-      if (!openRouterKey) throw error;
-      console.warn('Claude vision failed; trying OpenRouter:', error instanceof Error ? error.message : error);
+      if (!anthropicKey) throw error;
+      console.warn('OpenRouter failed; trying Claude:', error instanceof Error ? error.message : error);
     }
   }
-  return withRefusalFallback(
-    (model) => withOpenRouter(request, openRouterKey!, model), openRouterVisionModel(), openRouterFallbackModel()
+  return withModelFallback(
+    (model) => withAnthropic(request, anthropicKey!, model), anthropicVisionModel(), anthropicFallbackModel()
   );
 };
 
