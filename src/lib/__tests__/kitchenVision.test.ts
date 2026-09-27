@@ -51,9 +51,9 @@ describe('parseReceiptReply', () => {
       date: '2026-09-25',
       total: 42.1,
       lines: [
-        { name: 'Andrex toilet roll 9 pack', quantity: 1, usual: 'toilet roll' },
+        { name: 'Andrex toilet roll 9 pack', quantity: 1, usual: 'toilet roll', units: 9 },
         { name: 'Semi skimmed milk 4 pints', quantity: 2, usual: 'Milk' },
-        { name: 'Birthday candles', quantity: 1, usual: 'Candles' },
+        { name: 'Birthday candles', quantity: 1, usual: 'Candles', units: 3 },
       ],
     });
     expect(parseReceiptReply(reply, usuals, today)).toEqual({
@@ -61,9 +61,10 @@ describe('parseReceiptReply', () => {
       date: '2026-09-25',
       total: 42.1,
       lines: [
-        { name: 'Andrex toilet roll 9 pack', quantity: 1, usual: 'Toilet roll' },
-        { name: 'Semi skimmed milk 4 pints', quantity: 2, usual: 'Milk' },
-        { name: 'Birthday candles', quantity: 1, usual: null },
+        { name: 'Andrex toilet roll 9 pack', quantity: 1, usual: 'Toilet roll', units: 9 },
+        { name: 'Semi skimmed milk 4 pints', quantity: 2, usual: 'Milk', units: null },
+        // units only ever describe a usual the household has
+        { name: 'Birthday candles', quantity: 1, usual: null, units: null },
       ],
     });
   });
@@ -73,10 +74,16 @@ describe('parseReceiptReply', () => {
     const reading = parseReceiptReply(reply, usuals, today);
     expect(reading.date).toBeNull();
     expect(reading.total).toBeNull();
-    expect(reading.lines).toEqual([{ name: 'Bread', quantity: 1, usual: null }]);
+    expect(reading.lines).toEqual([{ name: 'Bread', quantity: 1, usual: null, units: null }]);
   });
 
   test('fails honestly when no lines were read', () => {
     expect(() => parseReceiptReply('{"lines": []}', usuals, today)).toThrow(/No items/);
   });
+});
+
+test('the receipt prompt names the unit each counted usual is kept in', () => {
+  const { receiptPrompt } = jest.requireActual('@/lib/kitchenVision');
+  expect(receiptPrompt(['Toilet roll', 'Milk'], { 'Toilet roll': 'roll' })).toContain('Some usuals are counted in a unit: Toilet roll (in rolls).');
+  expect(receiptPrompt(['Milk'])).not.toContain('Some usuals are counted');
 });

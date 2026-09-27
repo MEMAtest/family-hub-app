@@ -9,6 +9,7 @@ import {
   createStaple,
   createStarterStaples,
   flagStaple,
+  pluralUnit,
   recordPurchase,
   stapleStatus,
   STARTER_STAPLES,
@@ -40,6 +41,7 @@ export const UsualsPanel = () => {
   const { addToTopUps, pendingNames } = useTopUpsList();
   const [showAll, setShowAll] = useState(false);
   const [newName, setNewName] = useState('');
+  const [buying, setBuying] = useState<{ id: string; units: string; where: string } | null>(null);
   const today = useMemo(() => new Date(), [staples]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const withStatus = useMemo(
@@ -64,9 +66,22 @@ export const UsualsPanel = () => {
     else toast.success(added.length ? `${staple.name} added to Top-ups` : `${staple.name} marked ${flag}; it's already on Top-ups`);
   };
 
-  const handleBought = (staple: Staple) => {
+  // Counted stock needs to know how many came home; everything else just learns the date.
+  const handleBought = (staple: Staple, where: string) => {
+    if (staple.stock) {
+      setBuying({ id: staple.id, units: String(staple.stock.lastBoughtUnits ?? 1), where });
+      return;
+    }
     change(staple.id, (s) => recordPurchase(s));
     toast.success(`Got it — ${staple.name} restocked`);
+  };
+
+  const confirmBought = (staple: Staple) => {
+    const units = Number(buying?.units);
+    if (!Number.isFinite(units) || units <= 0) return;
+    change(staple.id, (s) => recordPurchase(s, new Date(), units));
+    setBuying(null);
+    toast.success(`Got it — ${units} ${pluralUnit(staple.stock?.unit ?? 'item', units)} of ${staple.name} added`);
   };
 
   const handleRemove = (staple: Staple) => {
@@ -110,6 +125,11 @@ export const UsualsPanel = () => {
   }
 
   const attention = withStatus.filter(({ status }) => ['out', 'low', 'due', 'soon'].includes(status.state));
+  // Counted stock that's fine for now still gets its own list, soonest first,
+  // so run-out dates are visible without opening every usual.
+  const counted = withStatus
+    .filter(({ staple, status }) => staple.stock && !['out', 'low', 'due', 'soon'].includes(status.state))
+    .sort((a, b) => (a.status.daysLeft ?? 0) - (b.status.daysLeft ?? 0));
   const byCategory = (Object.keys(CATEGORY_TITLES) as StapleCategory[])
     .map((category) => ({
       category,
@@ -119,11 +139,26 @@ export const UsualsPanel = () => {
     }))
     .filter(({ rows }) => rows.length > 0);
 
-  const Row = ({ staple, status }: (typeof withStatus)[number]) => {
+  // Called as a function, not rendered as <Row />: a component defined in the
+  // render would remount every time and drop focus from the "how many" box.
+  const renderRow = ({ staple, status }: (typeof withStatus)[number], where: string) => {
     const onList = pendingNames.has(staple.name.toLowerCase());
+    const stock = staple.stock;
+    const rateNote = stock
+      ? `one ${stock.unit} ≈ ${stock.daysPerUnit} day${stock.daysPerUnit === 1 ? '' : 's'} (${stock.rateSource === 'stated' ? 'you said' : stock.rateSource === 'learned' ? 'learned' : 'estimate'})`
+      : null;
+    const isBuying = buying?.id === staple.id && buying.where === where; // one row, even if listed twice
     return (
-      <li className="flex flex-wrap items-center gap-2 py-2">
-        <span className="min-w-[8rem] flex-1 text-sm font-medium text-gray-900 dark:text-slate-100">{staple.name}</span>
+      <li key={staple.id} className="flex flex-wrap items-center gap-2 py-2">
+        <span className="min-w-[8rem] flex-1 text-sm font-medium text-gray-900 dark:text-slate-100">
+          {staple.name}
+          {rateNote && (
+            <span className="block text-xs font-normal text-gray-500 dark:text-slate-400" title={stock?.assumption}>
+              {status.runsOutOn && status.state !== 'due' && `Runs out around ${new Date(`${status.runsOutOn}T12:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} · `}
+              {rateNote}
+            </span>
+          )}
+        </span>
         <span className={`rounded-full px-2 py-0.5 text-xs ${STATE_STYLES[status.state]}`}>{status.label}</span>
         {onList && <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">On Top-ups</span>}
         <div className="ml-auto flex gap-1">
@@ -133,11 +168,28 @@ export const UsualsPanel = () => {
           <button onClick={() => void handleFlag(staple, 'out')} disabled={staple.flag === 'out'}
             className={`${smallButton} border-red-200 text-red-700 hover:bg-red-50 dark:border-red-500/40 dark:text-red-200`}
             aria-label={`Out of ${staple.name}`}>Out</button>
-          <button onClick={() => handleBought(staple)}
-            className={`${smallButton} border-emerald-200 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-500/40 dark:text-emerald-300`}
-            aria-label={`Bought ${staple.name}`}>
-            <Check className="inline h-3 w-3" /> Bought
-          </button>
+          {isBuying ? (
+            <span className="flex items-center gap-1">
+              <input type="number" min={1} step="any" inputMode="decimal" autoFocus value={buying.units}
+                onChange={(e) => setBuying({ id: staple.id, units: e.target.value, where })}
+                onKeyDown={(e) => { if (e.key === 'Enter') confirmBought(staple); if (e.key === 'Escape') setBuying(null); }}
+                aria-label={`How many ${pluralUnit(stock?.unit ?? 'item', 2)} of ${staple.name} did you buy`}
+                className="w-14 rounded-md border border-gray-300 px-1.5 py-0.5 text-xs text-gray-900 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100" />
+              <span className="text-xs text-gray-500">{pluralUnit(stock?.unit ?? 'item', Number(buying.units) || 2)}</span>
+              <button onClick={() => confirmBought(staple)}
+                className={`${smallButton} border-emerald-200 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-500/40 dark:text-emerald-300`}
+                aria-label={`Add bought ${staple.name}`}>Add</button>
+              <button onClick={() => setBuying(null)} className="rounded-md p-1 text-gray-400 hover:bg-gray-100" aria-label="Cancel">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </span>
+          ) : (
+            <button onClick={() => handleBought(staple, where)}
+              className={`${smallButton} border-emerald-200 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-500/40 dark:text-emerald-300`}
+              aria-label={`Bought ${staple.name}`}>
+              <Check className="inline h-3 w-3" /> Bought
+            </button>
+          )}
           {showAll && (
             <button onClick={() => handleRemove(staple)} className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-red-600 dark:hover:bg-slate-800" aria-label={`Stop tracking ${staple.name}`}>
               <X className="h-3.5 w-3.5" />
@@ -163,10 +215,19 @@ export const UsualsPanel = () => {
         <ul className="mt-2 divide-y divide-gray-100 dark:divide-slate-800">
           {attention
             .sort((a, b) => (a.status.daysLeft ?? -1) - (b.status.daysLeft ?? -1))
-            .map((entry) => <Row key={entry.staple.id} {...entry} />)}
+            .map((entry) => renderRow(entry, 'attention'))}
         </ul>
       ) : (
         <p className="mt-2 text-sm text-gray-500 dark:text-slate-400">Nothing is running low. Tap “Low” or “Out” on anything below when it is.</p>
+      )}
+
+      {counted.length > 0 && (
+        <div className="mt-3">
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">What you&apos;ve got</h4>
+          <ul className="divide-y divide-gray-100 dark:divide-slate-800" aria-label="What you've got">
+            {counted.map((entry) => renderRow(entry, 'counted'))}
+          </ul>
+        </div>
       )}
 
       <button
@@ -184,7 +245,7 @@ export const UsualsPanel = () => {
             <div key={category}>
               <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">{CATEGORY_TITLES[category]}</h4>
               <ul className="divide-y divide-gray-100 dark:divide-slate-800">
-                {rows.map((entry) => <Row key={entry.staple.id} {...entry} />)}
+                {rows.map((entry) => renderRow(entry, 'all'))}
               </ul>
             </div>
           ))}

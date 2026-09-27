@@ -179,7 +179,8 @@ const AddExpenseModal: React.FC<AddExpenseModalProps> = ({ isOpen, onClose, onSa
               });
 
               if (!response.ok) {
-                throw new Error(`Receipt scan failed: ${response.status}`);
+                const failure = await response.json().catch(() => null);
+                throw new Error(failure?.error || `Receipt scan failed: ${response.status}`);
               }
 
               const scannedData = await response.json();

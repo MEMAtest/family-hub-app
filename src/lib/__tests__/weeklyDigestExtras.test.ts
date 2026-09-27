@@ -3,7 +3,7 @@ import { buildWeeklyDigest } from '../weeklyDigest';
 import { renderWeeklyDigestHtml, renderWeeklyDigestSubject, renderWeeklyDigestText } from '../weeklyDigestEmail';
 import { DEFAULT_DIGEST_PREFERENCES, normalizeDigestPreferences } from '../sharedDocuments';
 import type { PropertyIssue } from '@/types/property.types';
-import { createStaple, flagStaple, recordPurchase } from '@/utils/staples';
+import { createStaple, flagStaple, recordPurchase, setStockCount } from '@/utils/staples';
 
 const WEEK = '2026-09-28';
 
@@ -82,16 +82,18 @@ describe('kitchen sections', () => {
     const milk = recordPurchase(createStaple('Milk', { intervalDays: 3 }), new Date(2026, 8, 26, 12)); // due ~29th
     const rice = recordPurchase(createStaple('Rice', { intervalDays: 60 }), new Date(2026, 8, 26, 12));
     const tissues = flagStaple(createStaple('Tissues'), 'out');
+    // Counted on the 26th: 2 loaves at 2 days each, so gone on the 30th
+    const bread = setStockCount(createStaple('Bread'), { quantity: 2, unit: 'loaf', daysPerUnit: 2 }, new Date(Date.UTC(2026, 8, 26, 12)));
     const extras = buildDigestExtras({
       preferences: DEFAULT_DIGEST_PREFERENCES,
       issues: [],
       marks: [],
       weekStart: WEEK,
       mealsLastWeek: [{ date: '2026-09-23', name: 'Jollof rice' }, { date: '2026-09-21', name: 'Fish fingers' }],
-      staples: [rice, milk, tissues],
+      staples: [rice, milk, tissues, bread],
     });
     expect(extras.madeLastWeek).toEqual([{ day: 'Mon', name: 'Fish fingers' }, { day: 'Wed', name: 'Jollof rice' }]);
-    expect(extras.stockUp).toEqual(['Tissues (out)', 'Milk']);
+    expect(extras.stockUp).toEqual(['Tissues (out)', 'Milk', 'Bread (runs out Wed 30 Sept)']);
 
     const text = renderWeeklyDigestText(buildWeeklyDigest([], [], [], WEEK), 'Home', extras);
     expect(text).toContain('WHAT YOU MADE LAST WEEK');

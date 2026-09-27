@@ -1,8 +1,21 @@
 import Anthropic from '@anthropic-ai/sdk';
+import {
+  AIRefusalError,
+  anthropicFallbackModel,
+  anthropicVisionModel,
+  firstText,
+  openRouterFallbackModel,
+  openRouterVisionModel,
+  supportsEffort,
+  THINKING_HEADROOM_TOKENS,
+  withRefusalFallback,
+  type AIEffort,
+} from '@/lib/aiModels';
 
-// Reads a photo with an AI model: Claude first, OpenRouter as the fallback
-// (same providers and env vars as aiService). No made-up results: if no
-// provider is configured or both fail, the caller gets an error to show.
+// Asks an AI model about a photo (or plain text, when there is no image):
+// Claude first, OpenRouter as the fallback (same providers and env vars as
+// aiService). No made-up results: if no provider is configured or both fail,
+// the caller gets an error to show.
 
 export class VisionUnavailableError extends Error {}
 
@@ -18,32 +31,36 @@ export const visionConfigured = () => Boolean(process.env.ANTHROPIC_API_KEY || p
 interface VisionRequest {
   system: string;
   prompt: string;
-  image: Buffer;
-  mimeType: SupportedImageType;
+  image?: Buffer;
+  mimeType?: SupportedImageType;
   maxTokens?: number;
   timeoutMs?: number;
+  effort?: AIEffort;
 }
 
-const withAnthropic = async (req: VisionRequest, apiKey: string) => {
-  const client = new Anthropic({ apiKey, maxRetries: 1, timeout: req.timeoutMs });
+const withAnthropic = async (req: VisionRequest, apiKey: string, model: string) => {
+  // No SDK retries: OpenRouter is the retry, and both attempts must fit in a 60s function.
+  const client = new Anthropic({ apiKey, maxRetries: 0, timeout: req.timeoutMs });
+  const content: Anthropic.ContentBlockParam[] = [{ type: 'text', text: req.prompt }];
+  if (req.image && req.mimeType) {
+    content.unshift({ type: 'image', source: { type: 'base64', media_type: req.mimeType, data: req.image.toString('base64') } });
+  }
   const message = await client.messages.create({
-    model: process.env.ANTHROPIC_VISION_MODEL || process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-20250514',
-    max_tokens: req.maxTokens ?? 1500,
+    model,
+    max_tokens: (req.maxTokens ?? 1500) + THINKING_HEADROOM_TOKENS,
     system: req.system,
-    messages: [{
-      role: 'user',
-      content: [
-        { type: 'image', source: { type: 'base64', media_type: req.mimeType, data: req.image.toString('base64') } },
-        { type: 'text', text: req.prompt },
-      ],
-    }],
-  });
-  const block = message.content.find((part) => part.type === 'text');
-  if (!block || block.type !== 'text') throw new Error('No text in the AI reply');
-  return block.text;
+    messages: [{ role: 'user', content }],
+    // output_config is newer than the installed SDK's types; it is passed through as-is.
+    ...(req.effort && supportsEffort(model) ? { output_config: { effort: req.effort } } : {}),
+  } as Anthropic.MessageCreateParamsNonStreaming);
+  if ((message.stop_reason as string) === 'refusal') throw new AIRefusalError(model);
+  if (message.stop_reason === 'max_tokens') throw new Error('The AI reply was cut off');
+  const text = firstText(message.content);
+  if (!text) throw new Error('No text in the AI reply');
+  return text;
 };
 
-const withOpenRouter = async (req: VisionRequest, apiKey: string) => {
+const withOpenRouter = async (req: VisionRequest, apiKey: string, model: string) => {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), req.timeoutMs);
   try {
@@ -57,23 +74,28 @@ const withOpenRouter = async (req: VisionRequest, apiKey: string) => {
         'X-Title': 'Omosanya Home',
       },
       body: JSON.stringify({
-        model: process.env.OPENROUTER_VISION_MODEL || process.env.OPENROUTER_MODEL || 'openai/gpt-4o-mini',
-        temperature: 0,
-        max_tokens: req.maxTokens ?? 1500,
+        model,
+        max_tokens: (req.maxTokens ?? 1500) + THINKING_HEADROOM_TOKENS,
+        ...(req.effort && supportsEffort(model) ? { reasoning: { effort: req.effort } } : {}),
         messages: [
           { role: 'system', content: req.system },
           {
             role: 'user',
-            content: [
-              { type: 'text', text: req.prompt },
-              { type: 'image_url', image_url: { url: `data:${req.mimeType};base64,${req.image.toString('base64')}` } },
-            ],
+            content: req.image && req.mimeType
+              ? [
+                { type: 'text', text: req.prompt },
+                { type: 'image_url', image_url: { url: `data:${req.mimeType};base64,${req.image.toString('base64')}` } },
+              ]
+              : req.prompt,
           },
         ],
       }),
     });
     const payload = await response.json().catch(() => null);
     if (!response.ok) throw new Error(payload?.error?.message || `OpenRouter returned ${response.status}`);
+    const choice = payload?.choices?.[0];
+    if (choice?.finish_reason === 'content_filter' || choice?.native_finish_reason === 'refusal') throw new AIRefusalError(model);
+    if (choice?.finish_reason === 'length') throw new Error('The AI reply was cut off');
     const content = payload?.choices?.[0]?.message?.content;
     if (typeof content !== 'string' || !content.trim()) throw new Error('No text in the AI reply');
     return content;
@@ -91,13 +113,17 @@ export const askVision = async (req: VisionRequest): Promise<string> => {
   }
   if (anthropicKey) {
     try {
-      return await withAnthropic(request, anthropicKey);
+      return await withRefusalFallback(
+        (model) => withAnthropic(request, anthropicKey, model), anthropicVisionModel(), anthropicFallbackModel()
+      );
     } catch (error) {
       if (!openRouterKey) throw error;
       console.warn('Claude vision failed; trying OpenRouter:', error instanceof Error ? error.message : error);
     }
   }
-  return withOpenRouter(request, openRouterKey!);
+  return withRefusalFallback(
+    (model) => withOpenRouter(request, openRouterKey!, model), openRouterVisionModel(), openRouterFallbackModel()
+  );
 };
 
 // Pull the first JSON object out of a model reply (tolerates ``` fences and chatter).

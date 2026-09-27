@@ -130,11 +130,51 @@ Full design of the sync layer: [`docs/shared-household-data.md`](./shared-househ
 
 ---
 
+## Counted stock and AI models (follow-up, 27 September 2026)
+
+**Counted stock.** Saying "we have 20 toilet rolls from Costco, one lasts about 2 days; a box of
+12 wipes; 2 nappy sets" in the Kitchen box sends the note to `POST kitchen/stock-note`. The AI
+returns a count, unit and days-per-unit for each item, using the household's members and
+children's ages (ages only; names and birthdays never leave the server). The family checks and
+edits the numbers on a review card before anything is saved. After that the usual shows
+"About 20 rolls left · 40 days" and a run-out date, under "What you've got".
+
+- Maths lives in `src/utils/staples.ts` (`stockUnitsLeft`, `setStockCount`, `recordPurchase`).
+  Units left = last real count + units bought since − days elapsed / days-per-unit. There is no
+  running tally. A recount, or tapping "Out", teaches the rate, meeting the old one halfway. A
+  rate the family states always wins.
+- "Bought" on a counted usual asks how many. Receipts ask the AI how many of the usual's unit
+  each line adds (a 9-pack is 9 rolls). Don't fall back to "one shop's worth" when the AI
+  gave a number.
+- Plain notes ("low on eggs, out of milk") never call the AI (`looksLikeStockCount`). If the AI
+  fails on a note that says low/out, those items are still flagged the old way.
+- The Monday email lists counted items with their date: "Bread (runs out Wed 30 Sept)".
+
+**AI models.** The old default `claude-sonnet-4-20250514` now returns 404, and the budget routes
+used the retired `claude-3-haiku-20240307`. Defaults now live in `src/lib/aiModels.ts`
+(`claude-opus-5`, and `anthropic/claude-opus-5` on OpenRouter; env vars still override). New
+Claude models can reply with a thinking block first, so read the text block with `firstText`
+and never assume `content[0]`. **As of 27 Sep the `ANTHROPIC_API_KEY` in `.env.local` has no credit
+("credit balance is too low"), so every call falls through to OpenRouter.** Measured on the live
+keys: stock note 7-13s, fridge photo ~17s, receipt ~9s, issue triage ~12s (its timeout went
+from 8s to 20s so the AI answer isn't always discarded for the rules fallback).
+
+**Refusals.** Opus 5's safety classifiers sometimes stop harmless requests part-way. The
+receipt prompt was refused 6 times in 6 in one run, and the reply ends mid-JSON
+(`finish_reason: content_filter` on OpenRouter, `stop_reason: refusal` on Anthropic). Both
+AI paths treat that as `AIRefusalError` and retry once on `claude-opus-4-8` / `anthropic/claude-opus-4.8`
+(`withRefusalFallback` in `src/lib/aiModels.ts`; override with `*_FALLBACK_MODEL`). In a
+6-run replay afterwards, 2 were refused and both recovered. Don't remove this because a
+single manual test passed; that's how it was missed the first time.
+
+The budget `ai-receipt` route no longer returns made-up "Test Receipt £25.99" data on failure;
+it returns an error, and unreadable fields come back as null.
+
 ## What is left, in order
 
-1. Run the post-deploy AI checks above and tune the prompts in `src/lib/kitchenVision.ts` /
-   `src/services/aiService.ts#enhancePropertyIssues` if readings are poor.
-2. Fix the pre-existing mock-data fallback in the Budget `ai-receipt` route.
+1. Live AI checks were done locally on 27 Sep with real keys: fridge, receipt, stock note, issue
+   triage, budget receipt. Tune prompts only if real use shows poor readings.
+2. Top up the Anthropic account, or remove `ANTHROPIC_API_KEY` so calls stop failing first.
 3. Let the Meals store hold more than one meal per day.
 4. Optional: an 8am-all-year digest (needs a second cron or an in-route London-hour check;
    check the Vercel plan's cron limits first).

@@ -2,19 +2,21 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Mail, Mic, MicOff, Refrigerator, ShoppingCart } from 'lucide-react';
+import { Loader2, Mail, Mic, MicOff, Refrigerator, ShoppingCart } from 'lucide-react';
 import { useFamilyStore } from '@/store/familyStore';
 import { useTopUpsList, TOP_UPS_LIST_NAME } from '@/hooks/useTopUpsList';
 import { useSpeechInput } from '@/hooks/useSpeechInput';
 import { useMealLog } from '@/hooks/useMealLog';
-import { createStaple, flagStaple, matchStaple, parseLowNote, recordPurchase } from '@/utils/staples';
+import { applyStockNote, createStaple, flagStaple, looksLikeStockCount, matchStaple, parseLowNote, recordPurchase } from '@/utils/staples';
+import { PhotoReadError, readStockNote } from '@/services/kitchenPhotoService';
 import { SharedSyncBadge } from '@/components/common/SharedSyncBadge';
 import { MondayEmailSettingsModal } from '@/components/common/MondayEmailSettingsModal';
 import { UsualsPanel } from './UsualsPanel';
 import { FridgeCheckPanel } from './FridgeCheckPanel';
 import { ReceiptRestockPanel } from './ReceiptRestockPanel';
 import { MealLogPanel } from './MealLogPanel';
-import type { Staple } from '@/types/kitchen.types';
+import { StockNoteReview } from './StockNoteReview';
+import type { Staple, StockNoteItem } from '@/types/kitchen.types';
 
 const QUICK_PICKS = ['Milk', 'Bread', 'Eggs', 'Toilet roll', 'Tissues', 'Yakult'];
 
@@ -25,6 +27,9 @@ export const KitchenDashboard = () => {
   const mealLog = useMealLog();
   const [note, setNote] = useState('');
   const [showEmailSettings, setShowEmailSettings] = useState(false);
+  const [reading, setReading] = useState(false);
+  const [review, setReview] = useState<StockNoteItem[] | null>(null);
+  const familyId = useFamilyStore((state) => state.databaseStatus.familyId);
   const speech = useSpeechInput((transcript) => setNote((current) => (current ? `${current}, ${transcript}` : transcript)));
 
   // Ticking a usual off the Top-ups list while shopping counts as buying it.
@@ -77,6 +82,55 @@ export const KitchenDashboard = () => {
     else toast.error('Marked as low, but the shopping list could not be updated');
   };
 
+  // "20 toilet rolls, one lasts 2 days; a box of 12 wipes": the AI reads it
+  // and estimates usage, then it is shown for checking before it's saved.
+  const readNote = async (text: string) => {
+    if (!text.trim() || reading) return;
+    speech.stop();
+    if (!looksLikeStockCount(text) || !familyId) {
+      await markLow(text);
+      return;
+    }
+    setReading(true);
+    try {
+      const items = await readStockNote(familyId, text, useFamilyStore.getState().kitchenStaples.map((s) => s.name));
+      setReview(items);
+      setNote('');
+    } catch (error) {
+      const message = error instanceof PhotoReadError ? error.message : "Couldn't work that out just now.";
+      if (parseLowNote(text).length && /\b(low|out|run out|ran out|none|gone|finished|nearly)\b/i.test(text)) {
+        toast(`${message} Marked what you said as low instead.`);
+        await markLow(text);
+      } else {
+        toast.error(message);
+      }
+    } finally {
+      setReading(false);
+    }
+  };
+
+  const saveReview = async (items: StockNoteItem[]) => {
+    const now = new Date();
+    const result = applyStockNote(useFamilyStore.getState().kitchenStaples, items, now);
+    // List first, then flag: see markLow.
+    let listOk = true;
+    if (result.forTopUps.length) {
+      try {
+        await addToTopUps(result.forTopUps.map((staple) => ({ name: staple.name, category: staple.category })));
+      } catch {
+        listOk = false;
+      }
+    }
+    // Re-apply to the latest staples: another phone may have synced while the list was updating.
+    updateStaples((all) => applyStockNote(all, items, now).staples);
+    setReview(null);
+    const counted = items.filter((item) => item.status === 'count').length;
+    if (!listOk) toast.error('Saved, but the shopping list could not be updated');
+    else if (counted && result.forTopUps.length) toast.success(`Saved ${counted} count${counted === 1 ? '' : 's'}; ${result.forTopUps.map((s) => s.name).join(', ')} added to ${TOP_UPS_LIST_NAME}`);
+    else if (counted) toast.success(`Saved. You'll see when ${counted === 1 ? 'it runs' : 'each runs'} out under Your usuals`);
+    else toast.success(`${result.forTopUps.map((s) => s.name).join(', ')} added to ${TOP_UPS_LIST_NAME}`);
+  };
+
   return (
     <div className="space-y-4 sm:space-y-5">
       <section className="rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 p-4 text-white sm:p-5">
@@ -99,14 +153,14 @@ export const KitchenDashboard = () => {
         </div>
 
         <div className="mt-4 rounded-lg bg-white/15 p-3">
-          <label htmlFor="low-note" className="text-sm font-semibold">Running low on something?</label>
+          <label htmlFor="low-note" className="text-sm font-semibold">What have you got, or what&apos;s running low?</label>
           <div className="mt-2 flex gap-2">
             <input
               id="low-note"
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') void markLow(note); }}
-              placeholder="e.g. out of tissues, low on eggs"
+              onKeyDown={(e) => { if (e.key === 'Enter') void readNote(note); }}
+              placeholder="e.g. 20 loo rolls, low on eggs"
               className="min-w-0 flex-1 rounded-lg border-0 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400"
             />
             {speech.supported && (
@@ -119,11 +173,12 @@ export const KitchenDashboard = () => {
               </button>
             )}
             <button
-              onClick={() => void markLow(note)}
-              disabled={!note.trim()}
-              className="rounded-lg bg-white px-4 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 disabled:opacity-60"
+              onClick={() => void readNote(note)}
+              disabled={!note.trim() || reading}
+              className="flex items-center gap-1 rounded-lg bg-white px-4 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 disabled:opacity-60"
             >
-              Add
+              {reading && <Loader2 className="h-4 w-4 animate-spin" />}
+              {reading ? 'Working it out' : 'Add'}
             </button>
           </div>
           <div className="mt-2 flex flex-wrap gap-1.5">
@@ -140,6 +195,10 @@ export const KitchenDashboard = () => {
           </div>
         </div>
       </section>
+
+      {review && (
+        <StockNoteReview items={review} onSave={(items) => void saveReview(items)} onCancel={() => setReview(null)} />
+      )}
 
       <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
         <div className="space-y-4">

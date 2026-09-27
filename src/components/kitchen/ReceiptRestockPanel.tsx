@@ -5,7 +5,8 @@ import toast from 'react-hot-toast';
 import { AlertTriangle, Loader2, Receipt } from 'lucide-react';
 import { useFamilyStore } from '@/store/familyStore';
 import { uploadKitchenPhoto, PhotoReadError } from '@/services/kitchenPhotoService';
-import { createStaple, matchStaple, recordPurchase } from '@/utils/staples';
+import { createStaple, matchStaple, pluralUnit, recordPurchase } from '@/utils/staples';
+import type { Staple } from '@/types/kitchen.types';
 import { inferCategoryFromDescription } from '@/utils/statementImport';
 import type { ReceiptReply } from '@/lib/kitchenVision';
 
@@ -13,10 +14,33 @@ interface ReviewLine {
   key: string;
   name: string;
   quantity: number;
+  units: number | null; // what it adds to counted stock, in the usual's unit
   stapleId: string | null;
   restock: boolean; // matched usual: restock it
   track: boolean; // unmatched line: start tracking it as a usual
 }
+
+// Counted stock: what a receipt line adds, in the usual's own unit (9 rolls
+// from a 9-pack). The receipt reader works that out; failing that, assume each
+// line is one usual shop's worth.
+const countedUnits = (staple: Staple, line: { quantity: number; units: number | null } | undefined) =>
+  staple.stock ? line?.units ?? (line?.quantity ?? 1) * (staple.stock.lastBoughtUnits ?? 1) : undefined;
+
+const receiptDate = (reading: ReceiptReply | null) => (reading?.date ? new Date(`${reading.date}T12:00:00`) : new Date());
+
+const CountedBadge = ({ staple, line, boughtAt }: { staple: Staple | undefined; line: ReviewLine; boughtAt: Date }) => {
+  const units = staple ? countedUnits(staple, line) : undefined;
+  if (!staple?.stock || units === undefined) return null;
+  // Bought before the last count: recordPurchase leaves the count alone, so say so.
+  if (boughtAt.getTime() < new Date(staple.stock.countedAt).getTime()) {
+    return <span className="text-xs text-gray-500 dark:text-slate-400">already in your count</span>;
+  }
+  return (
+    <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
+      +{units} {pluralUnit(staple.stock.unit, units)}
+    </span>
+  );
+};
 
 export const ReceiptRestockPanel = () => {
   const familyId = useFamilyStore((state) => state.databaseStatus.familyId);
@@ -44,7 +68,10 @@ export const ReceiptRestockPanel = () => {
         familyId,
         'receipt',
         file,
-        { usuals: JSON.stringify(staples.map((s) => s.name)) },
+        {
+          usuals: JSON.stringify(staples.map((s) => s.name)),
+          counted: JSON.stringify(Object.fromEntries(staples.filter((s) => s.stock).map((s) => [s.name, s.stock!.unit]))),
+        },
         { maxSize: 2200, quality: 0.88 } // receipts need legible small print
       );
       const byName = new Map(staples.map((s) => [s.name.toLowerCase(), s]));
@@ -57,6 +84,7 @@ export const ReceiptRestockPanel = () => {
           key: `${index}-${line.name}`,
           name: line.name,
           quantity: line.quantity,
+          units: staple?.stock ? line.units ?? null : null,
           stapleId: staple?.id ?? null,
           restock: firstForStaple,
           track: false,
@@ -82,14 +110,16 @@ export const ReceiptRestockPanel = () => {
 
   const confirm = async () => {
     if (!reading) return;
-    const boughtAt = reading.date ? new Date(`${reading.date}T12:00:00`) : new Date();
-    const restockIds = new Set(lines.filter((l) => l.restock && l.stapleId).map((l) => l.stapleId!));
+    const boughtAt = receiptDate(reading);
+    const restockLines = new Map(lines.filter((l) => l.restock && l.stapleId).map((l) => [l.stapleId!, l]));
+    const restockIds = new Set(restockLines.keys());
+    const unitsBought = (staple: Staple) => countedUnits(staple, restockLines.get(staple.id));
     const newOnes = lines.filter((l) => l.track && !l.stapleId).map((l) => recordPurchase(createStaple(l.name), boughtAt));
 
     updateStaples((current) => {
       const existingIds = new Set(current.map((s) => s.id));
       return [
-        ...current.map((staple) => (restockIds.has(staple.id) ? recordPurchase(staple, boughtAt) : staple)),
+        ...current.map((staple) => (restockIds.has(staple.id) ? recordPurchase(staple, boughtAt, unitsBought(staple)) : staple)),
         ...newOnes.filter((s) => !existingIds.has(s.id)),
       ];
     });
@@ -172,6 +202,7 @@ export const ReceiptRestockPanel = () => {
                     <input type="checkbox" checked={line.restock} onChange={() => toggle(line.key, 'restock')} className="rounded text-violet-600" />
                     <span className="font-medium">{stapleName(line.stapleId)}</span>
                     <span className="text-xs text-gray-500 dark:text-slate-400">from “{line.name}”{line.quantity > 1 ? ` ×${line.quantity}` : ''}</span>
+                    <CountedBadge staple={staples.find((s) => s.id === line.stapleId)} line={line} boughtAt={receiptDate(reading)} />
                   </label>
                 </li>
               ))}

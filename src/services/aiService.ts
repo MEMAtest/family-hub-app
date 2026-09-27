@@ -5,6 +5,18 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import type { Message } from '@anthropic-ai/sdk/resources/messages';
+import {
+  AIRefusalError,
+  anthropicFallbackModel,
+  anthropicModel,
+  firstText,
+  openRouterFallbackModel,
+  openRouterModel,
+  supportsEffort,
+  THINKING_HEADROOM_TOKENS,
+  withRefusalFallback,
+  type AIEffort,
+} from '@/lib/aiModels';
 import { logAIUsage } from '@/utils/aiTelemetry';
 import { redactSensitiveData } from '@/utils/privacy';
 
@@ -14,7 +26,9 @@ interface ChatLimits {
   retries?: number;
   sdkRetries?: number;
   timeoutMs?: number;
+  effort?: AIEffort;
 }
+
 
 export class AIService {
   private anthropic: Anthropic | null;
@@ -30,8 +44,8 @@ export class AIService {
   constructor() {
     this.anthropicApiKey = process.env.ANTHROPIC_API_KEY || '';
     this.openRouterApiKey = process.env.OPENROUTER_API_KEY || '';
-    this.anthropicModel = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-20250514';
-    this.openRouterModel = process.env.OPENROUTER_MODEL || 'openai/gpt-4o-mini';
+    this.anthropicModel = anthropicModel();
+    this.openRouterModel = openRouterModel();
 
     if (!this.anthropicApiKey && !this.openRouterApiKey) {
       console.warn('No AI provider key found in environment variables');
@@ -56,22 +70,34 @@ export class AIService {
 
     if (this.anthropic) {
       try {
-        return await this.chatWithAnthropic(feature, safeSystemPrompt, safeUserPrompt, maxTokens, limits);
+        return await withRefusalFallback(
+          (model) => this.chatWithAnthropic(feature, safeSystemPrompt, safeUserPrompt, maxTokens, limits, model),
+          this.anthropicModel,
+          anthropicFallbackModel()
+        );
       } catch (error) {
         if (!this.openRouterApiKey) {
           throw error;
         }
 
         console.warn('Anthropic AI call failed; using OpenRouter fallback:', error instanceof Error ? error.message : 'Unknown error');
-        return await this.chatWithOpenRouter(feature, safeSystemPrompt, safeUserPrompt, maxTokens, limits);
+        return await this.openRouterWithFallback(feature, safeSystemPrompt, safeUserPrompt, maxTokens, limits);
       }
     }
 
     if (this.openRouterApiKey) {
-      return await this.chatWithOpenRouter(feature, safeSystemPrompt, safeUserPrompt, maxTokens, limits);
+      return await this.openRouterWithFallback(feature, safeSystemPrompt, safeUserPrompt, maxTokens, limits);
     }
 
     throw new Error('No AI provider key configured');
+  }
+
+  private openRouterWithFallback(feature: string, system: string, user: string, maxTokens: number, limits: ChatLimits) {
+    return withRefusalFallback(
+      (model) => this.chatWithOpenRouter(feature, system, user, maxTokens, limits, model),
+      this.openRouterModel,
+      openRouterFallbackModel()
+    );
   }
 
   private async chatWithAnthropic(
@@ -79,7 +105,8 @@ export class AIService {
     safeSystemPrompt: string,
     safeUserPrompt: string,
     maxTokens: number,
-    limits: ChatLimits = {}
+    limits: ChatLimits = {},
+    model: string = this.anthropicModel
   ): Promise<string> {
 
     const maxRetries = limits.retries ?? this.maxRetries;
@@ -92,8 +119,8 @@ export class AIService {
       try {
         const message = await Promise.race([
           this.anthropic!.messages.create({
-            model: this.anthropicModel,
-            max_tokens: maxTokens,
+            model,
+            max_tokens: maxTokens + THINKING_HEADROOM_TOKENS,
             system: safeSystemPrompt,
             messages: [
               {
@@ -101,12 +128,15 @@ export class AIService {
                 content: safeUserPrompt,
               },
             ],
-          }, limits.sdkRetries === undefined ? undefined : { maxRetries: limits.sdkRetries }),
+            // output_config is newer than the installed SDK's types; it is passed through as-is.
+            ...(supportsEffort(model) ? { output_config: { effort: limits.effort ?? 'low' } } : {}),
+          } as Anthropic.MessageCreateParamsNonStreaming, limits.sdkRetries === undefined ? undefined : { maxRetries: limits.sdkRetries }),
           this.timeoutPromise(limits.timeoutMs),
         ]) as Message;
 
-        const content = message.content[0];
-        if (content.type !== 'text') {
+        if ((message.stop_reason as string) === 'refusal') throw new AIRefusalError(model);
+        const text = firstText(message.content);
+        if (text === null) {
           throw new Error('Unexpected response type from Claude');
         }
 
@@ -119,7 +149,7 @@ export class AIService {
           timestamp: new Date().toISOString(),
         });
 
-        return content.text;
+        return text;
       } catch (error) {
         lastError = error;
         attempt += 1;
@@ -151,7 +181,8 @@ export class AIService {
     safeSystemPrompt: string,
     safeUserPrompt: string,
     maxTokens: number,
-    limits: ChatLimits = {}
+    limits: ChatLimits = {},
+    model: string = this.openRouterModel
   ): Promise<string> {
     const startedAt = Date.now();
 
@@ -165,13 +196,13 @@ export class AIService {
           'X-Title': 'Omosanya Home',
         },
         body: JSON.stringify({
-          model: this.openRouterModel,
+          model,
           messages: [
             { role: 'system', content: safeSystemPrompt },
             { role: 'user', content: safeUserPrompt },
           ],
-          max_tokens: maxTokens,
-          temperature: 0.2,
+          max_tokens: maxTokens + THINKING_HEADROOM_TOKENS,
+          ...(supportsEffort(model) ? { reasoning: { effort: limits.effort ?? 'low' } } : {}),
         }),
       }),
       this.timeoutPromise(limits.timeoutMs),
@@ -199,7 +230,9 @@ export class AIService {
       throw new Error(errorMessage);
     }
 
-    const content = payload?.choices?.[0]?.message?.content;
+    const choice = payload?.choices?.[0];
+    if (choice?.finish_reason === 'content_filter' || choice?.native_finish_reason === 'refusal') throw new AIRefusalError(model);
+    const content = choice?.message?.content;
     if (typeof content !== 'string' || !content.trim()) {
       throw new Error('Unexpected response from OpenRouter');
     }
@@ -231,6 +264,8 @@ export class AIService {
   }
 
   private shouldRetryAnthropic(error: unknown): boolean {
+    // A refusal isn't transient: the caller moves to the fallback model instead.
+    if (error instanceof AIRefusalError) return false;
     const status = (error as { status?: number } | null)?.status;
     return !status || status === 429 || status >= 500;
   }
@@ -544,7 +579,7 @@ Split the note into separate jobs if it mentions more than one thing. For each j
 Return: { "issues": [ ... ] }`;
 
     // The user is waiting and the rules fallback is good, so fail fast.
-    return await this.chat(systemPrompt, userPrompt, 1500, { retries: 0, sdkRetries: 1, timeoutMs: 8000 });
+    return await this.chat(systemPrompt, userPrompt, 1500, { retries: 0, sdkRetries: 1, timeoutMs: 20_000 });
   }
 
   /**
