@@ -7,7 +7,9 @@
 //   - deleted on one side, edited on the other -> keep the edit (never lose work)
 //   - edited on both sides            -> the newer `updatedAt` wins, else this device
 // Without a base (a device syncing for the first time) the server copy wins for
-// records both sides have, and records only one side has are kept.
+// records both sides have, unless this device's copy is strictly newer: it was
+// edited here before the first sync finished (e.g. a stock count saved straight
+// after opening the app). Records only one side has are kept.
 
 type Keyed = { id: string; updatedAt?: string };
 
@@ -31,6 +33,12 @@ const pickNewer = <T>(local: T, server: T): T => {
   return local;
 };
 
+const newerThan = (a: unknown, b: unknown) => {
+  const x = (a as Keyed | undefined)?.updatedAt;
+  const y = (b as Keyed | undefined)?.updatedAt;
+  return Boolean(x && y && x > y);
+};
+
 export const mergeCollection = <T extends Keyed>(base: T[] | null, local: T[], server: T[]): T[] => {
   const byId = (items: T[]) => new Map(items.map((item) => [item.id, item]));
   const baseMap = base ? byId(base) : null;
@@ -49,7 +57,7 @@ export const mergeCollection = <T extends Keyed>(base: T[] | null, local: T[], s
     let result: T | undefined;
 
     if (!baseMap) {
-      result = s ?? l;
+      result = s && l && newerThan(l, s) ? l : s ?? l;
     } else {
       const b = baseMap.get(id);
       const localChanged = !sameValue(l, b);
