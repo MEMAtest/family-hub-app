@@ -1,4 +1,5 @@
 import type { Prisma } from '@prisma/client';
+import { createHash } from 'crypto';
 import pdf from 'pdf-parse/lib/pdf-parse.js';
 import prisma from '@/lib/prisma';
 import { calendarEventDraftToDbData, toCalendarEventResponse } from '@/lib/calendarEventMapping';
@@ -12,6 +13,7 @@ import {
   parseCalendarImportText,
 } from '@/utils/calendarImport';
 import { summarizeSchoolDocument } from '@/utils/schoolDocumentSummary';
+import { parseDateKey } from '@/utils/recurrence';
 
 const emailFromValue = (value: any): string => {
   if (!value) return '';
@@ -100,11 +102,165 @@ const extractPdfAttachmentText = async (attachments: Array<{ fileName: string; m
   return extracted;
 };
 
-const isHighConfidenceAutoCreate = (draft: CalendarImportDraft) =>
-  draft.importStatus === 'ready' &&
-  draft.confidence >= 0.9 &&
-  draft.time !== '09:00' &&
-  Boolean(draft.person);
+export const isHighConfidenceAutoCreate = (
+  draft: CalendarImportDraft,
+  options: { eventSource?: string; authenticatedSchoolSender?: boolean },
+  now = new Date(),
+) => {
+  const genericTitle = /^(?:imported event|weekly update(?: email)?|newsletter|school update(?: email)?)$/i
+    .test(draft.title.trim());
+  const today = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(now);
+  const todayKey = `${today.find((part) => part.type === 'year')?.value}-${today.find((part) => part.type === 'month')?.value}-${today.find((part) => part.type === 'day')?.value}`;
+  const hasExplicitTime = /\b\d{1,2}(?::|\.)(\d{2})\s*(?:am|pm)?\b|\b\d{1,2}\s*(?:am|pm)\b/i.test(draft.source);
+  const verifiedSchoolEvent = options.eventSource === 'gmail-school-email' && options.authenticatedSchoolSender === true;
+  const offerCue = /\b(?:limited (?:places?|spaces?)|(?:places?|spaces?) (?:are|is) limited|first[- ]come,? first[- ]served|book now|register now|how to book|booking required|places? available)\b/i
+    .test(draft.source);
+  const bookingConfirmed = /\b(?:your booking is confirmed|booking confirmed|your place is confirmed|place confirmed|registration confirmed|you are booked|your place is reserved)\b/i
+    .test(draft.source);
+  const unconfirmedOffer = offerCue && !bookingConfirmed;
+
+  if (!parseDateKey(draft.date) || (draft.endDate && !parseDateKey(draft.endDate)) ||
+      draft.importStatus !== 'ready' || !draft.person || genericTitle || unconfirmedOffer || draft.date < todayKey) return false;
+  if (draft.confidence >= 0.9 && hasExplicitTime) return true;
+  return verifiedSchoolEvent && draft.type === 'education' && draft.confidence >= 0.85;
+};
+
+const schoolDefaultPersonId = (members: Array<{ id: string; role?: string | null; ageGroup?: string | null }>) => {
+  const primaryPupils = members.filter((member) =>
+    /student|child/i.test(member.role || '') && /child|primary/i.test(member.ageGroup || '')
+  );
+  return primaryPupils.length === 1 ? primaryPupils[0].id : undefined;
+};
+
+const hasExplicitTime = (draft: CalendarImportDraft) =>
+  /\b\d{1,2}(?::|\.)(\d{2})\s*(?:am|pm)?\b|\b\d{1,2}\s*(?:am|pm)\b/i.test(draft.source);
+
+const importedEventId = (intakeId: string, draftIndex: number) =>
+  `mail_event_${createHash('sha256').update(`${intakeId}\0${draftIndex}`).digest('hex')}`;
+
+const sameImportedEvent = (event: any, data: ReturnType<typeof calendarEventDraftToDbData>) => {
+  const allDay = /time not provided by source|school email did not specify a time/i.test(data.notes || '');
+  const sameDate = allDay
+    ? new Date(event.eventDate).toISOString().slice(0, 10) === data.eventDate.toISOString().slice(0, 10)
+    : new Date(event.eventDate).getTime() === data.eventDate.getTime();
+  return event.title === data.title &&
+    event.personId === data.personId &&
+    sameDate &&
+    (allDay || new Date(event.eventTime).getTime() === data.eventTime.getTime()) &&
+    event.eventType === data.eventType;
+};
+
+const persistHighConfidenceEvents = async (
+  familyId: string,
+  intakeId: string,
+  drafts: CalendarImportDraft[],
+  options: { eventSource?: string; authenticatedSchoolSender?: boolean },
+) => {
+  const schoolVerified = options.authenticatedSchoolSender && options.eventSource === 'gmail-school-email';
+  const source = schoolVerified ? 'gmail-school-email' :
+    options.eventSource === 'gmail-calendar-email' ? options.eventSource : 'calendar-email';
+  const persisted = await prisma.calendarEvent.findMany({ where: { familyId, sourceId: intakeId } });
+  const result: any[] = [];
+
+  for (const [draftIndex, draft] of drafts.entries()) {
+    if (!isHighConfidenceAutoCreate(draft, options)) continue;
+    const eventDraft = {
+      ...importDraftToCalendarEventDraft(draft),
+      source,
+      sourceId: intakeId,
+      ...(!hasExplicitTime(draft) && schoolVerified
+        ? { notes: `${draft.notes || ''} School email did not specify a time.`.trim() }
+        : {}),
+    };
+    const data = calendarEventDraftToDbData(familyId, eventDraft);
+    const existing = persisted.find((event) =>
+      event.id === importedEventId(intakeId, draftIndex) || sameImportedEvent(event, data)
+    );
+    if (existing) {
+      if (!result.some((event) => event.id === existing.id)) result.push(existing);
+      continue;
+    }
+
+    let created;
+    try {
+      created = await prisma.calendarEvent.create({
+        data: { id: importedEventId(intakeId, draftIndex), ...data },
+      });
+    } catch (error) {
+      if ((error as { code?: string })?.code !== 'P2002') throw error;
+      created = await prisma.calendarEvent.findUnique({ where: { id: importedEventId(intakeId, draftIndex) } });
+      if (!created) throw error;
+    }
+    persisted.push(created);
+    result.push(created);
+  }
+  return result;
+};
+
+const createCalendarIntakeNotification = async (input: {
+  familyId: string;
+  intakeId: string;
+  subject: string;
+  sender: string;
+  eventSource?: string;
+  createdEvents: Array<{ id: string }>;
+  needsReview: number;
+  duplicateCount: number;
+  conflictCount: number;
+  draftCount: number;
+  googleExportErrors?: string[];
+}) => {
+  const notificationId = `calendar-email-${input.intakeId}`;
+  const title = input.createdEvents.length > 0 ? 'Calendar email processed' : 'Calendar email needs review';
+  const message = input.createdEvents.length > 0
+    ? `${input.createdEvents.length} event${input.createdEvents.length === 1 ? '' : 's'} added from "${input.subject || input.sender || 'email'}".`
+    : `Review "${input.subject || input.sender || 'email'}" before adding calendar events.`;
+
+  try {
+    const notification = await prisma.notification.create({
+      data: {
+        id: notificationId,
+        familyId: input.familyId,
+        type: 'calendar_email_intake',
+        title,
+        message,
+        priority: input.needsReview > 0 || input.conflictCount > 0 ? 'high' : 'medium',
+        category: 'event',
+        read: false,
+        actionRequired: input.needsReview > 0 || input.conflictCount > 0 || input.draftCount === 0,
+        relatedEventId: input.createdEvents[0]?.id,
+        metadata: {
+          source: input.eventSource || 'calendar-email',
+          intakeId: input.intakeId,
+          createdEventIds: input.createdEvents.map((event) => event.id),
+          needsReview: input.needsReview,
+          duplicateCount: input.duplicateCount,
+          conflictCount: input.conflictCount,
+          googleExportErrors: input.googleExportErrors || [],
+        },
+      },
+    });
+    await sendFamilyPushNotification(input.familyId, {
+      title,
+      body: message,
+      tag: `calendar-email-${input.intakeId}`,
+      data: {
+        familyId: input.familyId,
+        notificationId: notification.id,
+        intakeId: input.intakeId,
+        url: '/?view=calendar',
+      },
+    }).catch((error) => {
+      console.warn('Calendar email push failed:', error);
+    });
+    return notification;
+  } catch (error) {
+    if ((error as { code?: string })?.code === 'P2002') return null;
+    throw error;
+  }
+};
 
 export type CalendarEmailIngestionResult = {
   statusCode: number;
@@ -113,7 +269,7 @@ export type CalendarEmailIngestionResult = {
 
 export const ingestCalendarEmailPayload = async (
   payload: any,
-  options: { familyId?: string; eventSource?: string } = {},
+  options: { familyId?: string; eventSource?: string; authenticatedSchoolSender?: boolean } = {},
 ): Promise<CalendarEmailIngestionResult> => {
   const data = payloadData(payload);
   const recipients = recipientsFromValue(data?.to || data?.recipient || data?.recipients);
@@ -142,14 +298,82 @@ export const ingestCalendarEmailPayload = async (
   if (messageId) {
     const existingIntake = await prisma.calendarEmailIntake.findFirst({
       where: { familyId: family.id, messageId: String(messageId) },
-      select: { id: true, status: true, createdEventIds: true },
+      select: { id: true, status: true, createdEventIds: true, parsedDrafts: true, metadata: true },
     });
     if (existingIntake) {
+      const status = existingIntake.status === 'processing' ? 'review_required' : existingIntake.status;
+      const intakeMetadata = existingIntake.metadata && typeof existingIntake.metadata === 'object' && !Array.isArray(existingIntake.metadata)
+        ? existingIntake.metadata as Record<string, unknown>
+        : {};
+      const drafts = Array.isArray(existingIntake.parsedDrafts)
+        ? existingIntake.parsedDrafts as unknown as CalendarImportDraft[]
+        : [];
+      const canResumeSchoolImport = intakeMetadata.schoolSenderVerified === true && existingIntake.status === 'processing';
+      if (existingIntake.status === 'processing' && !canResumeSchoolImport) {
+        await prisma.calendarEmailIntake.update({
+          where: { id: existingIntake.id },
+          data: {
+            status,
+            needsReview: drafts.length || 1,
+          },
+        });
+      }
+      if (canResumeSchoolImport) {
+        const createdEvents = await persistHighConfidenceEvents(family.id, existingIntake.id, drafts, {
+          eventSource: 'gmail-school-email',
+          authenticatedSchoolSender: true,
+        });
+        const readyButNotCreated = drafts.filter((draft) => draft.importStatus === 'ready').length - createdEvents.length;
+        const needsReview = readyButNotCreated + drafts.filter((draft) => draft.importStatus === 'needs_review').length;
+        const duplicateCount = drafts.filter((draft) => draft.importStatus === 'duplicate').length;
+        const conflictCount = drafts.filter((draft) => draft.importStatus === 'conflict').length;
+        const resumedStatus = createdEvents.length > 0 && needsReview === 0 && conflictCount === 0
+          ? 'auto_created'
+          : drafts.length === 0
+            ? 'no_events'
+            : createdEvents.length > 0
+              ? 'partial_review'
+              : 'review_required';
+        await prisma.calendarEmailIntake.update({
+          where: { id: existingIntake.id },
+          data: {
+            status: resumedStatus,
+            createdEventIds: createdEvents.map((event) => event.id),
+            autoCreated: createdEvents.length,
+            needsReview,
+            duplicateCount,
+            conflictCount,
+          },
+        });
+        await createCalendarIntakeNotification({
+          familyId: family.id,
+          intakeId: existingIntake.id,
+          subject,
+          sender,
+          eventSource: 'gmail-school-email',
+          createdEvents,
+          needsReview,
+          duplicateCount,
+          conflictCount,
+          draftCount: drafts.length,
+        });
+        return {
+          statusCode: 200,
+          body: {
+            intakeId: existingIntake.id,
+            status: resumedStatus,
+            duplicate: true,
+            createdEventIds: createdEvents.map((event) => event.id),
+            autoCreated: createdEvents.length,
+            needsReview,
+          },
+        };
+      }
       return {
         statusCode: 200,
         body: {
           intakeId: existingIntake.id,
-          status: existingIntake.status,
+          status,
           duplicate: true,
           createdEventIds: existingIntake.createdEventIds,
         },
@@ -170,17 +394,28 @@ export const ingestCalendarEmailPayload = async (
     color: member.color,
     icon: member.icon,
     role: member.role,
+    ageGroup: member.ageGroup,
   }));
+  const isAuthenticatedSchoolEmail =
+    options.authenticatedSchoolSender && options.eventSource === 'gmail-school-email';
   const drafts = parseCalendarImportText({
     text: normalizedText,
     people,
     existingEvents: existingEvents.map(toCalendarEventResponse),
-    defaultPersonId: people[0]?.id,
+    defaultPersonId: isAuthenticatedSchoolEmail
+      ? schoolDefaultPersonId(family.members) ?? ''
+      : people[0]?.id,
     today: new Date(),
   }) as CalendarImportDraft[];
 
-  const intake = await prisma.calendarEmailIntake.create({
-    data: {
+  const deterministicIntakeId = messageId
+    ? `mail_${createHash('sha256').update(`${family.id}\0${String(messageId)}`).digest('hex')}`
+    : undefined;
+  let intake;
+  try {
+    intake = await prisma.calendarEmailIntake.create({
+      data: {
+      ...(deterministicIntakeId ? { id: deterministicIntakeId } : {}),
       familyId: family.id,
       messageId,
       recipient: recipients[0] || null,
@@ -190,9 +425,15 @@ export const ingestCalendarEmailPayload = async (
       html,
       normalizedText,
       parsedDrafts: drafts as unknown as Prisma.InputJsonValue,
-      status: 'processing',
+      status: options.authenticatedSchoolSender && options.eventSource === 'gmail-school-email'
+        ? 'processing'
+        : 'review_required',
+      needsReview: drafts.length,
       metadata: {
         providerType: payload?.type || payload?.event || null,
+        schoolSenderVerified: Boolean(
+          options.authenticatedSchoolSender && options.eventSource === 'gmail-school-email'
+        ),
         documentSummary: summarizeSchoolDocument(normalizedText),
         attachmentCount: Array.isArray(data?.attachments) ? data.attachments.length : 0,
         extractedPdfCount: extractedAttachmentText.length,
@@ -201,21 +442,30 @@ export const ingestCalendarEmailPayload = async (
         ),
       } as Prisma.InputJsonValue,
       ...(inboundAttachments.length > 0 ? { attachments: { create: inboundAttachments } } : {}),
-    },
-  });
-
-  const createdEvents = [];
-  for (const draft of drafts.filter(isHighConfidenceAutoCreate)) {
-    const eventDraft = {
-      ...importDraftToCalendarEventDraft(draft),
-      source: options.eventSource || 'calendar-email',
-      sourceId: intake.id,
-    };
-    const created = await prisma.calendarEvent.create({
-      data: calendarEventDraftToDbData(family.id, eventDraft),
+      },
     });
-    createdEvents.push(created);
+  } catch (error) {
+    if ((error as { code?: string })?.code === 'P2002' && deterministicIntakeId) {
+      const existingIntake = await prisma.calendarEmailIntake.findFirst({
+        where: { familyId: family.id, messageId: String(messageId) },
+        select: { id: true, status: true, createdEventIds: true },
+      });
+      if (existingIntake) {
+        return {
+          statusCode: 200,
+          body: {
+            intakeId: existingIntake.id,
+            status: existingIntake.status,
+            duplicate: true,
+            createdEventIds: existingIntake.createdEventIds,
+          },
+        };
+      }
+    }
+    throw error;
   }
+
+  const createdEvents = await persistHighConfidenceEvents(family.id, intake.id, drafts, options);
 
   const googleExportErrors: string[] = [];
   try {
@@ -268,43 +518,20 @@ export const ingestCalendarEmailPayload = async (
     },
   });
 
-  const notification = await prisma.notification.create({
-    data: {
-      familyId: family.id,
-      type: 'calendar_email_intake',
-      title: createdEvents.length > 0 ? 'Calendar email processed' : 'Calendar email needs review',
-      message: createdEvents.length > 0
-        ? `${createdEvents.length} event${createdEvents.length === 1 ? '' : 's'} added from "${subject || sender || 'email'}".`
-        : `Review "${subject || sender || 'email'}" before adding calendar events.`,
-      priority: needsReview > 0 || conflictCount > 0 ? 'high' : 'medium',
-      category: 'event',
-      read: false,
-      actionRequired: needsReview > 0 || conflictCount > 0 || drafts.length === 0,
-      relatedEventId: createdEvents[0]?.id,
-      metadata: {
-        source: options.eventSource || 'calendar-email',
-        intakeId: intake.id,
-        createdEventIds: createdEvents.map((event) => event.id),
-        needsReview,
-        duplicateCount,
-        conflictCount,
-        googleExportErrors,
-      },
-    },
-  });
-
-  await sendFamilyPushNotification(family.id, {
-    title: notification.title,
-    body: notification.message,
-    tag: `calendar-email-${intake.id}`,
-    data: {
-      familyId: family.id,
-      notificationId: notification.id,
-      intakeId: intake.id,
-      url: '/?view=calendar',
-    },
+  await createCalendarIntakeNotification({
+    familyId: family.id,
+    intakeId: intake.id,
+    subject,
+    sender,
+    eventSource: options.eventSource,
+    createdEvents,
+    needsReview,
+    duplicateCount,
+    conflictCount,
+    draftCount: drafts.length,
+    googleExportErrors,
   }).catch((error) => {
-    console.warn('Calendar email push failed:', error);
+    console.warn('Calendar email notification failed:', error);
   });
 
   return {

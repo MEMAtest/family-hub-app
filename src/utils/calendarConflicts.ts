@@ -37,6 +37,7 @@ export const getEventWindowForDate = (
   event: CalendarEvent,
   date: string
 ): CalendarEventWindow | null => {
+  if (/(?:school email did not specify a time|time not provided by source)/i.test(event.notes || '')) return null;
   const eventEndDate = event.endDate || event.date;
   if (event.date > date || eventEndDate < date) return null;
 

@@ -34,7 +34,8 @@ import {
   AlertTriangle,
   Brain,
   Sparkles,
-  RefreshCw
+  RefreshCw,
+  Loader2
 } from 'lucide-react'
 import { CalendarEvent, BigCalendarEvent, CalendarTask, CalendarView, Person } from '@/types/calendar.types'
 import GoogleCalendarSync from './GoogleCalendarSync'
@@ -55,9 +56,23 @@ import { buildTaskEntries, getTaskEntryStyle, isTaskEntry } from '@/utils/taskCa
 const localizer = momentLocalizer(moment)
 const DnDCalendar = withDragAndDrop(Calendar)
 
+const hasUnspecifiedEventTime = (event: Pick<CalendarEvent, 'notes'>) =>
+  /(?:school email did not specify a time|time not provided by source|time not specified)/i.test(event.notes || '')
+
+const conciseEventContext = (notes: string) => {
+  const cleaned = notes
+    .replace(/(?:Imported from calendar intake:|Created from:)\s*/gi, '')
+    .replace(/(?:School email did not specify a time\.?|Time not provided by source\.?|Time not specified\.?)/gi, '')
+    .replace(/[•·]\s*/g, '. ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const short = cleaned.split(/(?<=[.!?])\s+/).filter(Boolean).slice(0, 2).join(' ');
+  return short.length > 220 ? `${short.slice(0, 217).trimEnd()}...` : short;
+};
+
 const getEventEnd = (event: CalendarEvent) => {
   const eventStart = moment(`${event.date} ${event.time}`, 'YYYY-MM-DD HH:mm')
-  if (event.endDate && event.endDate > event.date) {
+  if (!hasUnspecifiedEventTime(event) && event.endDate && event.endDate > event.date) {
     return moment(`${event.endDate} 23:59`, 'YYYY-MM-DD HH:mm').toDate()
   }
   return eventStart.clone().add(event.duration, 'minutes').toDate()
@@ -66,7 +81,7 @@ const getEventEnd = (event: CalendarEvent) => {
 /** End of a single expanded occurrence (not of the series row). */
 const getOccurrenceEnd = (occ: Occurrence) => {
   const start = moment(`${occ.date} ${occ.time}`, 'YYYY-MM-DD HH:mm')
-  if (occ.endDate > occ.date) {
+  if (!hasUnspecifiedEventTime(occ.event) && occ.endDate > occ.date) {
     return moment(`${occ.endDate} 23:59`, 'YYYY-MM-DD HH:mm').toDate()
   }
   return start.clone().add(occ.duration, 'minutes').toDate()
@@ -182,6 +197,9 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
   ])
   const [hoveredEvent, setHoveredEvent] = useState<CalendarEvent | null>(null)
   const [tooltipPosition, setTooltipPosition] = useState<{ x: number; y: number } | null>(null)
+  const [eventAiSummaries, setEventAiSummaries] = useState<Record<string, string>>({})
+  const [eventAiSummaryLoading, setEventAiSummaryLoading] = useState<string | null>(null)
+  const [eventAiSummaryErrors, setEventAiSummaryErrors] = useState<Record<string, string>>({})
   const [settingsTab, setSettingsTab] = useState<'sync' | 'export' | 'import'>('sync')
   const [importType, setImportType] = useState<'pdf' | 'csv'>('pdf')
   const [dragFeedback, setDragFeedback] = useState<string | null>(null)
@@ -471,7 +489,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
       // is where the series began — tapping the last swimming lesson of the
       // month used to send the day panel back to the first one.
       occurrenceDate: occ.date,
-      allDay: occ.endDate > occ.date,
+      allDay: hasUnspecifiedEventTime(occ.event) || occ.endDate > occ.date,
     }));
 
     // Tasks are drawn as all-day bands spanning set date -> due date, so the
@@ -1871,7 +1889,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                                     {event.title}
                                   </span>
                                   <span className="mt-0.5 block text-xs text-gray-600 dark:text-slate-300">
-                                    {event.time} · {person?.name || 'Family'}
+                                    {hasUnspecifiedEventTime(event) ? 'All day' : event.time} · {person?.name || 'Family'}
                                   </span>
                                 </span>
                               </button>
@@ -1909,7 +1927,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                             {event.title}
                           </span>
                           <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-600 dark:text-slate-300">
-                            <span>{event.time} · {event.duration} min</span>
+                            <span>{hasUnspecifiedEventTime(event) ? 'All day' : `${event.time} · ${event.duration} min`}</span>
                             {person && <span>{person.name}</span>}
                             {event.location && <span className="truncate">{event.location}</span>}
                             {isConflicting && (
@@ -1966,8 +1984,10 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                   <Clock className="w-4 h-4" />
                   <span>
                     {hoveredEvent.endDate && hoveredEvent.endDate > hoveredEvent.date
-                      ? `${hoveredEvent.date} - ${hoveredEvent.endDate}`
-                      : `${hoveredEvent.time} (${hoveredEvent.duration} min)`}
+                      ? `${moment(hoveredEvent.date).format('ddd D MMM')} - ${moment(hoveredEvent.endDate).format('ddd D MMM')}`
+                      : hasUnspecifiedEventTime(hoveredEvent)
+                        ? `${moment(hoveredEvent.date).format('ddd D MMM')} · All day`
+                        : `${moment(hoveredEvent.date).format('ddd D MMM')} · ${hoveredEvent.time} (${hoveredEvent.duration} min)`}
                   </span>
                 </div>
 
@@ -2030,11 +2050,53 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                   </div>
                 )}
 
-                {hoveredEvent.notes && (
-                  <div className="text-sm text-gray-600 dark:text-slate-300 border-t pt-2 mt-2">
-                    {hoveredEvent.notes}
+                <div className="border-t border-gray-100 pt-2 text-sm text-gray-600 dark:border-slate-800 dark:text-slate-300">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">About</p>
+                    <button
+                      type="button"
+                      disabled={!familyId || eventAiSummaryLoading === hoveredEvent.id}
+                      onClick={async (event) => {
+                        event.stopPropagation();
+                        if (!familyId) return;
+                        setEventAiSummaryErrors((current) => ({ ...current, [hoveredEvent.id]: '' }));
+                        setEventAiSummaryLoading(hoveredEvent.id);
+                        try {
+                          const response = await fetch(`/api/families/${familyId}/events/summary`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ eventId: hoveredEvent.id }),
+                          });
+                          const payload = await response.json();
+                          if (!response.ok) throw new Error(payload.error || 'Could not summarize this event.');
+                          setEventAiSummaries((current) => ({ ...current, [hoveredEvent.id]: payload.summary }));
+                        } catch (error) {
+                          setEventAiSummaryErrors((current) => ({ ...current, [hoveredEvent.id]: error instanceof Error ? error.message : 'Could not summarize this event.' }));
+                        } finally {
+                          setEventAiSummaryLoading(null);
+                        }
+                      }}
+                      className="inline-flex items-center gap-1 rounded px-1.5 py-1 text-[11px] font-semibold text-[#147c72] hover:bg-[#eef7f3] disabled:opacity-50 dark:text-[#56c6b8] dark:hover:bg-slate-800"
+                    >
+                      {eventAiSummaryLoading === hoveredEvent.id
+                        ? <Loader2 className="h-3 w-3 animate-spin" />
+                        : <Sparkles className="h-3 w-3" />}
+                      {eventAiSummaries[hoveredEvent.id] ? 'Refresh AI summary' : 'AI summary'}
+                    </button>
                   </div>
-                )}
+                  <p className="mt-1 text-sm leading-5 text-gray-700 dark:text-slate-200">
+                    {eventAiSummaries[hoveredEvent.id] || conciseEventContext(hoveredEvent.notes || '') || 'No extra details saved.'}
+                  </p>
+                  {eventAiSummaryErrors[hoveredEvent.id] && eventAiSummaryLoading === null && (
+                    <p role="alert" className="mt-1 text-xs text-red-600 dark:text-red-400">{eventAiSummaryErrors[hoveredEvent.id]}</p>
+                  )}
+                  {hoveredEvent.notes && (
+                    <details className="mt-2 text-xs">
+                      <summary className="cursor-pointer text-gray-500 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-200">Original notes</summary>
+                      <p className="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap leading-5">{hoveredEvent.notes}</p>
+                    </details>
+                  )}
+                </div>
 
                 {/* Action Buttons */}
                 <div className="flex items-center justify-end space-x-2 pt-2 mt-2 border-t border-gray-100">

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { CalendarPlus, CheckCircle2, Clock, ExternalLink, FileUp, Loader2, Mail, MapPin, RefreshCw, Search, Sparkles, XCircle } from 'lucide-react';
+import { CalendarPlus, CheckCircle2, Clock, ExternalLink, FileUp, Loader2, Mail, MapPin, RefreshCw, Sparkles, XCircle } from 'lucide-react';
 import type { CalendarEvent, Person } from '@/types/calendar.types';
 import type { CalendarTask } from '@/types/calendar.types';
 import { useFamilyStore } from '@/store/familyStore';
@@ -14,13 +14,15 @@ import { CalendarAssistantResponse, runCalendarAssistant } from '@/utils/calenda
 import type { SchoolDocumentRoutine, SchoolDocumentSummary } from '@/utils/schoolDocumentSummary';
 import { extractRoutineWeekdays, nextDateForWeekday } from '@/utils/schoolRoutineSchedule';
 import { addDays, expandEvents } from '@/utils/recurrence';
+import { expandTasks } from '@/utils/tasks';
 
 interface CalendarCopilotPanelProps {
   events: CalendarEvent[];
+  tasks: CalendarTask[];
   people: Person[];
   currentDate: Date;
   /** Save a parsed deadline as work with a window, not an event. */
-  createTask?: (draft: Omit<CalendarTask, 'id' | 'createdAt' | 'updatedAt'>) => unknown;
+  createTask?: (draft: Omit<CalendarTask, 'id' | 'createdAt' | 'updatedAt'>) => Promise<CalendarTask>;
   createEvent: (
     draft: Omit<CalendarEvent, 'id' | 'createdAt' | 'updatedAt'>
   ) => Promise<{ status: 'conflict' } | { status: 'created'; event: CalendarEvent }>;
@@ -35,6 +37,7 @@ interface CalendarInboxItem {
   receivedAt: string;
   autoCreated: number;
   needsReview: number;
+  authenticatedSchoolSender?: boolean;
   duplicateCount: number;
   conflictCount: number;
   parsedDrafts: CalendarImportDraft[];
@@ -73,6 +76,12 @@ const timeToMinutes = (time: string) => {
   return Number(hours) * 60 + Number(minutes);
 };
 
+const hasUnspecifiedEventTime = (event: Pick<CalendarEvent, 'notes'>) =>
+  /(?:school email did not specify a time|time not provided by source|time not specified)/i.test(event.notes || '');
+
+const draftHasSpecifiedTime = (draft: CalendarImportDraft) =>
+  draft.timeSpecified ?? /\b\d{1,2}(?::|\.)(\d{2})\s*(?:am|pm)?\b|\b\d{1,2}\s*(?:am|pm)\b/i.test(draft.source);
+
 const isChildProfile = (person: Person) =>
   /child|kid|son|daughter|student/i.test(person.role) ||
   /toddler|preschool|child|teen/i.test(person.ageGroup || '');
@@ -97,6 +106,7 @@ const looksLikeForwardedEmail = (text: string) =>
 
 const CalendarCopilotPanel = ({
   events,
+  tasks,
   people,
   currentDate,
   createEvent,
@@ -124,24 +134,28 @@ const CalendarCopilotPanel = ({
   const [inboxError, setInboxError] = useState<string | null>(null);
   const [gmailConnected, setGmailConnected] = useState(false);
   const [gmailEmail, setGmailEmail] = useState<string | null>(null);
+  const [gmailLastSyncAt, setGmailLastSyncAt] = useState<string | null>(null);
+  const [whatsappConfigured, setWhatsappConfigured] = useState(false);
+  const [whatsappDeliveryTrackingConfigured, setWhatsappDeliveryTrackingConfigured] = useState(false);
+  const [whatsappConsent, setWhatsappConsent] = useState('not_configured');
   const [gmailSyncLoading, setGmailSyncLoading] = useState(false);
   const [activeInboxItemId, setActiveInboxItemId] = useState<string | null>(null);
   const [documentSummary, setDocumentSummary] = useState<SchoolDocumentSummary | null>(null);
   const [documentAttachments, setDocumentAttachments] = useState<CalendarAttachment[]>([]);
   const [routineToSchedule, setRoutineToSchedule] = useState<SchoolDocumentRoutine | null>(null);
   const [routineTime, setRoutineTime] = useState('15:30');
-  const [routinePersonId, setRoutinePersonId] = useState(people[0]?.id || '');
+  const [routinePersonId, setRoutinePersonId] = useState(people.find(isChildProfile)?.id || people[0]?.id || '');
   const [routineSaving, setRoutineSaving] = useState(false);
   const [importSourceType, setImportSourceType] = useState('pasted-text');
   const [importSourceName, setImportSourceName] = useState<string | null>(null);
 
   const selectedDrafts = useMemo(
-    () => importDrafts.filter((draft) => selectedDraftIds.has(draft.importId)),
+    () => importDrafts.filter((draft) => draft.person && selectedDraftIds.has(draft.importId)),
     [importDrafts, selectedDraftIds]
   );
   const assistantDrafts = assistantResult?.drafts ?? (assistantResult?.draft ? [assistantResult.draft] : []);
   const pendingInboxItems = useMemo(
-    () => inboxItems.filter((item) => item.needsReview > 0 || item.conflictCount > 0 || item.status === 'review_required' || item.status === 'needs_ocr' || item.documentSummary),
+    () => inboxItems.filter((item) => item.needsReview > 0 || item.conflictCount > 0 || item.status === 'review_required' || item.status === 'needs_ocr' || item.status === 'no_events'),
     [inboxItems]
   );
   const personNameById = useMemo(
@@ -159,6 +173,9 @@ const CalendarCopilotPanel = ({
     const children = people.filter(isChildProfile);
     return children.length > 0 ? children : people;
   }, [people]);
+  useEffect(() => {
+    if (!routinePersonId && peopleForWhereabouts[0]) setRoutinePersonId(peopleForWhereabouts[0].id);
+  }, [peopleForWhereabouts, routinePersonId]);
   const todaysEventsByPerson = useMemo(() => {
     const dateKey = toDateKey(currentDate);
     const grouped = new Map<string, CalendarEvent[]>();
@@ -176,6 +193,36 @@ const CalendarCopilotPanel = ({
       });
     return grouped;
   }, [currentDate, events]);
+  const importantThisWeek = useMemo(() => {
+    const start = toDateKey(currentDate);
+    const end = addDays(start, 6);
+    const priorityRank = { high: 0, medium: 1, low: 2 } as const;
+    const eventItems = expandEvents(events.filter((event) => event.status !== 'cancelled'), start, end)
+      .map((occurrence) => ({
+        id: occurrence.occurrenceId,
+        title: occurrence.event.title,
+        date: occurrence.date,
+        time: hasUnspecifiedEventTime(occurrence.event) ? '' : occurrence.time,
+        location: occurrence.event.location,
+        person: personNameById.get(occurrence.event.person) || 'Family',
+        priority: occurrence.event.priority,
+        kind: 'Event' as const,
+      }));
+    const taskItems = expandTasks(tasks.filter((task) => !task.completedAt), start, end)
+      .map((occurrence) => ({
+        id: occurrence.occurrenceId,
+        title: occurrence.task.title,
+        date: occurrence.dueDate,
+        time: occurrence.task.dueTime || '',
+        location: '',
+        person: occurrence.task.assignees.map((id) => personNameById.get(id)).filter(Boolean).join(', ') || 'Family',
+        priority: occurrence.task.priority,
+        kind: 'Reminder' as const,
+      }));
+    return [...eventItems, ...taskItems]
+      .sort((a, b) => priorityRank[a.priority] - priorityRank[b.priority] || a.date.localeCompare(b.date) || a.time.localeCompare(b.time))
+      .slice(0, 5);
+  }, [currentDate, events, personNameById, tasks]);
 
   const loadInbox = useCallback(async () => {
     if (!activeFamilyId) return;
@@ -189,6 +236,10 @@ const CalendarCopilotPanel = ({
       setForwardingAddress(payload.forwardingAddress ?? null);
       setGmailConnected(Boolean(payload.gmail?.connected));
       setGmailEmail(payload.gmail?.googleUserEmail ?? null);
+      setGmailLastSyncAt(payload.gmail?.lastSyncAt ?? null);
+      setWhatsappConfigured(Boolean(payload.whatsappConfigured));
+      setWhatsappDeliveryTrackingConfigured(Boolean(payload.whatsappDeliveryTrackingConfigured));
+      setWhatsappConsent(payload.whatsappConsent || 'not_configured');
       setInboxItems(Array.isArray(payload.intakes) ? payload.intakes : []);
     } catch (error) {
       setInboxError(error instanceof Error ? error.message : 'Calendar inbox could not be loaded.');
@@ -205,7 +256,7 @@ const CalendarCopilotPanel = ({
     const handleGmailAuthMessage = (event: MessageEvent<{ type?: string; message?: string }>) => {
       if (event.origin !== window.location.origin) return;
       if (event.data?.type === 'gmail_auth_success') {
-        setImportSuccess('Gmail connected. Forward school emails to the Family Hub address below, then sync.');
+        setImportSuccess('Gmail connected. Stewart Fleming emails will be checked automatically.');
         void loadInbox();
       }
       if (event.data?.type === 'gmail_auth_error') {
@@ -219,13 +270,20 @@ const CalendarCopilotPanel = ({
 
   const connectGmail = async () => {
     if (!activeFamilyId) return;
+    const authWindow = window.open('about:blank', 'family-hub-gmail-connect', 'width=560,height=720');
+    if (!authWindow) {
+      setInboxError('Allow pop-ups for Family Hub to connect Gmail.');
+      return;
+    }
+
     setInboxError(null);
     try {
       const response = await fetch(`/api/families/${activeFamilyId}/gmail/connect`);
       const payload = await response.json();
       if (!response.ok || !payload.authUrl) throw new Error(payload.error || 'Gmail connection could not be started.');
-      window.open(payload.authUrl, 'family-hub-gmail-connect', 'width=560,height=720');
+      authWindow.location.assign(payload.authUrl);
     } catch (error) {
+      authWindow.close();
       setInboxError(error instanceof Error ? error.message : 'Gmail connection could not be started.');
     }
   };
@@ -241,8 +299,8 @@ const CalendarCopilotPanel = ({
       await loadInbox();
       setImportSuccess(
         payload.processed > 0
-          ? `Synced ${payload.processed} forwarded email${payload.processed === 1 ? '' : 's'} from Gmail.`
-          : 'Gmail is up to date. Forward an email to the Family Hub address to import it.',
+          ? `Synced ${payload.processed} email${payload.processed === 1 ? '' : 's'} from Gmail; ${payload.autoCreated} added to the calendar and ${payload.needsReview} left for review.`
+          : 'Gmail is up to date. Stewart Fleming emails are checked automatically; you can also forward other school emails below.',
       );
     } catch (error) {
       setInboxError(error instanceof Error ? error.message : 'Gmail could not be synced.');
@@ -257,10 +315,32 @@ const CalendarCopilotPanel = ({
     setImportDrafts(drafts);
     setDocumentSummary(item.documentSummary ?? null);
     setDocumentAttachments(item.attachments ?? []);
-    setSelectedDraftIds(new Set(drafts.filter((draft) => draft.importStatus !== 'duplicate').map((draft) => draft.importId)));
+    setSelectedDraftIds(new Set(drafts.filter((draft) => draft.importStatus !== 'duplicate' && draft.person).map((draft) => draft.importId)));
     setActiveInboxItemId(item.id);
     setImportError(null);
     setImportSuccess(`Loaded ${drafts.length} event${drafts.length === 1 ? '' : 's'} from "${item.subject || item.sender || 'forwarded email'}".`);
+  };
+
+  const markInboxItemReviewed = async () => {
+    if (!activeInboxItemId || !activeFamilyId) return;
+    setImporting(true);
+    setImportError(null);
+    try {
+      const response = await fetch(`/api/families/${activeFamilyId}/calendar-intake/inbox`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ intakeId: activeInboxItemId, createdEventIds: [], needsReview: 0 }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || 'Inbox review status could not be saved.');
+      setActiveInboxItemId(null);
+      setImportSuccess('Marked this email as reviewed.');
+      void loadInbox();
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : 'Inbox review status could not be saved.');
+    } finally {
+      setImporting(false);
+    }
   };
 
   const runQuickPrompt = (prompt: string) => {
@@ -283,7 +363,7 @@ const CalendarCopilotPanel = ({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             command,
-            today: currentDate.toISOString(),
+            today: toDateKey(currentDate),
           }),
         });
         const payload = await response.json();
@@ -327,6 +407,26 @@ const CalendarCopilotPanel = ({
       }
     } catch (error) {
       setAssistantError(error instanceof Error ? error.message : 'Could not add the calendar event.');
+    } finally {
+      setSavingDraft(false);
+    }
+  };
+
+  const confirmTaskDraft = async () => {
+    if (!assistantResult?.taskDraft || !createTask) return;
+    setSavingDraft(true);
+    setAssistantError(null);
+    try {
+      const task = await createTask(assistantResult.taskDraft);
+      setAssistantResult({
+        action: 'create',
+        summary: `Saved "${task.title}" as a family reminder.`,
+        warnings: [],
+      });
+      setCommand('');
+      onOpenCalendar();
+    } catch (error) {
+      setAssistantError(error instanceof Error ? error.message : 'Could not save this reminder.');
     } finally {
       setSavingDraft(false);
     }
@@ -403,12 +503,12 @@ const CalendarCopilotPanel = ({
                 body: JSON.stringify(isEmail
                   ? {
                       ...extractForwardedEmailFields(text),
-                      defaultPersonId: people[0]?.id,
+                      defaultPersonId: peopleForWhereabouts[0]?.id || people[0]?.id,
                       today: currentDate.toISOString(),
                     }
                   : {
                       text,
-                      defaultPersonId: people[0]?.id,
+                      defaultPersonId: peopleForWhereabouts[0]?.id || people[0]?.id,
                       today: currentDate.toISOString(),
                       sourceType,
                       sourceName,
@@ -424,7 +524,7 @@ const CalendarCopilotPanel = ({
               text,
               people,
               existingEvents: events,
-              defaultPersonId: people[0]?.id,
+              defaultPersonId: peopleForWhereabouts[0]?.id || people[0]?.id,
               today: currentDate,
             }),
           };
@@ -433,7 +533,7 @@ const CalendarCopilotPanel = ({
       setDocumentSummary(payload.documentSummary ?? null);
       setDocumentAttachments(payload.attachments ?? []);
       setImportDrafts(drafts);
-      setSelectedDraftIds(new Set(drafts.filter((draft) => draft.importStatus !== 'duplicate').map((draft) => draft.importId)));
+      setSelectedDraftIds(new Set(drafts.filter((draft) => draft.importStatus !== 'duplicate' && draft.person).map((draft) => draft.importId)));
       if (payload.intakeId) setActiveInboxItemId(payload.intakeId);
       if (drafts.length === 0) {
         setImportError(payload.documentSummary
@@ -468,7 +568,7 @@ const CalendarCopilotPanel = ({
       if (extractedText.trim()) formData.append('extractedText', extractedText);
       formData.append('sourceType', sourceType);
       formData.append('sourceName', sourceName);
-      if (people[0]?.id) formData.append('defaultPersonId', people[0].id);
+      if (peopleForWhereabouts[0]?.id) formData.append('defaultPersonId', peopleForWhereabouts[0].id);
       formData.append('today', currentDate.toISOString());
 
       const response = await fetch(`/api/families/${activeFamilyId}/calendar-intake/document`, {
@@ -488,7 +588,7 @@ const CalendarCopilotPanel = ({
       const drafts: CalendarImportDraft[] = payload.drafts || [];
       setImportText(payload.text || extractedText);
       setImportDrafts(drafts);
-      setSelectedDraftIds(new Set(drafts.filter((draft) => draft.importStatus !== 'duplicate').map((draft) => draft.importId)));
+      setSelectedDraftIds(new Set(drafts.filter((draft) => draft.importStatus !== 'duplicate' && draft.person).map((draft) => draft.importId)));
       setDocumentSummary(payload.documentSummary ?? null);
       setDocumentAttachments(payload.attachments ?? []);
       if (payload.intakeId) setActiveInboxItemId(payload.intakeId);
@@ -576,6 +676,16 @@ const CalendarCopilotPanel = ({
     });
   };
 
+  const assignDraftToPerson = (draftId: string, personId: string) => {
+    setImportDrafts((current) => current.map((draft) => draft.importId === draftId ? { ...draft, person: personId } : draft));
+    setSelectedDraftIds((current) => {
+      const next = new Set(current);
+      if (personId) next.add(draftId);
+      else next.delete(draftId);
+      return next;
+    });
+  };
+
   const importSelectedDrafts = async () => {
     if (selectedDrafts.length === 0) return;
 
@@ -590,7 +700,11 @@ const CalendarCopilotPanel = ({
 
       for (const draft of selectedDrafts) {
         try {
-          const result = await createEvent(importDraftToCalendarEventDraft(draft));
+          const inboxItem = inboxItems.find((item) => item.id === activeInboxItemId);
+          const schoolProvenance = inboxItem?.authenticatedSchoolSender
+            ? { source: 'gmail-school-email', sourceId: inboxItem.id }
+            : {};
+          const result = await createEvent({ ...importDraftToCalendarEventDraft(draft), ...schoolProvenance });
           if (result.status === 'created') {
             createdDraftIds.add(draft.importId);
             createdEventIds.push(result.event.id);
@@ -614,13 +728,18 @@ const CalendarCopilotPanel = ({
         setImportSuccess(`${createdCount} event${createdCount === 1 ? '' : 's'} added to the calendar.`);
         onOpenCalendar();
         if (activeInboxItemId && activeFamilyId) {
-          await fetch(`/api/families/${activeFamilyId}/calendar-intake/inbox`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ intakeId: activeInboxItemId, createdEventIds }),
-          });
-          setActiveInboxItemId(null);
-          void loadInbox();
+          try {
+            const response = await fetch(`/api/families/${activeFamilyId}/calendar-intake/inbox`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ intakeId: activeInboxItemId, createdEventIds, needsReview: failedCount }),
+            });
+            if (!response.ok) throw new Error('Inbox review status could not be saved.');
+            if (failedCount === 0) setActiveInboxItemId(null);
+            void loadInbox();
+          } catch (error) {
+            setImportError(error instanceof Error ? error.message : 'Inbox review status could not be saved.');
+          }
         }
       }
 
@@ -646,6 +765,33 @@ const CalendarCopilotPanel = ({
   // to reach them because the page itself does not scroll sideways.
   return (
     <section className="grid min-w-0 gap-3 border-b border-gray-200 bg-[#f7fbf8] p-3 dark:border-slate-800 dark:bg-slate-950 md:grid-cols-2">
+      <div className="min-w-0 rounded-lg border border-[#dde5e0] bg-white p-3 dark:border-slate-800 dark:bg-slate-900 md:col-span-2">
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-100">Important this week</h3>
+            <p className="text-xs text-gray-500 dark:text-slate-400">Next 7 days, most important first</p>
+          </div>
+          <Clock className="h-4 w-4 text-[#147c72]" />
+        </div>
+        {importantThisWeek.length > 0 ? (
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {importantThisWeek.map((item) => (
+              <div key={item.id} className="min-w-0 rounded-md border border-gray-200 px-3 py-2 dark:border-slate-700">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="min-w-0 truncate text-xs font-semibold text-gray-900 dark:text-slate-100">{item.title}</p>
+                  {item.priority === 'high' && <span className="shrink-0 text-[10px] font-semibold text-rose-700 dark:text-rose-300">Important</span>}
+                </div>
+                <p className="mt-1 truncate text-[11px] text-gray-500 dark:text-slate-400">
+                  {new Date(`${item.date}T12:00:00`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}
+                  {item.time ? ` · ${item.time}` : ''} · {item.person}{item.location ? ` · ${item.location}` : ''} · {item.kind}
+                </p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="rounded-md bg-[#f7fbf8] px-3 py-3 text-xs text-gray-600 dark:bg-slate-950 dark:text-slate-300">Nothing scheduled in the next 7 days.</p>
+        )}
+      </div>
       <div className="min-w-0 rounded-lg border border-[#dde5e0] bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
         <div className="mb-2 flex items-center gap-2">
           <FileUp className="h-4 w-4 text-purple-600" />
@@ -661,12 +807,13 @@ const CalendarCopilotPanel = ({
               {gmailConnected && gmailEmail ? (
                 <>
                   <p className="mt-1">Connected to {gmailEmail}</p>
+                  <p className="mt-1">Stewart Fleming mail syncs morning and evening{gmailLastSyncAt ? ` · Last checked ${new Date(gmailLastSyncAt).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}` : ''}.</p>
                   {forwardingAddress && (
-                    <p className="mt-1 break-all font-mono text-[11px]">Forward to {forwardingAddress}</p>
+                    <p className="mt-1 break-all font-mono text-[11px]">Forward other school emails to {forwardingAddress}</p>
                   )}
                 </>
               ) : (
-                <p className="mt-1">Connect Gmail to import school emails you forward to a private Family Hub address.</p>
+                <p className="mt-1">Connect Gmail to automatically import Stewart Fleming emails and forward other school emails to a private Family Hub address.</p>
               )}
             </div>
             <div className="flex shrink-0 items-center gap-1">
@@ -691,6 +838,17 @@ const CalendarCopilotPanel = ({
             </div>
           </div>
           {inboxError && <p className="mt-2 text-amber-700 dark:text-amber-200">{inboxError}</p>}
+          <p className="mt-2 text-[11px]">
+            {!whatsappConfigured
+              ? 'WhatsApp reminders are not configured yet, so no WhatsApp messages are being sent.'
+              : whatsappConsent === 'opted_out'
+                ? 'WhatsApp reminders are paused. Send START to the Family Hub WhatsApp number to opt back in.'
+                : whatsappConsent !== 'opted_in'
+                  ? 'Send START from the intended WhatsApp number to the Family Hub sender to activate reminders.'
+                  : whatsappDeliveryTrackingConfigured
+                    ? 'WhatsApp reminders and delivery-status tracking are active. Send STOP to pause.'
+                    : 'WhatsApp reminders are opted in, but delivery-status tracking still needs setup.'}
+          </p>
           {pendingInboxItems.length > 0 && (
             <div className="mt-3 space-y-2">
               {pendingInboxItems.slice(0, 3).map((item) => (
@@ -768,6 +926,17 @@ const CalendarCopilotPanel = ({
             {importSuccess}
           </div>
         )}
+        {activeInboxItemId && importDrafts.length === 0 && (
+          <button
+            type="button"
+            onClick={() => void markInboxItemReviewed()}
+            disabled={importing}
+            className="mt-2 inline-flex min-h-9 items-center gap-1.5 rounded-md border border-[#147c72] px-3 py-1.5 text-xs font-semibold text-[#147c72] hover:bg-[#eef7f3] disabled:opacity-50 dark:text-[#56c6b8] dark:hover:bg-slate-800"
+          >
+            {importing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+            Mark reviewed
+          </button>
+        )}
 
         {documentSummary && (
           <div className="mt-3 rounded-md border border-teal-200 bg-teal-50 px-3 py-3 text-xs text-teal-950 dark:border-teal-500/30 dark:bg-teal-500/10 dark:text-teal-100">
@@ -812,7 +981,7 @@ const CalendarCopilotPanel = ({
                           type="button"
                           onClick={() => {
                             setRoutineToSchedule(routine);
-                            setRoutinePersonId(people[0]?.id || '');
+                            setRoutinePersonId(peopleForWhereabouts[0]?.id || '');
                             setImportError(null);
                           }}
                           className="shrink-0 rounded-md border border-teal-300 bg-white px-2 py-1 font-semibold text-teal-800 hover:bg-teal-100 dark:border-teal-500/40 dark:bg-slate-950 dark:text-teal-100 dark:hover:bg-teal-500/20"
@@ -885,14 +1054,16 @@ const CalendarCopilotPanel = ({
         {importDrafts.length > 0 && (
           <div className="mt-3 max-h-56 space-y-2 overflow-y-auto">
             {importDrafts.map((draft) => (
-              <label
+              <div
                 key={draft.importId}
                 className="flex cursor-pointer items-start gap-2 rounded-md border border-gray-200 bg-gray-50 p-2 dark:border-slate-800 dark:bg-slate-950"
               >
                 <input
                   type="checkbox"
+                  aria-label={`Select ${draft.title}`}
                   checked={selectedDraftIds.has(draft.importId)}
                   onChange={() => toggleDraft(draft.importId)}
+                  disabled={!draft.person || draft.importStatus === 'duplicate'}
                   className="mt-1 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
                 />
                 <div className="min-w-0 flex-1">
@@ -909,8 +1080,20 @@ const CalendarCopilotPanel = ({
                     </span>
                   </div>
                   <p className="mt-0.5 text-xs text-gray-500 dark:text-slate-400">
-                    {draft.date}{draft.endDate ? ` to ${draft.endDate}` : ''} at {draft.time}
+                    {draft.date}{draft.endDate ? ` to ${draft.endDate}` : ''}{draftHasSpecifiedTime(draft) ? ` at ${draft.time}` : ' · Time not specified'}
                   </p>
+                  <label className="mt-1 flex items-center gap-2 text-[11px] font-medium text-gray-600 dark:text-slate-300">
+                    For
+                    <select
+                      aria-label={`Assign ${draft.title} to`}
+                      value={draft.person || ''}
+                      onChange={(event) => assignDraftToPerson(draft.importId, event.target.value)}
+                      className="min-w-0 rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                    >
+                      <option value="">Choose a child</option>
+                      {people.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}
+                    </select>
+                  </label>
                   {draft.warnings.length > 0 && (
                     <p className="mt-1 inline-flex items-center gap-1 text-[11px] text-amber-700 dark:text-amber-300">
                       <XCircle className="h-3 w-3" />
@@ -918,7 +1101,7 @@ const CalendarCopilotPanel = ({
                     </p>
                   )}
                 </div>
-              </label>
+              </div>
             ))}
           </div>
         )}
@@ -927,12 +1110,33 @@ const CalendarCopilotPanel = ({
       <div className="min-w-0 rounded-lg border border-[#dde5e0] bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
         <div className="mb-2 flex items-center gap-2">
           <Sparkles className="h-4 w-4 text-[#147c72]" />
-          <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-100">Search or quick create</h3>
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-100">Quick plan</h3>
+        </div>
+        <div className="flex min-w-0 gap-2">
+          <input
+            aria-label="Quick plan"
+            value={command}
+            onChange={(event) => setCommand(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') void runAssistant();
+            }}
+            placeholder="Askia brings in toys on Tuesdays and Fridays"
+            className="min-w-0 flex-1 rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-[#147c72] focus:outline-none focus:ring-2 focus:ring-[#147c72]/15 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+          />
+          <button
+            type="button"
+            onClick={() => void runAssistant()}
+            disabled={assistantLoading || !command.trim()}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-[#147c72] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+          >
+            {assistantLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+            Preview
+          </button>
         </div>
         {peopleForWhereabouts.length > 0 && (
           <div className="mb-3">
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">
-              Where everyone is today
+              Today
             </p>
             <div className="grid gap-2 sm:grid-cols-2">
               {peopleForWhereabouts.map((person) => {
@@ -948,7 +1152,7 @@ const CalendarCopilotPanel = ({
                         {person.icon ? `${person.icon} ` : ''}{person.name}
                       </p>
                       <span className="shrink-0 text-[11px] font-medium text-[#147c72] dark:text-[#56c6b8]">
-                        {personEvents.length === 0 ? 'Free' : `${personEvents.length} today`}
+                        {personEvents.length === 0 ? 'No plans' : `${personEvents.length} today`}
                       </span>
                     </div>
                     {nextEvent ? (
@@ -956,7 +1160,7 @@ const CalendarCopilotPanel = ({
                         <p className="truncate font-medium text-gray-800 dark:text-slate-200">{nextEvent.title}</p>
                         <p className="flex items-center gap-1 truncate">
                           <Clock className="h-3 w-3 shrink-0" />
-                          {nextEvent.time}
+                        {hasUnspecifiedEventTime(nextEvent) ? 'All day' : nextEvent.time}
                           {nextEvent.location ? (
                             <>
                               <MapPin className="ml-1 h-3 w-3 shrink-0" />
@@ -968,7 +1172,7 @@ const CalendarCopilotPanel = ({
                         </p>
                       </div>
                     ) : (
-                      <p className="mt-1 text-[11px] text-gray-500 dark:text-slate-400">No calendar location today</p>
+                      <p className="mt-1 text-[11px] text-gray-500 dark:text-slate-400">Nothing scheduled</p>
                     )}
                   </div>
                 );
@@ -988,27 +1192,6 @@ const CalendarCopilotPanel = ({
             </button>
           ))}
         </div>
-        <div className="flex gap-2">
-          <input
-            value={command}
-            onChange={(event) => setCommand(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') void runAssistant();
-            }}
-            placeholder="Find summer holidays, or create swimming lesson next Tuesday at 5pm"
-            className="min-w-0 flex-1 rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-[#147c72] focus:outline-none focus:ring-2 focus:ring-[#147c72]/15 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
-          />
-          <button
-            type="button"
-            onClick={() => void runAssistant()}
-            disabled={assistantLoading || !command.trim()}
-            className="inline-flex items-center gap-1.5 rounded-md bg-[#147c72] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
-          >
-            {assistantLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-            Run
-          </button>
-        </div>
-
         {assistantError && <p className="mt-2 text-xs text-red-600">{assistantError}</p>}
 
         {assistantResult && (
@@ -1057,22 +1240,19 @@ const CalendarCopilotPanel = ({
                     {assistantResult.taskDraft.title}
                   </p>
                   <p className="shrink-0 text-gray-500 dark:text-slate-400">
-                    set {assistantResult.taskDraft.assignedDate} · due {assistantResult.taskDraft.dueDate}
+                    {assistantResult.taskDraft.recurringPattern?.daysOfWeek?.length
+                      ? `Every ${assistantResult.taskDraft.recurringPattern.daysOfWeek.map((day) => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][day]).join(' & ')}`
+                      : `Due ${assistantResult.taskDraft.dueDate}`}
                   </p>
                 </div>
                 <button
                   type="button"
                   disabled={savingDraft || !createTask}
-                  onClick={() => {
-                    if (!assistantResult.taskDraft || !createTask) return;
-                    createTask(assistantResult.taskDraft);
-                    setAssistantResult(null);
-                    setCommand('');
-                  }}
+                  onClick={() => void confirmTaskDraft()}
                   className="mt-3 inline-flex w-fit items-center gap-1.5 rounded-md bg-[#147c72] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
                 >
-                  <CheckCircle2 className="h-4 w-4" />
-                  Add this homework
+                  {savingDraft ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                  {savingDraft ? 'Saving...' : assistantResult.taskDraft.recurringPattern ? 'Add repeating reminder' : 'Add reminder'}
                 </button>
               </div>
             )}

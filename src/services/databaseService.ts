@@ -1,5 +1,6 @@
 // Database Service - Handles all database operations and syncs with localStorage
 import { CalendarEvent, Person } from '@/types/calendar.types';
+import { mergeDatabaseAndCachedEvents } from '@/lib/calendarEventCache';
 
 const API_BASE = '/api/families';
 
@@ -55,27 +56,6 @@ class DatabaseService {
     }
 
     throw lastError ?? new Error('Failed to initialize database families');
-  }
-
-  private mergeEvents(primary: CalendarEvent[], secondary: CalendarEvent[]) {
-    const merged = new Map<string, CalendarEvent>();
-    const upsertLatest = (event: CalendarEvent) => {
-      if (!event?.id) return;
-      const existing = merged.get(event.id);
-      if (!existing) {
-        merged.set(event.id, event);
-        return;
-      }
-      const existingTime = new Date(existing.updatedAt || existing.createdAt).getTime();
-      const eventTime = new Date(event.updatedAt || event.createdAt).getTime();
-      if (Number.isNaN(existingTime) || eventTime >= existingTime) {
-        merged.set(event.id, event);
-      }
-    };
-
-    secondary.forEach(upsertLatest);
-    primary.forEach(upsertLatest);
-    return Array.from(merged.values());
   }
 
   private readLocalEvents(): CalendarEvent[] {
@@ -285,7 +265,7 @@ class DatabaseService {
           } catch (error) {
             console.warn('Failed to read cached calendar events, resetting cache:', error);
           }
-          const mergedEvents = this.mergeEvents(formattedEvents, storedEvents);
+          const mergedEvents = mergeDatabaseAndCachedEvents(formattedEvents, storedEvents);
           localStorage.setItem('calendarEvents', JSON.stringify(mergedEvents));
         }
       }

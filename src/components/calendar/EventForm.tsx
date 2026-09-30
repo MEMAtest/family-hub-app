@@ -741,6 +741,21 @@ const EventForm: React.FC<EventFormProps> = ({
                   placeholder="Enter location"
                 />
               </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-slate-300">
+                  <FileText className="w-4 h-4 inline mr-1" />
+                  What is this event about? <span className="font-normal text-gray-500">(optional)</span>
+                </label>
+                <AIEnhancedField
+                  value={formData.notes || ''}
+                  onChange={(value) => setFormData(prev => ({ ...prev, notes: value }))}
+                  rows={2}
+                  context="Calendar event description"
+                  className={fieldClass()}
+                  placeholder="Add the useful context: what to bring, who to meet, or what happens there"
+                />
+              </div>
             </div>
 
             {/* Advanced Options Toggle */}
@@ -915,21 +930,6 @@ const EventForm: React.FC<EventFormProps> = ({
                   )}
                 </div>
 
-                {/* Notes */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-slate-300">
-                    <FileText className="w-4 h-4 inline mr-1" />
-                    Notes
-                  </label>
-                  <AIEnhancedField
-                    value={formData.notes || ''}
-                    onChange={(value) => setFormData(prev => ({ ...prev, notes: value }))}
-                    rows={3}
-                    context="Calendar event notes"
-                    className={fieldClass()}
-                    placeholder="Add any additional notes..."
-                  />
-                </div>
               </div>
             )}
           </div>

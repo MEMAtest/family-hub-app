@@ -101,6 +101,7 @@ export const CalendarView = () => {
       {showAddOrImport && (
         <CalendarCopilotPanel
           events={events}
+          tasks={tasks}
           people={people}
           currentDate={currentDate}
           createEvent={createEvent}

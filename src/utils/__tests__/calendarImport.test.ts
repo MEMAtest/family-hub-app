@@ -1,4 +1,4 @@
-import { normalizeCalendarEmailText, parseCalendarImportText } from '@/utils/calendarImport';
+import { importDraftToCalendarEventDraft, normalizeCalendarEmailText, parseCalendarImportText } from '@/utils/calendarImport';
 import { summarizeSchoolDocument } from '@/utils/schoolDocumentSummary';
 import type { Person } from '@/types/calendar.types';
 
@@ -477,10 +477,36 @@ INSET day Monday 21 September 2026.
         title: 'INSET Day',
         date: '2026-09-21',
         time: '09:00',
+        timeSpecified: false,
         type: 'education',
         importStatus: 'ready',
       }),
     ]));
+  });
+
+  it('expands a weekday programme by weekday and flags inconsistent session counts', () => {
+    const drafts = parseCalendarImportText({
+      text: 'BFree Multisports. Day: Tuesday. Dates: 15th September to 1st December 2026 (10-week programme). Time: 3:30pm to 4:30pm. Year Groups: Year 1 and Year 2. How to Book.',
+      people,
+      defaultPersonId: 'child-1',
+      today: new Date('2026-09-30T09:00:00Z'),
+    });
+
+    expect(drafts).toHaveLength(9);
+    expect(drafts.every((draft) => new Date(`${draft.date}T12:00:00Z`).getUTCDay() === 2)).toBe(true);
+    expect(drafts.every((draft) => draft.time === '15:30' && draft.duration === 60)).toBe(true);
+    expect(drafts.every((draft) => draft.person === '')).toBe(true);
+    expect(drafts.every((draft) => draft.importStatus === 'needs_review')).toBe(true);
+    expect(drafts[0].warnings.join(' ')).toMatch(/10 weeks but lists .* weekdays/i);
+  });
+
+  it('rejects impossible month-day dates instead of rolling them into another month', () => {
+    const drafts = parseCalendarImportText({
+      text: 'School trip Monday 31 November 2026 at 10am',
+      people,
+      today: new Date('2026-09-30T09:00:00Z'),
+    });
+    expect(drafts).toHaveLength(0);
   });
 
   it('does not turn a school newsletter issue date into a calendar event', () => {
@@ -516,5 +542,58 @@ INSET day Monday 21 September 2026.
       expect.objectContaining({ label: 'PE timetable' }),
       expect.objectContaining({ label: 'Homework' }),
     ]));
+  });
+
+  it('decodes newsletter time ranges and gives dated activities useful titles', () => {
+    const normalized = normalizeCalendarEmailText({
+      subject: 'Weekly update email',
+      text: `
+Please find our weekly updates, key dates and reminders below.
+Reading mornings
+You are invited into your child's classroom to share a story from 8:45am - 9:15am on the following days:
+Year 1 &ndash; Monday 28th September
+Year 2 &ndash; Tuesday 29th September
+Key Stage 2 (Years 3, 4, 5, 6) &ndash; Thursday 1st October
+Our Book Fair returns from Friday 2nd October to Wednesday 7th October. As usual, this will be in the playground under the canopy from 3:20&ndash;4:00pm.
+      `,
+    });
+    const drafts = parseCalendarImportText({
+      text: normalized,
+      people,
+      defaultPersonId: 'child-1',
+      today: new Date('2026-09-30T09:00:00Z'),
+    });
+
+    expect(drafts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ title: 'Reading Morning (Key Stage 2)', date: '2026-10-01', time: '08:45' }),
+      expect.objectContaining({ title: 'Book Fair', date: '2026-10-02', time: '15:20', duration: 40 }),
+    ]));
+    expect(drafts.some((draft) => draft.time === '03:20')).toBe(false);
+    expect(drafts.every((draft) => draft.title !== 'Weekly Update Email')).toBe(true);
+  });
+
+  it('does not silently assign a school event to a family member when no default was selected', () => {
+    const drafts = parseCalendarImportText({
+      text: 'School concert Friday 9 October 2026 at 6pm',
+      people,
+      defaultPersonId: '',
+      today: new Date('2026-09-30T09:00:00Z'),
+    });
+
+    expect(drafts[0].person).toBe('');
+  });
+
+  it('keeps class-group dates unassigned and models dates without a time as all-day', () => {
+    const drafts = parseCalendarImportText({
+      text: 'Key Stage 2 reading morning Thursday 1 October 2026',
+      people,
+      defaultPersonId: 'child-1',
+      today: new Date('2026-09-30T09:00:00Z'),
+    });
+
+    expect(drafts[0]).toMatchObject({ person: '', date: '2026-10-01', time: '09:00', timeSpecified: false });
+    const event = importDraftToCalendarEventDraft(drafts[0]);
+    expect(event).toMatchObject({ person: '', date: '2026-10-01', time: '00:00', duration: 1439 });
+    expect(event.notes).toContain('Time not provided by source.');
   });
 });

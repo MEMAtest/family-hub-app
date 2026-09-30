@@ -410,7 +410,7 @@ const YearView: React.FC<YearViewProps> = ({
                               year: 'numeric',
                               month: 'long',
                               day: 'numeric'
-                            })} at {event.time}
+                            })}{/(?:school email did not specify a time|time not provided by source)/i.test(event.notes || '') ? ' · Time not specified' : ` at ${event.time}`}
                           </p>
                           {event.location && (
                             <p className="text-sm text-gray-500">{event.location}</p>
