@@ -303,7 +303,7 @@ test.describe('school document calendar intake', () => {
     await page.addInitScript(skipSetupWizard);
     await stubFamilyApis(page, state, {
       inboxItems: [{
-        id: 'confirmed-meeting', subject: 'Meeting Booking Confirmation', status: 'reviewed_imported',
+        id: 'confirmed-meeting', subject: 'Meeting Booking Confirmation', status: 'review_required',
         receivedAt: '2026-09-30T08:00:00.000Z', autoCreated: 1, needsReview: 0,
         duplicateCount: 0, conflictCount: 0, parsedDrafts: [],
       }, {
@@ -367,7 +367,10 @@ test.describe('school document calendar intake', () => {
     await calendarEvent.hover();
     await expect(page.getByText('Wed 30 Sep · All day')).toBeVisible();
     await expect(page.getByText('Bring the reading record. Sign in at the school office.', { exact: true })).toBeVisible();
-    await page.getByRole('button', { name: 'AI summary' }).click();
+    const aiSummaryButton = page.getByRole('button', { name: 'AI summary' });
+    await aiSummaryButton.hover();
+    await expect(aiSummaryButton).toBeVisible();
+    await aiSummaryButton.click();
     await expect(page.getByText('A school workshop for the family. Bring the reading record and sign in at the school office.')).toBeVisible();
   });
 

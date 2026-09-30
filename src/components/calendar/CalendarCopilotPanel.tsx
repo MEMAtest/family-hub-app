@@ -155,7 +155,13 @@ const CalendarCopilotPanel = ({
   );
   const assistantDrafts = assistantResult?.drafts ?? (assistantResult?.draft ? [assistantResult.draft] : []);
   const pendingInboxItems = useMemo(
-    () => inboxItems.filter((item) => item.needsReview > 0 || item.conflictCount > 0 || item.status === 'review_required' || item.status === 'needs_ocr' || item.status === 'no_events'),
+    () => inboxItems.filter((item) =>
+      item.needsReview > 0 ||
+      item.conflictCount > 0 ||
+      item.status === 'needs_ocr' ||
+      item.status === 'no_events' ||
+      (item.status === 'review_required' && item.autoCreated === 0)
+    ),
     [inboxItems]
   );
   const personNameById = useMemo(

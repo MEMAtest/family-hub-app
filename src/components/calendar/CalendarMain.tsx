@@ -197,6 +197,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
   ])
   const [hoveredEvent, setHoveredEvent] = useState<CalendarEvent | null>(null)
   const [tooltipPosition, setTooltipPosition] = useState<{ x: number; y: number } | null>(null)
+  const tooltipDismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [eventAiSummaries, setEventAiSummaries] = useState<Record<string, string>>({})
   const [eventAiSummaryLoading, setEventAiSummaryLoading] = useState<string | null>(null)
   const [eventAiSummaryErrors, setEventAiSummaryErrors] = useState<Record<string, string>>({})
@@ -207,6 +208,19 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
   const [showMobileMenu, setShowMobileMenu] = useState(false)
   const [selectedAgendaDate, setSelectedAgendaDate] = useState(() => moment(currentDate).format('YYYY-MM-DD'))
   const dayAgendaRef = useRef<HTMLElement>(null)
+  const clearTooltipDismissTimer = useCallback(() => {
+    if (tooltipDismissTimerRef.current) clearTimeout(tooltipDismissTimerRef.current)
+    tooltipDismissTimerRef.current = null
+  }, [])
+  const scheduleTooltipDismiss = useCallback(() => {
+    clearTooltipDismissTimer()
+    tooltipDismissTimerRef.current = setTimeout(() => {
+      setHoveredEvent(null)
+      setTooltipPosition(null)
+      tooltipDismissTimerRef.current = null
+    }, 300)
+  }, [clearTooltipDismissTimer])
+  useEffect(() => () => clearTooltipDismissTimer(), [clearTooltipDismissTimer])
   const [isAIConflictOpen, setIsAIConflictOpen] = useState(false)
   const [isAIScheduleOpen, setIsAIScheduleOpen] = useState(false)
   const [aiConflictForm, setAiConflictForm] = useState({
@@ -1805,6 +1819,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
               event: ({ event }: { event: any }) => (
                 <div
                   onMouseEnter={!isMobile ? (e) => {
+                    clearTooltipDismissTimer();
                     const rect = e.currentTarget.getBoundingClientRect();
                     setHoveredEvent((event as any).resource!);
                     setTooltipPosition({
@@ -1812,10 +1827,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                       y: rect.top - 10
                     });
                   } : undefined}
-                  onMouseLeave={!isMobile ? () => {
-                    setHoveredEvent(null);
-                    setTooltipPosition(null);
-                  } : undefined}
+                  onMouseLeave={!isMobile ? scheduleTooltipDismiss : undefined}
                   onTouchStart={isMobile ? () => {
                     setHoveredEvent((event as any).resource!);
                   } : undefined}
@@ -1951,6 +1963,8 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
               className={`fixed z-50 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-lg shadow-lg p-4 max-w-sm ${
                 isMobile ? 'bottom-0 left-0 right-0 m-4 rounded-t-2xl pwa-safe-bottom' : ''
               }`}
+              onMouseEnter={!isMobile ? clearTooltipDismissTimer : undefined}
+              onMouseLeave={!isMobile ? scheduleTooltipDismiss : undefined}
               style={isMobile ? {} : {
                 left: tooltipPosition!.x - 150,
                 top: tooltipPosition!.y - 10,
