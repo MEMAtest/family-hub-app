@@ -53,6 +53,20 @@ interface CalendarAttachment {
   downloadUrl: string;
 }
 
+const inboxItemSummary = (item: CalendarInboxItem) => {
+  if (item.status === 'no_events') return 'No dated events found';
+  if (item.status === 'needs_ocr') return 'Attachment needs a text check';
+
+  const issues: string[] = [];
+  if (item.needsReview > 0) issues.push(`${item.needsReview} to review`);
+  if (item.conflictCount > 0) {
+    issues.push(`${item.conflictCount} conflict${item.conflictCount === 1 ? '' : 's'} to check`);
+  }
+  if (issues.length > 0) return `${item.parsedDrafts.length} parsed · ${issues.join(' · ')}`;
+  if (item.autoCreated > 0) return `${item.autoCreated} added to calendar`;
+  return `${item.parsedDrafts.length} parsed`;
+};
+
 const statusLabel: Record<CalendarImportDraft['importStatus'], string> = {
   ready: 'Ready',
   duplicate: 'Duplicate',
@@ -867,7 +881,7 @@ const CalendarCopilotPanel = ({
                   <span className="min-w-0">
                     <span className="block truncate font-semibold">{item.subject || item.sender || 'Forwarded email'}</span>
                     <span className="block text-[11px] opacity-75">
-                      {item.parsedDrafts.length} parsed, {item.needsReview} to review
+                      {inboxItemSummary(item)}
                     </span>
                   </span>
                   <span className="shrink-0 text-[11px] font-semibold">Review</span>

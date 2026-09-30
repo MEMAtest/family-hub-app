@@ -307,6 +307,17 @@ test.describe('school document calendar intake', () => {
         receivedAt: '2026-09-30T08:00:00.000Z', autoCreated: 1, needsReview: 0,
         duplicateCount: 0, conflictCount: 0, parsedDrafts: [],
       }, {
+        id: 'school-meeting-conflict', subject: 'School meeting overlap', status: 'partial_review',
+        receivedAt: '2026-09-30T08:30:00.000Z', autoCreated: 0, needsReview: 0,
+        duplicateCount: 0, conflictCount: 1,
+        parsedDrafts: [{
+          importId: 'school-meeting-conflict-draft', title: 'School meeting', person: member.id,
+          date: '2026-10-13', time: '16:20', duration: 60, recurring: 'none', cost: 0,
+          type: 'meeting', isRecurring: false, priority: 'high', status: 'confirmed', confidence: 0.95,
+          source: 'Meeting Booking Confirmation 13 October 2026 16:20', sourceLine: 1,
+          importStatus: 'conflict', warnings: ['Overlaps another event for the same family member.'],
+        }],
+      }, {
         id: 'no-dates-newsletter', subject: 'School newsletter without dated events', status: 'no_events',
         receivedAt: '2026-09-30T09:00:00.000Z', autoCreated: 0, needsReview: 0,
         duplicateCount: 0, conflictCount: 0, parsedDrafts: [],
@@ -316,6 +327,9 @@ test.describe('school document calendar intake', () => {
 
     await expect(page.getByText('Gmail school inbox', { exact: true })).toBeVisible({ timeout: 60_000 });
     await expect(page.getByRole('button', { name: /Meeting Booking Confirmation/ })).toHaveCount(0);
+    await expect(page.getByText('1 parsed · 1 conflict to check')).toBeVisible();
+    await page.getByRole('button', { name: /School meeting overlap/ }).click();
+    await expect(page.getByText('Overlaps another event for the same family member.')).toBeVisible();
     await page.getByRole('button', { name: /School newsletter without dated events/ }).click();
     await expect(page.getByRole('button', { name: 'Mark reviewed' })).toBeVisible();
     await page.getByRole('button', { name: 'Mark reviewed' }).click();
