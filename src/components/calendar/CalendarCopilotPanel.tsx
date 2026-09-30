@@ -363,14 +363,9 @@ const CalendarCopilotPanel = ({
     }
   };
 
-  const runQuickPrompt = (prompt: string) => {
-    setCommand(prompt);
-    setAssistantResult(null);
-    setAssistantError(null);
-  };
-
-  const runAssistant = async () => {
-    if (!command.trim()) return;
+  const runAssistant = async (commandOverride?: string) => {
+    const requestedCommand = (commandOverride ?? command).trim();
+    if (!requestedCommand) return;
 
     setAssistantLoading(true);
     setAssistantError(null);
@@ -382,7 +377,7 @@ const CalendarCopilotPanel = ({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            command,
+            command: requestedCommand,
             today: toDateKey(currentDate),
           }),
         });
@@ -393,13 +388,20 @@ const CalendarCopilotPanel = ({
         if (people.length === 0) {
           throw new Error('Family members are still loading. Try again in a moment.');
         }
-        setAssistantResult(runCalendarAssistant({ command, events, people, today: currentDate }));
+        setAssistantResult(runCalendarAssistant({ command: requestedCommand, events, people, today: currentDate }));
       }
     } catch (error) {
       setAssistantError(error instanceof Error ? error.message : 'Could not run assistant request');
     } finally {
       setAssistantLoading(false);
     }
+  };
+
+  const runQuickPrompt = (prompt: string) => {
+    setCommand(prompt);
+    setAssistantResult(null);
+    setAssistantError(null);
+    void runAssistant(prompt);
   };
 
   const confirmAssistantDraft = async () => {

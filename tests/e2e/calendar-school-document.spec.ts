@@ -122,6 +122,23 @@ const stubFamilyApis = async (
   await page.route('**/api/families/*/events/assistant', async (route) => {
     const { command } = route.request().postDataJSON();
     state.assistantRequests?.push(command);
+    if (/gyming tomorrow at 6:30am/i.test(command)) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          action: 'create',
+          summary: 'Add a gym session for Test Child tomorrow at 6:30am.',
+          warnings: [],
+          draft: {
+            title: 'Gyming', person: member.id, date: '2026-10-01', time: '06:30', duration: 60,
+            location: '', recurring: 'none', cost: 0, type: 'fitness', isRecurring: false,
+            priority: 'medium', status: 'confirmed', notes: '',
+          },
+        }),
+      });
+      return;
+    }
     if (!/Askia brings in toys on Tuesdays and Fridays/i.test(command)) {
       await route.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ error: 'Unexpected assistant request' }) });
       return;
@@ -360,6 +377,25 @@ test.describe('school document calendar intake', () => {
       title: 'Bring in toys', assignees: [member.id],
       recurringPattern: { frequency: 'weekly', daysOfWeek: [2, 5] },
     });
+  });
+
+  test('quick gym suggestion needs one tap to preview and one to add', async ({ page }) => {
+    test.setTimeout(120_000);
+    const state = { documentRequestBody: '', eventPosts: [] as unknown[], gmailSyncs: 0, assistantRequests: [] as unknown[] };
+    await page.addInitScript(skipSetupWizard);
+    await stubFamilyApis(page, state);
+    await page.goto('/?view=calendar');
+
+    await expect(page.getByRole('heading', { name: 'Quick plan' })).toBeVisible({ timeout: 60_000 });
+    await page.getByRole('button', { name: /gyming tomorrow at 6:30am/ }).click();
+    await expect.poll(() => state.assistantRequests).toHaveLength(1);
+    expect(state.assistantRequests).toEqual(['Add gyming tomorrow at 6:30am for Test']);
+    await expect(page.getByText(/Gyming/)).toBeVisible();
+    await page.getByRole('button', { name: 'Confirm and add' }).click();
+
+    await expect(page.getByText('Added "Gyming" to the calendar.')).toBeVisible();
+    expect(state.eventPosts).toHaveLength(1);
+    expect(state.eventPosts[0]).toMatchObject({ title: 'Gyming', time: '06:30', eventType: 'fitness' });
   });
 
   test('shows an all-day event clearly and renders the concise AI summary in its hover details', async ({ page }) => {
