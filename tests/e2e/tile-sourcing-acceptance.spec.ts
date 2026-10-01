@@ -30,54 +30,61 @@ test.afterAll(async () => {
   await prisma.$disconnect();
 });
 
-test('finds the Harlem Caliza equivalent and both requested Topps Tiles products', async ({ page }) => {
+test('matches each bathroom quote item to supplier products and keeps the basket', async ({ page }) => {
+  const projectName = `Tile sourcing ${Date.now()}`;
   await page.addInitScript(() => localStorage.setItem('familyHub_setupComplete', 'skipped'));
   await page.goto('/');
   await openProperty(page);
   await page.getByRole('button', { name: 'Projects', exact: true }).click();
   await page.getByRole('button', { name: 'New Project' }).click();
-  await page.getByPlaceholder('e.g., Bathroom Renovation').fill('Tile sourcing acceptance');
+  await page.getByPlaceholder('e.g., Bathroom Renovation').fill(projectName);
   await page.getByRole('button', { name: /Bathroom/ }).last().click();
   await page.locator('form').getByRole('button', { name: 'Create Project', exact: true }).click();
   await page.getByRole('button', { name: /Materials/ }).click();
 
+  // Two rooms only: the main bathroom and the smaller shower room.
   await expect(page.getByText('Materials sourcing')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Main Bathroom' })).toBeVisible();
-  await page.getByRole('button', { name: /Equivalent for Harlem Caliza/ }).click();
+  await expect(page.getByRole('button', { name: 'Open Main Bathroom' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Open Shower Room' })).toBeVisible();
+  await expect(page.getByText('Small Bathroom')).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Open Main Bathroom' }).click();
+  await page.getByRole('button', { name: /^Equivalent for Harlem Caliza/ }).click();
   await expect(page.getByText(/Reference product outside Topps Tiles: Harlem Caliza/)).toBeVisible();
   await page.getByRole('button', { name: 'Search Topps Tiles' }).click();
-  const bone = page.getByRole('heading', { name: 'Kapital Bone Tile (59.5cm x 59.5cm)' });
+  const bone = page.locator('article').filter({ has: page.getByRole('heading', { name: 'Kapital™ Bone Tile (59.5cm x 59.5cm)' }) });
   await expect(bone).toBeVisible();
-  const boneCard = page.locator('article').filter({ has: bone });
-  await expect(boneCard.getByText('Fitter check')).toBeVisible();
-  await expect(boneCard.getByText(/1mm smaller than the reference/)).toBeVisible();
-  await expect(boneCard.getByRole('link', { name: 'Supplier page' })).toHaveAttribute('href', /toppstiles\.co\.uk\/bathroom-tiles\/kapitaltm-bone/);
-  await boneCard.getByRole('button', { name: 'Ask fitter' }).click();
+  await expect(bone.getByText(/1mm smaller each way than Harlem Caliza/)).toBeVisible();
+  await expect(bone.getByRole('link', { name: /Topps Tiles/ })).toHaveAttribute('href', /toppstiles\.co\.uk\/bathroom-tiles\/kapitaltm-bone/);
+  await bone.getByRole('button', { name: 'Add' }).click();
 
-  await page.getByRole('button', { name: 'Kapital Grey' }).click();
-  await page.getByRole('button', { name: 'Search Topps Tiles' }).click();
-  const greyCard = page.locator('article').filter({ has: page.getByRole('heading', { name: 'Kapital™ Grey Tile (59.5cm x 59.5cm)' }) });
-  await expect(greyCard).toBeVisible();
-  await expect(greyCard.getByText('Fitter check')).toBeVisible();
-  await greyCard.getByRole('button', { name: 'Ask fitter' }).click();
+  // Every quote item states what it is and its size; products link straight to their own supplier page.
+  await page.getByRole('button', { name: /^B-shaped shower bath/ }).click();
+  await expect(page.getByText('Size: 1700mm long × 850–900mm wide')).toBeVisible();
+  await page.getByRole('button', { name: /View details for Fairford 1700 x 900mm B Shaped Left Hand Shower Bath/ }).click();
+  const detail = page.getByRole('dialog', { name: /Fairford 1700 x 900mm B Shaped Left Hand Shower Bath/ });
+  await expect(detail.getByRole('link', { name: /Stonewater Bathrooms product page/ })).toHaveAttribute('href', 'https://www.stonewaterbathrooms.com/products/fairford-1700-x-900mm-b-shaped-left-hand-shower-bath');
+  await expect(detail.getByText('Fitter check')).toBeVisible();
+  await detail.getByRole('button', { name: 'Ask fitter' }).click();
+  await detail.getByRole('button', { name: 'Close product details' }).click();
 
-  await page.getByRole('button', { name: 'Small Bathroom' }).click();
-  await expect(page.getByRole('button', { name: /Cemente Basalt 60/ })).toBeVisible();
-  await page.getByRole('button', { name: /Cemente Basalt 60/ }).click();
-  await page.getByRole('button', { name: 'Search Topps Tiles' }).click();
-  const basaltCard = page.locator('article').filter({ has: page.getByRole('heading', { name: 'Cemente™ Basalt Tile (60cm x 60cm)' }) });
-  await expect(basaltCard).toBeVisible();
-  await expect(basaltCard.getByText('Fitter check')).toBeVisible();
-  await basaltCard.getByRole('button', { name: 'Ask fitter' }).click();
+  await page.getByRole('combobox', { name: 'Switch room' }).selectOption('shower-room');
+  await page.getByRole('button', { name: /^Floor tiles · Cemente Basalt 60/ }).click();
+  const basalt = page.locator('article').filter({ has: page.getByRole('heading', { name: 'Cemente™ Basalt Tile (60cm x 60cm)' }) });
+  await expect(basalt).toBeVisible();
+  await basalt.getByRole('button', { name: 'Add' }).click();
 
-  await expect(page.getByText('4 basket items')).toBeVisible();
+  await expect(page.getByText('3 basket items')).toBeVisible();
+  // Projects sync to the household store in the background; reload only once the change is shared.
+  await expect(page.getByText('Shared with family').first()).toBeVisible({ timeout: 20_000 });
   await page.reload();
   await openProperty(page);
   await page.getByRole('button', { name: 'Projects', exact: true }).click();
-  await page.getByText('Tile sourcing acceptance', { exact: true }).click();
+  await page.getByText(projectName, { exact: true }).click();
   await page.getByRole('button', { name: /Materials/ }).click();
-  await expect(page.getByText('4 basket items')).toBeVisible();
-  await expect(page.getByText('Kapital Bone Tile (59.5cm x 59.5cm)')).toBeVisible();
-  await expect(page.getByText('Kapital™ Grey Tile (59.5cm x 59.5cm)')).toBeVisible();
-  await expect(page.getByText('Cemente™ Basalt Tile (60cm x 60cm)')).toBeVisible();
+  await expect(page.getByText('3 basket items')).toBeVisible();
+  const basket = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Project basket' }) });
+  await expect(basket.getByText('Kapital™ Bone Tile (59.5cm x 59.5cm)')).toBeVisible();
+  await expect(basket.getByText('Fairford 1700 x 900mm B Shaped Left Hand Shower Bath')).toBeVisible();
+  await expect(basket.getByText('Cemente™ Basalt Tile (60cm x 60cm)')).toBeVisible();
 });

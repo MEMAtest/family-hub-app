@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
+import type { SourcedProduct, SourcingStock } from '@/types/sourcing.types';
+import { bathroomSourcingSeed } from '@/lib/sourcing/seed';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+
+const STONEWATER = 'https://www.stonewaterbathrooms.com';
+const USER_AGENT = 'FamilyHub/HomeRenoSourcing (public catalogue lookup)';
 
 const stripHtml = (value: string) => value
   .replace(/<[^>]*>/g, ' ')
@@ -10,128 +15,131 @@ const stripHtml = (value: string) => value
   .replace(/\s+/g, ' ')
   .trim();
 
-function stockState(text: string): 'IN_STOCK' | 'LOW_STOCK' | 'OUT_OF_STOCK' | 'UNKNOWN' {
+function stockFromText(text: string | null): SourcingStock {
+  if (!text) return 'UNKNOWN';
   const value = text.toLowerCase();
   if (/out of stock|sold out/.test(value)) return 'OUT_OF_STOCK';
-  if (/low stock|only \d+/.test(value)) return 'LOW_STOCK';
-  if (/in stock|available/.test(value)) return 'IN_STOCK';
+  if (/low stock|only \d+ left/.test(value)) return 'LOW_STOCK';
+  if (/in stock/.test(value)) return 'IN_STOCK';
+  if (/available to order/.test(value)) return 'TO_ORDER';
   return 'UNKNOWN';
 }
 
-function productFromRecord(record: Record<string, unknown>) {
-  const name = typeof record.title === 'string' ? record.title : '';
-  const body = typeof record.body === 'string' ? record.body : '';
-  const rawUrl = typeof record.url === 'string' ? record.url : '';
-  if (!name || !rawUrl) return null;
-
-  let url: URL;
+function isStonewaterUrl(raw: string) {
   try {
-    url = new URL(rawUrl, 'https://www.tradebase.com');
+    const url = new URL(raw, STONEWATER);
+    return /(^|\.)stonewaterbathrooms\.com$|(^|\.)tradebase\.com$/.test(url.hostname) && url.pathname.startsWith('/products/');
   } catch {
-    return null;
+    return false;
   }
-  if (url.hostname !== 'www.tradebase.com' && url.hostname !== 'tradebase.com') return null;
+}
 
-  const text = stripHtml(`${name} ${body}`);
+/** Product URL on the current domain, without search-tracking parameters. */
+function cleanProductUrl(raw: string) {
+  return `${STONEWATER}${new URL(raw, STONEWATER).pathname}`;
+}
+
+/** Reads the stock line Stonewater prints beside the price, e.g. "In stock. Delivery from Fri 2nd Oct." */
+async function readStonewaterStock(productUrl: string) {
+  const response = await fetch(productUrl, { headers: { 'User-Agent': USER_AGENT }, signal: AbortSignal.timeout(10000), cache: 'no-store' });
+  if (!response.ok) return null;
+  const html = await response.text();
+  const lines = Array.from(html.matchAll(/color: rgb\(var\(--color-accent-\d\)\)">([^<]+)</g), (match) => match[1].trim());
+  return lines.find((line) => /stock|order/i.test(line)) ?? null;
+}
+
+function productFromRecord(record: Record<string, unknown>): SourcedProduct | null {
+  const name = typeof record.title === 'string' ? record.title : '';
+  const rawUrl = typeof record.url === 'string' ? record.url : '';
+  if (!name || !rawUrl || !isStonewaterUrl(rawUrl)) return null;
+  const text = stripHtml(typeof record.body === 'string' ? record.body : '');
+
   const dimensions: Record<string, number> = {};
-  const pair = text.match(/(\d{3,4})\s*(?:x|×|by)\s*(\d{3,4})\s*mm?/i);
+  const pair = name.match(/(\d{3,4})\s*(?:mm)?\s*(?:x|×)\s*(\d{3,4})\s*mm?/i);
+  const width = name.match(/(\d{3,4})\s*mm/i);
   if (pair) {
     dimensions.lengthMm = Number(pair[1]);
     dimensions.widthMm = Number(pair[2]);
+  } else if (width) {
+    dimensions.maxWidthMm = Number(width[1]);
   }
-  const thickness = text.match(/(?:thickness|thick|glass)\D{0,20}(\d+(?:\.\d+)?)\s*mm/i);
-  if (thickness) dimensions.thicknessMm = Number(thickness[1]);
 
   const components: string[] = [];
-  const source = text.match(/contents?:\s*([^.\n]+)/i)?.[1] ?? text;
-  ['shower-tray', 'waste', 'screen', 'front-panel', 'end-panel', 'basin', 'seat', 'cistern', 'bath', 'vanity', 'shower-door'].forEach((key) => {
+  ['shower-tray', 'waste', 'screen', 'basin', 'seat', 'cistern', 'bath', 'vanity', 'shower-door', 'side-panel', 'towel-rail', 'valves'].forEach((key) => {
     const pattern = key.replace('-', '[ -]');
     const excluded = new RegExp(`(?:${pattern})[^.()]{0,30}(?:not included|excluded|sold separately)`, 'i').test(text);
-    if (!excluded && new RegExp(`\\b${pattern}\\b`, 'i').test(source)) components.push(key);
+    if (!excluded && new RegExp(`\\b${pattern}\\b`, 'i').test(name)) components.push(key);
   });
 
-  const imageRecord = record.featured_image;
-  const imageUrl = typeof imageRecord === 'object' && imageRecord && 'url' in imageRecord
-    ? String(imageRecord.url)
-    : typeof record.image === 'string' ? record.image : 'https://placehold.co/640x420/e8eee9/25342a?text=Stonewater';
-  const stockEvidence = record.available === true ? 'Supplier search result marked available' : 'Availability not confirmed';
+  const image = typeof record.image === 'string' ? record.image
+    : typeof record.featured_image === 'object' && record.featured_image && 'url' in record.featured_image ? String(record.featured_image.url) : '';
   const price = Number(record.price ?? record.price_min ?? 0);
 
   return {
-    id: `stonewater-${String(record.id ?? name).replace(/[^a-z0-9]+/gi, '-').toLowerCase()}`,
-    supplier: 'Stonewater Bathrooms (Tradebase)',
+    id: `sw-${String(record.id ?? name).replace(/[^a-z0-9]+/gi, '-').toLowerCase()}`,
+    supplier: 'Stonewater Bathrooms',
     name,
-    url: url.toString(),
-    imageUrl,
+    size: pair ? `${pair[1]} × ${pair[2]}mm` : width ? `${width[1]}mm` : undefined,
+    url: cleanProductUrl(rawUrl),
+    imageUrl: image,
+    gallery: image ? [image] : [],
     price: Number.isFinite(price) ? price : 0,
-    stock: stockState(stockEvidence),
-    stockEvidence,
+    stock: 'UNKNOWN',
+    stockEvidence: 'Stock could not be checked',
     dimensions,
     components,
+    description: text.slice(0, 420),
     lastChecked: new Date().toISOString(),
   };
 }
 
-// Verified Topps Tiles catalogue records used for stable, supplier-specific searches.
-// Prices are catalogue prices; stock and final project cost must be checked with the supplier.
-const toppsTiles = [
-  {
-    id: 'topps-716975', supplier: 'Topps Tiles', category: 'Tiles', name: 'Kapital Bone Tile (59.5cm x 59.5cm)',
-    url: 'https://www.toppstiles.co.uk/bathroom-tiles/kapitaltm-bone-tile-59-5cm-x-59-5cm',
-    imageUrl: 'https://placehold.co/640x420/e8e4dc/453f36?text=Kapital+Bone', price: 60, priceUnit: 'per m²',
-    stock: 'UNKNOWN' as const, stockEvidence: 'Check current availability with Topps Tiles',
-    dimensions: { lengthMm: 595, widthMm: 595 }, finish: 'Matt', colour: 'Bone', material: 'Porcelain', effect: 'Concrete effect', components: [], lastChecked: '2026-09-28T00:00:00.000Z',
-  },
-  {
-    id: 'topps-705459', supplier: 'Topps Tiles', category: 'Tiles', name: 'Cemente™ Basalt Tile (60cm x 60cm)',
-    url: 'https://www.toppstiles.co.uk/cemente/cementetm-basalt-tile-60cm-x-60cm',
-    imageUrl: 'https://placehold.co/640x420/777772/ffffff?text=Cemente+Basalt', price: 66.25, priceUnit: 'per m²',
-    stock: 'UNKNOWN' as const, stockEvidence: 'Check current availability with Topps Tiles',
-    dimensions: { lengthMm: 600, widthMm: 600 }, finish: 'Matt', colour: 'Basalt', material: 'Porcelain', effect: 'Concrete effect', components: [], lastChecked: '2026-09-28T00:00:00.000Z',
-  },
-  {
-    id: 'topps-716977', supplier: 'Topps Tiles', category: 'Tiles', name: 'Kapital™ Grey Tile (59.5cm x 59.5cm)',
-    url: 'https://www.toppstiles.co.uk/bathroom-tiles/kapitaltm-grey-tile-59-5cm-x-59-5cm',
-    imageUrl: 'https://placehold.co/640x420/858582/ffffff?text=Kapital+Grey', price: 60, priceUnit: 'per m²',
-    stock: 'UNKNOWN' as const, stockEvidence: 'Check current availability with Topps Tiles',
-    dimensions: { lengthMm: 595, widthMm: 595 }, finish: 'Matt', colour: 'Grey', material: 'Porcelain', effect: 'Concrete effect', components: [], lastChecked: '2026-09-28T00:00:00.000Z',
-  },
-];
-
 function findToppsProducts(query: string) {
   const normalized = query.toLowerCase();
-  if (/harlem|porcelanosa|caliza/.test(normalized)) return [toppsTiles[0]];
-  if (/cement|basalt/.test(normalized)) return [toppsTiles[1]];
-  if (/kapital|grey|gray/.test(normalized)) return [toppsTiles[2]];
+  const tiles = bathroomSourcingSeed.products.filter((product) => product.supplier === 'Topps Tiles');
+  const pick = (id: string) => tiles.filter((tile) => tile.id === id);
+  if (/harlem|porcelanosa|caliza|bone/.test(normalized)) return pick('topps-716975');
+  if (/cement|basalt|dark grey/.test(normalized)) return pick('topps-705459');
+  if (/kapital|grey|gray/.test(normalized)) return pick('topps-716977');
   return [];
 }
 
 export async function POST(request: NextRequest) {
-  let body: { supplierId?: string; requirement?: { name?: string; specification?: string } };
+  let body: { action?: string; url?: string; supplierId?: string; requirement?: { name?: string; specification?: string; size?: string } };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: 'A requirement is required.' }, { status: 400 });
   }
 
+  if (body.action === 'stock') {
+    if (!body.url || !isStonewaterUrl(body.url)) return NextResponse.json({ error: 'Live stock checks are available for Stonewater products.' }, { status: 400 });
+    try {
+      const stockEvidence = await readStonewaterStock(cleanProductUrl(body.url));
+      return NextResponse.json({ stock: stockFromText(stockEvidence), stockEvidence: stockEvidence ?? 'Stock not shown on supplier page', lastChecked: new Date().toISOString() });
+    } catch {
+      return NextResponse.json({ error: 'Could not reach Stonewater to check stock.' }, { status: 502 });
+    }
+  }
+
   const requirement = body.requirement;
-  const query = [requirement?.name, requirement?.specification].filter((value) => typeof value === 'string').join(' ').trim();
+  const query = [requirement?.name, requirement?.size]
+    .filter((value): value is string => typeof value === 'string' && value !== '—')
+    .join(' ')
+    .replace(/[×(),+·]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
   if (!query || query.length > 240) return NextResponse.json({ error: 'Enter a product requirement to search.' }, { status: 400 });
 
   if (body.supplierId === 'topps-tiles') {
-    return NextResponse.json({ products: findToppsProducts(query) });
+    return NextResponse.json({ products: findToppsProducts(`${query} ${requirement?.specification ?? ''}`) });
   }
 
   try {
-    const searchUrl = new URL('https://www.tradebase.com/search/suggest.json');
+    const searchUrl = new URL(`${STONEWATER}/search/suggest.json`);
     searchUrl.searchParams.set('q', query);
     searchUrl.searchParams.set('resources[type]', 'product');
     searchUrl.searchParams.set('resources[limit]', '8');
-    const response = await fetch(searchUrl, {
-      headers: { 'User-Agent': 'FamilyHub/HomeRenoSourcing (public catalogue lookup)' },
-      signal: AbortSignal.timeout(10000),
-      next: { revalidate: 300 },
-    });
+    const response = await fetch(searchUrl, { headers: { 'User-Agent': USER_AGENT }, signal: AbortSignal.timeout(10000), next: { revalidate: 300 } });
     if (!response.ok) return NextResponse.json({ error: 'Stonewater search is temporarily unavailable.' }, { status: 502 });
 
     const data = await response.json() as { resources?: { results?: { products?: Array<Record<string, unknown>> } } };
@@ -139,8 +147,18 @@ export async function POST(request: NextRequest) {
       const product = productFromRecord(record);
       return product ? [product] : [];
     });
+    // The search feed only says whether a product can be bought; the product page says whether it is held in stock.
+    await Promise.all(products.map(async (product) => {
+      try {
+        const evidence = await readStonewaterStock(product.url);
+        product.stock = stockFromText(evidence);
+        product.stockEvidence = evidence ?? 'Stock not shown on supplier page';
+      } catch {
+        // Keep the "could not be checked" wording.
+      }
+    }));
     return NextResponse.json({ products });
   } catch {
-    return NextResponse.json({ error: 'Could not reach the Stonewater public catalogue.' }, { status: 502 });
+    return NextResponse.json({ error: 'Could not reach the Stonewater catalogue.' }, { status: 502 });
   }
 }
