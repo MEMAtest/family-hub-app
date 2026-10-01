@@ -283,6 +283,9 @@ export interface PropertyProject {
   // Documents
   attachments: PropertyDocument[];
 
+  // Product sourcing / procurement workspace
+  sourcing?: import('./sourcing.types').ProjectSourcing;
+
   // Metadata
   createdAt: string;
   updatedAt: string;
