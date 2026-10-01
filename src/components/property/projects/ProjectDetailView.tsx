@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { ArrowLeft, Mail, Users, FileText, Calendar, Bell, CheckSquare, Settings, Edit2, Plus, CalendarPlus, Phone, Building2, UserPlus, Upload, BarChart3, PieChart, Download, FileSpreadsheet, FileJson, Printer } from 'lucide-react';
+import { ArrowLeft, Mail, Users, FileText, Calendar, Bell, CheckSquare, Settings, Edit2, Plus, CalendarPlus, Phone, Building2, UserPlus, Upload, BarChart3, PieChart, Download, FileSpreadsheet, FileJson, Printer, ShoppingBasket } from 'lucide-react';
 import { ProjectEmailInbox } from './ProjectEmailInbox';
 import PDFQuoteExtractor from '@/components/projects/PDFQuoteExtractor';
 import QuoteCostBreakdownChart from '@/components/projects/charts/QuoteCostBreakdownChart';
@@ -28,6 +28,7 @@ import type {
 import { CONTRACTOR_SPECIALTIES, type ContractorSpecialty } from '@/types/contractor.types';
 import { formatDate } from '@/utils/formatDate';
 import { exportQuotesToCSV, exportQuotesToExcel, exportQuotesToJSON, exportQuotesToHTML } from '@/utils/quoteExporters';
+import ProjectMaterialsView from './ProjectMaterialsView';
 
 const statusStyles: Record<ProjectStatus, { bg: string; text: string; label: string }> = {
   planning: { bg: 'bg-blue-100 dark:bg-blue-500/20', text: 'text-blue-700 dark:text-blue-300', label: 'Planning' },
@@ -44,7 +45,7 @@ const currencyFormatter = new Intl.NumberFormat('en-GB', {
   maximumFractionDigits: 0,
 });
 
-type TabId = 'emails' | 'contacts' | 'quotes' | 'visits' | 'followups' | 'tasks' | 'contractors';
+type TabId = 'emails' | 'contacts' | 'quotes' | 'materials' | 'visits' | 'followups' | 'tasks' | 'contractors';
 
 interface ProjectDetailViewProps {
   project: PropertyProject;
@@ -350,6 +351,7 @@ export const ProjectDetailView = ({
     { id: 'emails', label: 'Emails', icon: Mail, count: project.emails?.length || 0 },
     { id: 'contacts', label: 'Contacts', icon: Users, count: project.contacts?.length || 0 },
     { id: 'quotes', label: 'Quotes', icon: FileText, count: project.quotes?.length || 0 },
+    { id: 'materials', label: 'Materials', icon: ShoppingBasket, count: project.sourcing?.basket.length || 0 },
     { id: 'visits', label: 'Visits', icon: Calendar, count: project.scheduledVisits?.length || 0 },
     { id: 'followups', label: 'Follow-ups', icon: Bell, count: project.followUps?.length || 0 },
     { id: 'tasks', label: 'Tasks', icon: CheckSquare, count: project.tasks?.length || 0 },
@@ -1365,6 +1367,14 @@ export const ProjectDetailView = ({
               </div>
             )}
           </div>
+        )}
+
+        {activeTab === 'materials' && (
+          <ProjectMaterialsView
+            project={project}
+            onUpdateProject={onUpdateProject}
+            isReadOnly={isReadOnly}
+          />
         )}
 
         {activeTab === 'visits' && (
