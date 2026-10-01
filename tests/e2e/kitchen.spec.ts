@@ -98,6 +98,14 @@ test('saying what we have sets counts and run-out dates that the other phone see
       { name: 'Nappies', usual: null, status: 'count', quantity: 2, unit: 'pack', unitContents: 'about 50 nappies', daysPerUnit: 9, rateSource: 'estimated', assumption: 'About 50 nappies a pack.', question: null, category: 'kids' },
     ] }),
   }));
+  // Hold back this phone's first sync, so the save lands before it: a phone with no
+  // sync history must not lose a count to the server's older copy (CI caught this).
+  let releaseSync: () => void = () => undefined;
+  const syncHeld = new Promise<void>((resolve) => { releaseSync = resolve; });
+  await first.page.route('**/api/families/*/documents?keys=**', async (route) => {
+    await syncHeld;
+    await route.continue();
+  });
   await openKitchen(first.page);
   await first.page.getByLabel(/What have you got/).fill('we have 20 toilet tissue from costco, one lasts about 2 days, a box of 12 wipes, 2 diaper sets');
   await first.page.getByRole('button', { name: 'Add', exact: true }).click();
@@ -109,6 +117,7 @@ test('saying what we have sets counts and run-out dates that the other phone see
   await expect(review.getByText(/Lasts about 27 days/)).toBeVisible();
   await review.getByRole('button', { name: 'Save' }).click();
   await expect(review).toBeHidden();
+  releaseSync();
 
   await expect.poll(async () => {
     const doc = await prisma.familyDocument.findUnique({ where: { familyId_key: { familyId, key: 'kitchen.staples' } } });

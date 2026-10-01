@@ -65,6 +65,19 @@ describe('mergeCollection without a base (first sync on a device)', () => {
     expect(merged.map((i) => i.id)).toEqual(['seed', 'only-there', 'only-here']);
     expect(merged[0].title).toBe('edited elsewhere');
   });
+
+  test('without a base, an edit made on this phone after the server copy still wins', () => {
+    // A phone that saved a stock count before its first sync finished
+    const local = [item('toilet-roll', 'counted 20', '2026-09-28T10:05:00.000Z')];
+    const server = [item('toilet-roll', 'starter', '2026-09-27T09:00:00.000Z')];
+    expect(mergeCollection(null, local, server)[0].title).toBe('counted 20');
+    // ...but an old copy lying around on the phone never beats newer server data
+    const stale = [item('toilet-roll', 'old local', '2026-09-01T00:00:00.000Z')];
+    expect(mergeCollection(null, stale, server)[0].title).toBe('starter');
+    // and a tie goes to the server
+    const tie = [item('toilet-roll', 'same time', '2026-09-27T09:00:00.000Z')];
+    expect(mergeCollection(null, tie, server)[0].title).toBe('starter');
+  });
 });
 
 describe('mergeObject', () => {

@@ -150,22 +150,29 @@ edits the numbers on a review card before anything is saved. After that the usua
   fails on a note that says low/out, those items are still flagged the old way.
 - The Monday email lists counted items with their date: "Bread (runs out Wed 30 Sept)".
 
-**AI models.** The old default `claude-sonnet-4-20250514` now returns 404, and the budget routes
-used the retired `claude-3-haiku-20240307`. Defaults now live in `src/lib/aiModels.ts`
-(`claude-opus-5`, and `anthropic/claude-opus-5` on OpenRouter; env vars still override). New
-Claude models can reply with a thinking block first, so read the text block with `firstText`
-and never assume `content[0]`. **As of 27 Sep the `ANTHROPIC_API_KEY` in `.env.local` has no credit
-("credit balance is too low"), so every call falls through to OpenRouter.** Measured on the live
-keys: stock note 7-13s, fridge photo ~17s, receipt ~9s, issue triage ~12s (its timeout went
-from 8s to 20s so the AI answer isn't always discarded for the rules fallback).
+**AI models (cheap by design, 28 Sep 2026).** The old default `claude-sonnet-4-20250514` now
+returns 404. Defaults live in `src/lib/aiModels.ts`. OpenRouter goes first on
+`openai/gpt-6-luna`, with `z-ai/glm-5.3-flash` as the fallback. The Anthropic key is only a
+backup, on `claude-haiku-4-5`. Env vars (`OPENROUTER_MODEL`, `OPENROUTER_FALLBACK_MODEL`, `ANTHROPIC_MODEL`, ...) override.
+The household asked for cheap models. A bake-off on the real prompts (stock note, receipt,
+fridge; 3 runs each) scored:
 
-**Refusals.** Opus 5's safety classifiers sometimes stop harmless requests part-way. The
-receipt prompt was refused 6 times in 6 in one run, and the reply ends mid-JSON
-(`finish_reason: content_filter` on OpenRouter, `stop_reason: refusal` on Anthropic). Both
-AI paths treat that as `AIRefusalError` and retry once on `claude-opus-4-8` / `anthropic/claude-opus-4.8`
-(`withRefusalFallback` in `src/lib/aiModels.ts`; override with `*_FALLBACK_MODEL`). In a
-6-run replay afterwards, 2 were refused and both recovered. Don't remove this because a
-single manual test passed; that's how it was missed the first time.
+| Model | Score | Avg | Cost/call |
+| --- | --- | --- | --- |
+| openai/gpt-6-luna | 48/48 | 7.6s | $0.0005 |
+| z-ai/glm-5.3-flash | 48/48 | 16s | $0.0008 |
+| openai/gpt-5.6-luna | 44/48 | 6.9s | $0.0010 |
+| deepseek/deepseek-v4.1-flash | 43/48 | 115s | $0.0035 |
+| qwen/qwen3.8-flash | 37/48 | 44s | $0.0010 |
+| anthropic/claude-opus-5 | 36/48 | 12s | $0.0297 |
+
+Don't switch to Opus: it costs about 57× more, and its filter refused 2 of 3 receipts part-way
+(`finish_reason: content_filter`). Any failure except a timeout (refused, cut off, provider error)
+gets one retry on the fallback model (`withModelFallback`); in live checks this recovered two
+OpenRouter network drops. A timeout isn't retried, because two slow calls would outlast the 60s
+function limit. Read text past thinking blocks with `firstText`. **As of 27 Sep the
+`ANTHROPIC_API_KEY` has no credit**, which is harmless now that it's only the backup. Replay any
+new prompt about 6 times before trusting it; a single pass proves nothing.
 
 The budget `ai-receipt` route no longer returns made-up "Test Receipt £25.99" data on failure;
 it returns an error, and unreadable fields come back as null.
@@ -174,7 +181,7 @@ it returns an error, and unreadable fields come back as null.
 
 1. Live AI checks were done locally on 27 Sep with real keys: fridge, receipt, stock note, issue
    triage, budget receipt. Tune prompts only if real use shows poor readings.
-2. Top up the Anthropic account, or remove `ANTHROPIC_API_KEY` so calls stop failing first.
+2. Optional: top up the Anthropic account if you want the Haiku backup to work.
 3. Let the Meals store hold more than one meal per day.
 4. Optional: an 8am-all-year digest (needs a second cron or an in-route London-hour check;
    check the Vercel plan's cron limits first).
