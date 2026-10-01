@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import type { SourcedProduct, SourcingStock } from '@/types/sourcing.types';
 import { bathroomSourcingSeed } from '@/lib/sourcing/seed';
+import { requireAuth } from '@/lib/auth-utils';
+import { reviewCandidates } from '@/lib/sourcing/aiReview';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -118,8 +120,12 @@ function findToppsProducts(query: string) {
   return [];
 }
 
-export async function POST(request: NextRequest) {
-  let body: { action?: string; url?: string; supplierId?: string; requirement?: { name?: string; specification?: string; size?: string } };
+// Signed-in only: searches can call the sourcing AI, which costs money per request.
+export const POST = requireAuth(async (request: NextRequest) => {
+  let body: {
+    action?: string; url?: string; supplierId?: string;
+    requirement?: { id?: string; name?: string; specification?: string; size?: string; requiredComponents?: string[]; constraints?: Record<string, number | string> };
+  };
   try {
     body = await request.json();
   } catch {
@@ -158,8 +164,10 @@ export async function POST(request: NextRequest) {
     if (!response.ok) return NextResponse.json({ error: 'Stonewater search is temporarily unavailable.' }, { status: 502 });
 
     const data = await response.json() as { resources?: { results?: { products?: Array<Record<string, unknown>> } } };
+    const fullText = new Map<string, string>();
     const products = (data.resources?.results?.products ?? []).flatMap((record) => {
       const product = productFromRecord(record);
+      if (product) fullText.set(product.id, stripHtml(typeof record.body === 'string' ? record.body : ''));
       return product ? [product] : [];
     });
     // The search feed only says whether a product can be bought; the product page says whether it is held in stock.
@@ -172,8 +180,34 @@ export async function POST(request: NextRequest) {
         // Keep the "could not be checked" wording.
       }
     });
-    return NextResponse.json({ products });
+    const ai = await reviewResults(requirement, products, fullText);
+    return NextResponse.json({ products, ai });
   } catch {
     return NextResponse.json({ error: 'Could not reach the Stonewater catalogue.' }, { status: 502 });
+  }
+});
+
+/** Asks the sourcing AI whether each result is what the quote item needs. Search still works if the AI is down. */
+async function reviewResults(
+  requirement: { id?: string; name?: string; specification?: string; size?: string; requiredComponents?: string[]; constraints?: Record<string, number | string> } | undefined,
+  products: SourcedProduct[],
+  fullText: Map<string, string>,
+) {
+  if (!requirement?.name || products.length === 0) return { status: 'skipped' as const };
+  if (!process.env.OPENROUTER_API_KEY) return { status: 'unavailable' as const, reason: 'No AI provider configured' };
+  try {
+    const reviews = await reviewCandidates(
+      { name: requirement.name, specification: requirement.specification ?? requirement.name, size: requirement.size, requiredComponents: requirement.requiredComponents, constraints: requirement.constraints },
+      products.map((product) => ({ id: product.id, name: product.name, description: fullText.get(product.id) ?? product.description ?? '' })),
+    );
+    const checkedAt = new Date().toISOString();
+    products.forEach((product) => {
+      const review = reviews.get(product.id);
+      if (review) product.aiReview = { requirementId: requirement.id ?? '', verdict: review.verdict, reason: review.reason, missingParts: review.missingParts, model: review.model, checkedAt };
+    });
+    return { status: 'reviewed' as const, reviewed: reviews.size };
+  } catch (error) {
+    console.warn('Sourcing AI review failed; returning unreviewed results:', error instanceof Error ? error.message : error);
+    return { status: 'unavailable' as const, reason: 'AI review unavailable' };
   }
 }

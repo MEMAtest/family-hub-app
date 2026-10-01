@@ -87,6 +87,7 @@ export default function ProjectMaterialsView({ project, onUpdateProject, isReadO
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<SortOrder>('recommended');
   const [inStockOnly, setInStockOnly] = useState(false);
+  const [showUnsuitable, setShowUnsuitable] = useState(false);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
   const [message, setMessage] = useState('');
@@ -122,17 +123,22 @@ export default function ProjectMaterialsView({ project, onUpdateProject, isReadO
     return sourcing.products.filter((product) => product.requirementIds?.some((id) => ids.has(id)));
   }, [requirement, roomRequirements, sourcing.products]);
 
+  // The AI only judged a product against the quote item it was searched for.
+  const isRejected = (product: SourcedProduct) => product.aiReview?.verdict === 'not_suitable' && (!requirement || product.aiReview.requirementId === requirement.id);
+
   const results = useMemo(() => {
     const text = query.trim().toLowerCase();
     const rank: Record<SourcingStock, number> = { IN_STOCK: 0, LOW_STOCK: 1, TO_ORDER: 2, UNKNOWN: 3, OUT_OF_STOCK: 4 };
     return roomProducts
       .filter((product) => category === 'All' || product.category === category)
       .filter((product) => !inStockOnly || product.stock === 'IN_STOCK')
+      .filter((product) => showUnsuitable || !isRejected(product))
       .filter((product) => !text || `${product.name} ${product.size ?? ''} ${product.supplier}`.toLowerCase().includes(text))
       .sort((a, b) => sort === 'price' ? a.price - b.price
         : sort === 'stock' ? rank[a.stock] - rank[b.stock] || a.price - b.price
           : Number(!!b.topPick) - Number(!!a.topPick) || rank[a.stock] - rank[b.stock] || a.price - b.price);
-  }, [roomProducts, category, inStockOnly, query, sort]);
+  }, [roomProducts, category, inStockOnly, query, sort, showUnsuitable]); // eslint-disable-line react-hooks/exhaustive-deps
+  const hiddenUnsuitable = roomProducts.filter((product) => isRejected(product)).length;
 
   const categoryCounts = useMemo(() => Object.fromEntries(categories.map((item) => [item.id,
     item.id === 'All' ? roomProducts.length : roomProducts.filter((product) => product.category === item.id).length])), [roomProducts]);
@@ -165,7 +171,7 @@ export default function ProjectMaterialsView({ project, onUpdateProject, isReadO
     try {
       const response = await fetch('/api/property/sourcing/search', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ supplierId: tiles ? 'topps-tiles' : 'stonewater', requirement: { name: requirement.name, size: requirement.size, specification: requirement.specification } }),
+        body: JSON.stringify({ supplierId: tiles ? 'topps-tiles' : 'stonewater', requirement: { id: requirement.id, name: requirement.name, size: requirement.size, specification: requirement.specification, requiredComponents: requirement.requiredComponents, constraints: requirement.constraints } }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Supplier search failed.');
@@ -177,13 +183,21 @@ export default function ProjectMaterialsView({ project, onUpdateProject, isReadO
       const products = [...current.products];
       found.forEach((product) => {
         const index = products.findIndex((item) => item.id === product.id || item.url === product.url);
-        if (index >= 0) products[index] = { ...products[index], stock: product.stock, stockEvidence: product.stockEvidence, lastChecked: product.lastChecked,
+        if (index >= 0) products[index] = { ...products[index], stock: product.stock, stockEvidence: product.stockEvidence, lastChecked: product.lastChecked, aiReview: product.aiReview ?? products[index].aiReview,
           requirementIds: Array.from(new Set([...(products[index].requirementIds ?? []), requirement.id])) };
         else products.push(product);
       });
       if (!isReadOnly) save({ ...current, products });
       setCategory('All');
-      setMessage(found.length ? `${found.length} ${tiles ? 'Topps Tiles' : 'Stonewater'} result${found.length === 1 ? '' : 's'} for ${requirement.name}.` : `No ${tiles ? 'Topps Tiles' : 'Stonewater'} results. Try the wider-market links.`);
+      const counts = found.reduce<Record<string, number>>((total, product) => {
+        if (product.aiReview) total[product.aiReview.verdict] = (total[product.aiReview.verdict] ?? 0) + 1;
+        return total;
+      }, {});
+      const aiSummary = data.ai?.status === 'reviewed'
+        ? ` AI checked them against the quote: ${counts.match ?? 0} match, ${counts.needs_parts ?? 0} need extra parts, ${counts.part ?? 0} are parts, ${counts.not_suitable ?? 0} not suitable (hidden).`
+        : data.ai?.status === 'unavailable' ? ' The AI check is unavailable right now, so these results are not checked against the quote.' : '';
+      setShowUnsuitable(false);
+      setMessage(found.length ? `${found.length} ${tiles ? 'Topps Tiles' : 'Stonewater'} result${found.length === 1 ? '' : 's'} for ${requirement.name}.${aiSummary}` : `No ${tiles ? 'Topps Tiles' : 'Stonewater'} results. Try the wider-market links.`);
     } catch (reason) {
       setMessage(reason instanceof Error ? reason.message : 'Supplier search failed.');
     } finally {
@@ -282,7 +296,8 @@ export default function ProjectMaterialsView({ project, onUpdateProject, isReadO
       </div>
 
       <div>
-        <h3 className="mb-3 font-semibold text-gray-900 dark:text-white">{category === 'All' ? 'Products' : category} <span className="font-normal text-gray-500">({results.length} results)</span></h3>
+        <h3 className="mb-3 font-semibold text-gray-900 dark:text-white">{category === 'All' ? 'Products' : category} <span className="font-normal text-gray-500">({results.length} results)</span>
+          {hiddenUnsuitable > 0 && <button onClick={() => setShowUnsuitable((value) => !value)} className="ml-3 text-sm font-normal text-blue-600 hover:underline dark:text-blue-400">{showUnsuitable ? 'Hide' : 'Show'} {hiddenUnsuitable} not suitable</button>}</h3>
         {results.length === 0 ? <EmptyResults requirement={requirement} /> : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {results.map((product) => {
@@ -469,6 +484,7 @@ function ProductCard({ product, requirement, showRequirement, inBasket, disabled
       {product.size && <p className="mt-0.5 text-xs text-gray-500 dark:text-slate-400">{product.size}</p>}
       <div className="mt-2 text-lg font-semibold text-gray-900 dark:text-white">{money.format(product.price)}{product.priceUnit && <span className="text-sm font-normal text-gray-500"> {product.priceUnit.replace('per ', '/ ')}</span>}</div>
       <a href={product.url} target="_blank" rel="noreferrer" className="mt-0.5 inline-flex w-fit items-center gap-1 text-xs text-gray-500 hover:text-blue-700 dark:text-slate-400">{product.supplier} <ExternalLink className="h-3 w-3" /></a>
+      {product.aiReview && (!requirement || product.aiReview.requirementId === requirement.id) && <AiBadge review={product.aiReview} />}
       {product.note && <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">{product.note}</p>}
       <div className="mt-auto pt-3">
         <button disabled={disabled || inBasket} onClick={onAdd} className="inline-flex items-center gap-1 rounded-lg border border-blue-600 px-3 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 disabled:border-gray-300 disabled:text-gray-400 disabled:hover:bg-transparent dark:hover:bg-blue-950/40">
@@ -547,6 +563,7 @@ function ProductDetail({ product, requirement, inBasket, disabled, onClose, onAd
           </div>
         </div>
 
+        {product.aiReview && product.aiReview.requirementId === requirement?.id && <div className="rounded-xl border border-gray-200 p-3 dark:border-slate-700"><AiBadge review={product.aiReview} /><p className="mt-1 text-[11px] text-gray-400">Checked by AI ({product.aiReview.model.split('/').pop()}) from the supplier description. Confirm sizes with your fitter.</p></div>}
         {requirement && <div className={`rounded-xl border p-3 text-sm ${needsFitter ? 'border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30' : 'border-emerald-200 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950/30'}`}>
           <div className={`font-semibold ${needsFitter ? 'text-amber-800 dark:text-amber-200' : 'text-emerald-800 dark:text-emerald-200'}`}>{needsFitter ? 'Fitter check' : 'Matches the quote'}</div>
           <p className="mt-0.5 text-gray-700 dark:text-slate-200">For <strong>{requirement.name}</strong> ({requirement.size}).</p>
@@ -573,5 +590,21 @@ function ProductDetail({ product, requirement, inBasket, disabled, onClose, onAd
         </div>
       </div>
     </aside>
+  </div>;
+}
+
+const aiStyles: Record<NonNullable<SourcedProduct['aiReview']>['verdict'], { label: string; className: string }> = {
+  match: { label: 'AI: matches the quote', className: 'text-emerald-700 dark:text-emerald-300' },
+  needs_parts: { label: 'AI: needs extra parts', className: 'text-amber-700 dark:text-amber-300' },
+  part: { label: 'AI: a part for this item', className: 'text-blue-700 dark:text-blue-300' },
+  not_suitable: { label: 'AI: not suitable', className: 'text-red-700 dark:text-red-300' },
+};
+
+function AiBadge({ review }: { review: NonNullable<SourcedProduct['aiReview']> }) {
+  const style = aiStyles[review.verdict];
+  return <div className="mt-2 text-xs">
+    <span className={`font-semibold ${style.className}`}>{style.label}</span>
+    {review.reason && <span className="text-gray-600 dark:text-slate-300"> · {review.reason}</span>}
+    {review.missingParts.length > 0 && <span className="block text-gray-500 dark:text-slate-400">Missing: {review.missingParts.join(', ')}</span>}
   </div>;
 }

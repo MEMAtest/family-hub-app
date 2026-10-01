@@ -1,0 +1,756 @@
+{
+ "note": "Real Stonewater search results (1 Oct 2026) for the Tremaine Road bathroom quote, hand-labelled. allowed = verdicts counted as correct; a candidate whose only allowed verdict is not_suitable is a critical case.",
+ "cases": [
+  {
+   "requirement": {
+    "id": "main-bath",
+    "name": "B-shaped shower bath",
+    "specification": "Acrylic B-shaped shower bath with 6mm glass bath screen, front panel, end panel and waste",
+    "size": "1700mm long × 850–900mm wide",
+    "requiredComponents": [
+     "bath",
+     "screen",
+     "front-panel",
+     "end-panel",
+     "waste"
+    ],
+    "constraints": {
+     "lengthMm": 1700
+    }
+   },
+   "candidates": [
+    {
+     "id": "fairford-1700-x-850-lh-b-shape-bath-with-screen-and-panel",
+     "name": "Fairford 1700 x 850 LH B Shape Bath with Screen and Panel",
+     "description": " The Fairford 1700 x 850 LH B Shape Bath with Screen and Panel offers spacious comfort with its generous 1700mm length and 850mm width. Designed as a left-hand shower bath, its B-shape design provides ergonomic support and ease of use, ideal for both bathing and showering. A reinforced base layer ensures durability and stability over time. Included in the pack are everything you need: bath, bath panel, waste and a high quality 6mm easy-clean screen that resists staining and simplifies maintenance. The screen's thickness contributes to a sleek profile while helping prevent water splashes. A five-year manufacturers' guarantee underscores confidence in quality and craftsmanship. This set offers a complete solution for those looking for both function and style in one package, making it a reliable, long-lasting addition to your bathroom. Product Features Generous bathing area with 1700 mm length and 850 mm width Left-hand orientated B-shape design, ideal for combined bath and shower use Reinforced base layer enhances strength and durability Includes a 6 mm easy-clean shower screen for added convenience Comes with matching bath panel for a coordinated look Backed by a 5-year manufacturer's guarantee Supplied as a complete set: bath, screen, panel, and waste included ",
+     "allowed": [
+      "needs_parts",
+      "match"
+     ]
+    },
+    {
+     "id": "fairford-1700-x-900mm-b-shaped-left-hand-shower-bath",
+     "name": "Fairford 1700 x 900mm B Shaped Left Hand Shower Bath",
+     "description": " The Fairford 1700 x 900mm B Shaped Left Hand Shower Bath integrates functionality, style, and durability, making it suitable for modern bathrooms. Its B-shaped design provides a luxurious bathing experience alongside a practical showering space, ideal for homes where aesthetics and utility are priorities. Constructed from high-quality, sanitary-grade acrylic with a thickness of 4mm, this shower bath is designed for longevity, featuring a smooth, glossy white finish that complements various decor styles. With generous dimensions of 1700mm by 900mm, it offers ample space for relaxation, while its left-handed orientation enhances convenience and layout flexibility. The bath has a capacity of 240 liters, allowing for deep soaks, and the absence of pre-drilled tap holes enables personalized tap placement. Bath panels are available separately to match existing decor, and the design includes a legset, ensuring both functionality and style. Features Elegant B-shaped profile combining luxury and practicality Crafted from high-quality sanitary-grade acrylic for durability Glossy white finish complements any bathroom decor Spacious dimensions for ample relaxation space Unique left-handed orientation for convenient layout Generous capacity of 240 liters for deep soaking Customizable tap placement with no pre-drilled tap holes Supplied legset for added functionality Stylish round shape enhances modern aesthetic Backed by a 5-year guarantee for peace of mind ",
+     "allowed": [
+      "needs_parts"
+     ]
+    },
+    {
+     "id": "fairford-1700-x-900mm-b-shaped-right-hand-shower-bath",
+     "name": "Fairford 1700 x 900mm B Shaped Right Hand Shower Bath",
+     "description": " The Fairford 1700 x 900mm B Shaped Right Hand Shower Bath combines style and functionality, making it suitable for various bathroom designs. Made from durable sanitary grade acrylic, it ensures long-lasting use and features a sleek white finish that complements diverse color schemes. The robust 4mm thick acrylic structure adds strength while remaining lightweight. This shower bath is thoughtfully designed with rounded edges, providing ample space for both soaking and showering. With generous dimensions and a 240L capacity, it accommodates a comfortable bathing experience. The right-hand orientation allows for flexibility in layout, while the lack of pre-drilled tap holes offers customization options for fixtures. Backed by a 5-year guarantee from Stonewater, the Fairford shower bath includes a legset for enhanced stability. Bath panels are sold separately, allowing for personalized installation. Features Transform your bathroom into a sanctuary of comfort and style Crafted by Stonewater for versatility and sophistication Constructed from high-quality sanitary grade acrylic for durability Sleek white finish complements any colour scheme 4mm thick acrylic for added strength Ingeniously designed with a round, spacious shape Ample room for a luxurious soak or refreshing shower Right-hand orientation suitable for specific layouts Absence of pre-drilled tap holes allows customization Comes with a 5-year guarantee for peace of mind Bath panels supplied separately for installation f",
+     "allowed": [
+      "needs_parts"
+     ]
+    },
+    {
+     "id": "fairford-1700-x-850-rh-b-shape-bath-with-screen-and-panel",
+     "name": "Fairford 1700 x 850 RH B Shape Bath with Screen and Panel",
+     "description": " The Fairford 1700 x 850 RH B Shape Bath with Screen and Panel offers a spacious 1700mm by 850mm design with a right hand orientation for flexible bathroom layouts. Featuring a B Shape contour, this bath set enhances comfort and provides easier access compared to traditional styles, ideal for daily use. Constructed with a reinforced base layer, the set ensures long-lasting support and durability, resisting flex and maintaining stability. A 6mm easy-clean screen is included to minimize maintenance, offering clear panels that resist limescale build-up and simplify cleaning routines. This set is complete with all necessary components: the bath itself, a bath panel to match, waste plumbing, and the screen. Backed by a 5-year guarantee, this product delivers quality, peace of mind, and a cohesive bathroom solution ready to install. Choose this set for a reliable, elegant upgrade. Product Features Right-hand B-shape shower bath set designed for combined bathing and showering Includes 6 mm easy-clean screen to minimise water staining and ease maintenance Reinforced base layer for added strength and rigidity Bath panel included, matching the bath for a complete installation Comes with waste as part of the package Backed by a 5-year manufacturer's guarantee for peace of mind ",
+     "allowed": [
+      "needs_parts",
+      "match"
+     ]
+    },
+    {
+     "id": "fairford-1500-x-850-lh-b-shape-bath-with-screen-and-panel",
+     "name": "Fairford 1500 x 850 LH B Shape Bath with Screen and Panel",
+     "description": " The Fairford 1500 x 850 LH B Shape Bath with Screen and Panel is a left-hand shower bath set designed for comfort and practicality. The generous B-shape design gives more space for bathing at one end while saving room with a curved showering area, and its dimensions of 1500mm by 850mm accommodate both. A reinforced base layer ensures stability and long-lasting support. This product includes a 6mm easy-clean screen to help prevent water spray and allow effortless maintenance, along with a full bath panel and waste fitting for a complete installation. The left hand orientation fits showers positioned to the left side. Backed by a 5-year guarantee, this product delivers both reassurance and performance. Whether upgrading your bathroom or fitting a new suite, it blends durability, ease of cleaning, and user-friendly layout in one package. Product Features Spacious 1500 mm × 850 mm left-hand \"B-Shape\" shower bath set for flexible placement B-shape design offers expanded shower area and ergonomic bath contour for comfort Reinforced base layer improves strength, support and durability Easy-clean 6 mm toughened safety glass screen included for splash protection Complete set of components: bath, waste, screen and matching panel included Backed by a 5-year manufacturer's guarantee against defects ",
+     "allowed": [
+      "not_suitable"
+     ]
+    },
+    {
+     "id": "fairford-1500-x-850-rh-b-shape-bath-with-screen-and-panel",
+     "name": "Fairford 1500 x 850 RH B Shape Bath with Screen and Panel",
+     "description": " The Fairford 1500 x 850 RH B Shape Bath with Screen and Panel is a right-hand shower bath set designed for both comfort and practicality. With dimensions of 1500mm by 850mm, the B-shape layout offers generous space for bathing and showering, while its reinforced base layer ensures long-term stability and support. This is a right hand shower bath set, ideal for maximizing bathroom layout efficiency. Included in this set are the essential components: the bath, bath waste, bath screen, and bath panel. The 6mm easy-clean screen keeps water inside the bathing area and wipes clean with minimal effort, reducing maintenance time. The bath panel offers a clean, finished look that conceals under-bath fittings and complements modern bathroom styles. The product includes a five-year manufacturer's guarantee, giving confidence in build quality and materials. The Fairford 1500 x 850 RH B Shape Bath with Screen and Panel delivers durable design, full component coverage, and a practical layout - an investment in both comfort and functionality for your home. Product Features Right-hand-oriented B-shaped shower bath set for combined bathing and showering Spacious design dimensions: 1500 mm in length and 850 mm in width Includes easy-clean 6 mm bath screen to prevent splashes and aid maintenance Includes matching bath panel for a clean, finished look Reinforced base layer ensures stability and prevents flexing during use Delivered without pre-drilled tap holes - allowing installer customizatio",
+     "allowed": [
+      "not_suitable"
+     ]
+    },
+    {
+     "id": "fairford-1700-x-850mm-l-shaped-right-hand-shower-bath",
+     "name": "Fairford 1700 x 850mm L Shaped Right Hand Shower Bath",
+     "description": " The Fairford 1700 x 850mm L Shaped Right Hand Shower Bath combines the functionality of a spacious shower with the comfort of a luxurious bath. Its unique 'L' shape maximizes space efficiency, making it suitable for contemporary bathrooms. Made from premium sanitary-grade acrylic, this shower bath features a 4mm thickness for durability and a smooth finish, all in a classic white that complements various décors. With ample dimensions of 1700mm in length and 850mm in width, it offers a capacity of 200 liters to the overflow, providing plenty of space for relaxing soaks. The design allows for customizable faucet placement due to the absence of pre-drilled tap holes. The package includes the bath and a robust leg set for easy installation, with bath panels sold separately. This product is backed by a 5-year guarantee, ensuring quality and peace of mind. Features Modern and elegant design Combines spacious shower and luxurious bath Maximizes space efficiency with unique 'L' shape Crafted from premium sanitary-grade acrylic for durability Smooth finish with sleek, lightweight appearance Pristine white color complements various décors Ample room for relaxation and refreshing shower Customizable faucet placement with no pre-drilled tap holes Includes robust leg set for sturdy support and easy installation Backed by a comprehensive 5-year guarantee ",
+     "allowed": [
+      "not_suitable"
+     ]
+    },
+    {
+     "id": "fairford-1700-x-850mm-rh-l-shape-bath-with-screen-and-panel",
+     "name": "Fairford 1700 x 850mm RH L Shape Bath with Screen and Panel",
+     "description": " The Fairford 1700 x 850mm RH L Shape Bath with Screen and Panel features a spacious L-shape design that maximises comfort and practicality in your bathroom. The right-hand shower bath set includes a reinforced base layer, ensuring durability and long-term stability under foot. The 6mm easy-clean screen helps keep splashes contained while its surface resists grime and makes maintenance simpler. Included with the Fairford bath set are the bath itself, bath panel, bath waste and the bath screen - everything needed for a complete installation. The reinforced base adds to the overall strength, while the panel and waste are designed to integrate seamlessly for a clean, cohesive look. With a generous size of 1700mm by 850mm, it provides both depth and width for bathing or showering. A five-year manufacturer guarantee offers peace of mind, reflecting the confidence in build quality and materials. The Fairford 1700 x 850mm RH L Shape Bath with Screen and Panel is designed to combine form, function and ease of care in one carefully crafted bath set. Product Features Right-hand L-shaped bath set combining bathing and showering in one unit Includes 6 mm easy-clean bath screen for splash protection Comes with bath panel and waste as part of the complete pack Reinforced base layer for enhanced strength and durability L-shape design provides wider area for showering, comfort for soaking Five-year manufacturer's guarantee for peace of mind ",
+     "allowed": [
+      "not_suitable"
+     ]
+    }
+   ]
+  },
+  {
+   "requirement": {
+    "id": "main-vanity",
+    "name": "Wall-hung vanity unit",
+    "specification": "Wall-hung vanity unit with two drawers and basin (quote names a Coronation unit, which Stonewater does not sell)",
+    "size": "600mm wide",
+    "requiredComponents": [
+     "vanity",
+     "basin"
+    ],
+    "constraints": {
+     "maxWidthMm": 600
+    }
+   },
+   "candidates": [
+    {
+     "id": "fairford-sophia-country-oak-600mm-wall-hung-vanity-unit-with-basin",
+     "name": "Fairford Sophia Country Oak 600mm Wall Hung Vanity Unit with Basin",
+     "description": " The Fairford Sophia Country Oak 600mm Wall Hung Vanity Unit with Basin presents a sleek and practical solution for modern bathrooms. Measuring 600mm wide and 465mm deep, it features a fluted, handleless design in Country Oak finish that adds texture and style while maintaining a clean, unobtrusive silhouette. The unit is equipped with soft-close runners on its single drawer, ensuring smooth, silent operation and durable use. The matte white resin basin complements the earthy oak tones and includes a white overflow cover for added functionality. The wall-hung format creates a visually open space and makes cleaning easier underneath. The resin basin's mute sheen resists stains and is simple to maintain. Backed by a two-year guarantee, this vanity unit offers both style and dependable performance. Ideal for spaces where design meets utility, it delivers refined aesthetics and convenience without sacrificing quality. Product Features Wall-hung design saves floor space and gives a sleek floating appearance Fluted Country Oak front adds texture and visual depth Matte White resin basin for a clean, modern look Single drawer with soft-close runners for quiet operation Handleless, recessed design for minimal, streamlined aesthetic Includes white overflow cover for basin Backed by a 2-year manufacturer's guarantee ",
+     "allowed": [
+      "match",
+      "needs_parts",
+      "not_suitable"
+     ]
+    },
+    {
+     "id": "fairford-aspri-satin-green-600mm-2-drawer-wall-hung-vanity-unit-with-worktop",
+     "name": "Fairford Aspri Satin Green 600mm 2 Drawer Wall Hung Vanity Unit with Worktop",
+     "description": " The Fairford Aspri Satin Green 600mm 2 Drawer Wall Hung Vanity Unit with Worktop presents a sleek, space-saving solution for contemporary bathrooms. Its satin green, painted matt finish offers a smooth, designer-style look that enhances modern interiors, while the FSC-certified construction ensures both environmental responsibility and enduring quality. Featuring two soft-close drawers, this unit minimises noise and wear, delivering reliable day-to-day performance. With a wall-hung design, this unit lifts off the floor to create visual space and facilitate easier cleaning. At 600mm wide, 539mm high and 383mm deep, it strikes a balance between compact footprint and ample storage capacity in its drawer interiors. Included worktop and handles complete the design in a coordinated package, so there is no extra sourcing needed. Construction uses rigid panels held together with cam and wood dowel joints, with cabinet thickness at 16mm and fascia at 18mm, ensuring structural sturdiness. Its D-shape handles integrate seamlessly with the unit's contemporary style. Backed by a five-year guarantee, this wall-hung vanity unit combines aesthetic appeal with functional benefits and reliable support - making it an excellent investment for anyone looking to elevate their bathroom design without compromise. Product Features Wall-hung design for a sleek, modern bathroom aesthetic Finished in Satin Green with a painted matt finish for durable, stylish colour Includes two soft-close drawers for ",
+     "allowed": [
+      "needs_parts"
+     ]
+    },
+    {
+     "id": "fairford-laurel-20-600mm-wall-hung-satin-grey-vanity-unit-3-tap-hole",
+     "name": "Fairford Laurel 600mm Wall Hung Satin Grey Vanity Unit - 3 Tap Hole",
+     "description": " The Fairford Laurel 2.0 600mm Wall Hung Satin Grey Vanity Unit is crafted from durable MDF with an MFC carcass, offering a practical storage solution for any bathroom. Its satin grey finish adds a contemporary touch, making it suitable for various décor styles. The wall-hung design maximizes floor space while maintaining a sleek profile, measuring 600mm wide, 390mm deep, and 431mm high. Equipped with dual-stage soft-close drawer runners, this unit ensures smooth and quiet operation. It includes a high-quality basin and necessary fixings for easy installation, featuring a 3-tap hole design for compatibility with different tap styles. The unit and basin are shipped separately for convenience, eliminating the need for complicated assembly. With a 5-year guarantee, this vanity unit is designed for durability, though minor adjustments may be needed after installation for optimal fit. Features Sleek and modern design Crafted from durable MDF with MFC carcass Sophisticated satin grey finish Wall-hung for space-saving and streamlined look Ample storage with compact dimensions (600mm width, 390mm depth, 431mm height) Dual-stage soft-close drawer runners for smooth operation Comes complete with high-quality basin and necessary fixings 3-tap hole design for compatibility with various tap styles Rigid construction for straightforward installation Backed by a 5-year guarantee ",
+     "allowed": [
+      "match",
+      "needs_parts"
+     ]
+    },
+    {
+     "id": "fairford-sophia-smoked-sage-600mm-wall-hung-vanity-unit-with-basin",
+     "name": "Fairford Sophia Smoked Sage 600mm Wall Hung Vanity Unit with Basin",
+     "description": " The Fairford Sophia Smoked Sage 600mm Wall Hung Vanity Unit with Basin offers a stylish and functional solution for modern bathrooms. At 600mm wide and 465mm deep, this compact design fits neatly into smaller spaces while providing generous storage space in its single, handleless drawer. The smoked sage fluted front brings texture and sophistication, complemented by a crisp matte white resin basin that enhances the ensemble's clean lines. Featuring soft close runners, the drawer closes smoothly and quietly, preventing slams and preserving the integrity of nearby tiling or surfaces. The handleless design keeps the look uninterrupted and minimal, making cleaning easier and maintaining an uncluttered feel. Supplied with a white overflow cover, this unit meets practical needs without compromising style. Backed by a 2-year guarantee, it offers durability and peace of mind. The Fairford Sophia Smoked Sage 600mm Wall Hung Vanity Unit with Basin combines elegance and utility for those seeking an elevated bathroom upgrade. Product Features Stylish fluted front with a smoked sage finish Wall-hung design for a floating appearance and easy floor cleaning Handleless look via recessed cut-out integrated handle in drawer front Single draw­er with soft-close runners for smooth, quiet use Matte white resin basin with single tap hole and matching white overflow cover Durable, easy-care materials suited to daily bathroom use Backed by a 2-year manufacturer's guarantee ",
+     "allowed": [
+      "match",
+      "needs_parts",
+      "not_suitable"
+     ]
+    },
+    {
+     "id": "fairford-tisse-pebble-grey-600mm-2-drawer-wall-hung-vanity-unit-with-thin-edged-basin",
+     "name": "Fairford Tisse Pebble Grey 600mm 2 Drawer Wall Hung Vanity Unit with Thin Edged Basin",
+     "description": " The Fairford Tisse Pebble Grey 600mm 2 Drawer Wall Hung Vanity Unit with Thin Edged Basin offers a sleek and functional solution for modern bathrooms. With clean lines and a soft pebble grey finish, this wall-mounted unit is designed to enhance your space without overwhelming it. Constructed from durable 18mm MFC, it ensures stability and longevity, while the thin-edged vitreous china basin is perfectly integrated into the design, featuring a rectangular shape and a pre-drilled tap hole for easy installation. Fully assembled for convenience, this vanity unit promotes a spacious feel through its wall-hung design, making floor cleaning effortless. It includes soft-close drawers for quiet operation and added luxury. At 610mm wide, 460mm deep, and 589mm high, it provides ample storage, fitting seamlessly into most layouts. With FSC certification and a 5-year guarantee, it promises quality and sustainability. Features Stylish wall-mounted vanity unit Contemporary design with subtle in-frame look Smooth matt pebble grey finish Includes thin-edged vitreous china basin Pre-drilled with one tap hole Fully assembled for easy installation Soft-close drawers for quiet operation Wall-hung installation for a spacious feel Integrated overflow with cover Compatible with slotted waste (not included) Supplied with D-shaped handles and fixings FSC certified for responsibly sourced materials 5-year guarantee for quality assurance ",
+     "allowed": [
+      "match"
+     ]
+    },
+    {
+     "id": "fairford-anika-600mm-matt-blue-2-drawer-wall-hung-vanity-unit",
+     "name": "Fairford Anika 600mm Matt Blue 2 Drawer Wall Hung Vanity Unit",
+     "description": " The Fairford Anika 600mm Matt Blue 2 Drawer Wall Hung Vanity Unit combines style and functionality for modern bathrooms. Constructed from durable vinyl-coated MDF with an MFC carcass, it features a contemporary matt blue finish that enhances any decor. This unit includes a basin and necessary fixings, shipped separately for protection during delivery. Measuring 600mm wide, 395mm deep, and 589mm high, it suits smaller spaces and is wall-mounted for easy cleaning and a spacious feel. The two soft-close drawers provide ample storage for toiletries, keeping your bathroom organized. Delivered fully assembled, minor adjustments may be needed upon installation. Its single tap hole allows for versatile tap choices, making it a practical addition to your home. With a 10-year guarantee, the Fairford Anika is a reliable choice for modern living. Features Sleek and sophisticated design Combines style, functionality, and durability Crafted from high-quality vinyl-coated MDF with MFC carcass Stunning matt blue finish Comes with a basin and all necessary fixings for installation Compact design ideal for smaller bathrooms or en-suites Wall-hung mounting type creates an illusion of more space Two spacious drawers with 2-stage soft-close runners for ample storage Delivered fully assembled with minor adjustments needed Features a single tap hole for flexible tap selection Backed by a 10-year guarantee ",
+     "allowed": [
+      "match"
+     ]
+    },
+    {
+     "id": "fairford-aspri-satin-grey-600mm-2-door-wall-hung-vanity-unit-with-worktop",
+     "name": "Fairford Aspri Satin Grey 600mm 2 Door Wall Hung Vanity Unit with Worktop",
+     "description": " The Fairford Aspri Satin Grey 600mm 2 Door Wall Hung Vanity Unit with Worktop offers a sleek, modern storage solution for contemporary bathrooms. Measuring 600mm wide, its wall-hung design creates a floating effect that maximises floor space and simplifies cleaning, while the satin grey matt finish on moisture-resistant engineered wood complements a variety of décor schemes. Equipped with two soft-close doors and D-shaped handles, the unit provides smooth, quiet operation and reliable durability. The included matching worktop delivers a complete surface suitable for a countertop basin. Cabinet and fascia thicknesses of approximately 16-18mm ensure solid construction. Supplied ready to install with no assembly required, this vanity unit combines practical functionality with modern style. FSC certification and a five-year guarantee highlight its quality, sustainability, and long-lasting performance. Product Features Satin grey finish for a sleek, modern look Wall hung design maximises floor space and gives a floating appearance Two soft-close doors for quiet and gentle closing Supplied complete with matching worktop D-shaped handles included for easy grip and coordinated design ",
+     "allowed": [
+      "not_suitable"
+     ]
+    },
+    {
+     "id": "fairford-anika-600mm-matt-grey-2-drawer-wall-hung-vanity-unit",
+     "name": "Fairford Anika 600mm Matt Grey 2 Drawer Wall Hung Vanity Unit",
+     "description": " The Fairford Anika 600mm Matt Grey 2 Drawer Wall Hung Vanity Unit blends modern design with practicality, making it an ideal choice for contemporary bathrooms. Constructed from durable vinyl-coated MDF and featuring a sturdy MFC carcass, this unit offers a sophisticated finish and lasting quality. Its minimalist matt grey tone complements various bathroom styles. Designed to optimize space, the wall-hung unit creates an open ambiance and provides ample storage. With dimensions of 600mm wide and 395mm deep, it fits well in both large and compact bathrooms. The two soft-close drawers facilitate quiet operation and help keep your essentials organized. Delivered fully assembled for easy installation, the unit includes a pre-drilled tap hole for faucet flexibility. Backed by a 10-year guarantee, it combines style with practicality, making it a sustainable choice for your bathroom. Features Sleek modern design Practical functionality Made from durable vinyl-coated MDF MFC carcass for long-lasting quality Elegant matt grey tone Maximizes floor space Compact depth of 395mm Two-drawer configuration with soft-close runners Smooth and quiet drawer operation Delivered fully assembled Single pre-drilled tap hole for faucet flexibility Supported by a comprehensive 10-year guarantee Environmentally conscious, belongs to the Green discount group ",
+     "allowed": [
+      "match",
+      "needs_parts"
+     ]
+    }
+   ]
+  },
+  {
+   "requirement": {
+    "id": "main-wc-unit",
+    "name": "WC furniture unit",
+    "specification": "Back-to-wall WC furniture unit with concealed cistern and push-button flush",
+    "size": "500mm wide",
+    "requiredComponents": [
+     "wc-unit",
+     "cistern"
+    ],
+    "constraints": {
+     "maxWidthMm": 500
+    }
+   },
+   "candidates": [
+    {
+     "id": "fairford-kingsly-500mm-wc-unit",
+     "name": "Fairford Kingsly 500mm WC Unit",
+     "description": " The Fairford Kingsly 500mm WC Unit offers a modern solution for contemporary bathrooms with its sleek gloss white finish. Designed to integrate seamlessly with other bathroom furniture, it enhances the overall aesthetic of your space. Constructed from premium MFC painted gloss, it combines durability with an elegant appearance, featuring a cabinet thickness of 16 mm and a fascia thickness of 18 mm for added stability. Measuring 800 mm high, 500 mm wide, and 200 mm deep, this unit optimizes space while maintaining functionality. Its floor-mounted, pre-assembled design simplifies installation, eliminating the need for extra assembly. Built with FSC-certified materials, it reflects a commitment to sustainability, and a 5-year guarantee ensures long-lasting quality. Features Sleek gloss white finish that enhances aesthetics Designed to coordinate with other gloss white bathroom furniture Constructed from premium MFC painted gloss for durability Rigid structure ensures long-lasting stability Floor-mounted design for easy installation Pre-assembled configuration eliminates assembly steps Environmentally-conscious construction using FSC-certified materials Comprehensive 5-year guarantee for quality assurance ",
+     "allowed": [
+      "needs_parts"
+     ]
+    },
+    {
+     "id": "fairford-union-style-shaker-matt-lux-green-500mm-full-depth-wc-unit",
+     "name": "Fairford Union Style Shaker Matt Lux Green 500mm Full Depth WC Unit",
+     "description": " The Fairford Union Style Shaker Matt Lux Green 500mm Full Depth WC Unit combines timeless shaker design with modern functionality. Measuring 500mm wide, 815mm high, and 353mm deep, it offers generous concealed storage for plumbing and bathroom essentials while maintaining a neat footprint. The matt Lux Green finish adds contemporary style and resists moisture for long-term durability. Constructed with an 18mm thick fascia and cabinet, the rigid floor-standing design requires no assembly and ensures stable installation. Its full-depth storage conceals unsightly plumbing while complementing a wide range of bathroom interiors. The matt finish provides a refined aesthetic and easy maintenance. Backed by FSC certification and a five-year guarantee, this WC unit delivers sustainable materials and dependable performance. Combining practical storage with modern style, it is an ideal solution for bathrooms seeking both functionality and elegant design. Product Features Full-depth WC unit with slab-style design to conceal cistern and plumbing Lux green matt finish for a contemporary, stylish look Rigid pre-assembled furniture for straightforward installation Smart storage and flexible configuration options ideal for compact or larger spaces Matches with separate WC pan and soft-close seat for cohesive design Contemporary style aesthetic to complement modern bathroom ceramics ",
+     "allowed": [
+      "needs_parts"
+     ]
+    },
+    {
+     "id": "fairford-union-500mm-full-depth-white-wc-unit",
+     "name": "Fairford Union 500mm Full Depth White WC Unit",
+     "description": " The Fairford Union 500mm Full Depth White WC Unit combines practicality and durability, ideal for modern family bathrooms. Crafted in Britain, it features ample storage to keep your space organized. Measuring 500mm wide, 864mm high, and 355mm deep, its sleek gloss white finish complements various bathroom styles. You can enhance its functionality by pairing it with fitted vanity units or a polymarble WC top for a cohesive look. Supplied rigid for easy installation, the unit's sturdy construction ensures long-lasting performance. Its 16mm cabinet thickness and easy-to-clean surface simplify maintenance. The unit also comes with a 5-year guarantee against faulty workmanship, adding to its reliability. Please note that the toilet pan, worktop, and concealed cistern are sold separately, allowing for customization. Features Blends practicality, style, and durability British-Made craftsmanship Ample storage for organized bathrooms contemporary gloss white finish Perfect fit for any bathroom size Easy to pair with fitted vanity units or polymarble WC tops hassle-free installation (supplied Rigid) Easy-to-clean surface 5-Year guarantee against faulty workmanship or materials ",
+     "allowed": [
+      "needs_parts"
+     ]
+    },
+    {
+     "id": "fairford-union-style-shaker-dark-oak-500mm-slimline-wc-unit",
+     "name": "Fairford Union Style Shaker Dark Oak 500mm Slimline WC Unit",
+     "description": " The Fairford Union Style Shaker Dark Oak 500mm Slimline WC Unit is a floor-mounted furniture piece crafted from textured woodgrain MFC in a rich dark oak finish. With precise cabinet and fascia thickness of 18 mm and a compact depth of approximately 253 mm, it's designed to fit neatly alongside a wall-hung ceramic WC or compatible pan. Measuring around 500 mm wide and 815 mm high, this unit provides versatile storage without overwhelming smaller cloakrooms. Its construction uses rigid assembly, including cam and wood dowel joints for durability and a reliable fit. Offering FSC certification ensures responsibly sourced materials, and a 5-year guarantee gives peace of mind in use. The union style shaker front adds a classic touch, suitable for both traditional and modern interiors. This unit is ideal for those seeking functional, stylish storage in tight bathroom spaces, combining clean lines, high-quality construction, and enduring design in a compact form. Product Features Shaker style WC unit with traditional elegance Autumn oak textured woodgrain finish Rigid, factory-assembled construction - no assembly required Floor-mounted unit designed for WC integration Flexible storage layout suited to both compact and spacious bathrooms Includes 5-year guarantee for peace of mind FSC certified materials used in production ",
+     "allowed": [
+      "needs_parts"
+     ]
+    },
+    {
+     "id": "fairford-opto-500mm-gloss-white-wc-unit-330mm-deep",
+     "name": "Fairford Opto 500mm Gloss White WC Unit (330mm deep)",
+     "description": " The Fairford Opto 500mm Gloss White WC Unit features a sleek gloss white finish that complements various bathroom styles. This fully assembled, floorstanding unit measures 500mm in width, 766mm in height, and 330mm in depth, designed to maximize space without sacrificing elegance. Its curved design adds visual appeal while ensuring practicality and stability during installation. The high-gloss surface is easy to clean and durable, making it suitable for busy bathrooms. Although the unit does not include a cistern, toilet, seat, or flush button, it allows compatibility with several fixtures for customization. All necessary fixings are included for straightforward assembly. With a 5-year guarantee, the Fairford Opto WC Unit combines lasting quality and functionality, making it a reliable choice for any bathroom renovation or creation. Features Modern and sleek gloss white finish Fully assembled unit for easy installation Contemporary aesthetic that blends with any décor Space-efficient design without compromising elegance Floorstanding for stability and convenience Graceful curved design enhances visual appeal High-gloss finish for easy cleaning and maintenance Comes with all necessary fixings for straightforward setup Compatible with a wide range of cisterns, toilets, and seats Backed by a 5-year guarantee for durability and quality ",
+     "allowed": [
+      "needs_parts"
+     ]
+    },
+    {
+     "id": "fairford-union-500mm-full-depth-gloss-grey-wc-unit-with-top",
+     "name": "Fairford Union 500mm Full Depth Gloss Grey WC Unit with Top",
+     "description": " The Fairford Union 500mm Full Depth Gloss Grey WC Unit offers a blend of style and functionality for modern bathrooms. With its sleek gloss grey finish, it suits various décor styles while providing a contemporary touch. Made from high-quality MDF, this durable unit withstands everyday use and features a full-depth design for increased storage, helping maintain an organized space. The concealed cistern contributes to a clean look and allows for easy access during maintenance. A soft-closing mechanism ensures quiet operation, while the dual flush system promotes water conservation. Measuring 500mm wide and 355mm deep, it fits standard 500mm back-to-wall toilets. Pre-assembled for convenience, the unit is delivered in separate components for easy integration. Backed by a 5-year guarantee, the Fairford Union WC unit is a reliable choice for any bathroom. Features Elegant full-depth design for enhanced storage space Constructed from high-quality MDF for durability Stylish gloss grey finish that complements various décors Concealed cistern for a clean and streamlined appearance Soft-closing mechanism for quiet and gentle operation Eco-friendly dual flush system for water conservation Compatible with standard 500mm back-to-wall toilets Easy to install and designed for seamless integration Comes pre-assembled with separate components for easy setup 5-year guarantee for quality assurance ",
+     "allowed": [
+      "match",
+      "needs_parts"
+     ]
+    },
+    {
+     "id": "fairford-union-500mm-slimline-grey-wc-unit",
+     "name": "Fairford Union 500mm Slimline Grey WC Unit",
+     "description": " The Fairford Union 500mm Slimline Grey WC Unit is designed to enhance your bathroom's functionality and aesthetic. With its anthracite and natural woodgrain finishes, it adds a modern touch that suits various decor styles. At a slim depth of 255mm, this unit fits perfectly in compact spaces, making it ideal for smaller bathrooms and cloakrooms. Constructed using a robust Cam &amp; Wood Dowel method and featuring an 18mm cabinet thickness, the unit ensures durability and reliability. Fully assembled upon delivery, it simplifies installation. Made in Britain, it pairs well with back-to-wall or wall-hung pans and can be coordinated with Fairford's fusion vanity units for a cohesive look. Measuring 864mm high and 500mm wide, it includes a plinth for a streamlined appearance. Please note that the toilet pan, worktop, cistern, and concealed cistern are sold separately. Features Elegant and durable design with anthracite and natural woodgrain finish Compact design ideal for cloakrooms and smaller bathrooms Slimline depth of 255mm for tight spaces Robust Cam &amp; Wood Dowel construction for durability Fully assembled for easy installation Configurable to pair with back-to-wall or wall-hung pans Designed to coordinate with Fairford's fusion vanity units Textured MFC woodgrain finish for visual and tactile appeal Supplied with a plinth for a streamlined appearance ",
+     "allowed": [
+      "needs_parts"
+     ]
+    },
+    {
+     "id": "fairford-white-500mm-2-in-1-wc-unit-and-basin-set",
+     "name": "Fairford White 500mm 2 in 1 WC Unit and Basin Set",
+     "description": " The Fairford White 500mm 2 in 1 WC Unit and Basin Set offers a practical solution for modern bathrooms with its sleek gloss white finish that fits seamlessly into contemporary décor. This innovative design combines a wash basin and WC unit, maximizing utility in compact spaces. Constructed with durable Cam and Wood Dowel methods, the unit ensures reliability, while the MFC-painted gloss basin provides an easy-to-clean surface and ample space for daily use. Measuring 503mm wide, 360mm deep, and 890mm high, it is designed to fit comfortably in smaller areas without sacrificing functionality. It features a concealed cistern for a tidy appearance and a single taphole for customizable tap options. Delivered pre-assembled and made from FSC-certified materials, this unit comes with a five-year guarantee, making it a dependable choice for efficient bathroom fixtures. Features Sleek gloss white finish enhances modern bathroom aesthetics Innovative 2-in-1 design for compact spaces Stylish and practical solution for bathroom utility Rectangular bowl shape for ample space and easy maintenance Supplied with cabinet, basin, and concealed cistern Pre-assembled for convenience FSC-certified materials for environmental compliance Backed by a five-year guarantee ",
+     "allowed": [
+      "needs_parts",
+      "not_suitable"
+     ]
+    }
+   ]
+  },
+  {
+   "requirement": {
+    "id": "main-toilet",
+    "name": "Grove back-to-wall toilet",
+    "specification": "Fairford Grove back-to-wall toilet pan with soft-close seat and push-button flush",
+    "size": "490mm projection",
+    "requiredComponents": [
+     "toilet",
+     "seat"
+    ],
+    "constraints": {}
+   },
+   "candidates": [
+    {
+     "id": "fairford-grove-back-to-wall-toilet",
+     "name": "Fairford Grove Back To Wall Toilet",
+     "description": " The Fairford Grove Back To Wall Toilet combines style and functionality, featuring a minimalist square design that fits seamlessly into modern bathrooms. Made from vitreous china with a smooth, glazed white finish, it is both durable and easy to maintain, resisting scratches and stains. The rimless design enhances hygiene by eliminating hidden spaces where bacteria can thrive, while the back-to-wall configuration keeps plumbing discreetly tucked away for a neat appearance. With a compact projection of just 490mm, this toilet is ideal for small spaces like en suites and cloakrooms, without sacrificing comfort. Its square wrapover seat includes a quick-release hinge for easy cleaning and a soft-close mechanism for quiet, safe operation. The set comes complete with the toilet pan, seat, and fixing kit for straightforward installation, backed by a 5-Year Guarantee for peace of mind. Features Contemporary minimalist design Made from high-quality vitreous china Smooth, glazed white finish resistant to scratches and discoloration Rimless design for enhanced hygiene and easy cleaning Back-to-wall configuration concealing pipework and cistern Ideal for small spaces with a short projection of 490mm Square wrapover soft-close seat with quick-release hinge for easy cleaning Included package contains toilet pan, seat, and fixing kit 5-Year Guarantee (1-Year on seat) for peace of mind ",
+     "allowed": [
+      "match"
+     ]
+    },
+    {
+     "id": "fairford-grove-lip-back-to-wall-toilet-with-soft-close-seat",
+     "name": "Fairford Grove Lip Back To Wall Toilet with Soft Close Seat",
+     "description": " The Fairford Grove Lip Back To Wall Toilet with Soft Close Seat combines modern design and functionality for a refined bathroom experience. Crafted from premium vitreous china, its sleek silhouette features soft square curves, perfect for both contemporary and traditional settings. The durable Alpine White finish ensures longevity and style, resisting wear over time. This toilet includes a soft close seat, reducing noise from slamming lids, and a quick-release mechanism for easy cleaning. Its rimless pan design promotes hygiene by offering a smooth, easy-to-clean surface. Designed for concealed cisterns, this back-to-wall configuration provides a streamlined look in compact spaces. With dimensions of 550mm depth, 370mm width, and 470mm height, it fits various bathroom layouts. The toilet also comes with a 5-year manufacturer's guarantee, highlighting its quality and durability. Features contemporary elegance with superior functionality Sleek, Modern design with Soft square curves Polished Alpine white finish Soft Close seat to eliminate noise top fix and Quick-release mechanism for Easy cleaning Advanced Rimless pan design for superior hygiene Back-to-wall configuration for a streamlined look floor-mounted for stability 5-Year manufacturer's guarantee ",
+     "allowed": [
+      "match",
+      "needs_parts",
+      "not_suitable"
+     ]
+    },
+    {
+     "id": "fairford-handel-pro-short-projection-back-to-wall-toilet",
+     "name": "Fairford Handel Pro Short Projection Back To Wall Toilet",
+     "description": " The Fairford Handel Pro Short Projection Back To Wall Toilet offers a stylish and functional solution for compact bathrooms, cloakrooms, and en-suites. Its sleek round design enhances any decor, while the high-quality glazed ceramic construction ensures durability and resistance to scratches and discoloration. With a back-to-wall configuration that conceals the cistern and a short 540mm projection, it optimizes space without sacrificing comfort. Featuring a rimless design, this toilet promotes hygiene by minimizing grime buildup and providing a powerful flush for efficient cleaning. The included D-shaped soft close seat ensures a quiet closure and is easy to remove for maintenance. This product comes with a 10-year guarantee on the toilet and a 2-year guarantee on the seat, offering peace of mind. Installation is straightforward, as the package includes all necessary components. Features Sleek and stylish design for modern bathrooms Compact, round shape ideal for small spaces High-quality glazed ceramic construction High gloss white finish resists scratches and discoloration Back-to-wall design for a minimalist look Rimless design for superior hygiene and easy cleaning Powerful flush mechanism for effective bowl cleaning Premium wrap-over, D-shaped soft close seat included Quick-release feature for easy seat removal and cleaning Includes toilet pan, seat, and fixing kit for hassle-free installation 10-year guarantee on the toilet and 2-year guarantee on the seat ",
+     "allowed": [
+      "not_suitable"
+     ]
+    },
+    {
+     "id": "fairford-grove-pure-back-to-wall-toilet-with-soft-close-seat",
+     "name": "Fairford Grove Pure Back To Wall Toilet with Soft Close Seat",
+     "description": " The Fairford Grove Pure Back To Wall Toilet from Stonewater combines functionality and modern design, crafted from high-quality vitreous china for durability and a pristine white finish. Its compact dimensions - 550mm depth, 470mm height, and 370mm width - make it suitable for any bathroom size, while the back-to-wall design conceals plumbing for a clean, streamlined look. Featuring a P Trap configuration for efficient waste disposal, the toilet includes a soft-close seat for added comfort and reduced noise. The top-fix, quick-release hinge allows for easy installation and cleaning. Stonewater backs this product with a 5-year guarantee, ensuring long-term reliability. Ideal for both renovations and upgrades, this toilet merges elegance with practicality. Features Sleek and modern design Crafted from high-quality vitreous china Exceptional durability Pristine white finish Compact dimensions (550mm depth, 470mm height, 370mm width) Back-to-wall design for a neat aesthetic P Trap configuration for superior waste disposal Premium soft-close seat for sophistication and practicality Top-fix, quick-release hinge mechanism for easy installation and cleaning Soft-close functionality for a quieter bathroom environment 5-year guarantee for peace of mind Excellent value from the \"Blue\" discount group ",
+     "allowed": [
+      "match",
+      "needs_parts",
+      "not_suitable"
+     ]
+    },
+    {
+     "id": "fairford-grove-fully-flush-to-wall-close-coupled-toilet-with-soft-close-seat",
+     "name": "Fairford Grove Fully Flush To Wall Close Coupled Toilet with Soft Close Seat",
+     "description": " The Fairford Grove Fully Flush To Wall Close Coupled Toilet with Soft Close Seat blends modern design with functionality, making it a practical choice for contemporary bathrooms. With its soft square curves and alpine white finish, it offers a polished look that suits various interiors. Constructed from high-quality ceramic, it features a durable PP soft close seat, ensuring resilience for daily use. Notably, the rimless pan design improves hygiene by eliminating hard-to-reach spots, simplifying cleaning. Its dual flush cistern provides a water-saving option with 6/4-litre flush volumes, while the horizontal outlet P-trap configuration accommodates different bathroom layouts. Measuring 795mm in height, with a 613mm depth projection, this toilet fits seamlessly into various spaces. The package includes the pan, cistern, seat, flush, and fixing kit for easy installation. With a 5-year manufacturer's guarantee, the Fairford Grove toilet promises lasting performance and reliability. Features Impeccable blend of sleek design and functionality Soft close seat reducing noise and preventing damage Modern soft square curves for a clean and elegant look Constructed from high-quality vitreous china for durability Innovative rimless pan design enhancing hygiene and easy cleaning Dual flush cistern providing a water-saving solution Quiet operation of the soft close seat ensuring a serene bathroom environment Hassle-free installation with included components Backed by a 5-year manufacture",
+     "allowed": [
+      "not_suitable"
+     ]
+    },
+    {
+     "id": "fairford-gravo-back-to-wall-toilet",
+     "name": "Fairford Gravo Back To Wall Toilet",
+     "description": " The Fairford Gravo Back To Wall Toilet is an elegant fixture designed for modern bathrooms, featuring a concealed cistern and hidden pipework for a clean look. Made from high-quality vitreous china with a glossy white finish, it is durable and stain-resistant, ensuring a polished appearance for years. The toilet comes with a substantial 10-year guarantee (1 year for the seat), providing assurance of its quality. This toilet includes a soft-close, D-shaped seat with a quick-release hinge, preventing slamming and reducing safety risks. The quick-release feature simplifies cleaning and maintenance. With dimensions of 370mm in width and a depth projection of 520mm, the Fairford Gravo is designed to fit seamlessly into various bathroom layouts, making installation straightforward with included components, though additional parts may be needed. Features Sophisticated and Modern design concealed cistern and Hidden pipework streamlined and clutter-free appearance Crafted from high-quality Vitreous china glossy, Stain-Resistant surface Soft-Close, wrapover D-shaped seat Quick-release hinge for Easy cleaning and maintenance dimensions designed to fit seamlessly into any bathroom layout ",
+     "allowed": [
+      "not_suitable"
+     ]
+    },
+    {
+     "id": "fairford-grove-pure-wall-hung-toilet-with-soft-close-seat",
+     "name": "Fairford Grove Pure Wall Hung Toilet with Soft Close Seat",
+     "description": " The Fairford Grove Pure Wall Hung Toilet with Soft Close Seat combines sleek design and functionality, made from premium vitreous china in a timeless white finish. Its minimalist profile enhances modern bathroom aesthetics while providing a practical solution for various spaces. With compact dimensions of 340mm in width, 480mm in depth, and 390mm in height, it offers space-saving benefits with a comfortable user experience. The efficient P Trap pan trap ensures reliable waste disposal and hygiene. The soft-closing seat minimizes noise and increases durability, while the vitreous china material resists stains and scratches, ensuring easy maintenance. Backed by a 5-year guarantee, this toilet also supports environmentally conscious choices, making it a durable and stylish addition to any bathroom. Features Sleek design and minimalist elegance Crafted from premium Vitreous china space-saving Compact dimensions efficient waste disposal with P trap pan trap style Soft-closing seat included for noise reduction and convenience Resistant to stains, scratches, and wear 5-Year guarantee for robust construction Environmentally conscious choice as Part of the Green Discount group ",
+     "allowed": [
+      "not_suitable"
+     ]
+    },
+    {
+     "id": "fairford-grove-close-coupled-rimless-toilet-with-wrapover-seat",
+     "name": "Fairford Grove Close Coupled Rimless Toilet with Wrapover Seat",
+     "description": " The Fairford Grove Close Coupled Rimless Toilet with Wrapover Seat merges modern design with practicality, making it suitable for contemporary bathrooms. Made from durable vitreous china, its white finish resists stains and scratches, ensuring longevity. The rimless design promotes hygiene by eliminating hard-to-clean areas, simplifying maintenance. Featuring a dual flush mechanism, users can choose between a 6-litre or 3-litre flush to conserve water and reduce costs. The compact projection of 612mm makes it ideal for smaller spaces, while the square wrapover seat includes a soft-close function for safety and quiet operation. With dimensions of 790mm height, 375mm width, and a 400mm pan height, this toilet combines comfort and a sleek profile. The package includes all necessary components for installation, and it is backed by a 5-year manufacturer's guarantee for reliability. Features Made from vitreous china for extra protection from stains and scratches. Square wrapover seat with quick release design for style and convenience. Soft close seat ensures user safety. Compact pan with close coupled design - perfect for smaller rooms. 6/3 litre water saving eco-friendly dual flush. 5 year manufacturer's guarantee (one year on the seat). Rimless pan for ease of cleaning. ",
+     "allowed": [
+      "not_suitable"
+     ]
+    }
+   ]
+  },
+  {
+   "requirement": {
+    "id": "main-rail",
+    "name": "Heated towel rail",
+    "specification": "Straight chrome heated towel rail with a pair of chrome valves",
+    "size": "1200mm high × 600mm wide",
+    "requiredComponents": [
+     "towel-rail",
+     "valves"
+    ],
+    "constraints": {
+     "finish": "chrome"
+    }
+   },
+   "candidates": [
+    {
+     "id": "fairford-600mm-x-1200mm-straight-black-towel-rail",
+     "name": "Fairford 600mm x 1200mm Straight Black Towel Rail",
+     "description": " The Fairford 600mm x 1200mm Straight Black Towel Rail combines style and practicality, featuring a sleek black finish that enhances contemporary bathroom decor. Its generous dimensions allow for the drying and warming of multiple towels, making it suitable for busy households seeking comfort. With a heat output of 3109 BTU at 60 °C, this wall-mounted towel rail ensures that towels stay warm while maintaining a cozy environment. It is compatible with both water and central heating systems, allowing for easy integration into existing setups. Built for durability, it comes with a 5-year guarantee for reliable performance. Designed for straightforward installation, the towel rail has a pipe center measurement of 555mm, accommodating various bathroom layouts. Note that valves are not included, offering flexibility in accessory selection. Features Luxurious and modern design Striking black finish Spacious dimensions (600mm x 1200mm) for multiple towels High heat output of 3109 BTU at 60 °C Compatible with water and central heating systems Robust construction for durability 5-year guarantee Pipe centre measurement of 555mm for easy installation Flexible accessory selection (valves not included) Part of Green Discount Group ",
+     "allowed": [
+      "not_suitable"
+     ]
+    },
+    {
+     "id": "fairford-metis-1000-x-600mm-brushed-brass-towel-rail",
+     "name": "Fairford Metis 1000 x 600mm Brushed Brass Towel Rail",
+     "description": " The rail measures 1000mm high by 600mm wide and projects 74mm from the wall, providing ample space for towels while keeping them neatly organised. With 13 straight bars, it delivers 1,148 BTU at a 50°C temperature rise for strong heating performance. The 550mm pipe centre distance aligns with standard plumbing layouts for straightforward installation. Finished in brushed brass with durable PVD coating, the rail resists corrosion and maintains its modern appearance over time. The IPX4 rating allows safe installation in bathroom zones where splashing water may occur, combining safety with contemporary style. Designed for dual-fuel compatibility (up to 300W element, sold separately), it can operate via central heating or electric options for flexible heating solutions. Brackets are included for installation, while valves are sold separately to allow customised plumbing configurations. Product Features Straight wall-mounted towel rail design for modern interiors Brushed brass finish for a warm, stylish look Equipped with 13 horizontal bars, ideal for hanging multiple towels Draws water heating via pipework; compatible with a 300 W dual fuel heating element (element sold separately) Includes mounting brackets; valves not included IPX4 rated for protection against water splashes (bathroom-safe) ",
+     "allowed": [
+      "not_suitable"
+     ]
+    },
+    {
+     "id": "fairford-600mm-x-1200mm-straight-chrome-towel-rail",
+     "name": "Fairford 600mm x 1200mm Straight Chrome Towel Rail",
+     "description": " The Fairford 600mm x 1200mm Straight Chrome Towel Rail is a functional addition to any bathroom, designed with modern aesthetics and performance in mind. Its chrome finish complements various decors while ensuring durability against wear and tear. With dimensions of 600mm x 1200mm, it provides ample space to keep towels warm and organized. This towel rail has a heat output of 2182 BTU at 60 degrees Celsius, keeping your bathroom cozy during colder months. Suitable for water or central heating systems, it offers versatility and energy efficiency. The wall-mounted design allows for easy installation, with a pipe centre measurement of 555mm for a secure fit. The package includes the towel rail, but valves are not included, offering flexibility for accessory choices. Backed by a 5-year guarantee, the Fairford towel rail is a reliable choice for homeowners seeking a blend of style and efficiency. Features Sleek and functional design Modern aesthetics with superior performance Chrome finish for durability and style Ample space for towels (600mm x 1200mm) Impressive heat output of 2182 BTU at 60 Degrees Celsius Versatile for water or central heating systems Wall-mounted for easy installation Packaged with the towel rail (valves not included) Backed by a 5-year guarantee ",
+     "allowed": [
+      "needs_parts"
+     ]
+    },
+    {
+     "id": "fairford-atlas-1200-x-500mm-matt-black-towel-rail",
+     "name": "Fairford Atlas 1200 x 500mm Matt Black Towel Rail",
+     "description": " The Fairford Atlas 1200 x 500mm Matt Black Towel Rail combines high performance with modern design. Measuring 1200mm high and 500mm wide, it features 21 round bars to maximise towel-drying capacity while fitting neatly into contemporary bathrooms. The durable mild steel construction and matt black finish deliver a sleek, modern aesthetic. Powered by a 600-watt electric heating element, the rail provides rapid and efficient warmth. Its vertical design optimises wall space, making it suitable for both compact and larger bathrooms without compromising functionality. Supplied with installation fittings and built to withstand pressures up to 8 bar, this towel rail offers reliable performance and safety. The matt finish resists fingerprints and stains, ensuring low maintenance and long-term visual appeal for modern bathroom interiors. Product Features Sleek, contemporary design ideal for modern bathrooms Mature matt black finish for a bold and elegant look Large size (1200 mm height × 500 mm width) to warm multiple towels Efficient heat output ensures quick drying and reduced dampness Compatible with central heating, dual fuel, or electric systems depending on setup Manufactured from robust mild steel for durability and performance Ladder-style layout with evenly spaced horizontal bars for easy towel hanging Wall-mounted installation with included fixing hardware Backed by a manufacturer's warranty for peace of mind ",
+     "allowed": [
+      "not_suitable"
+     ]
+    },
+    {
+     "id": "fairford-cube-1200-x-600mm-chrome-towel-rail",
+     "name": "Fairford Cube 1200 x 600mm Chrome Towel Rail",
+     "description": " The Fairford Cube 1200 x 600mm Chrome Towel Rail is a stylish and functional addition to any modern interior. Crafted from high-quality steel, it offers a polished chrome finish with sharp edges and square tubes, ensuring both durability and contemporary design. With impressive heat output rated at 451 BTU at 30 °C, 864 BTU at 50 °C, and 1,094 BTU at 60 °C, this towel rail provides efficient warmth for various spaces such as bathrooms and kitchens. Designed for practicality, it features standard 1/2 inch BSP tappings and comes with wall brackets for easy installation, optimizing space with its wall-mounted design. The water-powered system is compatible with existing central heating systems, allowing for customization with separate radiator valves. Backed by a 20-year manufacturer's guarantee and CE-approved for safety, this towel rail combines functionality with modern aesthetics, making it a reliable choice for enhancing your home. Features Sophisticated and functional design for modern homes Crafted from high-quality steel for long-lasting performance Polished chrome finish for modern aesthetic Sharp, clean edges and square tubes enhance visual appeal Exceptional heat output: 451 BTU @ 30 °C, 864 BTU @ 50 °C, 1,094 BTU @ 60 °C Easy to install with standard 1/2 inch BSP tappings Supplied with wall brackets and fixing screws for hassle-free setup Wall-mounted design saves space while maintaining a minimalist look Compatible with existing central heating systems 20-year manuf",
+     "allowed": [
+      "needs_parts"
+     ]
+    },
+    {
+     "id": "fairford-metis-1200-x-600mm-gunmetal-towel-rail",
+     "name": "Fairford Metis 1200 x 600mm Gunmetal Towel Rail",
+     "description": " The Fairford Metis 1200 x 600 mm Gunmetal Towel Rail combines modern style with practical functionality for contemporary bathrooms. Finished in gunmetal, its sleek straight-rail design complements modern interiors, while its generous 1200 mm height and 600 mm width provide ample space for hanging and warming multiple towels. Compatible with central heating systems, it delivers consistent performance year-round. Constructed from durable steel, this towel rail is built for long-lasting use and includes all necessary wall-mounting fixings. While valves are not supplied, the bottom inlet position allows for flexible installation options. With clean lines and a statement gunmetal finish, the Fairford Metis towel rail enhances bathroom aesthetics while maintaining practicality. It efficiently warms towels and helps reduce moisture, contributing to a more comfortable environment. Backed by robust construction, it is a functional and stylish upgrade designed to last. Product Features Incorporates 17 straight bars, ideal for hanging multiple towels evenly Finished in gunmetal grey with a Premium PVD surface for a durable, stylish look Suitable for dual fuel element connection (up to 400W), enabling both electric and hydronic heating use Comes with wall mounting brackets for secure and easy installation Rated IPX4 for protection against water splashes, suitable for use in bathrooms ",
+     "allowed": [
+      "not_suitable"
+     ]
+    },
+    {
+     "id": "fairford-metis-1600-x-600mm-brushed-brass-towel-rail",
+     "name": "Fairford Metis 1600 x 600mm Brushed Brass Towel Rail",
+     "description": " The Fairford Metis 1600 x 600 mm Brushed Brass Towel Rail is a modern, high-capacity heating solution that combines generous drying space with elegant design. Measuring 1600 mm in height and projecting 74 mm from the wall, its 22 horizontal bars and 550 mm pipe centres provide nearly 1,950 BTU, efficiently warming towels for maximum comfort. Finished in brushed brass with a durable PVD coating, the rail adds a warm, upscale tone to bathrooms while resisting tarnish and corrosion. Rated IPX4, it meets water-resistance standards suitable for wet areas. Brackets are included for secure wall mounting. Engineered for versatile installation, it is dual-fuel ready and compatible with a 600 W electric element (sold separately), allowing operation via central heating, electrically, or both. Combining functionality with stylish design, the Fairford Metis 1600 x 600 mm Brushed Brass Towel Rail is a reliable and attractive addition to any bathroom renovation. Product Features Designed for dual fuel compatibility (up to 600 W heater element) Includes mounting brackets; valves sold separately Brushed brass finish for a premium, sophisticated look Rated to IPX4 for splash protection - suitable for bathroom installation Straight, clean-lined style with modern aesthetics Multiple heating bars (22) for efficient heat distribution and towel drying ",
+     "allowed": [
+      "not_suitable"
+     ]
+    },
+    {
+     "id": "fairford-metis-1200-x-400mm-gunmetal-towel-rail",
+     "name": "Fairford Metis 1200 x 400mm Gunmetal Towel Rail",
+     "description": " The Fairford Metis 1200 × 400 mm Gunmetal Towel Rail features a contemporary ladder design with a durable gunmetal finish and dual-fuel compatibility for flexible heating. With 17 horizontal bars, 350 mm pipe centres, and a 74 mm projection, it installs neatly and provides ample towel-drying space. Brackets are included (valves sold separately). Built to modern safety standards with an IPX4 rating, the rail is suitable for bathrooms and wet areas and works with a 300 W dual-fuel element for efficient heating via central or electric systems. The PVD gunmetal finish enhances durability and maintains a sleek, modern aesthetic. Measuring 1200 mm high and 400 mm wide, the rail offers generous drying capacity while fitting compact spaces. Its combination of practicality and contemporary style makes it an effective solution for warming towels and enhancing bathroom comfort. Product Features Straight towel rail design that blends seamlessly into modern interiors Gunmetal grey PVD finish for a sleek, high-end look Includes wall brackets for easy and secure installation Valves sold separately to allow for styling and functional flexibility Compatible with a 300W dual-fuel element for efficient heating performance IPX4 rated, safe for use in moisture-prone environments like bathrooms ",
+     "allowed": [
+      "not_suitable"
+     ]
+    }
+   ]
+  },
+  {
+   "requirement": {
+    "id": "shower-door",
+    "name": "Sliding shower door",
+    "specification": "8mm glass sliding shower door with an 800mm side panel, to fit a 1000 × 800mm tray",
+    "size": "1000mm door + 800mm side panel · 8mm glass",
+    "requiredComponents": [
+     "shower-door",
+     "side-panel"
+    ],
+    "constraints": {
+     "thicknessMm": 8
+    }
+   },
+   "candidates": [
+    {
+     "id": "fairford-8mm-1000mm-sliding-shower-door",
+     "name": "Fairford 8mm, 1000mm Sliding Shower Door",
+     "description": " The Fairford 8mm Sliding Shower Door offers a blend of modern design and functionality, perfect for enhancing any bathroom. Crafted with 8mm thick glass, it provides durability alongside a sophisticated appearance. The door measures 1900mm in height and adjusts between 945mm and 990mm in width, fitting 1000mm shower trays seamlessly. Its sliding configuration saves space, making it suitable for various bathroom sizes. With a 380mm entry width and a quick-release mechanism, cleaning is straightforward, aided by an easy-clean glass coating for minimal maintenance. Constructed with robust aluminium profiles and a sturdy metal handle, this door ensures long-lasting performance. The installation is user-friendly, designed for right-handed orientation. The product comes with a lifetime guarantee from Stonewater, confirming its quality. Note that it includes only the door and necessary fixings, without a side panel or shower tray. Features Transform your bathroom into a haven of modern elegance Combines style and functionality Sleek modern aesthetic 8mm thick glass for durability and luxury appearance Space-saving sliding door configuration Generous 380mm entry width for easy access Quick-release mechanism for easy cleaning Easy-clean glass coating for maintenance convenience Robust aluminium profiles Sturdy metal handle for longevity Right-handed orientation for thoughtful design Easy-fit installation for DIY enthusiasts Lifetime guarantee for superior quality Perfect for enclosur",
+     "allowed": [
+      "needs_parts"
+     ]
+    },
+    {
+     "id": "fairford-pro-8-black-1000-x-800mm-frameless-8mm-hinged-shower-door-enclosure-with-side-panel",
+     "name": "Fairford Pro 8 Black 1000 x 800mm Frameless 8mm Hinged Shower Door Enclosure with Side Panel",
+     "description": " The Fairford Pro 8 Black 1000 x 800mm Frameless Hinged Shower Door Enclosure with Side Panel combines modern style and functionality. Its sleek matt black finish and frameless design enhance any contemporary bathroom while providing practicality. The enclosure features an 8mm thick glass panel for durability and safety, ensuring easy maintenance and a clear view over time. With a height of 1950mm, it offers a spacious feel, and its adjustable dimensions (955-975mm for the door and 755-775mm for the side panel) allow for a customizable fit. Installation is straightforward, thanks to included fixings and high-quality aluminium profiles that ensure longevity. This 1000mm x 800mm enclosure is a reliable choice, backed by a 10-year guarantee. The package includes the hinged door and side panel; however, the shower tray and fittings are sold separately. Features Transform your bathroom into a modern oasis Sleek matt black finish Frameless design Exceptional durability with 8mm thick glass panel Easy to clean glass Smooth and effortless hinged door mechanism Precision-engineered brass handles Spacious and luxurious feel with a height of 1950mm Adjustable dimensions for perfect fit Easy assembly with included fixings Constructed with high-quality aluminium profiles 10-year guarantee for reliability and long-term value Excellent value as part of the Green discount group Includes hinged door and side panel ",
+     "allowed": [
+      "not_suitable"
+     ]
+    },
+    {
+     "id": "fairford-pro-8-1000-x-800mm-frameless-8mm-hinged-shower-door-enclosure-with-side-panel",
+     "name": "Fairford Pro 8 1000 x 800mm Frameless 8mm Hinged Shower Door Enclosure with Side Panel",
+     "description": " The Fairford Pro 8 is a frameless shower door enclosure measuring 1000 x 800mm, featuring an 8mm thick glass for safety and durability. Its polished chrome finish enhances modern aesthetics, while the adjustable door and side panel accommodate various bathroom layouts. With a height of 1950mm, it offers ample space for a comfortable showering experience. Designed for easy maintenance, the hinged door and easy-clean glass simplify upkeep, and the lightweight aluminium profile ensures sturdy construction. This enclosure comes with a brass door handle for a secure grip but does not include a shower tray or fittings. Supported by a 10-year guarantee, the Fairford Pro 8 combines functionality and style in a contemporary bathroom. Features Frameless design exuding sophistication 8mm thick glass for robust safety Polished chrome finish for a luxurious touch Ample space for comfortable showering experience (1000mm x 800mm) Adjustable door (955 975mm) and side panel (755 775mm) Hinged door mechanism for convenience Easy-clean glass for simplified maintenance Easy-fit assembly with included fixings Lightweight yet sturdy aluminium profile Elegant brass door handle ",
+     "allowed": [
+      "not_suitable"
+     ]
+    },
+    {
+     "id": "fairford-pro-8-brushed-brass-1000-x-800mm-frameless-8mm-hinged-shower-door-enclosure-with-side-panel",
+     "name": "Fairford Pro 8 Brushed Brass 1000 x 800mm Frameless 8mm Hinged Shower Door Enclosure with Side Panel",
+     "description": " The Fairford Pro 8 Brushed Brass Hinged Shower Door Enclosure offers a modern and elegant solution for contemporary bathrooms. Featuring a frameless design and high-quality 8mm toughened safety glass, it combines aesthetic appeal with durability. The enclosure is easy to maintain, ensuring a clean look with minimal effort. Its hinged door operates smoothly and securely, with adjustable dimensions for easy installation, accommodating slight unevenness in spaces. Measuring 1950mm in height, 1000mm in width, and 800mm in depth, it provides ample room for a comfortable showering experience. While the shower tray and fittings are sold separately, the package includes the essential hinged door and side panel. Designed for straightforward assembly, professional installation is recommended for optimal results, and it comes with a 10-year guarantee for added assurance. Features Modern and sophisticated shower enclosure design Frameless design with brushed brass finish High-quality 8mm toughened safety glass Easy to clean glass surface Hinged door mechanism for effortless operation Adjustable dimensions for flexible installation Premium aluminium profile and brass handle Ample space for comfortable showering experience Straightforward assembly with professional installation recommended 10-year guarantee for enduring quality ",
+     "allowed": [
+      "not_suitable"
+     ]
+    },
+    {
+     "id": "fairford-8mm-frameless-1000mm-gunmetal-sliding-shower-door",
+     "name": "Fairford 8mm Frameless 1000mm Gunmetal Sliding Shower Door",
+     "description": " The Fairford 8mm Frameless 1000mm Gunmetal Sliding Shower Door is crafted from 8mm toughened safety glass and features a sleek, frameless design with a matte gunmetal profile kit, adding a modern touch to any bathroom layout. With a wall-mount sliding mechanism and large out-of-true wall adjustment (950-990mm), it provides versatile installation options, whether used in a wetroom or over a shower tray. Standing at 2000mm high, this shower door offers generous coverage and an open, airy feel. The sliding tracks are designed for smooth, reliable operation, and the door includes a single-piece matching handle along with concealed fixings that blend seamlessly with the glass. Maintenance is made easier with the Aqua-Shield easy-clean glass coating, which repels water marks and limescale, helping to keep the surface clear for longer. Backed by a lifetime guarantee, this door offers durable performance combined with refined aesthetics - perfect for those seeking a premium shower enclosure with minimal framing. Product Features Sleek, frameless 8 mm thick toughened safety glass Gunmetal-finish aluminium profile kit for striking, modern aesthetics Sliding full-height door with smooth roller mechanism Aqua-Shield easy-clean coating to resist limescale, soap scum and bacterial buildup Concealed fixings for a clean, minimalist installation Adjustable to accommodate walls out of true (20 mm adjustment range) Single door unit, reversible for left or right hand opening Wall-mounted design",
+     "allowed": [
+      "needs_parts",
+      "not_suitable"
+     ]
+    },
+    {
+     "id": "fairford-8mm-frameless-1000mm-matt-black-sliding-shower-door",
+     "name": "Fairford 8mm Frameless 1000mm Matt Black Sliding Shower Door",
+     "description": " The Fairford 8mm Frameless 1000mm Matt Black Sliding Shower Door combines 8mm toughened safety glass with a sleek matt black aluminium profile, creating a modern and streamlined look. Its frameless design reduces visual clutter, offering a clean and open feel to any bathroom. Standing 2000mm high and adjustable from 950-990mm, it easily accommodates slightly out-of-true walls while ensuring a secure fit. Fully reversible, this door can be installed for left- or right-hand opening. It is suitable for installation over a tray or directly onto a wetroom floor. The smooth roller mechanism and concealed fixings contribute to both functional performance and a polished aesthetic, allowing the door to glide effortlessly while maintaining a crisp overall look. The Aqua-Shield easy-clean coating helps protect the glass, reducing limescale and soap scum buildup for hassle-free maintenance. Entry width ranges from 393-432mm depending on installation, providing practical access without sacrificing valuable space. With its minimalist frameless design and premium matt black profile, this sliding shower door is a stylish and durable upgrade for any contemporary bathroom. Product Features Frameless single sliding wetroom door design for a sleek, modern look Matt Black profile kit included for stylish, contrasting accents Wall-mounted installation for a clean, space-saving fit Easy-clean Aqua-Shield glass treatment to reduce limescale and soap scum build-up Clear toughened glass for excellent",
+     "allowed": [
+      "needs_parts",
+      "not_suitable"
+     ]
+    },
+    {
+     "id": "fairford-pro-8-black-1000-x-800mm-frameless-8mm-rectangular-pivot-door-enclosure-with-side-panel",
+     "name": "Fairford Pro 8 Black 1000 x 800mm Frameless 8mm Rectangular Pivot Door Enclosure with Side Panel",
+     "description": " The Fairford Pro 8 Black Frameless Rectangular Pivot Door Enclosure (1000 x 800mm) combines modern design with functionality, making it ideal for contemporary bathrooms. Finished in a sleek matt black, this enclosure features a frameless design with strong aluminum profiles, adding a sophisticated touch to your space. Its durable 8mm toughened safety glass is easy to clean and enhances the overall aesthetic. With adjustable dimensions for the door and side panel, the enclosure fits a variety of layouts, and the pivot door mechanism allows for easy access. Installation is user-friendly thanks to the easy-fit technology and included fixings, catering to both DIY enthusiasts and professionals. The package includes the pivot door and side panel, while the shower tray and fittings are sold separately. A 10-year guarantee ensures long-lasting reliability. Features Contemporary design for style and sophistication Exquisite matt black finish Frameless design with precision-engineered aluminum profiles Versatile rectangular shape (1000mm x 800mm) 8mm toughened safety glass for durability Easy to clean surface Effortless access with pivot door mechanism Easy-fit technology for convenient installation Adjustable door (955-975mm) and side panel (755-775mm) Robust brass handle for premium functionality Includes pivot door and side panel package ",
+     "allowed": [
+      "not_suitable"
+     ]
+    },
+    {
+     "id": "fairford-pro-8mm-800mm-matt-black-side-panel",
+     "name": "Fairford Pro 8mm 800mm Matt Black Side Panel",
+     "description": " Made from 8mm toughened safety glass, the Fairford Pro 8mm 800mm Matt Black Side Panel offers exceptional performance and long-lasting durability. The sleek matt black frame complements both hinged and sliding shower doors, enhancing contemporary bathroom designs without overwhelming the space. At 800mm wide and 1900mm tall, this side panel is perfectly sized for standard shower enclosures. With a slim profile depth of just over 30mm, it maximizes space while maintaining structural strength. Hidden fixings provide a clean, minimalist look, concealing hardware for a neat finish. Backed by a lifetime guarantee, this Fairford Pro 8mm 800mm Matt Black Side Panel assures long-term quality and satisfaction. Constructed from high-grade aluminium and glass, it combines strength and style, making it an ideal choice for durable, elegant shower spaces. Product Features 8 mm toughened safety glass provides strong, durable protection Matt black frame for a modern, stylish finish Hidden fixings for a clean, seamless look Compatible with both hinged and sliding shower doors Lifetime guarantee ensures long-term peace of mind ",
+     "allowed": [
+      "part",
+      "not_suitable"
+     ]
+    }
+   ]
+  },
+  {
+   "requirement": {
+    "id": "shower-tray",
+    "name": "Shower tray",
+    "specification": "Rectangular stone-resin shower tray with a 90mm high-flow waste",
+    "size": "1000 × 800mm",
+    "requiredComponents": [
+     "shower-tray",
+     "waste"
+    ],
+    "constraints": {
+     "lengthMm": 1000,
+     "widthMm": 800
+    }
+   },
+   "candidates": [
+    {
+     "id": "fairford-1000-x-800mm-offset-quadrant-rh-shower-tray",
+     "name": "Fairford 1000 x 800mm Offset Quadrant, RH Shower Tray",
+     "description": " The Fairford Offset Quadrant Shower Tray, measuring 1000 x 800mm with a right-handed orientation, is designed for modern bathrooms, combining style with practicality. This sleek tray fits easily into most enclosures and is crafted in the UK from an acrylic cap and stone resin core, making it 40% lighter than traditional options for easier handling and installation. Standing at just 40mm high, its low-profile design supports high performance with a 90mm Hi-Flow Waste that achieves a flow rate of 32 liters per minute, ensuring efficient drainage. Constructed to meet BS EN 14527:2016 standards and made from WRAS-approved, phthalate-free materials, it prioritizes safety and environmental consciousness. Easy to clean and maintain, it also accommodates uneven surfaces with up to 10mm of base tolerance. The shower tray comes with a 25-year guarantee, reflecting its durability, while a riser kit is sold separately, allowing for customization. Features Exceptional elegance and utility Sleek and stylish design High-quality looks and functionality Right-handed orientation and quadrant shape for space-saving 40% lighter than traditional high-wall stone resin trays Low-profile design at 40mm height 90mm Hi-Flow Waste for rapid water flow rate of 32 liters per minute Easy installation and maintenance Constructed from WRAS-approved, phthalate-free materials 25-year guarantee demonstrating durability ",
+     "allowed": [
+      "not_suitable"
+     ]
+    },
+    {
+     "id": "fairford-1000-x-800mm-antislip-lh-offset-quadrant-shower-tray",
+     "name": "Fairford 1000 x 800mm Antislip LH Offset Quadrant Shower Tray",
+     "description": " The Fairford 1000 x 800mm Antislip LH Offset Quadrant Shower Tray is designed for both functionality and style, making it a suitable choice for modern bathrooms. Constructed with an acrylic cap over a durable stone resin core, it promises reliability and a glossy white finish that integrates well with various decors. Its left-handed offset quadrant shape saves space while ensuring usability, with dimensions of 1000mm x 800mm and a low 40mm height for easy access. This shower tray features an anti-slip surface for safety, making it ideal for all users, including families. Additionally, the waste design allows for efficient drainage, with a 90mm size located on the curved edge. Note that the waste is sold separately, giving flexibility in selection. This product adheres to high-quality standards and includes a 25-year guarantee. Features Sleek and practical design Superior performance and timeless elegance Crafted with an acrylic cap and durable stone resin core Gloss white finish complements any bathroom décor Offset quadrant shape for left-handed orientation Space-saving solution Low 40mm height profile for easy accessibility Anti-slip surface for safe footing in wet conditions Thoughtful waste design positioned on the curved edge Efficient water drainage with a waste size of 90mm 25-year guarantee for investment security ",
+     "allowed": [
+      "not_suitable"
+     ]
+    },
+    {
+     "id": "fairford-1000-x-800mm-rectangular-shower-tray",
+     "name": "Fairford 1000 X 800mm Rectangular Shower Tray",
+     "description": " The Fairford 1000 x 800mm Rectangular Shower Tray is a UK-manufactured product combining modern design with functionality, making it a suitable option for bathroom upgrades. Its low-profile design ensures compatibility with various enclosures while adding an elegant touch to any space. It features a 90mm Hi-Flow Waste system that efficiently manages water flow at 32 litres per minute, preventing waterlogging and ensuring proper drainage. Constructed from WRAS-approved, Phthalate-free materials that meet BS EN 14527:2016 standards, this shower tray ensures safety and durability. Weighing 40% less than traditional high wall stone resin trays, it simplifies installation and maintenance. The tray allows for up to 10mm tolerance at the base to fit different enclosures and offers an optional riser kit for additional height. With its gloss white finish and central waste location, the tray combines practical functionality with visual appeal. It comes with a 25-year guarantee, providing assurance of quality. Features Blends modern design with superior functionality Sleek, low-profile structure Efficient 90mm Hi-Flow Waste system Manages water flow at a rate of 32 litres per minute Crafted from WRAS-approved, Phthalate-free materials Complies with BS EN 14527:2016 standards 40% lighter than conventional high wall stone resin trays Up to 10mm tolerance at the base Optional riser kit increases height by 96mm Gloss white finish and central waste location Backed by a 25-year guarantee on ",
+     "allowed": [
+      "match",
+      "needs_parts"
+     ]
+    },
+    {
+     "id": "fairford-1000-x-800mm-rectangular-shower-tray-corner-waste",
+     "name": "Fairford 1000 X 800mm Rectangular Shower Tray, Corner Waste",
+     "description": " The Fairford 1000 x 800mm Rectangular Shower Tray is expertly crafted in Britain, offering a blend of durability and functionality. Made from premium ABS capped stone resin, this shower tray ensures long-lasting performance with its robust structure and glossy white finish, which is easy to maintain and clean, keeping your bathroom looking pristine. The spacious dimensions provide ample room for a comfortable shower experience, and the corner waste design is compatible with a 90mm high flow waste system for efficient drainage. With a low-profile height of just 45mm, it is easy to install in various bathroom layouts. Backed by a lifetime guarantee, this shower tray exemplifies quality and reliability, making it a practical choice for modern homes while enhancing your bathroom's aesthetic. Features Combines luxury and durability Expertly crafted in Britain Sleek and sophisticated aesthetic Made from premium ABS capped stone resin Remarkable resilience and flawless finish Easy cleaning and maintenance Ample space for a comfortable showering experience Convenient corner waste design Compatible with a 90mm high flow waste system Low-profile design at 45mm height Easy to install Lifetime guarantee (not covering modifications or relocations) Harmonious blend of luxury, practicality, and timeless elegance ",
+     "allowed": [
+      "match",
+      "needs_parts"
+     ]
+    },
+    {
+     "id": "fairford-1000-x-800mm-antislip-rectangular-shower-tray",
+     "name": "Fairford 1000 x 800mm Antislip Rectangular Shower Tray",
+     "description": " The Fairford 1000 x 800mm Antislip Rectangular Shower Tray combines functionality with modern design, making it an ideal addition to any bathroom. Constructed with a durable acrylic cap and a stone resin core, it offers long-lasting performance while maintaining an elegant appearance. The gloss white finish enhances its versatility, seamlessly fitting into various decor styles while the anti-slip surface adds safety, particularly beneficial for families and the elderly. Measuring 1000mm x 800mm and featuring a low-profile height of 40mm, this shower tray provides ample space for a comfortable shower experience. Its centrally located waste outlet accommodates a 90mm waste size, ensuring efficient drainage. This product is easy to install and comes with a 25-year guarantee, affirming its quality and longevity. Please note that waste fittings are sold separately. Features Sleek and functional design Crafted for longevity and elegance Robust construction of acrylic cap with stone resin core Gloss white finish complements any bathroom decor Anti-slip surface for maximum safety Ample dimensions of 1000mm x 800mm for comfort Low-profile height of just 40mm for a modern aesthetic Rectangular shape and right-handed orientation for versatility Centrally located waste outlet for efficient drainage Engineered for ease of installation Backed by a 25-year guarantee Eco-friendly product ",
+     "allowed": [
+      "needs_parts"
+     ]
+    },
+    {
+     "id": "fairford-1000-x-800mm-antislip-rh-offset-quadrant-shower-tray",
+     "name": "Fairford 1000 x 800mm Antislip RH Offset Quadrant Shower Tray",
+     "description": " The Fairford 1000 x 800mm Antislip RH Offset Quadrant Shower Tray is designed for modern bathrooms, combining practicality and style. Its right-handed offset shape maximizes space while adding a contemporary look. Crafted with an acrylic cap and stone resin core, it provides a durable and sturdy base, complemented by a glossy white finish that fits seamlessly into any décor. Safety features include an anti-slip surface, ensuring security for users of all ages. The shower tray has a 40mm height profile for easy access and is designed to accommodate a 90mm waste outlet located on the curved edge, which is sold separately. Measuring 1000mm x 800mm, it offers ample space for comfortable showering and is suitable for compact bathrooms. With a 25-year guarantee, the Fairford shower tray is a reliable choice for homeowners. Features Sleek and functional design for modern bathrooms Precision crafted for long-lasting durability Space-efficient right-handed offset quadrant shape Exceptional strength with acrylic cap and stone resin core Glossy white finish complements any bathroom décor Anti-slip surface for safety Conveniently located waste on curved edge for efficient drainage Low-profile height of 40mm enhances accessibility Ample showering space with dimensions of 1000mm x 800mm Backed by a 25-year guarantee for quality and reliability ",
+     "allowed": [
+      "not_suitable"
+     ]
+    },
+    {
+     "id": "fairford-1000-x-800mm-offset-quadrant-lh-shower-tray",
+     "name": "Fairford 1000 x 800mm Offset Quadrant, LH Shower Tray",
+     "description": " The Fairford 1000 x 800mm Offset Quadrant, LH Shower Tray is designed for modern bathrooms, combining strength and style. Made with an acrylic cap and stone resin core, it ensures durability while maintaining a sleek profile. Its left-handed orientation and quadrant shape allow for versatile installation in various enclosures. With a slim 40mm height, the tray facilitates easy access and features a central waste location that works with a 90mm waste (sold separately) for efficient drainage. The gloss white finish provides a clean and spacious appearance. Measuring 1000mm x 800mm, this shower tray offers ample space for comfort. It is scratch-resistant and shock-proof, designed for everyday use, and comes with a 25-year manufacturer guarantee. Waste and fixings are sold separately for customization. Features Elegant and modern design Left-handed orientation Quadrant shape for versatile fitting Slim 40mm height profile for easy access Central-to-curved-edge waste location for efficient drainage Gloss white finish for a polished look Scratch-resistant and shock-proof surface 25-year guarantee for reliability ",
+     "allowed": [
+      "not_suitable"
+     ]
+    },
+    {
+     "id": "dezine-solidstone-1000-x-800mm-rectangular-shower-tray-with-waste",
+     "name": "Dezine SolidStone 1000 X 800mm Rectangular Shower Tray with Waste",
+     "description": " Dezine SolidStone 1000 X 800mm Rectangular Shower Tray with Waste Dezine SolidStone 1000 X 800mm Rectangular Shower Tray with Waste Upgrade your shower experience with the Dezine SolidStone 1000 X 800mm Rectangular Shower Tray with Waste. This premium quality shower tray is crafted with meticulous attention to detail, providing a sleek and sturdy foundation for your shower enclosure. Exceptional Quality and Durability Made in the UK from high-grade stone resin and topped with an ABS cap for added durability, this shower tray is designed to withstand the test of time. Its robust construction is backed by a generous 25-year manufacturer's guarantee , giving you peace of mind for years to come. 100% Flat Guarantee With a commitment to excellence, this SolidStone shower tray comes with a \"100% Flat\" guarantee. You can be completely confident that your new shower tray will arrive at your doorstep level and free from any damage, ready for installation. Next Day Delivery Need your shower tray in a hurry? Our products, including the Dezine SolidStone shower tray, are available for next day or selected day delivery. We take extra care with our own van delivery service to ensure your purchase arrives in pristine condition, without any transit damage. Product Details Finish: Gloss White Contents: Shower tray (Waste not included) Other Notes: Suitable for most shower enclosures Transform your bathroom with the Dezine SolidStone 1000 X 800mm Rectangular Shower Tray with Waste - a blend o",
+     "allowed": [
+      "match"
+     ]
+    }
+   ]
+  },
+  {
+   "requirement": {
+    "id": "shower-vanity",
+    "name": "Union vanity unit",
+    "specification": "Fairford Union white vanity unit with basin",
+    "size": "400mm wide",
+    "requiredComponents": [
+     "vanity",
+     "basin"
+    ],
+    "constraints": {
+     "maxWidthMm": 400,
+     "finish": "white"
+    }
+   },
+   "candidates": [
+    {
+     "id": "fairford-union-400mm-full-depth-white-vanity-unit",
+     "name": "Fairford Union 400mm Full Depth White Vanity Unit",
+     "description": " The Fairford Union 400mm Full Depth White Vanity Unit offers a blend of modern design and practical functionality, making it an ideal addition to any bathroom. With a sleek gloss white finish and minimalist matt chrome handles, it suits various styles while allowing for customization with either a polymarble basin or a semi-recessed basin and worktop. The vanity features a soft-close door that opens to a spacious shelf, providing convenient storage for bathroom essentials. Constructed with a robust 16mm cabinet thickness, it ensures durability and longevity. Pre-assembled for easy installation, the unit's easy-to-clean surface maintains its appearance. Measuring 400mm wide, 355mm deep, and 864mm high, this vanity unit effectively combines style and functionality for modern bathroom spaces. Features Sophisticated design and practical functionality Sleek gloss white finish Versatile freestanding unit complements various bathroom styles and polymarble basins minimalist aesthetic with matt chrome Rear-Fixed handles designed for flexibility with options for polymarble or Semi-recessed basins Equipped with Soft-Close door mechanism Spacious Internal shelf for storage Easy-to-clean surface pre-assembled for Easy installation 5-Year guarantee against faulty workmanship or materials 1-Year guarantee on serviceable parts ",
+     "allowed": [
+      "needs_parts"
+     ]
+    },
+    {
+     "id": "fairford-union-400mm-full-depth-black-vanity-unit",
+     "name": "Fairford Union 400mm Full Depth Black Vanity Unit",
+     "description": " The Fairford Union 400mm Full Depth Black Vanity Unit combines style and functionality in a sleek freestanding design. Finished in rich Hacienda Black woodgrain, it features a striking charcoal tone that complements modern interiors and matches seamlessly with a WC unit. This vanity offers ample storage behind a single soft-closing door with a convenient shelf for organizing toiletries, while the 95-degree soft-close mechanism ensures quiet operation. Constructed with durability using the Cam and Wood Dowel method and an 18mm thick cabinet, it is pre-assembled for easy installation and straightforward cleaning. Measuring 864mm high, 400mm wide, and 355mm deep, this compact unit is ideal for small to medium bathrooms and allows for customization since it does not include a basin or tap. A 5-year guarantee covers manufacturing defects. Features Sleek and Modern freestanding design Rich Hacienda black Woodgrain finish Ample storage with a full-Depth design single Soft-closing door with practical shelf 95-degree clip-on Soft-Close door mechanism matt chrome Rear-Fixed handles for Modern elegance Easy to install and clean with Rigid delivery Built using robust cam and wood dowel method 5-Year guarantee against manufacturing defects 1-Year guarantee on moving parts ",
+     "allowed": [
+      "not_suitable"
+     ]
+    },
+    {
+     "id": "fairford-union-400mm-slimline-black-vanity-unit",
+     "name": "Fairford Union 400mm Slimline Black Vanity Unit",
+     "description": " The Fairford Union 400mm Slimline Black Vanity Unit combines modern design with practical functionality. With its sleek Hacienda Black finish, it fits seamlessly into various bathroom styles. Its compact dimensions of 400mm wide, 355mm deep, and 864mm high make it ideal for small spaces like cloakrooms. Featuring a soft-closing single door, the unit reveals an adjustable shelf for organizing bathroom essentials. Rear-fixed matt chrome handles provide easy access, while compatible handle options allow for customization. Constructed from durable 18mm MFC with a textured woodgrain finish, this vanity is built to last. Installation is straightforward due to its pre-assembled design with Cam and Wood Dowel construction. The unit also includes a 95-degree clip-on soft-close hinge for added convenience. The basin, tap, and waste are sold separately, offering flexibility in design. Features Sleek and modern design with Hacienda Black finish Compact dimensions (400mm width, 355mm depth, 864mm height) ideal for small spaces Soft-closing single door for smooth operation Adjustable shelf for versatile storage options Matt chrome rear fixed handles for easy access Customizable handle options available Pre-assembled with advanced Cam and Wood Dowel construction for easy installation 95-degree clip-on soft-close hinge for added practicality 5-year guarantee on faulty workmanship and materials 1-year warranty on moving parts Basin, tap, and waste sold separately for customization ",
+     "allowed": [
+      "not_suitable"
+     ]
+    },
+    {
+     "id": "fairford-union-400mm-full-depth-drift-wood-vanity-unit",
+     "name": "Fairford Union 400mm Full Depth Drift Wood Vanity Unit",
+     "description": " The Fairford Union 400mm Full Depth Drift Wood Vanity Unit is a freestanding piece designed to enhance any bathroom with its natural driftwood finish and modern functionality. Measuring 864mm high, 400mm wide, and 355mm deep, this compact unit provides efficient storage while maintaining a sleek profile. It features a soft-closing door with a 95-degree clip-on hinge and an internal shelf, promoting organization and easy accessibility for bathroom essentials. Constructed with an 18mm thick cabinet for durability, it also includes understated matt chrome handles. Fully assembled for easy installation, the unit has an easy-to-clean surface. This vanity is made using quality craftsmanship and is backed by a 5-year guarantee against manufacturing defects. Features Freestanding vanity unit Natural driftwood finish for rustic charm Soft-closing door with a 95-degree clip-on hinge Convenient interior shelf for organizing essentials Includes matt chrome handles Easy to clean surface Fully assembled with all necessary fixings included Constructed using the Cam and Wood Dowel method 5-year guarantee against manufacturing defects 1-year warranty on moving components ",
+     "allowed": [
+      "not_suitable"
+     ]
+    },
+    {
+     "id": "fairford-union-400mm-slimline-white-vanity-unit",
+     "name": "Fairford Union 400mm Slimline White Vanity Unit",
+     "description": " The Fairford Union 400mm Slimline White Vanity Unit combines elegant design with practical storage solutions for your bathroom. Featuring a sleek gloss white finish, it complements various bathroom styles and pairs well with polymarble basins. Its compact dimensions of 864mm in height and 400mm in width make it ideal for smaller spaces, with a slim depth of only 255mm. Despite its size, the unit offers generous storage with soft-close doors that reduce wear and noise. An adjustable internal shelf allows for customized organization. Built for durability, it has a sturdy 16mm cabinet thickness and is supplied rigid for easy installation. This vanity unit comes with a 5-year guarantee on workmanship and a 1-year guarantee on moving parts, ensuring long-lasting performance. Please note that the basin, tap, and waste are sold separately. Features elegant and efficient storage solution for any bathroom gloss white finish that pairs with polymarble basins designed for cloakrooms or smaller bathrooms Compact unit maximizing space without compromising storage Features Soft-Close doors for quieter operation Adjustable Internal shelf for customizable storage supplied Rigid for Quick installation Constructed using cam and wood dowel method for durability 5-Year guarantee against faulty workmanship or materials 1-Year guarantee on serviceable and moving parts ",
+     "allowed": [
+      "needs_parts"
+     ]
+    },
+    {
+     "id": "fairford-union-400mm-bleached-oak-full-depth-vanity-unit",
+     "name": "Fairford Union 400mm Bleached Oak Full Depth Vanity Unit",
+     "description": " The Fairford Union 400mm Bleached Oak Full Depth Vanity Unit combines functionality with a timeless design, making it an ideal addition to any bathroom. Its bleached oak finish complements various interior styles while enhancing the overall aesthetic. Crafted in Britain, this unit features durable construction with cam and wood dowels and is made from 18mm MFC textured woodgrain material for a refined appearance. Designed for floor-standing installation, it includes one soft-close door with a modern wrapover handle, providing both style and practicality. Inside, a single shelf offers organized storage for essentials. The vanity unit is also eco-friendly, made from FSC-certified materials and supplied pre-assembled. With dimensions of 400mm width, 864mm Features Elegant bleached oak finish adds subtle color to bathrooms Personalize units with a wide range of handle options Crafted in Britain to the highest quality standards Rigid construction for durability and stability Soft-close door with contemporary wrapover handle Single shelf for organized storage Pre-assembled for convenience Emphasis on sustainability with FSC-certified materials 5-year guarantee from Hudson Reed ",
+     "allowed": [
+      "not_suitable"
+     ]
+    },
+    {
+     "id": "fairford-union-400mm-slimline-drift-wood-vanity-unit",
+     "name": "Fairford Union 400mm Slimline Drift Wood Vanity Unit",
+     "description": " The Fairford Union 400mm Slimline Drift Wood Vanity Unit combines compact design with quality craftsmanship, making it suitable for modern or minimalist bathrooms. Its slim profile and driftwood finish complement various decors, creating a serene atmosphere. The unit provides ample storage with a soft-closing door that operates quietly and prevents wear, while an adjustable shelf accommodates toiletries and cleaning supplies. Constructed from durable 18mm MFC textured woodgrain panels, it ensures longevity and stability. Fully assembled for hassle-free installation, this vanity measures 400mm in width, 355mm in depth, and 864mm in height, ideal for smaller spaces. It comes with a 5-year guarantee against defects, while the basin, tap, and waste are sold separately for customization. Features Compact design with premium craftsmanship Elegant driftwood finish, blending with various decors Generous storage capacity Soft-closing door with 95-degree clip-on hinges Adjustable shelf for flexible storage Standard matt chrome rear-fix handles with optional customization Fully assembled for hassle-free installation Durable construction using 18mm MFC textured woodgrain panels 5-year guarantee against faulty workmanship and materials Basin, tap, and waste sold separately for personalization ",
+     "allowed": [
+      "not_suitable"
+     ]
+    },
+    {
+     "id": "fairford-union-400mm-full-depth-grey-gloss-vanity-unit",
+     "name": "Fairford Union 400mm Full Depth Grey Gloss Vanity Unit",
+     "description": " The Fairford Union 400mm Full Depth Grey Gloss Vanity Unit combines modern design with practical functionality, making it ideal for contemporary bathrooms. Its high gloss grey finish enhances the aesthetic, creating a sophisticated look that pairs well with various decor styles. This unit provides ample storage space, essential for busy family bathrooms, while its soft-close doors reduce noise and enhance durability. Crafted in Britain, the vanity unit showcases exceptional craftsmanship and features a durable MFC painted gloss finish. It arrives fully assembled for hassle-free installation, including all necessary fixings. With dimensions of 400mm in width, 355mm in depth, and 864mm in height, this unit is both compact and spacious, perfect for optimizing smaller spaces. It comes with a 5-year guarantee against manufacturing faults and a 1-year guarantee on moving parts. Features Exquisite fusion of functionality and aesthetic appeal Sleek, Modern bathroom design high gloss Grey finish Generous storage space for busy family bathrooms Soft-Close doors for quieter closing action and reduced wear and tear customizable with additional handle options Easy installation with all necessary fixings included Proudly Made In Britain with superior craftsmanship 5-Year guarantee against faulty workmanship or materials 1-Year guarantee on serviceable and moving parts ",
+     "allowed": [
+      "not_suitable"
+     ]
+    }
+   ]
+  },
+  {
+   "requirement": {
+    "id": "shower-rail",
+    "name": "Towel rail",
+    "specification": "Straight chrome towel rail with a pair of chrome valves",
+    "size": "1000mm high × 500mm wide",
+    "requiredComponents": [
+     "towel-rail",
+     "valves"
+    ],
+    "constraints": {
+     "finish": "chrome"
+    }
+   },
+   "candidates": [
+    {
+     "id": "fairford-metis-1000-x-500mm-brushed-brass-towel-rail",
+     "name": "Fairford Metis 1000 x 500mm Brushed Brass Towel Rail",
+     "description": " The Fairford Metis 1000 x 500mm Brushed Brass Towel Rail offers generous towel storage and modern styling. Measuring 1000mm high and 500mm wide with 13 bars, it provides ample space for drying towels while maintaining a sleek and contemporary appearance. The PVD-coated brushed brass finish resists tarnishing and corrosion for long-lasting durability. With an IPX4 rating, the rail is suitable for bathroom environments and protected against water splashes. The 74mm projection from the wall and 450mm pipe centres ensure compatibility with standard plumbing setups and straightforward installation using the included mounting brackets. Supporting dual-fuel operation (up to 300W element sold separately), the rail can function with central heating or electric systems. Delivering efficient heat and practical towel-drying performance, it combines functionality with stylish design for modern bathrooms. Product Features Straight-style heated towel rail with a modern brushed brass finish Includes wall brackets; valves are sold separately Dual-fuel capable - compatible with a 300W electric heating element IPX4 rated for protection against water splashes ",
+     "allowed": [
+      "not_suitable"
+     ]
+    },
+    {
+     "id": "fairford-500mm-x-1000mm-straight-chrome-towel-rail",
+     "name": "Fairford 500mm x 1000mm Straight Chrome Towel Rail",
+     "description": " The Fairford 500mm x 1000mm Straight Chrome Towel Rail combines practicality with a modern aesthetic, making it a valuable addition to any bathroom. Its chrome finish ensures durability and resistance to wear, while its wall-mounted design allows for easy installation. With a heat output of 1540 BTUs at 60 degrees Celsius, this towel rail effectively keeps towels warm and the bathroom comfortable. The 500mm x 1000mm dimensions provide ample space for multiple towels, catering to busy households. Compatible with water-based central heating systems, it comes with a 5-year guarantee, ensuring quality and reliability. Valves are not included, allowing customization based on your needs. Features Sleek chrome finish enhancing aesthetic appeal Durable and resistant to wear and corrosion Impressive heat output of 1540 BTUs at 60 degrees Celsius Ample space for multiple towels (500mm x 1000mm) Compatible with water-based central heating systems Robust design ensuring enduring quality 5-year guarantee for peace of mind Wall-mounted design for straightforward installation Part of Stonewater's Green discount group Perfect for both renovations and new installations ",
+     "allowed": [
+      "needs_parts"
+     ]
+    },
+    {
+     "id": "fairford-500mm-x-1000mm-straight-black-towel-rail",
+     "name": "Fairford 500mm x 1000mm Straight Black Towel Rail",
+     "description": " The Fairford 500mm x 1000mm Straight Black Towel Rail, designed by Stonewater, offers a modern solution for any bathroom. Its sleek black finish and straight design complement various interior styles while providing ample space for warming multiple towels. This wall-mounted towel rail not only saves floor space but also enhances the minimalist aesthetic of your bathroom. With a heat output of 2194 BTUs at 60 degrees Celsius, it effectively warms towels and contributes to the overall heating of the space. Compatible with water and central heating systems, it features 455mm pipe centres for straightforward installation, although valves are not included. Built for durability, it includes a 5-year guarantee, assuring quality. Ideal for those seeking both luxury and efficiency, the Fairford towel rail is a practical addition to your home. Features Stylish and practical design Contemporary straight design Stunning black finish Ample space to warm multiple towels Wall-mounted design saves floor space Impressive heat output of 2194 BTUs at 60 Degrees Celsius Compatible with water or central heating systems Easy installation with 455mm pipe centres Comes with a 5-year guarantee Part of the Green discount group for affordability ",
+     "allowed": [
+      "not_suitable"
+     ]
+    },
+    {
+     "id": "fairford-500mm-x-1600mm-straight-chrome-towel-rail",
+     "name": "Fairford 500mm x 1600mm Straight Chrome Towel Rail",
+     "description": " The Fairford 500mm x 1600mm Straight Chrome Towel Rail, designed by Stonewater, combines modern aesthetics with functionality. Its sleek chrome finish enhances both contemporary and traditional bathrooms while ensuring durability. This wall-mounted towel rail measures 1600mm in height and 500mm in width, providing ample space for keeping towels warm and dry. Its straight design facilitates easy hanging, making it practical for daily use. With a heat output of 2484 BTUs at 60 degrees Celsius, it effectively warms the bathroom for added comfort during colder months. Installation is straightforward due to the 455mm pipe center alignment, allowing it to fit seamlessly against your wall. The towel rail is backed by a 5-year guarantee, ensuring reliability in construction. Valves are not included for customization. As part of Stonewater's Green Discount Group, it offers a blend of style and practicality at an affordable price. Features Sophisticated and functional design Sleek chrome finish for luxury and durability Wall-mounted for space-saving convenience Straight design for easy towel hanging High heat output of 2484 BTUs at 60 degrees Celsius Compatible with water/central heating systems Simple installation with 455mm pipe centre alignment Comes with a 5-year guarantee Part of Stonewater's Green Discount Group ",
+     "allowed": [
+      "not_suitable"
+     ]
+    },
+    {
+     "id": "fairford-stack-800-x-500mm-gunmetal-towel-rail",
+     "name": "Fairford Stack 800 x 500mm Gunmetal Towel Rail",
+     "description": " The Fairford Winchester 700 x 500 mm Chrome Wall Mounted Towel Rail offers a sophisticated blend of style and everyday functionality, making it well suited to modern bathroom interiors. Measuring approximately 700 mm wide by 500 mm high, its wall-mounted design maximises floor space while maintaining a sleek, uncluttered aesthetic. The chrome finish provides a smooth, high-shine surface that resists moisture and complements contemporary fittings. Manufactured from durable materials with a robust structure, this towel rail ensures dependable support for daily use while retaining a refined, minimalist profile. Its practical proportions make it ideal for medium and larger bathrooms, keeping towels neatly arranged and within easy reach. Designed for secure and straightforward wall installation, it combines long-term durability with timeless appeal. With its compact form and resilient chrome coating, this towel rail is a practical upgrade that enhances both comfort and visual harmony in the bathroom. Product Features Designer towel rail combining form and function in gunmetal finish Modern styling with a sleek, high-end visual aesthetic Durable PVD finish that resists wear and maintains colour integrity Offers generous drying capacity with eight horizontal bars Versatile for wet environments with IPX4 splash resistance Can be converted to an electrical rail if required Requires valves to be purchased separately, allowing custom valve choice ",
+     "allowed": [
+      "not_suitable"
+     ]
+    },
+    {
+     "id": "fairford-leyte-850-x-500mm-gunmetal-towel-rail",
+     "name": "Fairford Leyte 850 x 500mm Gunmetal Towel Rail",
+     "description": " This 850 x 500 mm gunmetal towel rail combines durability and modern style. The steel ladder design maximises wall space while providing effective heat output, making it ideal for warming towels and enhancing bathroom comfort without compromising aesthetics. Measuring 850 mm high and 500 mm wide, the rail features multiple bars for hanging and drying towels, suiting medium-sized bathrooms and en-suites. The gunmetal finish resists corrosion and retains its contemporary appearance over time, ensuring long-term durability. Wall brackets are included for straightforward installation, and the design supports standard plumbing configurations (valves not included). Backed by a manufacturer's guarantee, this towel rail delivers reliable heating, low maintenance, and stylish functionality for modern bathrooms. Product Features Contemporary designer towel rail with a sleek modern profile PVD gunmetal grey finish for enhanced durability and a stylish look Six evenly spaced bars ideal for hanging multiple towels Wall-mounted structure that doubles as a radiator for efficient heating IPX4 rated for safe use in bathroom environments Available with optional electrical rail conversion Radiator valves sold separately for flexible installation ",
+     "allowed": [
+      "not_suitable"
+     ]
+    },
+    {
+     "id": "fairford-metis-1000-x-600mm-brushed-brass-towel-rail",
+     "name": "Fairford Metis 1000 x 600mm Brushed Brass Towel Rail",
+     "description": " The rail measures 1000mm high by 600mm wide and projects 74mm from the wall, providing ample space for towels while keeping them neatly organised. With 13 straight bars, it delivers 1,148 BTU at a 50°C temperature rise for strong heating performance. The 550mm pipe centre distance aligns with standard plumbing layouts for straightforward installation. Finished in brushed brass with durable PVD coating, the rail resists corrosion and maintains its modern appearance over time. The IPX4 rating allows safe installation in bathroom zones where splashing water may occur, combining safety with contemporary style. Designed for dual-fuel compatibility (up to 300W element, sold separately), it can operate via central heating or electric options for flexible heating solutions. Brackets are included for installation, while valves are sold separately to allow customised plumbing configurations. Product Features Straight wall-mounted towel rail design for modern interiors Brushed brass finish for a warm, stylish look Equipped with 13 horizontal bars, ideal for hanging multiple towels Draws water heating via pipework; compatible with a 300 W dual fuel heating element (element sold separately) Includes mounting brackets; valves not included IPX4 rated for protection against water splashes (bathroom-safe) ",
+     "allowed": [
+      "not_suitable"
+     ]
+    },
+    {
+     "id": "fairford-metis-1000-x-500mm-gunmetal-towel-rail",
+     "name": "Fairford Metis 1000 x 500mm Gunmetal Towel Rail",
+     "description": " The Fairford Metis 1000 x 500 mm Gunmetal Towel Rail measures 1000 mm in height and 500 mm in width, with a 74 mm projection, making it a prominent wall-mounted feature in modern bathrooms. Its 430 mm pipe centres ensure compatibility with standard water or dual-fuel installations. The rail comes with wall-mount brackets included, while valves are sold separately. Finished in durable PVD gunmetal grey, this towel rail combines style with long-lasting resilience. Rated IPX4, it is suitable for wet zones and protected against splashes from any direction. Its clean, straight-line design complements contemporary interiors with understated sophistication. Designed for both practicality and aesthetics, the Fairford Metis Towel Rail heats efficiently, helping towels dry faster and reducing dampness and mould. With solid construction and a subtle presence, it delivers reliable performance while enhancing comfort without overpowering the bathroom space. Product Features Gunmetal grey straight towel rail design adds modern style to any bathroom Rated IPX4 - suitable for use in wet environments and zones where moisture is present Includes mounting brackets; valves sold separately for flexible installation options Compatible with a 300 W dual fuel element for electric supplement alongside central heating ",
+     "allowed": [
+      "not_suitable"
+     ]
+    }
+   ]
+  }
+ ]
+}
