@@ -50,6 +50,15 @@ export interface SourcedProduct {
   components: string[];
   note?: string;
   topPick?: boolean;
+  /** Verdict from the sourcing AI on a supplier search result, against the quote item it was searched for. */
+  aiReview?: {
+    requirementId: string;
+    verdict: 'match' | 'needs_parts' | 'part' | 'not_suitable';
+    reason: string;
+    missingParts: string[];
+    model: string;
+    checkedAt: string;
+  };
   description?: string;
   lastChecked: string;
 }
