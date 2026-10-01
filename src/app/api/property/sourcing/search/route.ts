@@ -39,13 +39,28 @@ function cleanProductUrl(raw: string) {
   return `${STONEWATER}${new URL(raw, STONEWATER).pathname}`;
 }
 
-/** Reads the stock line Stonewater prints beside the price, e.g. "In stock. Delivery from Fri 2nd Oct." */
-async function readStonewaterStock(productUrl: string) {
+async function fetchStockLine(productUrl: string) {
   const response = await fetch(productUrl, { headers: { 'User-Agent': USER_AGENT }, signal: AbortSignal.timeout(10000), cache: 'no-store' });
   if (!response.ok) return null;
   const html = await response.text();
   const lines = Array.from(html.matchAll(/color: rgb\(var\(--color-accent-\d\)\)">([^<]+)</g), (match) => match[1].trim());
   return lines.find((line) => /stock|order/i.test(line)) ?? null;
+}
+
+/**
+ * Reads the stock line Stonewater prints beside the price, e.g. "In stock. Delivery from Fri 2nd Oct."
+ * Under load the page is sometimes served without that line, so try once more before giving up.
+ */
+async function readStonewaterStock(productUrl: string) {
+  return (await fetchStockLine(productUrl)) ?? fetchStockLine(productUrl);
+}
+
+/** Runs `task` over `items` with at most `limit` in flight, so a search does not hammer the supplier. */
+async function forEachLimited<T>(items: T[], limit: number, task: (item: T) => Promise<void>) {
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) await task(items[next++]);
+  }));
 }
 
 function productFromRecord(record: Record<string, unknown>): SourcedProduct | null {
@@ -148,7 +163,7 @@ export async function POST(request: NextRequest) {
       return product ? [product] : [];
     });
     // The search feed only says whether a product can be bought; the product page says whether it is held in stock.
-    await Promise.all(products.map(async (product) => {
+    await forEachLimited(products, 3, async (product) => {
       try {
         const evidence = await readStonewaterStock(product.url);
         product.stock = stockFromText(evidence);
@@ -156,7 +171,7 @@ export async function POST(request: NextRequest) {
       } catch {
         // Keep the "could not be checked" wording.
       }
-    }));
+    });
     return NextResponse.json({ products });
   } catch {
     return NextResponse.json({ error: 'Could not reach the Stonewater catalogue.' }, { status: 502 });
