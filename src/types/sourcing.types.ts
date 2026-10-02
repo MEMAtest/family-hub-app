@@ -53,7 +53,8 @@ export interface SourcedProduct {
   /** Verdict from the sourcing AI on a supplier search result, against the quote item it was searched for. */
   aiReview?: {
     requirementId: string;
-    verdict: 'match' | 'needs_parts' | 'part' | 'not_suitable';
+    /** 'similar' is only used for tiles: same look, but size, finish or shade differs. */
+    verdict: 'match' | 'needs_parts' | 'part' | 'similar' | 'not_suitable';
     reason: string;
     missingParts: string[];
     model: string;

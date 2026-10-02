@@ -5,6 +5,13 @@ test.skip(!hasTestDatabase, TEST_DATABASE_REQUIRED);
 
 const prisma = createTestPrisma();
 
+// Tile searches here use the hand-checked Topps catalogue only, so CI never depends on live
+// tile shops or the AI (both are exercised in unit tests and checked live by hand).
+const toppsOnly = (page: Page) => page.route('**/api/property/sourcing/search', (route) => {
+  const body = route.request().postData() ?? '';
+  return route.continue(body.includes('"uk-tiles"') ? { postData: body.replace('"uk-tiles"', '"topps-tiles"') } : undefined);
+});
+
 const openProperty = async (page: Page) => {
   await page.locator('nav, aside').getByRole('button', { name: /^Property$/ }).first().click();
   await expect(page.getByText('Tremaine Improvements').first()).toBeVisible();
@@ -33,6 +40,7 @@ test.afterAll(async () => {
 test('matches each bathroom quote item to supplier products and keeps the basket', async ({ page }) => {
   const projectName = `Tile sourcing ${Date.now()}`;
   await page.addInitScript(() => localStorage.setItem('familyHub_setupComplete', 'skipped'));
+  await toppsOnly(page);
   await page.goto('/');
   await openProperty(page);
   await page.getByRole('button', { name: 'Projects', exact: true }).click();
@@ -51,7 +59,7 @@ test('matches each bathroom quote item to supplier products and keeps the basket
   await page.getByRole('button', { name: 'Open Main Bathroom' }).click();
   await page.getByRole('button', { name: /^Equivalent for Harlem Caliza/ }).click();
   await expect(page.getByText(/Reference product outside Topps Tiles: Harlem Caliza/)).toBeVisible();
-  await page.getByRole('button', { name: 'Search Topps Tiles' }).click();
+  await page.getByRole('button', { name: 'Search UK tile shops' }).click();
   const bone = page.locator('article').filter({ has: page.getByRole('heading', { name: 'Kapital™ Bone Tile (59.5cm x 59.5cm)' }) });
   await expect(bone).toBeVisible();
   await expect(bone.getByText(/1mm smaller each way than Harlem Caliza/)).toBeVisible();
@@ -93,6 +101,7 @@ test('on a small phone the tabs are labelled and the basket stays readable', asy
   const context = await browser.newContext({ viewport: { width: 360, height: 780 }, isMobile: true, hasTouch: true });
   await context.addInitScript(() => localStorage.setItem('familyHub_setupComplete', 'skipped'));
   const page = await context.newPage();
+  await toppsOnly(page);
   const projectName = `Phone sourcing ${Date.now()}`;
   await page.goto('/');
   await page.locator('header button').first().click();
@@ -106,7 +115,7 @@ test('on a small phone the tabs are labelled and the basket stays readable', asy
   await page.getByRole('button', { name: /Materials/ }).click();
   await page.getByRole('button', { name: 'Open Main Bathroom' }).click();
   await page.getByRole('button', { name: /^Equivalent for Harlem Caliza/ }).click();
-  await page.getByRole('button', { name: 'Search Topps Tiles' }).click();
+  await page.getByRole('button', { name: 'Search UK tile shops' }).click();
   await page.locator('article').filter({ has: page.getByRole('heading', { name: /Kapital™ Bone/ }) }).getByRole('button', { name: 'Add' }).click();
   await page.getByRole('button', { name: /All rooms/ }).first().click();
 
