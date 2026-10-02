@@ -3,6 +3,10 @@ import type { SourcedProduct, SourcingStock } from '@/types/sourcing.types';
 import { bathroomSourcingSeed } from '@/lib/sourcing/seed';
 import { requireAuth } from '@/lib/auth-utils';
 import { reviewCandidates } from '@/lib/sourcing/aiReview';
+import { reviewTiles, searchUkTiles, tileShopStock, tileStoreFor } from '@/lib/sourcing/tileSearch';
+
+// A tile search reads up to 16 product pages and asks the AI; give it room.
+export const maxDuration = 60;
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -132,8 +136,13 @@ export const POST = requireAuth(async (request: NextRequest) => {
     return NextResponse.json({ error: 'A requirement is required.' }, { status: 400 });
   }
 
+  if (body.action === 'stock' && body.url && tileStoreFor(body.url)) {
+    const result = await tileShopStock(body.url);
+    if (!result) return NextResponse.json({ error: 'Could not reach the tile shop to check stock.' }, { status: 502 });
+    return NextResponse.json({ ...result, lastChecked: new Date().toISOString() });
+  }
   if (body.action === 'stock') {
-    if (!body.url || !isStonewaterUrl(body.url)) return NextResponse.json({ error: 'Live stock checks are available for Stonewater products.' }, { status: 400 });
+    if (!body.url || !isStonewaterUrl(body.url)) return NextResponse.json({ error: 'Live stock checks are available for Stonewater and the UK tile shops.' }, { status: 400 });
     try {
       const stockEvidence = await readStonewaterStock(cleanProductUrl(body.url));
       return NextResponse.json({ stock: stockFromText(stockEvidence), stockEvidence: stockEvidence ?? 'Stock not shown on supplier page', lastChecked: new Date().toISOString() });
@@ -151,9 +160,10 @@ export const POST = requireAuth(async (request: NextRequest) => {
     .trim();
   if (!query || query.length > 240) return NextResponse.json({ error: 'Enter a product requirement to search.' }, { status: 400 });
 
-  if (body.supplierId === 'topps-tiles') {
-    return NextResponse.json({ products: findToppsProducts(`${query} ${requirement?.specification ?? ''}`) });
-  }
+  const topps = () => findToppsProducts(`${query} ${requirement?.specification ?? ''}`);
+  // 'topps-tiles': the hand-checked Topps catalogue only (no live shops or AI; the e2e suite uses it).
+  if (body.supplierId === 'topps-tiles') return NextResponse.json({ products: topps() });
+  if (body.supplierId === 'uk-tiles') return NextResponse.json(await searchTiles(requirement!, topps()));
 
   try {
     const searchUrl = new URL(`${STONEWATER}/search/suggest.json`);
@@ -209,5 +219,38 @@ async function reviewResults(
   } catch (error) {
     console.warn('Sourcing AI review failed; returning unreviewed results:', error instanceof Error ? error.message : error);
     return { status: 'unavailable' as const, reason: 'AI review unavailable' };
+  }
+}
+
+/**
+ * Tiles: Topps Tiles' hand-checked products (it blocks automated lookups) plus UK tile shops
+ * that allow catalogue search, each judged by the AI against the quote item.
+ */
+async function searchTiles(
+  requirement: { id?: string; name?: string; specification?: string; size?: string; constraints?: Record<string, number | string> },
+  topps: SourcedProduct[],
+) {
+  const tileRequirement = { id: requirement.id, name: requirement.name ?? '', specification: requirement.specification ?? requirement.name ?? '', size: requirement.size, constraints: requirement.constraints };
+  let found: Awaited<ReturnType<typeof searchUkTiles>>['results'] = [];
+  try {
+    found = (await searchUkTiles(tileRequirement)).results;
+  } catch (error) {
+    console.warn('UK tile search failed:', error instanceof Error ? error.message : error);
+  }
+  const products = [...topps, ...found.map(({ product }) => product)];
+  if (found.length === 0) return { products, ai: { status: 'skipped' as const } };
+  if (!process.env.OPENROUTER_API_KEY) return { products, ai: { status: 'unavailable' as const, reason: 'No AI provider configured' } };
+  try {
+    const reviews = await reviewTiles(tileRequirement, found);
+    const checkedAt = new Date().toISOString();
+    const verdicts = { close: 'match', similar: 'similar', not_similar: 'not_suitable' } as const;
+    found.forEach(({ product }) => {
+      const review = reviews.get(product.id);
+      if (review) product.aiReview = { requirementId: requirement.id ?? '', verdict: verdicts[review.verdict], reason: review.reason, missingParts: [], model: review.model, checkedAt };
+    });
+    return { products, ai: { status: 'reviewed' as const, reviewed: reviews.size } };
+  } catch (error) {
+    console.warn('Tile AI review failed; returning unreviewed results:', error instanceof Error ? error.message : error);
+    return { products, ai: { status: 'unavailable' as const, reason: 'AI review unavailable' } };
   }
 }

@@ -43,8 +43,15 @@ type SortOrder = 'recommended' | 'price' | 'stock';
 const productsFor = (sourcing: ProjectSourcing, requirement: SourcingRequirement) =>
   sourcing.products.filter((product) => product.requirementIds?.includes(requirement.id));
 
+// Suppliers whose live stock the app can read (Topps Tiles blocks it).
+const canCheckStock = (url: string) => /stonewaterbathrooms\.com|tradebase\.com|capietra\.com|tilesahead\.co\.uk|walltiles\.co\.uk|bertandmay\.com/.test(url);
+const STOCK_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+// A box or single-tile price can't be totalled without knowing how many are needed, so those stay
+// out of totals (the basket says so) rather than counting as if one box covered the room.
+const isUncountedPrice = (product: SourcedProduct) => product.priceUnit === 'per box' || product.priceUnit === 'per tile';
 const lineCost = (requirement: SourcingRequirement | undefined, product: SourcedProduct) =>
-  product.price * (product.priceUnit === 'per m²' ? requirement?.quantity ?? 1 : 1);
+  isUncountedPrice(product) ? 0 : product.price * (product.priceUnit === 'per m²' ? requirement?.quantity ?? 1 : 1);
 
 /** Cheapest top-pick product for each part the quote item needs, so a bath estimate includes its screen and panels. */
 function estimateFor(sourcing: ProjectSourcing, requirement: SourcingRequirement) {
@@ -63,14 +70,36 @@ function coverage(requirement: SourcingRequirement, products: SourcedProduct[]) 
   return requirement.requiredComponents.map((part) => ({ part, covered: covered.has(part) }));
 }
 
-/** Older saved workspaces used placeholder products; replace them with the verified catalogue but keep custom quote items. */
-function migrate(saved: ProjectSourcing): ProjectSourcing {
+// Products found by a live supplier search (Stonewater, the UK tile shops), as opposed to old placeholders.
+const SEARCHED_PRODUCT = /^(sw|capietra|tilesahead|walltiles|bertandmay)-/;
+
+/**
+ * Refresh a saved workspace to the current verified catalogue, keeping the household's own work:
+ * custom quote items, products found by searches (with their basket entries) and fresher stock checks.
+ * Older saved workspaces used placeholder products; those are still replaced.
+ */
+export function migrate(saved: ProjectSourcing): ProjectSourcing {
   const seed = createBathroomSourcingSeed();
-  const seedIds = new Set(seed.requirements.map((item) => item.id));
+  const seedRequirementIds = new Set(seed.requirements.map((item) => item.id));
   const known = new Set(rooms.map((room) => room.id));
-  const custom = saved.requirements.filter((item) => !seedIds.has(item.id) && item.id.startsWith('req-') && known.has(item.roomId));
-  const productIds = new Set(seed.products.map((product) => product.id));
-  return { ...seed, requirements: [...seed.requirements, ...custom], basket: saved.basket.filter((item) => productIds.has(item.productId)) };
+  const custom = saved.requirements.filter((item) => !seedRequirementIds.has(item.id) && item.id.startsWith('req-') && known.has(item.roomId));
+  const requirementIds = new Set([...seedRequirementIds, ...custom.map((item) => item.id)]);
+  const savedProducts = new Map(saved.products.map((product) => [product.id, product]));
+  const catalogue = seed.products.map((product) => {
+    const old = savedProducts.get(product.id);
+    return old && old.lastChecked > product.lastChecked ? { ...product, stock: old.stock, stockEvidence: old.stockEvidence, lastChecked: old.lastChecked } : product;
+  });
+  const catalogueIds = new Set(catalogue.map((product) => product.id));
+  const searched = saved.products.filter((product) => !catalogueIds.has(product.id) && SEARCHED_PRODUCT.test(product.id)
+    && product.requirementIds?.some((id) => requirementIds.has(id)));
+  const products = [...catalogue, ...searched];
+  const productIds = new Set(products.map((product) => product.id));
+  return {
+    ...seed,
+    requirements: [...seed.requirements, ...custom],
+    products,
+    basket: saved.basket.filter((item) => productIds.has(item.productId) && requirementIds.has(item.requirementId)),
+  };
 }
 
 export default function ProjectMaterialsView({ project, onUpdateProject, isReadOnly = false }: Props) {
@@ -171,7 +200,7 @@ export default function ProjectMaterialsView({ project, onUpdateProject, isReadO
     try {
       const response = await fetch('/api/property/sourcing/search', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ supplierId: tiles ? 'topps-tiles' : 'stonewater', requirement: { id: requirement.id, name: requirement.name, size: requirement.size, specification: requirement.specification, requiredComponents: requirement.requiredComponents, constraints: requirement.constraints } }),
+        body: JSON.stringify({ supplierId: tiles ? 'uk-tiles' : 'stonewater', requirement: { id: requirement.id, name: requirement.name, size: requirement.size, specification: requirement.specification, requiredComponents: requirement.requiredComponents, constraints: requirement.constraints } }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Supplier search failed.');
@@ -194,16 +223,50 @@ export default function ProjectMaterialsView({ project, onUpdateProject, isReadO
         return total;
       }, {});
       const aiSummary = data.ai?.status === 'reviewed'
-        ? ` AI checked them against the quote: ${counts.match ?? 0} match, ${counts.needs_parts ?? 0} need extra parts, ${counts.part ?? 0} are parts, ${counts.not_suitable ?? 0} not suitable (hidden).`
+        ? tiles
+          ? ` AI compared the shop tiles with the quote: ${counts.match ?? 0} close, ${counts.similar ?? 0} similar look, ${counts.not_suitable ?? 0} not similar (hidden).`
+          : ` AI checked them against the quote: ${counts.match ?? 0} match, ${counts.needs_parts ?? 0} need extra parts, ${counts.part ?? 0} are parts, ${counts.not_suitable ?? 0} not suitable (hidden).`
         : data.ai?.status === 'unavailable' ? ' The AI check is unavailable right now, so these results are not checked against the quote.' : '';
       setShowUnsuitable(false);
-      setMessage(found.length ? `${found.length} ${tiles ? 'Topps Tiles' : 'Stonewater'} result${found.length === 1 ? '' : 's'} for ${requirement.name}.${aiSummary}` : `No ${tiles ? 'Topps Tiles' : 'Stonewater'} results. Try the wider-market links.`);
+      const source = tiles ? 'Topps Tiles and UK tile shop' : 'Stonewater';
+      setMessage(found.length ? `${found.length} ${source} result${found.length === 1 ? '' : 's'} for ${requirement.name}.${aiSummary}` : `No ${source} results. Try the wider-market links.`);
     } catch (reason) {
       setMessage(reason instanceof Error ? reason.message : 'Supplier search failed.');
     } finally {
       setSearching(false);
     }
   }
+
+  // Stock goes stale: refresh what the household is looking at (basket and this room's products)
+  // when it was last checked over a day ago. A few at a time, once per visit, never in read-only view.
+  const refreshed = useRef(new Set<string>());
+  useEffect(() => {
+    if (isReadOnly) return;
+    const now = Date.now();
+    const inBasket = new Set(sourcing.basket.map((item) => item.productId));
+    const stale = [...sourcing.products.filter((product) => inBasket.has(product.id)), ...roomProducts]
+      .filter((product, index, all) => all.findIndex((other) => other.id === product.id) === index)
+      .filter((product) => canCheckStock(product.url) && !refreshed.current.has(product.id)
+        && !(now - new Date(product.lastChecked).getTime() < STOCK_MAX_AGE_MS))
+      .slice(0, 8);
+    if (stale.length === 0) return;
+    stale.forEach((product) => refreshed.current.add(product.id));
+    let next = 0;
+    const worker = async () => {
+      while (next < stale.length) {
+        const product = stale[next++];
+        try {
+          const response = await fetch('/api/property/sourcing/search', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'stock', url: product.url }) });
+          if (!response.ok) continue;
+          const data = await response.json();
+          updateProduct(product.id, { stock: data.stock, stockEvidence: data.stockEvidence, lastChecked: data.lastChecked });
+        } catch {
+          // Leave the old reading; "Check live stock" is still there.
+        }
+      }
+    };
+    void Promise.all([worker(), worker()]);
+  }, [roomId, isReadOnly, sourcing.basket.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function addRequirement() {
     if (!roomId || !newName.trim()) return;
@@ -404,8 +467,12 @@ function MaterialsOverview({ sourcing, basketTotal, isReadOnly, onOpenRoom, onUp
 const roomLabel = (id: SourcingRoomId) => rooms.find((room) => room.id === id)?.label ?? id;
 
 function BasketTable({ sourcing, total, isReadOnly, onUpdate }: { sourcing: ProjectSourcing; total: number; isReadOnly: boolean; onUpdate: (basket: ProjectSourcing['basket']) => void }) {
+  const perBox = sourcing.basket.filter((item) => {
+    const product = sourcing.products.find((candidate) => candidate.id === item.productId);
+    return product ? isUncountedPrice(product) : false;
+  }).length;
   return <section className="overflow-hidden rounded-2xl border border-gray-200 dark:border-slate-700">
-    <div className="flex items-center justify-between bg-white px-4 py-3 dark:bg-slate-900"><div><h3 className="font-semibold text-gray-900 dark:text-white">Project basket</h3><p className="text-xs text-gray-500 dark:text-slate-400">Review before ordering. No orders are placed from here.</p></div><span className="font-semibold text-gray-900 dark:text-white">{money.format(total)}</span></div>
+    <div className="flex items-center justify-between bg-white px-4 py-3 dark:bg-slate-900"><div><h3 className="font-semibold text-gray-900 dark:text-white">Project basket</h3><p className="text-xs text-gray-500 dark:text-slate-400">Review before ordering. No orders are placed from here.</p></div><div className="text-right"><span className="font-semibold text-gray-900 dark:text-white">{money.format(total)}</span>{perBox > 0 && <p className="text-xs text-amber-700 dark:text-amber-300">+ {perBox} priced per box or tile (not in total)</p>}</div></div>
     <div className="divide-y divide-gray-100 dark:divide-slate-800">{sourcing.basket.map((item) => {
       const product = sourcing.products.find((candidate) => candidate.id === item.productId);
       const linked = sourcing.requirements.find((candidate) => candidate.id === item.requirementId);
@@ -417,7 +484,7 @@ function BasketTable({ sourcing, total, isReadOnly, onUpdate }: { sourcing: Proj
         <div className="min-w-0 basis-[calc(100%-3.75rem)] sm:basis-0 sm:flex-1"><a href={product.url} target="_blank" rel="noreferrer" className="line-clamp-2 text-sm font-medium text-gray-900 hover:text-blue-700 sm:block sm:truncate dark:text-white">{product.name}</a>
           <div className="text-xs text-gray-500">{linked?.name} · {linked ? roomLabel(linked.roomId) : ''} · {product.supplier} · <StockBadge stock={product.stock} /></div></div>
         <div className="flex w-full items-center justify-end gap-2 sm:w-auto sm:gap-3">
-          <span className="mr-auto text-sm font-semibold text-gray-800 sm:mr-0 dark:text-slate-200">{money.format(lineCost(linked, product))}</span>
+          <span className="mr-auto text-sm font-semibold text-gray-800 sm:mr-0 dark:text-slate-200">{isUncountedPrice(product) ? `${money.format(product.price)} ${product.priceUnit!.replace('per ', '/ ')}` : money.format(lineCost(linked, product))}</span>
           <select aria-label={`Status for ${product.name}`} disabled={isReadOnly} value={item.status} onChange={(event) => onUpdate(sourcing.basket.map((entry) => entry.id === item.id ? { ...entry, status: event.target.value as SourcingBasketStatus } : entry))} className="min-h-10 rounded-lg border-gray-200 py-1.5 text-xs dark:border-slate-700 dark:bg-slate-800"><option value="review">Review</option><option value="ask_fitter">Ask fitter</option><option value="approved">Approved</option><option value="ordered">Ordered</option></select>
           {!isReadOnly && <button aria-label={`Remove ${product.name} from basket`} onClick={() => onUpdate(sourcing.basket.filter((entry) => entry.id !== item.id))} className="rounded-md p-3 text-gray-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/30"><Trash2 className="h-4 w-4" /></button>}
         </div>
@@ -442,7 +509,7 @@ function RequirementPanel({ requirement, products, basketIds, searching, tiles, 
         {parts.length > 0 && <div className="mt-2 flex flex-wrap gap-1.5">{parts.map(({ part, covered }) => <span key={part} className={`rounded-full px-2 py-0.5 text-xs ${covered ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' : 'bg-white text-gray-500 ring-1 ring-gray-200 dark:bg-slate-900 dark:ring-slate-700'}`}>{covered ? '✓ ' : ''}{part.replace(/-/g, ' ')}</span>)}</div>}
       </div>
       {requirement.category !== 'Fitter check' && <button onClick={onSearch} disabled={searching} className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-60">
-        {searching ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}{searching ? 'Searching…' : tiles ? 'Search Topps Tiles' : 'Search Stonewater'}</button>}
+        {searching ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}{searching ? 'Searching…' : tiles ? 'Search UK tile shops' : 'Search Stonewater'}</button>}
     </div>
     {message && <p role="status" className="mt-3 text-sm text-gray-600 dark:text-slate-300">{message}</p>}
   </div>;
@@ -508,7 +575,7 @@ function ProductDetail({ product, requirement, inBasket, disabled, onClose, onAd
   const [tab, setTab] = useState<'details' | 'specs' | 'supplier'>('details');
   const [checking, setChecking] = useState(false);
   const [checkError, setCheckError] = useState('');
-  const canCheck = /stonewaterbathrooms\.com|tradebase\.com/.test(product.url);
+  const canCheck = canCheckStock(product.url);
   const needsFitter = Boolean(product.note) || requirement?.status === 'fitter_check';
 
   useEffect(() => { setImage(gallery[0]); setTab('details'); setCheckError(''); }, [product.id]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -601,6 +668,7 @@ const aiStyles: Record<NonNullable<SourcedProduct['aiReview']>['verdict'], { lab
   match: { label: 'AI: matches the quote', className: 'text-emerald-700 dark:text-emerald-300' },
   needs_parts: { label: 'AI: needs extra parts', className: 'text-amber-700 dark:text-amber-300' },
   part: { label: 'AI: a part for this item', className: 'text-blue-700 dark:text-blue-300' },
+  similar: { label: 'AI: similar look', className: 'text-amber-700 dark:text-amber-300' },
   not_suitable: { label: 'AI: not suitable', className: 'text-red-700 dark:text-red-300' },
 };
 
