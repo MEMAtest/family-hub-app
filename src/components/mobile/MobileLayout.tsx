@@ -87,7 +87,7 @@ export default function MobileLayout({ children, currentView, onViewChange }: Mo
 
       {/* Mobile Sidebar Overlay */}
       {showSidebar && (
-        <div className="fixed inset-0 z-50 lg:hidden">
+        <div className="fixed inset-0 z-[70] lg:hidden">
           <div
             className="absolute inset-0 bg-black bg-opacity-50"
             onClick={() => setShowSidebar(false)}

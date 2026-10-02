@@ -31,7 +31,7 @@ const ModalShell = ({
 }) => {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 px-2 sm:px-4 py-4 sm:py-6 overflow-y-auto">
+    <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/40 px-2 sm:px-4 py-4 sm:py-6 overflow-y-auto">
       <div className="w-full max-w-[95vw] sm:max-w-md lg:max-w-2xl max-h-[85vh] sm:max-h-[90vh] overflow-y-auto rounded-t-2xl sm:rounded-xl bg-white shadow-xl dark:bg-slate-900">
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-200 bg-white px-4 sm:px-5 py-3 sm:py-4 dark:border-slate-800 dark:bg-slate-900 rounded-t-2xl sm:rounded-t-xl">
           <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-100 truncate pr-2">{title}</h3>

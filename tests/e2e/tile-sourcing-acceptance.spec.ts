@@ -88,3 +88,38 @@ test('matches each bathroom quote item to supplier products and keeps the basket
   await expect(basket.getByText('Fairford 1700 x 900mm B Shaped Left Hand Shower Bath')).toBeVisible();
   await expect(basket.getByText('Cemente™ Basalt Tile (60cm x 60cm)')).toBeVisible();
 });
+
+test('on a small phone the tabs are labelled and the basket stays readable', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 360, height: 780 }, isMobile: true, hasTouch: true });
+  await context.addInitScript(() => localStorage.setItem('familyHub_setupComplete', 'skipped'));
+  const page = await context.newPage();
+  const projectName = `Phone sourcing ${Date.now()}`;
+  await page.goto('/');
+  await page.locator('header button').first().click();
+  await page.getByRole('button', { name: /^Property$/ }).first().click();
+  // Icon-only tabs used to leave people guessing on phones under 375px wide.
+  await page.getByRole('button', { name: 'Projects', exact: true }).click();
+  await page.getByRole('button', { name: 'New Project' }).click();
+  await page.getByPlaceholder('e.g., Bathroom Renovation').fill(projectName);
+  await page.getByRole('button', { name: /Bathroom/ }).last().click();
+  await page.locator('form').getByRole('button', { name: 'Create Project', exact: true }).click();
+  await page.getByRole('button', { name: /Materials/ }).click();
+  await page.getByRole('button', { name: 'Open Main Bathroom' }).click();
+  await page.getByRole('button', { name: /^Equivalent for Harlem Caliza/ }).click();
+  await page.getByRole('button', { name: 'Search Topps Tiles' }).click();
+  await page.locator('article').filter({ has: page.getByRole('heading', { name: /Kapital™ Bone/ }) }).getByRole('button', { name: 'Add' }).click();
+  await page.getByRole('button', { name: /All rooms/ }).first().click();
+
+  const row = page.getByTestId('basket-row').first();
+  await row.scrollIntoViewIfNeeded();
+  const layout = await row.evaluate((el) => {
+    const name = el.querySelector('a')!.getBoundingClientRect();
+    const price = el.querySelector('span.font-semibold')!.getBoundingClientRect();
+    return { nameWidth: name.width, overlaps: !(price.bottom <= name.top || price.top >= name.bottom || price.right <= name.left || price.left >= name.right) };
+  });
+  // Squeezed into one row, the name shrank to a single letter and the price sat on top of it.
+  expect(layout.nameWidth).toBeGreaterThan(120);
+  expect(layout.overlaps).toBe(false);
+  await expect(row.getByRole('link', { name: /Kapital™ Bone Tile/ })).toBeVisible();
+  await context.close();
+});

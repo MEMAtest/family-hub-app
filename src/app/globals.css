@@ -517,7 +517,7 @@
 
   /* Mobile modal optimizations */
   .mobile-modal {
-    @apply fixed inset-0 z-50 overflow-y-auto;
+    @apply fixed inset-0 z-[70] overflow-y-auto;
   }
 
   .mobile-modal-content {

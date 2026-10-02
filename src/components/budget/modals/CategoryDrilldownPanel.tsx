@@ -142,7 +142,7 @@ const CategoryDrilldownPanel: React.FC<CategoryDrilldownPanelProps> = ({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex">
+    <div className="fixed inset-0 z-[70] flex">
       <div
         className="absolute inset-0 bg-black/40"
         onClick={onClose}

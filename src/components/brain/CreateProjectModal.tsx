@@ -156,7 +156,7 @@ const CreateProjectModal = () => {
 
   if (isDesktop) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="fixed inset-0 z-[70] flex items-center justify-center">
         <div className="absolute inset-0 bg-black/30" onClick={() => setIsCreateProjectOpen(false)} />
         <div className="relative w-full max-w-md max-h-[80vh] overflow-hidden rounded-xl bg-white shadow-xl dark:bg-slate-900">
           {formContent}
@@ -166,7 +166,7 @@ const CreateProjectModal = () => {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col justify-end">
+    <div className="fixed inset-0 z-[70] flex flex-col justify-end">
       <div className="absolute inset-0 bg-black/30" onClick={() => setIsCreateProjectOpen(false)} />
       <div className="relative max-h-[85vh] rounded-t-xl bg-white dark:bg-slate-900 shadow-xl overflow-hidden">
         <div className="mx-auto mt-2 mb-1 h-1 w-10 rounded-full bg-gray-300 dark:bg-slate-600" />

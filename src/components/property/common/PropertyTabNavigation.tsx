@@ -48,7 +48,8 @@ export const PropertyTabNavigation = ({ activeTab, onTabChange }: PropertyTabNav
               aria-current={isActive ? 'page' : undefined}
             >
               <Icon className="h-4 w-4 flex-shrink-0" />
-              <span className="hidden xs:inline">{tab.label}</span>
+              {/* Always labelled: the bar scrolls sideways, and icon-only tabs on small phones left people guessing. */}
+              <span>{tab.label}</span>
             </button>
           );
         })}
