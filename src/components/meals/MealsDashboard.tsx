@@ -973,7 +973,7 @@ const MealsDashboard: React.FC<MealsDashboardProps> = ({ onClose }) => {
       {renderMobileMenu()}
 
       {pendingShoppingItems.length > 0 && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-labelledby="shopping-preview-title">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-labelledby="shopping-preview-title">
           <div className="w-full max-w-lg rounded-lg bg-white p-5 shadow-xl dark:bg-slate-900 sm:p-6">
             <div className="flex items-start justify-between gap-4">
               <div>

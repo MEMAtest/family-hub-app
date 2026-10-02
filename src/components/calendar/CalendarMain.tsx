@@ -926,7 +926,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
       </div>
 
       {isAIConflictOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white dark:bg-slate-900 w-full max-w-3xl rounded-lg shadow-xl overflow-hidden">
             <div className="flex items-center justify-between border-b border-gray-200 dark:border-slate-800 px-6 py-4">
               <div>
@@ -1086,7 +1086,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
       )}
 
       {isAIScheduleOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white dark:bg-slate-900 w-full max-w-3xl rounded-lg shadow-xl overflow-hidden">
             <div className="flex items-center justify-between border-b border-gray-200 dark:border-slate-800 px-6 py-4">
               <div>
@@ -1355,7 +1355,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
   // Mobile Menu Overlay
   const renderMobileMenuOverlay = () => (
     showMobileMenu && (
-      <div className="lg:hidden fixed inset-0 z-50 bg-black bg-opacity-50" onClick={() => setShowMobileMenu(false)}>
+      <div className="lg:hidden fixed inset-0 z-[70] bg-black bg-opacity-50" onClick={() => setShowMobileMenu(false)}>
         <div className="absolute top-0 right-0 w-80 max-w-[90vw] h-full bg-white dark:bg-slate-900 shadow-xl" onClick={e => e.stopPropagation()}>
           <div className="p-4 border-b border-gray-200 dark:border-slate-800 pwa-safe-top">
             <div className="flex items-center justify-between">

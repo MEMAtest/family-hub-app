@@ -84,7 +84,7 @@ const ConflictSettings: React.FC<ConflictSettingsProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto">
+    <div className="fixed inset-0 z-[70] overflow-y-auto">
       <div className="flex items-center justify-center min-h-screen px-4">
         <div className="fixed inset-0 bg-black bg-opacity-50" onClick={onClose} />
 

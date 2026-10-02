@@ -1844,7 +1844,7 @@ export const ProjectDetailView = ({
 
       {/* Contractor Type Selection Modal */}
       {showContractorTypeModal && pendingContact && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
           <div
             className="absolute inset-0 bg-black/50"
             onClick={() => {
@@ -2202,7 +2202,7 @@ export const ProjectDetailView = ({
 
       {/* Quote Contractor Creation Modal */}
       {showQuoteContractorModal && pendingQuoteForContractor && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
           <div
             className="absolute inset-0 bg-black/50"
             onClick={() => {

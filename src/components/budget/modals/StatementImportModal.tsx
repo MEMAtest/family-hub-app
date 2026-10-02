@@ -291,7 +291,7 @@ const StatementImportModal = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto">
+    <div className="fixed inset-0 z-[70] overflow-y-auto">
       <div className="fixed inset-0 bg-black/50" onClick={handleClose} />
       <div className="relative mx-auto my-10 w-full max-w-5xl rounded-xl bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
