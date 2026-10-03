@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createHash, randomUUID } from 'crypto';
+import { createHash } from 'crypto';
+import { z } from 'zod';
+import { approvedStatementRow, createStatementPreview, readStatementPreview } from '@/lib/statementPreview';
 import prisma from '@/lib/prisma';
 import { createId } from '@/utils/id';
 import { requireFamilyAccess } from '@/lib/auth-utils';
+import { extractStatementPdf } from '@/lib/statementPdf';
 
 // Force Node.js runtime for pdf-parse and file processing
 export const runtime = 'nodejs';
@@ -37,9 +40,8 @@ const parseWithAI = async (text: string, statementDate?: string): Promise<Statem
 
   const section = extractPdfSection(text);
 
-  // Build expense categories without "Other" for AI prompt
-  const expenseCategories = EXPENSE_CATEGORIES.filter(c => c !== 'Other');
-  const incomeCategories = INCOME_CATEGORIES.filter(c => c !== 'Other');
+  const expenseCategories = EXPENSE_CATEGORIES;
+  const incomeCategories = INCOME_CATEGORIES;
 
   const systemPrompt = `You are a UK bank statement parser. Extract ALL transactions and return ONLY valid JSON.
 
@@ -58,7 +60,7 @@ Return this structure:
   ]
 }
 
-CATEGORY RULES (CRITICAL - avoid "Other" at all costs):
+CATEGORY RULES (do not guess unsupported categories):
 For DEBITS (expenses), use one of: ${expenseCategories.join(', ')}
 For CREDITS (income), use one of: ${incomeCategories.join(', ')}
 
@@ -74,12 +76,12 @@ Category mapping hints:
 - Insurance premiums → Insurance
 - Rent, mortgage → Housing
 - Clothing shops (Primark, ASOS, Next, H&M) → Clothing
-- General Amazon purchases → Clothing (if unsure, better than Other)
+- General Amazon purchases → Other unless the purchase category is explicit
 - Salary, wages, BACS credits from employers → Salary
-- Refunds → use the category of what was refunded if clear, otherwise Investment
-- Bank transfers → If from employer = Salary, if unclear = Investment
+- Refunds → use the category of what was refunded if clear, otherwise Other
+- Bank transfers → If explicitly from employer = Salary, otherwise Other
 
-ONLY use "Other" as absolute last resort when category is truly unidentifiable.
+Use "Other" whenever the statement does not establish a category. Never infer investments or salary from an unexplained transfer.
 
 Other rules:
 - Amount is absolute value (no negative). Use "direction" for debit/credit.
@@ -110,8 +112,6 @@ Other rules:
   });
 
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    console.error('OpenRouter error:', errorData);
     throw new Error(`OpenRouter API error: ${response.status}`);
   }
 
@@ -168,9 +168,6 @@ const transactionFingerprint = (transaction: StatementTransaction) =>
     .update(`${transaction.date}|${transaction.description.trim().toLowerCase().replace(/\s+/g, ' ')}|${Number(transaction.amount).toFixed(2)}|${transaction.direction}`)
     .digest('hex');
 
-const looksLikeTransfer = (description: string) =>
-  /(bank transfer|faster payment|transfer|cash transfer|to account|from account|standing order)/i.test(description);
-
 async function persistStatementImport({
   familyId,
   accountId,
@@ -178,6 +175,7 @@ async function persistStatementImport({
   contentHash,
   sourceType,
   result,
+  originalTransactions,
   importedById,
 }: {
   familyId: string;
@@ -186,18 +184,27 @@ async function persistStatementImport({
   contentHash: string;
   sourceType: string;
   result: StatementParseResult;
+  originalTransactions: StatementTransaction[];
   importedById: string;
 }) {
-  const account = await prisma.budgetAccount.findFirst({ where: { id: accountId, familyId }, select: { id: true } });
+  const account = await prisma.budgetAccount.findFirst({ where: { id: accountId, familyId, active: true }, select: { id: true } });
   if (!account) throw new Error('Choose a household account before importing a statement.');
 
-  const existingFile = await prisma.statementImport.findUnique({
-    where: { accountId_contentHash: { accountId, contentHash } },
-    select: { id: true, importedRows: true, duplicateRows: true },
+  // Stable occurrence numbers retain legitimate identical rows when saving a subset.
+  const occurrences = new Map<string, number>();
+  const rowOccurrences = new Map<string, number>();
+  originalTransactions.forEach(row => {
+    const key = transactionFingerprint(row);
+    const occurrence = occurrences.get(key) ?? 0;
+    occurrences.set(key, occurrence + 1);
+    rowOccurrences.set(row.id, occurrence);
   });
-  if (existingFile) {
-    return { id: existingFile.id, importedRows: existingFile.importedRows, duplicateRows: existingFile.duplicateRows, alreadyImported: true };
-  }
+  const fingerprints = new Map(result.transactions.map(row => {
+    const base = transactionFingerprint(row);
+    const occurrence = rowOccurrences.get(row.id) ?? 0;
+    return [row.id, occurrence === 0 ? base : createHash('sha256').update(`${base}|occurrence:${occurrence}`).digest('hex')];
+  }));
+  if (new Set(fingerprints.values()).size !== result.transactions.length) throw new Error('Edited rows have become indistinguishable. Review their dates, descriptions and amounts.');
 
   const validRows = result.transactions
     .map((transaction) => ({ ...transaction, direction: normalizeDirection(transaction.direction, transaction.description) }))
@@ -215,8 +222,10 @@ async function persistStatementImport({
   const closingBalance = last?.balance ?? null;
 
   const created = await prisma.$transaction(async (tx) => {
-    const statementImport = await tx.statementImport.create({
-      data: {
+    const statementImport = await tx.statementImport.upsert({
+      where: { accountId_contentHash: { accountId, contentHash } },
+      update: {},
+      create: {
         familyId,
         accountId,
         fileName,
@@ -226,7 +235,7 @@ async function persistStatementImport({
         statementEnd: result.metadata.endDate ? new Date(`${result.metadata.endDate}T12:00:00Z`) : null,
         openingBalance,
         closingBalance,
-        parsedRows: result.transactions.length,
+        parsedRows: originalTransactions.length,
         rejectedRows: rejectedRows.length ? rejectedRows : undefined,
         importedById,
       },
@@ -243,52 +252,48 @@ async function persistStatementImport({
         direction: transaction.direction,
         balance: transaction.balance ?? null,
         category: transaction.category || null,
-        fingerprint: transactionFingerprint(transaction),
+        fingerprint: fingerprints.get(transaction.id)!,
       })),
       skipDuplicates: true,
     });
 
     await tx.statementImport.update({
       where: { id: statementImport.id },
-      data: { importedRows: write.count, duplicateRows: validRows.length - write.count },
+      data: { importedRows: { increment: write.count }, duplicateRows: validRows.length - write.count },
     });
-    return { id: statementImport.id, importedRows: write.count, duplicateRows: validRows.length - write.count };
+    return { id: statementImport.id, importedRows: write.count, duplicateRows: validRows.length - write.count, alreadyImported: write.count === 0 };
   });
-
-  const importedTransactions = await prisma.budgetTransaction.findMany({
-    where: { statementImportId: created.id, transactionType: 'normal' },
-    select: { id: true, accountId: true, transactionDate: true, description: true, amount: true, direction: true },
-  });
-  for (const transaction of importedTransactions) {
-    if (!looksLikeTransfer(transaction.description)) continue;
-    const candidate = await prisma.budgetTransaction.findFirst({
-      where: {
-        familyId,
-        accountId: { not: transaction.accountId },
-        transactionType: 'normal',
-        amount: transaction.amount,
-        direction: transaction.direction === 'credit' ? 'debit' : 'credit',
-        transactionDate: {
-          gte: new Date(transaction.transactionDate.getTime() - 3 * 24 * 60 * 60 * 1000),
-          lte: new Date(transaction.transactionDate.getTime() + 3 * 24 * 60 * 60 * 1000),
-        },
-      },
-      select: { id: true },
-    });
-    if (candidate) {
-      const transferGroupId = randomUUID();
-      await prisma.budgetTransaction.updateMany({
-        where: { id: { in: [transaction.id, candidate.id] } },
-        data: { transactionType: 'transfer', transferGroupId },
-      });
-    }
-  }
 
   return created;
 }
 
 export const POST = requireFamilyAccess(async (request: NextRequest, _context, authUser) => {
   try {
+    if (request.headers.get('content-type')?.includes('application/json')) {
+      const body = z.object({
+        action: z.literal('commit'), accountId: z.string().min(1), previewToken: z.string(),
+        transactions: z.array(approvedStatementRow).min(1).max(10000),
+      }).parse(await request.json());
+      const preview = readStatementPreview(body.previewToken, {
+        familyId: authUser.familyId, accountId: body.accountId, userId: authUser.dbUser.id,
+      });
+      const originalIds = new Set(preview.result.transactions.map(row => row.id));
+      if (new Set(body.transactions.map(row => row.id)).size !== body.transactions.length || body.transactions.some(row => !originalIds.has(row.id))) {
+        return NextResponse.json({ error: 'Choose rows from this statement review.' }, { status: 400 });
+      }
+      // Edited rows no longer support the original running-balance evidence.
+      const changed = body.transactions.length !== preview.result.transactions.length || body.transactions.some(row => {
+        const original = preview.result.transactions.find(item => item.id === row.id)!;
+        return row.amount !== original.amount || row.date !== original.date || row.direction !== original.direction;
+      });
+      const ledgerImport = await persistStatementImport({
+        familyId: authUser.familyId, accountId: body.accountId, fileName: preview.fileName,
+        contentHash: preview.contentHash, sourceType: preview.sourceType, importedById: authUser.dbUser.id,
+        originalTransactions: preview.result.transactions,
+        result: { ...preview.result, transactions: body.transactions.map(row => ({ ...row, balance: changed ? undefined : preview.result.transactions.find(item => item.id === row.id)?.balance })) },
+      });
+      return NextResponse.json({ success: true, ledgerImport });
+    }
     const formData = await request.formData();
     const file = formData.get('file');
     const useAi = formData.get('useAi') === 'true';
@@ -299,6 +304,12 @@ export const POST = requireFamilyAccess(async (request: NextRequest, _context, a
         { status: 400 }
       );
     }
+
+    if (file.size > 20 * 1024 * 1024) return NextResponse.json({ error: 'Statement exceeds 20 MB.' }, { status: 413 });
+    const accountId = formData.get('accountId');
+    if (typeof accountId !== 'string' || !accountId) return NextResponse.json({ error: 'Choose a statement account.' }, { status: 400 });
+    const account = await prisma.budgetAccount.findFirst({ where: { id: accountId, familyId: authUser.familyId, active: true }, select: { id: true } });
+    if (!account) return NextResponse.json({ error: 'Statement account not found.' }, { status: 404 });
 
     const fileName = file.name.toLowerCase();
     const buffer = Buffer.from(await file.arrayBuffer());
@@ -318,9 +329,7 @@ export const POST = requireFamilyAccess(async (request: NextRequest, _context, a
       const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false }) as string[][];
       result = parseStatementRows(rows, 'xlsx');
     } else if (fileName.endsWith('.pdf')) {
-      // Dynamic import to avoid bundling issues
-      const pdfParse = (await import('pdf-parse')).default;
-      const parsed = await pdfParse(buffer);
+      const parsed = await extractStatementPdf(buffer);
       const text = parsed.text || '';
       const statementDate = parseStatementDateFromPdf(text) ?? undefined;
 
@@ -374,36 +383,22 @@ export const POST = requireFamilyAccess(async (request: NextRequest, _context, a
       );
     }
 
-    const accountId = formData.get('accountId');
-    if (typeof accountId === 'string' && accountId) {
-      const ledgerImport = await persistStatementImport({
-        familyId: authUser.familyId,
-        accountId,
-        fileName: file.name,
-        contentHash: createHash('sha256').update(buffer).digest('hex'),
-        sourceType: fileName.split('.').pop() || 'unknown',
-        result,
-        importedById: authUser.dbUser.id,
-      });
-      Object.assign(result, { ledgerImport });
-    }
+    // A preview is signed and scoped but performs no ledger writes.
+    if (result.success) Object.assign(result, { previewToken: createStatementPreview({
+      familyId: authUser.familyId, accountId, fileName: file.name,
+      contentHash: createHash('sha256').update(buffer).digest('hex'),
+      sourceType: fileName.split('.').pop() || 'unknown', result,
+      userId: authUser.dbUser.id, expiresAt: Date.now() + 30 * 60 * 1000,
+    }) });
 
-    console.log('📊 Statement import result:', {
-      success: result?.success,
-      transactionCount: result?.transactions?.length ?? 0,
-      warnings: result?.warnings?.length ?? 0,
-      errors: result?.errors?.length ?? 0,
-      bank: result?.metadata?.bank,
-    });
     return NextResponse.json(result);
   } catch (error) {
-    console.error('Statement import parse error:', error);
     return NextResponse.json(
       {
         error: 'Failed to parse statement',
         details: error instanceof Error ? error.message : 'Unknown error',
       },
-      { status: 500 }
+      { status: error instanceof z.ZodError || request.headers.get('content-type')?.includes('application/json') ? 400 : 500 }
     );
   }
 });

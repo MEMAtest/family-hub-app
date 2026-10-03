@@ -115,7 +115,9 @@ const SimpleBudgetDashboard: React.FC = () => {
   const [showAllIncome, setShowAllIncome] = useState(false);
   const [showAllExpenses, setShowAllExpenses] = useState(false);
 
+  const [ledgerRevision, setLedgerRevision] = useState(0);
   const handleStatementImported = useCallback((income: any[], expenses: any[]) => {
+    setLedgerRevision(value => value + 1);
     if (income.length) {
       setIncomeList((prev) => [...prev, ...income]);
     }
@@ -812,7 +814,7 @@ const SimpleBudgetDashboard: React.FC = () => {
         </div>
       )}
 
-      <ActualCashFlowPanel familyId={familyId} month={`${selectedYear}-${String(selectedMonth).padStart(2, '0')}`} />
+      <ActualCashFlowPanel familyId={familyId} month={`${selectedYear}-${String(selectedMonth).padStart(2, '0')}`} revision={ledgerRevision} />
 
       <div className={`${isMobile ? 'px-4' : ''} mb-4`}>
         <div className="inline-flex rounded-lg border border-[#dde5e0] bg-white/80 p-1 dark:border-slate-800 dark:bg-slate-900/80">

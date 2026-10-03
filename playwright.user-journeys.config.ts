@@ -10,6 +10,7 @@ export default defineConfig({
     'bootstrap-resilience.spec.ts',
     'brain-integrations.spec.ts',
     'budget.spec.ts',
+    'statement-review.spec.ts',
     'calendar-hydration-resilience.spec.ts',
     'calendar-mobile.spec.ts',
     'calendar-school-document.spec.ts',

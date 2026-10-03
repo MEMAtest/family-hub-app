@@ -29,32 +29,10 @@ interface StatementImportModalProps {
   onImported: (income: any[], expenses: any[]) => void;
 }
 
-const normalizeText = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, '');
-
-const buildFingerprint = (date: string, description: string, amount: number) => {
-  return `${date}|${normalizeText(description)}|${amount.toFixed(2)}`;
-};
-
-const extractExistingFingerprints = (items: any[]) => {
-  const set = new Set<string>();
-  items.forEach((item) => {
-    const dateValue = item.paymentDate || item.createdAt;
-    const date = dateValue ? new Date(dateValue).toISOString().split('T')[0] : '';
-    const description = item.expenseName || item.incomeName || item.name || 'statement item';
-    const amount = Number(item.amount || 0);
-    if (date && amount) {
-      set.add(buildFingerprint(date, description, amount));
-    }
-  });
-  return set;
-};
-
 const StatementImportModal = ({
   isOpen,
   onClose,
   familyId,
-  existingIncome,
-  existingExpenses,
   onImported,
 }: StatementImportModalProps) => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -65,16 +43,12 @@ const StatementImportModal = ({
   const [parseProgress, setParseProgress] = useState(0);
   const [isImporting, setIsImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [useAi, setUseAi] = useState(true);
+  const [useAi, setUseAi] = useState(false);
   const [accounts, setAccounts] = useState<Array<{ id: string; name: string }>>([]);
   const [accountId, setAccountId] = useState('');
   const [newAccountName, setNewAccountName] = useState('');
   const [creatingAccount, setCreatingAccount] = useState(false);
 
-  const duplicateFingerprints = useMemo(() => ({
-    income: extractExistingFingerprints(existingIncome),
-    expense: extractExistingFingerprints(existingExpenses),
-  }), [existingIncome, existingExpenses]);
   const displayError = error;
 
   useEffect(() => {
@@ -173,13 +147,6 @@ const StatementImportModal = ({
         throw new Error(result.errors?.[0] || 'Statement parsing failed');
       }
       setParseResult(result);
-      console.log('📊 Statement parse result:', {
-        success: result.success,
-        transactionCount: result.transactions?.length ?? 0,
-        warnings: result.warnings,
-        errors: result.errors,
-        metadata: result.metadata,
-      });
 
       const nextRows = (result.transactions ?? []).map((transaction: StatementTransaction) => {
         const importAs: 'income' | 'expense' = transaction.direction === 'credit' ? 'income' : 'expense';
@@ -206,13 +173,6 @@ const StatementImportModal = ({
         };
       });
 
-      console.log('📋 Rows to display:', {
-        total: nextRows.length,
-        includedCount: nextRows.filter(r => r.include).length,
-        duplicates: nextRows.filter(r => r.duplicate).length,
-        missingDate: nextRows.filter(r => !r.date).length,
-        sampleRow: nextRows[0],
-      });
       setRows(nextRows);
     } catch (parseError) {
       setError(parseError instanceof Error ? parseError.message : 'Failed to parse statement');
@@ -266,8 +226,18 @@ const StatementImportModal = ({
     setError(null);
 
     try {
-      // Valid rows are saved as immutable actual transactions when the file is parsed.
-      // They are intentionally not converted into planned budget entries.
+      if (!familyId || !parseResult?.previewToken) throw new Error('Retrieve the statement again before saving.');
+      const transactions = rows.filter(row => row.include && row.importAs !== 'skip').map(row => ({
+        id: row.id, date: row.date, description: row.description, amount: row.amount,
+        direction: row.importAs === 'income' ? 'credit' : 'debit', category: row.category,
+        source: parseResult.metadata.sourceType || 'csv',
+      }));
+      const response = await fetch(`/api/families/${familyId}/budget/statement-import`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'commit', accountId, previewToken: parseResult.previewToken, transactions }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || result.details || 'Could not save reviewed transactions.');
       onImported([], []);
       handleClose();
     } catch (importError) {
@@ -291,7 +261,7 @@ const StatementImportModal = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[70] overflow-y-auto">
+    <div role="dialog" aria-modal="true" aria-label="Import Statement" data-preview-contract="review-v1" className="fixed inset-0 z-[70] overflow-y-auto">
       <div className="fixed inset-0 bg-black/50" onClick={handleClose} />
       <div className="relative mx-auto my-10 w-full max-w-5xl rounded-xl bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
@@ -304,7 +274,7 @@ const StatementImportModal = ({
               <p className="text-sm text-gray-500">Upload CSV, PDF, or Excel to update your budget automatically.</p>
             </div>
           </div>
-          <button onClick={handleClose} className="rounded-md p-2 text-gray-500 hover:bg-gray-100">
+          <button aria-label="Close statement import" onClick={handleClose} className="rounded-md p-2 text-gray-500 hover:bg-gray-100">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -327,7 +297,7 @@ const StatementImportModal = ({
                   className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                 />
                 <Sparkles className="h-3 w-3" />
-                Enhance PDF parsing with AI
+                Send PDF text to OpenRouter for AI parsing
               </label>
               <label className="cursor-pointer rounded-md bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700">
                 Choose file
@@ -344,7 +314,7 @@ const StatementImportModal = ({
           <div className="grid gap-3 rounded-lg border border-gray-200 p-4 sm:grid-cols-[1fr_auto]">
             <div>
               <label className="mb-1 block text-xs font-semibold text-gray-700">Statement account</label>
-              <select value={accountId} onChange={(event) => setAccountId(event.target.value)} className="h-10 w-full rounded-md border border-gray-300 bg-white px-3 text-sm">
+              <select aria-label="Statement account" value={accountId} onChange={(event) => { setAccountId(event.target.value); setParseResult(null); setRows([]); }} className="h-10 w-full rounded-md border border-gray-300 bg-white px-3 text-sm">
                 <option value="">Choose account</option>
                 {accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
               </select>
@@ -509,15 +479,10 @@ const StatementImportModal = ({
                               value={row.importAs}
                               onChange={(event) => {
                                 const nextImportAs = event.target.value as ImportRow['importAs'];
-                                const fingerprint = buildFingerprint(row.date, row.description, row.amount);
-                                const duplicateSet = nextImportAs === 'income'
-                                  ? duplicateFingerprints.income
-                                  : duplicateFingerprints.expense;
-                                const duplicate = nextImportAs !== 'skip' && duplicateSet.has(fingerprint);
                                 updateRow(row.id, {
                                   importAs: nextImportAs,
-                                  duplicate,
-                                  include: nextImportAs === 'skip' ? false : !duplicate,
+                                  duplicate: false,
+                                  include: nextImportAs !== 'skip',
                                 });
                               }}
                               className="rounded-md border border-gray-200 px-2 py-1 text-xs"
@@ -566,11 +531,11 @@ const StatementImportModal = ({
           </button>
           <button
             onClick={handleImport}
-            disabled={rows.length === 0 || isImporting}
+            disabled={totals.count === 0 || isImporting || isParsing}
             className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
           >
             {isImporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-            Done
+            Save reviewed transactions
           </button>
         </div>
       </div>
