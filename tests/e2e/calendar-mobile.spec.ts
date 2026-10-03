@@ -269,13 +269,13 @@ test.describe('the school-document review card fits on a phone', () => {
 
       await page.goto('/');
       await page.getByRole('button', { name: /^Calendar$/ }).last().click();
-      await expect(page.locator('.rbc-calendar')).toBeVisible({ timeout: 20_000 });
+      await expect(page.getByTestId('selected-day-agenda')).toBeVisible({ timeout: 20_000 });
       await page.waitForTimeout(1_200);
 
       await page.getByRole('button', { name: /School inbox & quick plan/ }).click();
       const schoolInbox = page.getByRole('region', { name: 'School inbox and import' });
       await expect(schoolInbox).toBeVisible();
-      await page.getByRole('button', { name: /Review events|Review/i }).first().click({ force: true }).catch(() => {});
+      await schoolInbox.getByRole('button', { name: /Autumn term letter/ }).click();
       await page.waitForTimeout(800);
 
       const schedule = page.getByRole('button', { name: /Schedule weekly/i }).first();
