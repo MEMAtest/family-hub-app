@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireFamilyAccess } from '@/lib/auth-utils';
 import { gmailForwardingAddress } from '@/lib/gmailCalendarServer';
+import { getWhatsAppConsentState, getWhatsAppConfig } from '@/lib/whatsappCalendarReminders';
 import type { CalendarImportDraft } from '@/utils/calendarImport';
 import type { SchoolDocumentSummary } from '@/utils/schoolDocumentSummary';
 
@@ -61,6 +62,11 @@ export const GET = requireFamilyAccess(async (_request: NextRequest, context) =>
         googleUserEmail: gmailConnection?.googleUserEmail || null,
         lastSyncAt: gmailConnection?.lastSyncAt || null,
       },
+      whatsappConfigured: Boolean(getWhatsAppConfig()),
+      whatsappConsent: await getWhatsAppConsentState(familyId),
+      whatsappDeliveryTrackingConfigured: Boolean(
+        process.env.WHATSAPP_APP_SECRET && process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN,
+      ),
       intakes: intakes.map((intake) => ({
         id: intake.id,
         sender: intake.sender,
@@ -70,6 +76,10 @@ export const GET = requireFamilyAccess(async (_request: NextRequest, context) =>
         receivedAt: intake.receivedAt,
         autoCreated: intake.autoCreated,
         needsReview: intake.needsReview,
+        authenticatedSchoolSender: Boolean(
+          intake.metadata && typeof intake.metadata === 'object' && !Array.isArray(intake.metadata) &&
+          (intake.metadata as Record<string, unknown>).schoolSenderVerified === true
+        ),
         duplicateCount: intake.duplicateCount,
         conflictCount: intake.conflictCount,
         createdEventIds: intake.createdEventIds,
@@ -95,9 +105,10 @@ export const PATCH = requireFamilyAccess(async (request: NextRequest, context) =
     const createdEventIds = Array.isArray(body.createdEventIds)
       ? body.createdEventIds.filter((id: unknown): id is string => typeof id === 'string')
       : [];
+    const needsReview = body.needsReview === undefined ? 0 : Number(body.needsReview);
 
-    if (!intakeId) {
-      return NextResponse.json({ error: 'intakeId is required' }, { status: 400 });
+    if (!intakeId || !Number.isInteger(needsReview) || needsReview < 0 || needsReview > 200) {
+      return NextResponse.json({ error: 'A valid intakeId and review count are required' }, { status: 400 });
     }
 
     const intake = await prisma.calendarEmailIntake.findFirst({
@@ -115,9 +126,9 @@ export const PATCH = requireFamilyAccess(async (request: NextRequest, context) =
     const updated = await prisma.calendarEmailIntake.update({
       where: { id: intake.id },
       data: {
-        status: createdEventIds.length > 0 ? 'reviewed_imported' : 'reviewed',
+        status: needsReview > 0 ? 'partial_review' : createdEventIds.length > 0 ? 'reviewed_imported' : 'reviewed',
         createdEventIds: Array.from(new Set([...existingCreatedIds, ...createdEventIds])),
-        needsReview: 0,
+        needsReview,
       },
     });
 

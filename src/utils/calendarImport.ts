@@ -15,6 +15,7 @@ export interface CalendarImportDraft {
   cost: number;
   type: CalendarEvent['type'];
   notes?: string;
+  timeSpecified?: boolean;
   isRecurring: boolean;
   priority: CalendarEvent['priority'];
   status: CalendarEvent['status'];
@@ -67,6 +68,13 @@ const schoolKeywords = [
   'holiday',
   'inset',
   'school',
+  'reading morning',
+  'book fair',
+  'vaccination',
+  'immunisation',
+  'workshop',
+  'assembly',
+  'camp',
   'parents',
   'assembly',
   'sports',
@@ -100,6 +108,13 @@ const pad = (value: number) => String(value).padStart(2, '0');
 
 const toDateKey = (year: number, month: number, day: number) =>
   `${year}-${pad(month)}-${pad(day)}`;
+
+const validDateKey = (year: number, month: number, day: number) => {
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
+    ? toDateKey(year, month, day)
+    : null;
+};
 
 const titleCase = (value: string) =>
   value
@@ -207,6 +222,17 @@ const isEmailNoiseLine = (line: string) =>
 const isSchoolLetterHeader = (line: string) =>
   line.length < 120 && /(?:primary|school|academy|college|nursery)/i.test(line);
 
+const hasConflictingDateMentions = (line: string) => {
+  const datePattern = new RegExp(
+    `\\b(?:\\d{1,2}[./-]\\d{1,2}[./-](?:20)?\\d{2}|(?:${dayNamePattern},?\\s*)?\\d{1,2}(?:st|nd|rd|th)?\\s+${monthNamePattern}(?:\\s+20\\d{2})?|${monthNamePattern}\\s+\\d{1,2}(?:st|nd|rd|th)?(?!\\d{2}\\b)(?:,?\\s+20\\d{2})?)\\b`,
+    'gi'
+  );
+  const matches = Array.from(line.matchAll(datePattern));
+  if (matches.length < 2) return false;
+  const betweenDates = line.slice(matches[0].index! + matches[0][0].length, matches[1].index);
+  return !/(?:-|–|—|\bto\b|\buntil\b)/i.test(betweenDates);
+};
+
 export const normalizeCalendarEmailText = ({
   subject,
   from,
@@ -225,12 +251,11 @@ export const normalizeCalendarEmailText = ({
   if (cleanSubject) candidateLines.add(cleanSubject);
 
   lines.forEach((line, index) => {
-    const previous = lines[index - 1] || '';
-    const previousTwo = lines[index - 2] || '';
     const next = lines[index + 1] || '';
     const nextTwo = lines[index + 2] || '';
     const nextThree = lines[index + 3] || '';
     const hasDate = Boolean(parseDateValue(line, new Date().getFullYear()));
+    if (hasDate && hasConflictingDateMentions(line)) return;
     const hasTime = /\b(\d{1,2})(?::|\.)(\d{2})\s*(am|pm)?\b/i.test(line) || /\b(\d{1,2})\s*(am|pm)\b/i.test(line);
     const hasEventKeyword = [...schoolKeywords, ...entertainmentKeywords].some((keyword) =>
       line.toLowerCase().includes(keyword)
@@ -256,7 +281,7 @@ export const normalizeCalendarEmailText = ({
           if (/\b\d{1,2}(?::|\.)(\d{2})\s*(?:am|pm)?\b|\b\d{1,2}\s*(?:am|pm)\b/i.test(nextLine)) break;
         }
       }
-      if (/^(?:location|venue|where|place)\s*:/i.test(next)) contextParts.push(next);
+      if (/^(?:location|venue|where|place)\s*:/i.test(next) && !contextParts.includes(next)) contextParts.push(next);
       const context = contextParts.join(' • ');
       candidateLines.add(context);
     }
@@ -279,16 +304,20 @@ const parseDateValue = (value: string, fallbackYear?: number): { date: string; m
 
   const iso = text.match(/\b(20\d{2})[-/](\d{1,2})[-/](\d{1,2})\b/);
   if (iso) {
+    const date = validDateKey(Number(iso[1]), Number(iso[2]), Number(iso[3]));
+    if (!date) return null;
     return {
-      date: toDateKey(Number(iso[1]), Number(iso[2]), Number(iso[3])),
+      date,
       match: iso[0],
     };
   }
 
   const numeric = text.match(/\b(\d{1,2})[-/](\d{1,2})[-/](20\d{2})\b/);
   if (numeric) {
+    const date = validDateKey(Number(numeric[3]), Number(numeric[2]), Number(numeric[1]));
+    if (!date) return null;
     return {
-      date: toDateKey(Number(numeric[3]), Number(numeric[2]), Number(numeric[1])),
+      date,
       match: numeric[0],
     };
   }
@@ -298,8 +327,10 @@ const parseDateValue = (value: string, fallbackYear?: number): { date: string; m
     const month = monthLookup[compactRange[3].toLowerCase()];
     const year = Number(compactRange[4] ?? fallbackYear);
     if (month && year) {
+      const date = validDateKey(year, month, Number(compactRange[1]));
+      if (!date) return null;
       return {
-        date: toDateKey(year, month, Number(compactRange[1])),
+        date,
         match: compactRange[0].trim(),
       };
     }
@@ -312,20 +343,24 @@ const parseDateValue = (value: string, fallbackYear?: number): { date: string; m
     const month = monthLookup[dayMonth[2].toLowerCase()];
     const year = Number(dayMonth[3] ?? fallbackYear);
     if (month && year) {
+      const date = validDateKey(year, month, Number(dayMonth[1]));
+      if (!date) continue;
       return {
-        date: toDateKey(year, month, Number(dayMonth[1])),
+        date,
         match: dayMonth[0].trim(),
       };
     }
   }
 
-  const monthDayMatches = Array.from(text.matchAll(/\b([A-Za-z]+)\s+(\d{1,2})(?:,?\s+(20\d{2}))?\b/gi));
+  const monthDayMatches = Array.from(text.matchAll(/\b([A-Za-z]+)\s+(\d{1,2})(?!\d{2}\b)(?:,?\s+(20\d{2}))?\b/gi));
   for (const monthDay of monthDayMatches) {
     const month = monthLookup[monthDay[1].toLowerCase()];
     const year = Number(monthDay[3] ?? fallbackYear);
     if (month && year) {
+      const date = validDateKey(year, month, Number(monthDay[2]));
+      if (!date) continue;
       return {
-        date: toDateKey(year, month, Number(monthDay[2])),
+        date,
         match: monthDay[0].trim(),
       };
     }
@@ -346,7 +381,8 @@ const parseEndDate = (line: string, start: { date: string; match: string }) => {
   const year = Number(rangeMatch[3] ?? startYear);
   if (!month || !year) return undefined;
 
-  const endDate = toDateKey(year, month, Number(rangeMatch[1]));
+  const endDate = validDateKey(year, month, Number(rangeMatch[1]));
+  if (!endDate) return undefined;
   return endDate >= start.date ? endDate : undefined;
 };
 
@@ -450,7 +486,7 @@ const cleanTitleCandidate = (value: string, dateMatch?: string, location?: strin
     cleaned = cleaned.replace(new RegExp(escapeRegExp(location), 'i'), ' ');
   }
 
-  return cleaned
+  const result = cleaned
     .replace(new RegExp(`\\b${dayNamePattern},?\\s+\\d{1,2}(?:st|nd|rd|th)?\\s+${monthNamePattern}(?:\\s+20\\d{2})?\\b`, 'gi'), ' ')
     .replace(new RegExp(`\\b\\d{1,2}(?:st|nd|rd|th)?\\s+${monthNamePattern}(?:\\s+20\\d{2})?\\b`, 'gi'), ' ')
     .replace(/\b20\d{2}[-/]\d{1,2}[-/]\d{1,2}\b/g, ' ')
@@ -458,9 +494,11 @@ const cleanTitleCandidate = (value: string, dateMatch?: string, location?: strin
     .replace(/\b\d{1,2}[:.]\d{2}\s*(am|pm)?\s*(?:-|to|–|—)?\s*\d{0,2}[:.]?\d{0,2}\s*(am|pm)?\b/gi, ' ')
     .replace(/\b\d{1,2}\s*(am|pm)\b/gi, ' ')
     .replace(/\b(on|at)\s*$/gi, ' ')
+    .replace(/\s+\b(?:from|to|on|at|the|a|an|and)\s*$/gi, ' ')
     .replace(/^[\s,:;.!?-]+|[\s,:;.!?-]+$/g, '')
     .replace(/\s+/g, ' ')
     .trim();
+  return result;
 };
 
 const extractExplicitLocation = (line: string) => {
@@ -537,6 +575,7 @@ const extractContextVenue = (line: string, dateMatch?: string) => {
   if (segments.length < 2) return undefined;
 
   const candidate = segments[segments.length - 1];
+  if (/^(?:year\s+[1-6]|reception|key stage\s+[12])\s*[–-]?$/i.test(candidate)) return undefined;
   if (/\b(confirmation|ticket|booking|subject)\b/i.test(candidate)) return undefined;
   if (candidate.length > 80) return undefined;
   return candidate;
@@ -600,12 +639,34 @@ const inferTitle = (line: string, dateMatch: string) => {
   const beforeDate = line.split(dateMatch)[0]?.split(/\s•\s/)[0]?.replace(/[:\-–—]+$/g, '').trim();
   const afterDate = line.split(dateMatch)[1]?.replace(/^[:\-–—]+/g, '').trim();
   const semanticTitle = inferSemanticTitle(beforeDate || line, dateMatch, location);
+  const genericSubject = /^(?:weekly update(?: email)?|newsletter|school newsletter|school update(?: email)?|parent newsletter|weekly news)$/i
+    .test(cleanTitleCandidate(beforeDate || '').toLowerCase());
+  const eventLabels: Array<[RegExp, string]> = [
+    [/\bparent(?:s)? workshop\b/i, 'Parent Workshop'],
+    [/\breading mornings?\b/i, 'Reading Morning'],
+    [/\bflu vaccination(?: session)?\b/i, 'Flu Vaccination Session'],
+    [/\bachievement assembly\b/i, 'Achievement Assembly'],
+    [/\bbook fair\b/i, 'Book Fair'],
+    [/\bhalf[ -]term (?:holiday )?camp\b/i, 'Half Term Holiday Camp'],
+    [/\bholiday camp\b/i, 'Holiday Camp'],
+    [/\bswimming gala\b/i, 'Swimming Gala'],
+    [/\bsports day\b/i, 'Sports Day'],
+    [/\bparents['’]? evening\b/i, 'Parents Evening'],
+    [/\binset day\b/i, 'INSET Day'],
+  ];
+  const eventLabel = eventLabels.find(([pattern]) => pattern.test(line))?.[1];
+  const yearGroup = line.match(/\b(Year\s+[1-6]|Reception|Key Stage\s+[12])\b/i)?.[1];
+  const newsletterTitle = eventLabel
+    ? `${eventLabel}${yearGroup && eventLabel === 'Reading Morning' ? ` (${titleCase(yearGroup)})` : ''}`
+    : undefined;
+  const narrativeTitle = /\b(?:returns?|takes place|begins?|starts?)\s+(?:from|on|at)?\s*$/i.test(beforeDate || '');
   const raw = /^(date|when)\s*:?\s*$/i.test(beforeDate || '')
     ? location || afterDate
-    : semanticTitle || beforeDate || location || afterDate || line;
+    : semanticTitle || (genericSubject || narrativeTitle ? newsletterTitle : undefined) || beforeDate || location || afterDate || line;
   const removableLocation = raw === location ? undefined : location;
+  const canonicalTitle = genericSubject || narrativeTitle ? newsletterTitle : undefined;
 
-  return titleCase(cleanTitleCandidate(raw || '', dateMatch, removableLocation).slice(0, 90)) || 'Imported event';
+  return titleCase(canonicalTitle || cleanTitleCandidate(raw || '', dateMatch, removableLocation).slice(0, 90)) || 'Imported event';
 };
 
 const hasExplicitTime = (line: string) =>
@@ -660,10 +721,11 @@ const warningsForLine = (line: string) => {
   return warnings;
 };
 
-const getDefaultPerson = (people: Person[], defaultPersonId?: string) =>
-  defaultPersonId && defaultPersonId !== 'all'
-    ? defaultPersonId
-    : people[0]?.id ?? '';
+const getDefaultPerson = (people: Person[], defaultPersonId?: string) => {
+  if (defaultPersonId === 'all') return people[0]?.id ?? '';
+  if (defaultPersonId !== undefined) return defaultPersonId;
+  return people[0]?.id ?? '';
+};
 
 const toDraft = (
   event: Partial<CalendarImportDraft>,
@@ -671,10 +733,16 @@ const toDraft = (
   sourceLine: number,
   people: Person[],
   defaultPersonId?: string
-): CalendarImportDraft => ({
+): CalendarImportDraft => {
+  const namedPeople = people.filter((person) =>
+    person.name && new RegExp(`\\b${escapeRegExp(person.name)}\\b`, 'i').test(line)
+  );
+  const namedPersonId = namedPeople.length === 1 ? namedPeople[0].id : undefined;
+  const hasUnmappedCohort = /\b(?:Reception|Year\s+[1-6]|Key\s+Stage\s+[12])\b/i.test(line);
+  return {
   importId: `import-${sourceLine}-${Math.random().toString(36).slice(2, 8)}`,
   title: event.title || 'Imported event',
-  person: event.person || getDefaultPerson(people, defaultPersonId),
+  person: event.person || namedPersonId || (hasUnmappedCohort ? '' : getDefaultPerson(people, defaultPersonId)),
   date: event.date || new Date().toISOString().split('T')[0],
   endDate: event.endDate,
   time: event.time || '09:00',
@@ -684,6 +752,7 @@ const toDraft = (
   cost: 0,
   type: event.type || inferType(line),
   notes: event.notes || `Imported from calendar intake: ${line}`,
+  timeSpecified: event.timeSpecified ?? hasExplicitTime(line),
   isRecurring: false,
   priority: event.priority || (inferType(line) === 'education' ? 'high' : 'medium'),
   status: 'confirmed',
@@ -692,7 +761,8 @@ const toDraft = (
   sourceLine,
   importStatus: 'ready',
   warnings: event.warnings || [],
-});
+  };
+};
 
 const mapHeader = (header: string) => {
   const value = header.toLowerCase();
@@ -756,7 +826,8 @@ export const annotateCalendarImportDrafts = (
     event.time === draft.time &&
     event.title.trim().toLowerCase() === draft.title.trim().toLowerCase()
   );
-  const conflicts = existingEvents.filter((event) => overlaps(draft, event));
+  const timeIsKnown = draft.timeSpecified ?? hasExplicitTime(draft.source);
+  const conflicts = timeIsKnown ? existingEvents.filter((event) => overlaps(draft, event)) : [];
   const warnings = [...draft.warnings];
 
   if (duplicate) warnings.push('Already appears to exist in the calendar.');
@@ -765,7 +836,8 @@ export const annotateCalendarImportDrafts = (
 
   return {
     ...draft,
-    importStatus: duplicate ? 'duplicate' : conflicts.length > 0 ? 'conflict' : draft.confidence < 0.7 ? 'needs_review' : 'ready',
+    importStatus: duplicate ? 'duplicate' : conflicts.length > 0 ? 'conflict' :
+      draft.importStatus === 'needs_review' || draft.confidence < 0.7 ? 'needs_review' : 'ready',
     duplicateOf: duplicate?.id,
     conflictWith: conflicts.map((event) => event.id),
     warnings,
@@ -778,9 +850,38 @@ const addDaysToDateKey = (date: string, days: number) => {
   return next.toISOString().split('T')[0];
 };
 
-const expandTimedDateRanges = (drafts: CalendarImportDraft[]) => drafts.flatMap((draft) => {
+const weekdayIndexes: Record<string, number> = {
+  sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6,
+};
+
+const expandTimedDateRanges = (drafts: CalendarImportDraft[], today: Date) => drafts.flatMap((draft) => {
   if (!draft.endDate || draft.endDate <= draft.date || draft.duration >= 24 * 60) {
     return [draft];
+  }
+
+  const weeklyDay = draft.source.match(/\bDay\s*:\s*(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\b/i)?.[1];
+  if (weeklyDay) {
+    const allDates: string[] = [];
+    const targetDay = weekdayIndexes[weeklyDay.toLowerCase()];
+    for (let date = draft.date; date <= draft.endDate && allDates.length <= 52; date = addDaysToDateKey(date, 1)) {
+      const weekday = new Date(`${date}T12:00:00Z`).getUTCDay();
+      if (weekday === targetDay) allDates.push(date);
+    }
+    const statedWeeks = Number(draft.source.match(/\b(\d+)\s*[- ]week\s+(?:programme|program|course)\b/i)?.[1]);
+    const countMismatch = statedWeeks > 0 && allDates.length !== statedWeeks;
+    const todayKey = today.toISOString().slice(0, 10);
+    const dates = allDates.filter((date) => date >= todayKey);
+    return dates.map((date) => ({
+      ...draft,
+      importId: `${draft.importId}-${date}`,
+      date,
+      endDate: undefined,
+      ...(countMismatch ? {
+        importStatus: 'needs_review' as const,
+        warnings: [...draft.warnings, `The source says ${statedWeeks} weeks but lists ${allDates.length} matching weekdays; confirm the session dates.`],
+      } : {}),
+      notes: `${draft.notes || `Imported from calendar intake: ${draft.source}`} (weekly ${weeklyDay} session; confirm programme dates and booking before adding)`,
+    }));
   }
 
   const expanded: CalendarImportDraft[] = [];
@@ -906,7 +1007,7 @@ export const parseCalendarImportText = ({
     });
 
   const drafts = structured.length > 0 ? structured : dedupeImportDrafts(lineDrafts);
-  return annotateCalendarImportDrafts(expandTimedDateRanges(drafts), existingEvents);
+  return annotateCalendarImportDrafts(expandTimedDateRanges(drafts, today), existingEvents);
 };
 
 const dedupeImportDrafts = (drafts: CalendarImportDraft[]) => {
@@ -940,18 +1041,31 @@ const dedupeImportDrafts = (drafts: CalendarImportDraft[]) => {
 
 export const importDraftToCalendarEventDraft = (
   draft: CalendarImportDraft
-): Omit<CalendarEvent, 'id' | 'createdAt' | 'updatedAt'> => ({
+): Omit<CalendarEvent, 'id' | 'createdAt' | 'updatedAt'> => {
+  const timeSpecified = draft.timeSpecified ?? hasExplicitTime(draft.source);
+  const notes = timeSpecified
+    ? draft.notes
+    : [draft.notes, 'Time not provided by source.'].filter(Boolean).join(' ');
+  const allDayDuration = (() => {
+    if (!draft.endDate) return 1439;
+    const start = new Date(`${draft.date}T00:00:00Z`).getTime();
+    const end = new Date(`${draft.endDate}T00:00:00Z`).getTime();
+    const dayCount = Math.max(1, Math.floor((end - start) / 86_400_000) + 1);
+    return dayCount * 1440 - 1;
+  })();
+
+  return ({
   title: draft.title,
   person: draft.person,
   date: draft.date,
   endDate: draft.endDate,
-  time: draft.time,
-  duration: draft.duration,
+  time: timeSpecified ? draft.time : '00:00',
+  duration: timeSpecified ? draft.duration : allDayDuration,
   location: draft.location,
   recurring: draft.recurring,
   cost: draft.cost,
   type: draft.type,
-  notes: draft.notes,
+  notes,
   isRecurring: draft.isRecurring,
   priority: draft.priority,
   status: draft.status,
@@ -960,4 +1074,5 @@ export const importDraftToCalendarEventDraft = (
     { id: 'reminder-school-1-hour', type: 'notification', time: 60, enabled: true },
   ],
   attendees: [],
-});
+  });
+};

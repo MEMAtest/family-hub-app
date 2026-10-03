@@ -7,6 +7,10 @@ const PEOPLE: Person[] = [
   { id: 'k1', name: 'Kayode', color: '#333', icon: '🧒', role: 'Child' },
   { id: 'k2', name: 'Simi', color: '#444', icon: '🧒', role: 'Child' },
 ];
+const ASKIA_PEOPLE: Person[] = [
+  ...PEOPLE,
+  { id: 'k3', name: 'Askia', color: '#555', icon: '🧒', role: 'Child' },
+];
 
 // Wednesday 2 September 2026
 const TODAY = '2026-09-02';
@@ -95,6 +99,16 @@ describe('a deadline makes it work, not an appointment', () => {
     const r = parse('Simi has spellings every Friday due the following Friday');
     expect(r.kind).toBe('task');
     expect(r.taskDraft?.recurringPattern?.frequency).toBe('weekly');
+  });
+
+  it('turns a spoken bring-in routine into one repeating family reminder', () => {
+    const r = parseFamilyInput({ text: 'Askia brings in toys on Tuesday and Friday', people: ASKIA_PEOPLE, today: TODAY });
+    expect(r.kind).toBe('task');
+    expect(r.taskDraft?.title).toBe('Bring in toys');
+    expect(r.taskDraft?.assignees).toEqual(['k3']);
+    expect(r.taskDraft?.recurringPattern).toEqual({ frequency: 'weekly', interval: 1, daysOfWeek: [2, 5] });
+    expect(r.taskDraft?.dueDate).toBe(r.taskDraft?.assignedDate);
+    expect(r.needs).toEqual([]);
   });
 });
 

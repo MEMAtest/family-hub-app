@@ -24,11 +24,6 @@ export const GOOGLE_CALENDAR_SCOPES = [
 
 export const GOOGLE_GMAIL_SCOPES = [
   'https://www.googleapis.com/auth/gmail.readonly',
-  // Lets the household send its own mail — the Monday digest goes out from the
-  // family's own address rather than needing a transactional provider and a
-  // DNS-verified domain. Adding a scope means anyone connected before this has
-  // to reconnect once; Google never widens an existing grant silently.
-  'https://www.googleapis.com/auth/gmail.send',
 ];
 
 export const createOAuthClient = () =>
@@ -187,6 +182,28 @@ export const syncPrivateCyclePeriod = async (personId: string, period: { id: str
 };
 
 export const googlePayloadFromFamilyEvent = (event: CalendarEvent) => {
+  const timeUnspecified = /(?:school email did not specify a time|time not provided by source)/i.test(event.notes || '');
+  if (timeUnspecified) {
+    const lastDay = event.endDate || event.date;
+    const exclusiveEnd = new Date(new Date(`${lastDay}T00:00:00Z`).getTime() + 24 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 10);
+    return {
+      summary: event.title,
+      description: event.notes || '',
+      location: event.location || '',
+      start: { date: event.date },
+      end: { date: exclusiveEnd },
+      reminders: {
+        useDefault: false,
+        overrides: event.reminders?.filter((reminder) => reminder.enabled).map((reminder) => ({
+          method: reminder.type === 'email' ? 'email' : 'popup',
+          minutes: reminder.time,
+        })) || [],
+      },
+      status: event.status === 'confirmed' ? 'confirmed' : 'tentative',
+    };
+  }
   const startDateTime = new Date(`${event.date}T${event.time}:00`);
   const endDateTime = new Date(startDateTime.getTime() + (event.duration || 60) * 60_000);
 

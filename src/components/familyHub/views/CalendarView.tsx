@@ -10,6 +10,8 @@ import { useAppView } from '@/contexts/familyHub/AppViewContext';
 import type { CalendarEvent } from '@/types/calendar.types';
 import { addDays, expandEvents } from '@/utils/recurrence';
 import { formatDateForInput } from '@/utils/formatDate';
+import toast from 'react-hot-toast';
+import { hasUnspecifiedEventTime } from '@/utils/eventSemantics';
 
 export const CalendarView = () => {
   const { events, tasks, openEditForm, openCreateForm, createEvent, createTask, updateEvent, deleteEvent,
@@ -55,19 +57,19 @@ export const CalendarView = () => {
     <header className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 bg-white px-4 py-4 dark:border-slate-800 dark:bg-slate-900 sm:px-6">
       <h2 className="text-xl font-semibold sm:text-2xl">Family Calendar</h2>
       <div className="flex items-center gap-2">
-        <button type="button" onClick={() => { setShowImport(!showImport); if (!showImport) requestAnimationFrame(() => importRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })); }} aria-expanded={showImport} className="inline-flex min-h-10 items-center gap-2 rounded-md border border-gray-200 px-3 text-sm font-medium dark:border-slate-700"><Import className="h-4 w-4" />School inbox {showImport ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}</button>
+        <button type="button" onClick={() => { setShowImport(!showImport); if (!showImport) requestAnimationFrame(() => importRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })); }} aria-expanded={showImport} className="inline-flex min-h-10 items-center gap-2 rounded-md border border-gray-200 px-3 text-sm font-medium dark:border-slate-700"><Import className="h-4 w-4" />School inbox &amp; quick plan {showImport ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}</button>
         <button type="button" onClick={openTemplateManager} title="Event templates" aria-label="Event templates" className="min-h-10 rounded-md border border-gray-200 p-2.5 dark:border-slate-700"><LayoutGrid className="h-4 w-4" /></button>
         <button type="button" onClick={openConflictSettings} title="Conflict rules" aria-label="Conflict rules" className="min-h-10 rounded-md border border-gray-200 p-2.5 dark:border-slate-700"><Settings className="h-4 w-4" /></button>
       </div>
     </header>
     <div className="grid min-w-0 gap-5 px-3 py-4 sm:px-5 xl:grid-cols-[minmax(0,1fr)_300px]">
       <div className="min-w-0 overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-        <CalendarMain events={events} tasks={tasks} onTaskToggle={(id, occurrenceDate) => toggleTaskComplete(id, undefined, occurrenceDate)} people={people} onEventClick={openEditForm} onEventCreate={openCreateForm}
+        <CalendarMain events={events} tasks={tasks} onTaskToggle={(id, occurrenceDate) => { void toggleTaskComplete(id, undefined, occurrenceDate).catch(() => toast.error('Could not update this reminder. Please try again.')); }} people={people} onEventClick={openEditForm} onEventCreate={openCreateForm}
           onEventUpdate={updateEvent} onEventDelete={deleteEvent} currentDate={currentDate} onDateChange={setCurrentDate}
           onTemplateManage={openTemplateManager} onConflictSettings={openConflictSettings} onEventsSync={handleEventsSync} />
       </div>
-      <aside className="min-w-0 space-y-5">
-        <section className="border-b border-gray-200 pb-5 dark:border-slate-800" aria-label="Quick add event">
+      <aside className="flex min-w-0 flex-col gap-5">
+        <section className="order-2 border-t border-gray-200 pt-5 dark:border-slate-800" aria-label="Quick add event">
           <h3 className="mb-3 flex items-center gap-2 text-base font-semibold"><Plus className="h-5 w-5 text-[#147c72]" />Quick add</h3>
           <form onSubmit={saveQuickEvent} className="space-y-3">
             <label className="block text-xs font-medium">What's happening?<input required aria-label="Quick event title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Club, appointment or family plan" className={field} /></label>
@@ -86,17 +88,17 @@ export const CalendarView = () => {
             <button type="button" onClick={() => openCreateForm()} className="min-h-10 text-sm font-medium text-gray-500 dark:text-slate-400">Full event options</button>
           </form>
         </section>
-        <section aria-label="Upcoming this week">
+        <section className="order-1" aria-label="Upcoming this week">
           <h3 className="mb-3 flex items-center gap-2 text-base font-semibold"><CalendarDays className="h-5 w-5 text-violet-500" />Coming up this week</h3>
           {upcoming.length ? <div className="divide-y divide-gray-200 dark:divide-slate-800">{upcoming.map((item) => <button key={item.occurrenceId} type="button" onClick={() => openEditForm({ ...item.event, date: item.date, time: item.time, duration: item.duration, endDate: item.endDate, occurrenceDate: item.date, seriesStartDate: item.event.isRecurring ? item.event.date : undefined })} className="flex w-full items-start gap-3 py-3 text-left">
             <span className="w-11 shrink-0 text-center text-xs text-gray-500 dark:text-slate-400">{new Intl.DateTimeFormat('en-GB', { weekday: 'short' }).format(new Date(`${item.date}T12:00:00`))}<strong className="mt-1 block text-base text-gray-800 dark:text-slate-200">{item.date.slice(8)}</strong></span>
-            <span className="min-w-0"><span className="block text-sm font-semibold">{item.event.title}</span><span className="mt-1 block text-xs text-gray-500 dark:text-slate-400">{item.time} · {people.find((person) => person.id === item.event.person)?.name || 'Family'}</span>{item.event.location && <span className="mt-1 block truncate text-xs text-gray-500">{item.event.location}</span>}</span>
+            <span className="min-w-0"><span className="block text-sm font-semibold">{item.event.title}</span><span className="mt-1 block text-xs text-gray-500 dark:text-slate-400">{hasUnspecifiedEventTime(item.event) ? 'All day' : item.time} · {people.find((person) => person.id === item.event.person)?.name || 'Family'}</span>{item.event.location && <span className="mt-1 block truncate text-xs text-gray-500">{item.event.location}</span>}</span>
           </button>)}</div> : <p className="text-sm text-gray-500 dark:text-slate-400">No events in the next seven days.</p>}
         </section>
       </aside>
     </div>
     {showImport && <section ref={importRef} className="scroll-mt-4 border-t border-gray-200 dark:border-slate-800" aria-label="School inbox and import">
-      <CalendarCopilotPanel events={events} people={people} currentDate={currentDate} createEvent={createEvent} createTask={createTask} onOpenCalendar={() => setCurrentDate(currentDate)} />
+      <CalendarCopilotPanel events={events} tasks={tasks} people={people} currentDate={currentDate} createEvent={createEvent} createTask={createTask} onOpenCalendar={() => setCurrentDate(currentDate)} />
     </section>}
   </div>;
 };

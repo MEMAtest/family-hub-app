@@ -5,6 +5,7 @@ export default defineConfig({
   ...baseConfig,
   globalSetup: baseConfig.globalSetup,
   testMatch: [
+    'bathroom-project-journey.spec.ts',
     'auth-private-boundaries.spec.ts',
     'bootstrap-resilience.spec.ts',
     'brain-integrations.spec.ts',

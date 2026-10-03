@@ -13,16 +13,17 @@ import { DEFAULT_FAMILY_ID } from '@/lib/defaultFamilyProfile';
 import { getCalendarEventIcon, getEventNotificationMetadata } from '@/utils/eventSemantics';
 import { decodeStoredRecurringPattern } from '@/lib/calendarEventMapping';
 import { toggleTaskOccurrenceCompletion } from '@/utils/tasks';
+import { mergeDatabaseAndCachedEvents } from '@/lib/calendarEventCache';
 
 interface CalendarContextValue {
   events: CalendarEvent[];
   /** Homework, chores and anything else with a deadline. */
   tasks: CalendarTask[];
-  createTask: (draft: Omit<CalendarTask, 'id' | 'createdAt' | 'updatedAt'>) => CalendarTask;
-  updateTask: (id: string, updates: Partial<CalendarTask>) => void;
-  deleteTask: (id: string) => void;
+  createTask: (draft: Omit<CalendarTask, 'id' | 'createdAt' | 'updatedAt'>) => Promise<CalendarTask>;
+  updateTask: (id: string, updates: Partial<CalendarTask>) => Promise<void>;
+  deleteTask: (id: string) => Promise<void>;
   /** Mark done / not done. Completion is what a task is for. */
-  toggleTaskComplete: (id: string, completedBy?: string, occurrenceDate?: string) => void;
+  toggleTaskComplete: (id: string, completedBy?: string, occurrenceDate?: string) => Promise<void>;
   eventTemplates: EventTemplate[];
   selectedEvent: CalendarEvent | null;
   defaultSlot: { start: Date; end: Date } | null;
@@ -332,9 +333,9 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
         }
       })();
       const currentEvents = useFamilyStore.getState().events;
-      const mergedEvents = mergeEvents(
+      const mergedEvents = mergeDatabaseAndCachedEvents(
         formattedEvents,
-        mergeEvents(storedEvents, currentEvents)
+        [...storedEvents, ...currentEvents],
       );
 
       setEvents(mergedEvents);
@@ -388,9 +389,9 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
             if (Array.isArray(dbEvents)) {
               // Convert database events to app format
               const formattedEvents = mapDatabaseEventsToCalendarEvents(dbEvents);
-              const mergedEvents = mergeEvents(
+              const mergedEvents = mergeDatabaseAndCachedEvents(
                 formattedEvents,
-                mergeEvents(storedEvents, currentEvents)
+                [...storedEvents, ...currentEvents],
               );
               console.log('📆 CalendarContext: Loaded', mergedEvents.length, 'events from database/local cache');
               setEvents(mergedEvents);
@@ -456,29 +457,49 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
     };
   }, [databaseStatus.connected, refreshEventsFromDatabase]);
 
-  // Tasks are cached locally so the feature works before the calendar_tasks
-  // migration has been run; the API is wired in the same shape as events.
+  // Keep a local cache for offline use while connected-family reminders sync to the database.
   const TASKS_KEY = 'familyHubTasks';
   const [tasks, setTasks] = useState<CalendarTask[]>([]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    let active = true;
     try {
       const stored = localStorage.getItem(TASKS_KEY);
       const parsed = stored ? JSON.parse(stored) : [];
       if (Array.isArray(parsed)) {
-        setTasks(
-          parsed.map((task: CalendarTask) => ({
-            ...task,
-            createdAt: new Date(task.createdAt),
-            updatedAt: new Date(task.updatedAt),
-          }))
-        );
+        const localTasks = parsed.map((task: CalendarTask) => ({
+          ...task,
+          createdAt: new Date(task.createdAt),
+          updatedAt: new Date(task.updatedAt),
+        }));
+        setTasks(localTasks);
+        const familyId = databaseStatus.familyId || localStorage.getItem('familyId');
+        if (databaseStatus.connected && familyId) {
+          void fetch(`/api/families/${familyId}/tasks`)
+            .then(async (response) => {
+              if (!response.ok) throw new Error('Family reminders could not be loaded.');
+              const payload = await response.json();
+              if (!Array.isArray(payload) || !active) return;
+              const databaseTasks = payload.map((task: CalendarTask) => ({
+                ...task,
+                createdAt: new Date(task.createdAt),
+                updatedAt: new Date(task.updatedAt),
+              }));
+              const pendingLocalTasks = localTasks.filter((task: CalendarTask) => task.id.startsWith('task-'));
+              const byId = new Map([...databaseTasks, ...pendingLocalTasks].map((task: CalendarTask) => [task.id, task]));
+              const merged = [...byId.values()];
+              setTasks(merged);
+              localStorage.setItem(TASKS_KEY, JSON.stringify(merged));
+            })
+            .catch((error) => console.warn('CalendarContext: database reminders unavailable; using cache', error));
+        }
       }
     } catch (error) {
       console.warn('CalendarContext: could not read cached tasks', error);
     }
-  }, []);
+    return () => { active = false; };
+  }, [databaseStatus.connected, databaseStatus.familyId]);
 
   const persistTasks = useCallback((next: CalendarTask[]) => {
     setTasks(next);
@@ -492,56 +513,82 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
   }, []);
 
   const createTask = useCallback(
-    (draft: Omit<CalendarTask, 'id' | 'createdAt' | 'updatedAt'>): CalendarTask => {
-      const task: CalendarTask = {
+    async (draft: Omit<CalendarTask, 'id' | 'createdAt' | 'updatedAt'>): Promise<CalendarTask> => {
+      const validDraft = {
         ...draft,
-        // A deadline before the day it was set is always a mistake.
         dueDate: draft.dueDate < draft.assignedDate ? draft.assignedDate : draft.dueDate,
-        id: createId('task'),
-        createdAt: new Date(),
-        updatedAt: new Date(),
       };
+      const familyId = databaseStatus.familyId || (typeof window !== 'undefined' ? localStorage.getItem('familyId') : null);
+      let task: CalendarTask;
+      if (databaseStatus.connected && familyId) {
+        const response = await fetch(`/api/families/${familyId}/tasks`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(validDraft),
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || 'Could not save this reminder.');
+        task = { ...payload, createdAt: new Date(payload.createdAt), updatedAt: new Date(payload.updatedAt) };
+      } else {
+        task = { ...validDraft, id: createId('task'), createdAt: new Date(), updatedAt: new Date() };
+      }
       persistTasks([...tasks, task]);
       return task;
     },
-    [persistTasks, tasks]
+    [databaseStatus.connected, databaseStatus.familyId, persistTasks, tasks]
   );
 
   const updateTask = useCallback(
-    (id: string, updates: Partial<CalendarTask>) => {
-      persistTasks(
-        tasks.map((task) => (task.id === id ? { ...task, ...updates, updatedAt: new Date() } : task))
-      );
+    async (id: string, updates: Partial<CalendarTask>) => {
+      const familyId = databaseStatus.familyId || (typeof window !== 'undefined' ? localStorage.getItem('familyId') : null);
+      if (databaseStatus.connected && familyId && !id.startsWith('task-')) {
+        const response = await fetch(`/api/families/${familyId}/tasks`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id, ...updates }),
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || 'Could not update this reminder.');
+        updates = { ...payload, createdAt: new Date(payload.createdAt), updatedAt: new Date(payload.updatedAt) };
+      }
+      persistTasks(tasks.map((task) => (task.id === id ? { ...task, ...updates, updatedAt: new Date() } : task)));
     },
-    [persistTasks, tasks]
+    [databaseStatus.connected, databaseStatus.familyId, persistTasks, tasks]
   );
 
   const deleteTask = useCallback(
-    (id: string) => persistTasks(tasks.filter((task) => task.id !== id)),
-    [persistTasks, tasks]
+    async (id: string) => {
+      const familyId = databaseStatus.familyId || (typeof window !== 'undefined' ? localStorage.getItem('familyId') : null);
+      if (databaseStatus.connected && familyId && !id.startsWith('task-')) {
+        const response = await fetch(`/api/families/${familyId}/tasks`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id }),
+        });
+        if (!response.ok) throw new Error('Could not delete this reminder.');
+      }
+      persistTasks(tasks.filter((task) => task.id !== id));
+    },
+    [databaseStatus.connected, databaseStatus.familyId, persistTasks, tasks]
   );
 
   const toggleTaskComplete = useCallback(
-    (id: string, completedBy?: string, occurrenceDate?: string) => {
-      persistTasks(
-        tasks.map((task) =>
-          task.id === id
-            ? occurrenceDate
-              ? {
-                  ...toggleTaskOccurrenceCompletion(task, occurrenceDate, new Date().toISOString()),
-                  updatedAt: new Date(),
-                }
-              : {
-                ...task,
-                completedAt: task.completedAt ? null : new Date().toISOString(),
-                completedBy: task.completedAt ? null : completedBy ?? null,
-                updatedAt: new Date(),
-              }
-            : task
-        )
-      );
+    async (id: string, completedBy?: string, occurrenceDate?: string) => {
+      const task = tasks.find((item) => item.id === id);
+      if (!task) return;
+      if (occurrenceDate) {
+        const updated = toggleTaskOccurrenceCompletion(task, occurrenceDate, new Date().toISOString());
+        await updateTask(id, task.recurringPattern
+          ? { occurrenceCompletions: updated.occurrenceCompletions }
+          : { completedAt: updated.completedAt, completedBy: updated.completedAt ? completedBy ?? null : null });
+        return;
+      }
+      await updateTask(id, {
+        completedAt: task.completedAt ? null : new Date().toISOString(),
+        completedBy: task.completedAt ? null : completedBy ?? null,
+      });
     },
-    [persistTasks, tasks]
+    [tasks, updateTask]
   );
 
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);

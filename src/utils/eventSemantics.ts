@@ -59,3 +59,5 @@ export const getEventNotificationMetadata = (
   eventTime: event.time,
   eventLocation: event.location,
 });
+export const hasUnspecifiedEventTime = (event: { notes?: string }) =>
+  /(?:school email did not specify a time|time not provided by source|time not specified)/i.test(event.notes || '');

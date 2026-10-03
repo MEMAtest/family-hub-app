@@ -53,13 +53,11 @@ import { formatConflictGroupTimeRange, getSameDayConflictGroups } from '@/utils/
 import { addDays, expandEvents, getExpansionRange, type Occurrence } from '@/utils/recurrence'
 import { buildTaskEntries, getTaskEntryStyle, isTaskEntry } from '@/utils/taskCalendar'
 import { expandTasks } from '@/utils/tasks'
+import { hasUnspecifiedEventTime } from '@/utils/eventSemantics'
 
 // Set up moment localizer and drag-and-drop calendar
 const localizer = momentLocalizer(moment)
 const DnDCalendar = withDragAndDrop(Calendar)
-
-const hasUnspecifiedEventTime = (event: Pick<CalendarEvent, 'notes'>) =>
-  /(?:school email did not specify a time|time not provided by source|time not specified)/i.test(event.notes || '')
 
 const conciseEventContext = (notes: string) => {
   const cleaned = notes
@@ -72,9 +70,13 @@ const conciseEventContext = (notes: string) => {
   return short.length > 220 ? `${short.slice(0, 217).trimEnd()}...` : short;
 };
 
-const eventSummaryKey = (event: CalendarEvent) => `${event.id}:${event.occurrenceDate || event.date}`;
+const eventSummaryKey = (event: CalendarEvent) => JSON.stringify([
+  event.id, event.occurrenceDate || event.date, event.title, event.time,
+  event.duration, event.person, event.location, event.notes,
+]);
 
 const eventForCalendarOccurrence = (entry: any): CalendarEvent => {
+  if (!entry.resource) return entry as CalendarEvent;
   const resource = entry.resource as CalendarEvent;
   const date = entry.occurrenceDate || moment(entry.start).format('YYYY-MM-DD');
   const endDate = entry.end ? moment(entry.end).format('YYYY-MM-DD') : date;
@@ -95,7 +97,7 @@ const eventForCalendarOccurrence = (entry: any): CalendarEvent => {
 
 const getEventEnd = (event: CalendarEvent) => {
   const eventStart = moment(`${event.date} ${event.time}`, 'YYYY-MM-DD HH:mm')
-  if (event.endDate && event.endDate > event.date) {
+  if (!hasUnspecifiedEventTime(event) && event.endDate && event.endDate > event.date) {
     return moment(`${event.endDate} 23:59`, 'YYYY-MM-DD HH:mm').toDate()
   }
   return eventStart.clone().add(event.duration, 'minutes').toDate()
@@ -104,7 +106,7 @@ const getEventEnd = (event: CalendarEvent) => {
 /** End of a single expanded occurrence (not of the series row). */
 const getOccurrenceEnd = (occ: Occurrence) => {
   const start = moment(`${occ.date} ${occ.time}`, 'YYYY-MM-DD HH:mm')
-  if (occ.endDate > occ.date) {
+  if (!hasUnspecifiedEventTime(occ.event) && occ.endDate > occ.date) {
     return moment(`${occ.endDate} 23:59`, 'YYYY-MM-DD HH:mm').toDate()
   }
   return start.clone().add(occ.duration, 'minutes').toDate()
@@ -235,12 +237,14 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
   const hoverDismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const keepHoverOpen = useCallback(() => {
     if (hoverDismissTimer.current) clearTimeout(hoverDismissTimer.current);
+    hoverDismissTimer.current = null;
   }, []);
   const dismissHoverSoon = useCallback(() => {
     keepHoverOpen();
     hoverDismissTimer.current = setTimeout(() => {
       setHoveredEvent(null);
       setTooltipPosition(null);
+      hoverDismissTimer.current = null;
     }, 250);
   }, [keepHoverOpen]);
   useEffect(() => () => keepHoverOpen(), [keepHoverOpen]);
@@ -551,7 +555,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
       // is where the series began — tapping the last swimming lesson of the
       // month used to send the day panel back to the first one.
       occurrenceDate: occ.date,
-      allDay: occ.endDate > occ.date,
+      allDay: hasUnspecifiedEventTime(occ.event) || occ.endDate > occ.date,
     }));
 
     // Tasks are drawn as all-day bands spanning set date -> due date, so the
@@ -613,9 +617,11 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
     }
     const occurrence = eventForCalendarOccurrence(event)
     setSelectedAgendaDate(occurrence.date)
-    setHoveredEvent(occurrence)
+    keepHoverOpen()
+    setHoveredEvent(null)
+    setTooltipPosition(null)
     onEventClick(occurrence)
-  }, [onEventClick])
+  }, [keepHoverOpen, onEventClick])
 
   // Handle single event export
   const handleExportEvent = useCallback((event: CalendarEvent) => {
@@ -1919,7 +1925,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                               <button
                                 key={event.id}
                                 type="button"
-                                onClick={() => { setHoveredEvent(event); onEventClick(event); }}
+                                onClick={() => { keepHoverOpen(); setHoveredEvent(null); setTooltipPosition(null); onEventClick(event); }}
                                 className="flex items-start gap-2 rounded-md border border-amber-100 bg-amber-50/80 p-2 text-left transition hover:border-amber-200 hover:bg-amber-100 dark:border-amber-300/10 dark:bg-amber-500/10 dark:hover:bg-amber-500/20"
                               >
                                 <span
@@ -1931,7 +1937,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                                     {event.title}
                                   </span>
                                   <span className="mt-0.5 block text-xs text-gray-600 dark:text-slate-300">
-                                    {event.time} · {person?.name || 'Family'}
+                                    {hasUnspecifiedEventTime(event) ? 'All day' : event.time} · {person?.name || 'Family'}
                                   </span>
                                 </span>
                               </button>
@@ -1959,7 +1965,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                       <button
                         key={event.id}
                         type="button"
-                        onClick={() => { setHoveredEvent(event); onEventClick(event); }}
+                        onClick={() => { keepHoverOpen(); setHoveredEvent(null); setTooltipPosition(null); onEventClick(event); }}
                         className={`flex w-full items-start gap-3 rounded-md border p-3 text-left transition ${
                           isConflicting
                             ? 'border-amber-200 bg-amber-50 hover:border-amber-300 hover:bg-amber-100 dark:border-amber-300/20 dark:bg-amber-500/10 dark:hover:bg-amber-500/20'
@@ -2036,7 +2042,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                   <Clock className="w-4 h-4" />
                   <span>
                     {hoveredEvent.endDate && hoveredEvent.endDate > hoveredEvent.date
-                      ? `${hoveredEvent.date} - ${hoveredEvent.endDate}`
+                      ? `${moment(hoveredEvent.date).format('ddd D MMM')} - ${moment(hoveredEvent.endDate).format('ddd D MMM')}`
                       : `${moment(hoveredEvent.date).format('ddd D MMM')} · ${hasUnspecifiedEventTime(hoveredEvent) ? 'Time not provided' : `${hoveredEvent.time} (${hoveredEvent.duration} min)`}`}
                   </span>
                 </div>

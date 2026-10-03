@@ -32,8 +32,13 @@ test('desktop daily flow is compact, navigable and review-first', async ({ page 
 
   await page.getByRole('button', { name: /^Calendar$/ }).first().click();
   await expect(page).toHaveURL(/\?view=calendar/);
-  await expect(page.getByRole('button', { name: 'Quick add & import' })).toBeVisible();
-  await expect(page.getByText('Search or quick create', { exact: true })).toBeVisible();
+  const schoolInboxToggle = page.getByRole('button', { name: /School inbox & quick plan/ });
+  await expect(schoolInboxToggle).toBeVisible();
+  await expect(schoolInboxToggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.getByRole('region', { name: 'Quick add event' }).getByRole('button', { name: 'Add to calendar' })).toBeVisible();
+  await schoolInboxToggle.click();
+  await expect(page.getByRole('region', { name: 'School inbox and import' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Quick plan' })).toBeVisible();
 
   await page.goBack();
   await expect(overview).toBeVisible();
@@ -103,6 +108,8 @@ test('iPhone month shows same-day events before any tap', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/?view=calendar');
   await waitForHub(page);
+  await expect(page.getByRole('button', { name: /^Day$/ })).toBeVisible();
+  await page.getByRole('button', { name: /^Month$/ }).click();
   await page.getByRole('button', { name: 'Next calendar period' }).click();
 
   await expect(page.getByText(eventTitles[0], { exact: true }).first()).toBeVisible();
@@ -128,8 +135,10 @@ for (const viewport of [
     await expectNoHorizontalOverflow(page);
 
     await page.getByRole('button', { name: /^Calendar$/ }).last().click();
-    await expect(page.getByRole('button', { name: 'Quick add & import' })).toBeVisible();
-    await expect(page.getByText('Search or quick create', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('selected-day-agenda')).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Day$/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /School inbox & quick plan/ })).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.getByRole('button', { name: 'Add event' }).first()).toBeVisible();
     await expectNoHorizontalOverflow(page);
 
     await page.getByRole('button', { name: /^Shopping$/ }).last().click();

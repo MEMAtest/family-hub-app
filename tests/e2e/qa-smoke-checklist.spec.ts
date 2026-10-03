@@ -200,7 +200,7 @@ test.describe('QA Smoke Checklist - Mobile (iPhone 14 - 390x844)', () => {
     await expect(bottomNav).toBeVisible();
     await expect(page.getByRole('navigation', { name: 'All sections' })).toHaveCount(0);
 
-    for (const label of ['Cal', 'Money', 'Today', 'Meals', 'Basket', 'Personal']) {
+    for (const label of ['Cal', 'Money', 'Today', 'Meals', 'Basket', 'More']) {
       await expect(bottomNav.getByText(label, { exact: true })).toBeVisible();
     }
 

@@ -320,7 +320,7 @@ test.describe('everything else that answers "what is on" agrees with the grid', 
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
     await page.addInitScript(() => { if (!localStorage.getItem('familyHubTasks')) localStorage.setItem('familyHubTasks', JSON.stringify([{
-      id: 'weekly-homework', title: 'Weekly homework', assignedDate: '2026-09-02', dueDate: '2026-09-06',
+      id: 'task-weekly-homework', title: 'Weekly homework', assignedDate: '2026-09-02', dueDate: '2026-09-06',
       assignees: ['recurrence-e2e-child'], recurringPattern: { frequency: 'weekly', interval: 1 },
       taskType: 'homework', priority: 'medium', createdAt: '2026-09-01', updatedAt: '2026-09-01',
     }])); });
@@ -376,7 +376,7 @@ test.describe('everything else that answers "what is on" agrees with the grid', 
     const { eventUpdates } = await openCalendarWith(page, [withPattern({ title: 'Phonics', date: '2026-09-18', time: '15:30' })]);
     await page.locator('.rbc-event').filter({ hasText: 'Phonics' }).first().click();
     const dialog = page.getByRole('dialog', { name: 'Edit Event' });
-    await dialog.getByRole('button', { name: 'Stop repeating on save' }).click();
+    await dialog.getByRole('checkbox', { name: 'Stop repeating on save' }).check();
     await expect(dialog).toContainText('Repeats will stop when you save');
     await dialog.getByRole('button', { name: 'Update Event', exact: true }).click();
     await expect(dialog).not.toBeVisible();
@@ -461,7 +461,7 @@ test.describe('everything else that answers "what is on" agrees with the grid', 
     ]);
 
     const quickPlan = page.getByRole('heading', { name: 'Quick plan' }).locator('../..');
-    await page.getByRole('button', { name: 'School inbox', exact: true }).click();
+    await page.getByRole('button', { name: 'School inbox & quick plan', exact: true }).click();
     // Was empty: the panel only ever knew about the week the event was created.
     await expect(quickPlan).toContainText('1 today', { timeout: 10_000 });
     await expect(quickPlan).toContainText('Swimming lesson');
@@ -477,5 +477,27 @@ test.describe('everything else that answers "what is on" agrees with the grid', 
     const totals = page.getByText('Total Events').locator('..');
     await expect(totals).toContainText('18', { timeout: 15_000 });
     await expect(page.getByText('Busiest Month').locator('..')).toContainText('September');
+    await page.getByRole('button', { name: '2026-09-16: 1 events', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'Edit Event' });
+    await expect(dialog).toContainText('You opened');
+    await expect(dialog.locator('input[type="date"]')).toHaveValue('2026-09-02');
+    await dialog.getByRole('button', { name: 'Close event form' }).click();
+    await expect(dialog).toHaveCount(0);
+  });
+
+  test('closing a mobile event returns directly to the agenda without a stale preview sheet', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    await openCalendarWith(page, [withPattern({ date: '2026-09-14', title: 'Monday club' })]);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.getByRole('button', { name: 'Day', exact: true }).first().click();
+    await page.getByTestId('selected-day-agenda').getByRole('button', { name: /Monday club/ }).click();
+    const dialog = page.getByRole('dialog', { name: 'Edit Event' });
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole('button', { name: 'Close event form' }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'About this event', exact: true })).toHaveCount(0);
+    await expect(page.getByTestId('selected-day-agenda')).toBeVisible();
+    expect(errors).toEqual([]);
   });
 });

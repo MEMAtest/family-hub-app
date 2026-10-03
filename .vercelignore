@@ -30,6 +30,9 @@ env.local
 .tmp/
 .vercel/
 .claude/
+.local-backup-20260914/
+output/
+AGENTS.md
 .DS_Store
 *.log
 *.tsbuildinfo

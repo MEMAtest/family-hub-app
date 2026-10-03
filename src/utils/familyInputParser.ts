@@ -111,15 +111,19 @@ export const findDate = (text: string, today: string): DateHit | null => {
     if (isDateKey(rolled)) return { date: rolled, matched: monthDay[0] };
   }
 
-  for (const [name, dow] of Object.entries(WEEKDAYS)) {
-    if (new RegExp(`\\bnext ${name}\\b`).test(t)) {
-      return { date: nextWeekday(today, dow), matched: `next ${name}` };
-    }
+  const nextWeekdayHits = Object.entries(WEEKDAYS)
+    .filter(([name]) => new RegExp(`\\bnext ${name}\\b`).test(t))
+    .map(([name, dow]) => ({ name, date: nextWeekday(today, dow) }));
+  if (nextWeekdayHits.length > 0) {
+    const earliest = nextWeekdayHits.sort((a, b) => a.date.localeCompare(b.date))[0];
+    return { date: earliest.date, matched: `next ${earliest.name}` };
   }
-  for (const [name, dow] of Object.entries(WEEKDAYS)) {
-    if (new RegExp(`\\b(?:this |on )?${name}s?\\b`).test(t)) {
-      return { date: upcomingWeekday(today, dow), matched: name };
-    }
+  const weekdayHits = Object.entries(WEEKDAYS)
+    .filter(([name]) => new RegExp(`\\b(?:this |on )?${name}s?\\b`).test(t))
+    .map(([name, dow]) => ({ name, date: upcomingWeekday(today, dow) }));
+  if (weekdayHits.length > 0) {
+    const earliest = weekdayHits.sort((a, b) => a.date.localeCompare(b.date))[0];
+    return { date: earliest.date, matched: earliest.name };
   }
 
   return null;
@@ -131,21 +135,20 @@ export const findDate = (text: string, today: string): DateHit | null => {
 
 export const findRecurrence = (text: string, startDate: string): RecurringPattern | null => {
   const t = norm(text);
-  const repeats = /\b(every|each|weekly|fortnightly|monthly|yearly|annually|daily)\b/.test(t)
-    || /\b(mondays|tuesdays|wednesdays|thursdays|fridays|saturdays|sundays)\b/.test(t);
-  if (!repeats) return null;
-
+  const explicitRepeat = /\b(every|each|weekly|fortnightly|monthly|yearly|annually|daily)\b/.test(t);
   const interval = /\bfortnightly\b|\bevery other\b|\bevery 2 weeks\b/.test(t) ? 2 : 1;
-
-  if (/\bdaily\b|\bevery day\b/.test(t)) return { frequency: 'daily', interval };
-  if (/\bmonthly\b|\bevery month\b/.test(t)) return { frequency: 'monthly', interval };
-  if (/\byearly\b|\bannually\b|\bevery year\b/.test(t)) return { frequency: 'yearly', interval };
-
   // Collect every weekday mentioned: "every Monday and Wednesday".
   const days = new Set<number>();
   for (const [name, dow] of Object.entries(WEEKDAYS)) {
     if (new RegExp(`\\b${name}s?\\b`).test(t)) days.add(dow);
   }
+  const pluralWeekday = /\b(?:mondays|tuesdays|wednesdays|thursdays|fridays|saturdays|sundays)\b/.test(t);
+  const pairedWeekdays = days.size > 1 && /\band\b|[,/]/.test(t);
+  if (!explicitRepeat && !pluralWeekday && !pairedWeekdays) return null;
+
+  if (/\bdaily\b|\bevery day\b/.test(t)) return { frequency: 'daily', interval };
+  if (/\bmonthly\b|\bevery month\b/.test(t)) return { frequency: 'monthly', interval };
+  if (/\byearly\b|\bannually\b|\bevery year\b/.test(t)) return { frequency: 'yearly', interval };
 
   return {
     frequency: 'weekly',
@@ -265,7 +268,7 @@ const stripFrom = (text: string, phrase: string): string => {
 
 const QUERY_RE = /^(find|search|show|what|what's|whats|when|when's|whens|who|list|do i|have i|is there|are there|anything)\b/;
 
-const TASK_WORDS = /\b(homework|assignment|revision|spellings?|project|essay|worksheet|reading|practice|coursework|form|permission slip|chore)\b/;
+const TASK_WORDS = /\b(homework|assignment|revision|spellings?|project|essay|worksheet|reading|practice|coursework|form|permission slip|chore|bring|brings|pack|packs)\b/;
 
 export const inferTaskType = (text: string): CalendarTask['taskType'] => {
   const t = norm(text);
@@ -300,6 +303,7 @@ export const inferEventType = (text: string): CalendarEvent['type'] => {
 const STRIP = [
   /\b(add|create|book|schedule|put|make|set up|remind me to|remember to|need to|i need|we need)\b/gi,
   /\b(has|have|is|are|will be|goes to|going to|takes|does)\b/gi,
+  /\bbrings?\s+in\b/gi,
   /\b(every|each|weekly|fortnightly|monthly|yearly|annually|daily|every other)\b/gi,
   /\b(today|tomorrow|tmrw|day after tomorrow)\b/gi,
   /\b(next |this |on )?(monday|tuesday|wednesday|thursday|friday|saturday|sunday)s?\b/gi,
@@ -316,6 +320,7 @@ const STRIP = [
 ];
 
 export const extractTitle = (text: string, people: Person[]): string => {
+  const isBringInRoutine = /\bbrings?\s+in\b/i.test(text);
   let out = text;
   for (const person of people) {
     const first = norm(person.name).split(' ')[0];
@@ -327,6 +332,7 @@ export const extractTitle = (text: string, people: Person[]): string => {
 
   out = out.replace(/[,;]+/g, ' ').replace(/\s+/g, ' ').replace(/^[\s'"-]+|[\s'"-]+$/g, '').trim();
   out = out.replace(/^(an?|the|for|to)\s+/i, '').trim();
+  if (isBringInRoutine && out && !/^bring\b/i.test(out)) out = `Bring in ${out}`;
 
   if (!out) return 'Family event';
   return out[0].toUpperCase() + out.slice(1);
@@ -362,6 +368,7 @@ export const parseFamilyInput = ({
   const dateHit = findDate(beforeDue, today);
   const time = findTime(trimmed);
   const title = extractTitle(trimmed, people);
+  const recurrence = findRecurrence(trimmed, dateHit?.date ?? today);
   const needs: ParsedResult['needs'] = [];
   if (assignees.length === 0) needs.push('assignee');
 
@@ -370,10 +377,10 @@ export const parseFamilyInput = ({
 
   if (looksLikeTask) {
     const assignedDate = dateHit?.date ?? today;
-    const dueDate = dueHit?.date ?? addDays(assignedDate, 7);
-    if (!dueHit) needs.push('date');
+    const isBringInRoutine = Boolean(recurrence) && /\b(?:bring|brings|pack|packs|take|takes)\b/i.test(trimmed);
+    const dueDate = dueHit?.date ?? (isBringInRoutine ? assignedDate : addDays(assignedDate, 7));
+    if (!dueHit && !isBringInRoutine) needs.push('date');
 
-    const recurrence = findRecurrence(trimmed, assignedDate);
     let confidence = 0.5;
     if (dueHit) confidence += 0.25;
     if (dateHit) confidence += 0.1;
@@ -405,7 +412,6 @@ export const parseFamilyInput = ({
   if (!dateHit) needs.push('date');
   if (!time) needs.push('time');
 
-  const recurrence = findRecurrence(trimmed, date);
   const eventType = inferEventType(trimmed);
 
   let confidence = 0.4;
@@ -425,14 +431,16 @@ export const parseFamilyInput = ({
       person: assignees[0] ?? '',
       attendees: assignees.slice(1),
       date,
-      time: time ?? '09:00',
-      duration: inferDuration(trimmed),
+      time: time ?? '00:00',
+      duration: time ? inferDuration(trimmed) : 1439,
       recurring: recurrence ? (recurrence.frequency === 'daily' ? 'weekly' : recurrence.frequency) : 'none',
       isRecurring: Boolean(recurrence),
       ...(recurrence ? { recurringPattern: recurrence } : {}),
       cost: 0,
       type: eventType,
-      notes: `Created from: "${trimmed}"`,
+      notes: time
+        ? `Created from: "${trimmed}"`
+        : `Time not specified. Created from: "${trimmed}"`,
       priority: eventType === 'education' ? 'high' : 'medium',
       status: needs.length > 0 ? 'tentative' : 'confirmed',
       reminders: [

@@ -650,12 +650,12 @@ test('Perfume and Cycle remain usable at iPhone width', async ({ page }) => {
   await dismissSetupWizard(page);
   await expect(page.getByRole('heading', { name: 'Perfume Hub' })).toBeVisible({ timeout: 30_000 });
   await noOverflow('Perfume Hub');
-  await page.getByRole('button', { name: 'Open personal areas' }).click();
+  await page.getByRole('button', { name: 'Open more areas' }).click();
   await expect(page.getByRole('button', { name: 'Perfume', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Health & Cycle' })).toBeVisible();
   await page.getByRole('button', { name: 'Health & Cycle' }).click();
   await expect(page.getByRole('heading', { name: 'Health & Cycle' })).toBeVisible({ timeout: 30_000 });
-  await page.getByRole('button', { name: 'Open personal areas' }).click();
+  await page.getByRole('button', { name: 'Open more areas' }).click();
   const closePersonalMenu = page.getByRole('button', { name: 'Close personal menu' });
   const personalCloseBounds = await closePersonalMenu.boundingBox();
   expect(personalCloseBounds?.width, 'Personal menu close button width').toBeGreaterThanOrEqual(44);
@@ -663,7 +663,7 @@ test('Perfume and Cycle remain usable at iPhone width', async ({ page }) => {
   await closePersonalMenu.click();
   await expect(page.getByRole('button', { name: 'Close personal menu' })).toBeHidden();
   await expect(page.getByRole('heading', { name: 'Health & Cycle' })).toBeVisible();
-  await page.getByRole('button', { name: 'Open personal areas' }).click();
+  await page.getByRole('button', { name: 'Open more areas' }).click();
   await page.getByRole('button', { name: 'Perfume', exact: true }).click();
   await page.getByRole('button', { name: 'Browse catalogue' }).click();
   await expect(page.getByRole('dialog', { name: 'Fragrance catalogue' })).toBeVisible();
