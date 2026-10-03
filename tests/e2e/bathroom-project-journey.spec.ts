@@ -34,6 +34,7 @@ test('two-room overview preserves the existing selection and offers direct next 
   await page.getByRole('button', { name: 'Close comparison', exact: true }).click();
   await page.screenshot({ path: 'output/playwright/bathroom-overview-desktop-final.png' });
   await page.getByRole('button', { name: 'Main Bathroom', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Shower Room choices' })).not.toBeVisible();
   await expect(page.getByRole('heading', { name: 'Main Bathroom', exact: true })).toBeVisible();
   await expect(page.getByText(/Quote: 500mm wide/).first()).toBeVisible();
   await page.getByRole('button', { name: 'Shower Room', exact: true }).click();
@@ -46,6 +47,7 @@ test('phone navigation, room notes and basket quantities survive reload', async 
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: 'output/playwright/bathroom-overview-mobile-final.png' });
   await page.getByRole('button', { name: 'Main Bathroom', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Shower Room choices' })).not.toBeVisible();
   await page.getByRole('button', { name: /Edit room/ }).click();
   await page.getByLabel('Size & layout notes').fill('QA: confirm door clearance before ordering');
   await page.getByRole('button', { name: 'Save room', exact: true }).click();
