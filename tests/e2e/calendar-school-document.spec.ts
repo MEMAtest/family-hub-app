@@ -292,6 +292,8 @@ test.describe('school document calendar intake', () => {
     await expect(page.getByRole('checkbox', { name: 'Stop repeating on save' })).toBeVisible();
     await expect(page.getByLabel('What is this event about? (optional)')).toHaveValue('Screening check June –Friday 18');
     await page.getByRole('button', { name: 'Close event form' }).click();
+    await page.getByRole('button', { name: 'School inbox & quick plan', exact: true }).click();
+    await expect(page.getByRole('region', { name: 'School inbox and import' })).not.toContainText('Phonics');
     expect(state.eventPosts).toEqual([]);
   });
   test('uploads a school PDF, preserves the source link, and schedules a weekly routine', async ({ page }) => {

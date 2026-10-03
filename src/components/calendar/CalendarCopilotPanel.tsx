@@ -221,7 +221,7 @@ const CalendarCopilotPanel = ({
     const start = toDateKey(currentDate);
     const end = addDays(start, 6);
     const priorityRank = { high: 0, medium: 1, low: 2 } as const;
-    const eventItems = expandEvents(events.filter((event) => event.status !== 'cancelled'), start, end)
+    const eventItems = expandEvents(events.filter((event) => event.status !== 'cancelled' && !recurringSourceDateWarning(event)), start, end)
       .map((occurrence) => ({
         id: occurrence.occurrenceId,
         title: occurrence.event.source === 'gmail-school-email' ? schoolEventTitle(occurrence.event.title) : occurrence.event.title,
