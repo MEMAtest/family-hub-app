@@ -132,6 +132,8 @@ const YearView: React.FC<YearViewProps> = ({
           endDate: occ.endDate,
           time: occ.time,
           duration: occ.duration,
+          occurrenceDate: occ.date,
+          seriesStartDate: occ.event.isRecurring ? occ.event.date : undefined,
         }));
         const dayTotalCost = dayEvents.reduce((sum, event) => sum + (event.cost || 0), 0);
 
@@ -250,8 +252,11 @@ const YearView: React.FC<YearViewProps> = ({
         ))}
 
         {monthData.days.map((day, index) => (
-          <div
+          <button
             key={index}
+            type="button"
+            disabled={day.isOtherMonth}
+            aria-label={`${day.fullDate.getFullYear()}-${String(day.fullDate.getMonth() + 1).padStart(2, '0')}-${String(day.date).padStart(2, '0')}: ${day.eventCount} events`}
             className={`aspect-square text-xs flex items-center justify-center rounded cursor-pointer transition-colors ${
               day.isOtherMonth
                 ? 'text-gray-300'
@@ -270,7 +275,7 @@ const YearView: React.FC<YearViewProps> = ({
             title={day.eventCount > 0 ? `${day.eventCount} events${day.totalCost > 0 ? `, £${day.totalCost}` : ''}` : ''}
           >
             {day.date}
-          </div>
+          </button>
         ))}
       </div>
     </div>
@@ -410,7 +415,7 @@ const YearView: React.FC<YearViewProps> = ({
                               year: 'numeric',
                               month: 'long',
                               day: 'numeric'
-                            })} at {event.time}
+                            })}{/(?:school email did not specify a time|time not provided by source)/i.test(event.notes || '') ? ' · Time not specified' : ` at ${event.time}`}
                           </p>
                           {event.location && (
                             <p className="text-sm text-gray-500">{event.location}</p>

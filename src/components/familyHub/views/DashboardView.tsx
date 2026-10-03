@@ -50,6 +50,8 @@ import { UpcomingContractorVisits } from '@/components/contractors';
 import BrainFocusWidget from '@/components/dashboard/BrainFocusWidget';
 import { DEFAULT_DASHBOARD_PREFERENCES, useFamilyStore } from '@/store/familyStore';
 import { useNotifications } from '@/contexts/NotificationContext';
+import { addDays, expandEvents } from '@/utils/recurrence';
+import { formatDateForInput } from '@/utils/formatDate';
 
 type FeedItem = {
   id: string;
@@ -219,7 +221,7 @@ const CollapsedWidget = ({
 
 export const DashboardView = () => {
   const { setView } = useAppView();
-  const { events, openCreateForm } = useCalendarContext();
+  const { events, openCreateForm, openEditForm } = useCalendarContext();
   const { data: budgetData, openForm: openBudgetForm } = useBudgetContext();
   const mealsContext = useMealsContext();
   const { openMealForm } = mealsContext;
@@ -350,19 +352,23 @@ export const DashboardView = () => {
 
   const upcomingEvents = useMemo(() => {
     const now = new Date();
-    return events
+    const today = formatDateForInput(now);
+    return expandEvents(events, today, addDays(today, 90))
+      .map((occurrence) => ({ ...occurrence.event, date: occurrence.date, time: occurrence.time,
+        duration: occurrence.duration, endDate: occurrence.endDate,
+        occurrenceDate: occurrence.date, seriesStartDate: occurrence.isRecurring ? occurrence.event.date : undefined }))
       .filter((event) => new Date(`${event.date}T${event.time}`) >= now)
       .sort((a, b) => new Date(`${a.date}T${a.time}`).getTime() - new Date(`${b.date}T${b.time}`).getTime())
       .slice(0, 5);
   }, [events]);
 
   const schoolTerms = useMemo(() => {
-    // Use selected school year data - map dynamic years to available data
-    // For now, use 2025-2026 data for current year, 2026-2027 for next
-    return selectedSchoolYear === currentAcademicYear
-      ? stewartFleming2025To2026
-      : stewartFleming2026To2027;
-  }, [selectedSchoolYear, currentAcademicYear]);
+    const availableYears: Record<string, typeof stewartFleming2025To2026> = {
+      '2025-2026': stewartFleming2025To2026,
+      '2026-2027': stewartFleming2026To2027,
+    };
+    return availableYears[selectedSchoolYear] ?? [];
+  }, [selectedSchoolYear]);
 
   const { expenseRecords } = useMemo(() => extractBudgetRecords(budgetData), [budgetData]);
 
@@ -757,15 +763,15 @@ export const DashboardView = () => {
             {upcomingEvents.map((event) => {
               const person = members.find((m) => m.id === event.person);
               return (
-              <div key={event.id} className="flex items-center justify-between rounded-lg border border-[#dde5e0] bg-[#f7fbf8] p-3 dark:border-slate-700 dark:bg-slate-800">
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">{event.title}</p>
+              <button type="button" onClick={() => openEditForm(event)} key={`${event.id}:${event.date}`} className="flex w-full items-center justify-between gap-3 rounded-lg border border-[#dde5e0] bg-[#f7fbf8] p-3 text-left hover:border-[#147c72] dark:border-slate-700 dark:bg-slate-800">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-900 dark:text-slate-100">{event.title}</p>
                     <p className="text-xs text-gray-500">
                       {event.date} at {event.time} • {event.location || 'TBC'}
                     </p>
                   </div>
                   <span className="text-xs text-gray-400">{person?.name || 'Family'}</span>
-                </div>
+                </button>
               );
             })}
           </div>
@@ -949,7 +955,7 @@ export const DashboardView = () => {
             {upcomingSchoolHighlights.length === 0 ? (
               <div className="col-span-2 text-center py-8">
                 <p className="text-sm text-gray-500">
-                  All term dates for {selectedSchoolYear} have passed
+                  {schoolTerms.length ? `All term dates for ${selectedSchoolYear} have passed` : `Term dates for ${selectedSchoolYear} have not been added yet`}
                 </p>
               </div>
             ) : (

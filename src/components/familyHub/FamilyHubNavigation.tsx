@@ -2,7 +2,7 @@
 
 import { Fragment } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
-import { LucideIcon, UserRound, X } from 'lucide-react';
+import { LucideIcon, Menu, X } from 'lucide-react';
 import OmosanyaLogo from '@/components/common/OmosanyaLogo';
 
 export interface NavItem {
@@ -72,7 +72,7 @@ export const FamilyHubNavigation = ({
 
   const renderNav = (variant: 'desktop' | 'mobile') => (
     <nav className="flex flex-col gap-5">
-      {(variant === 'mobile' ? [...groupedItems].sort((left, right) => Number(right.title === 'Personal') - Number(left.title === 'Personal')) : groupedItems).map((group) => (
+      {groupedItems.map((group) => (
         <div key={`${variant}-${group.title}`} className="space-y-1.5">
           <p className="px-3 text-[10px] font-extrabold uppercase tracking-[0.16em] text-[#8a9690] dark:text-slate-500">
             {group.title}
@@ -114,10 +114,10 @@ export const FamilyHubNavigation = ({
                 ? 'bg-[#eaf1e7] text-[#147c72] dark:bg-[#147c72]/20 dark:text-[#56c6b8]'
                 : 'text-[#5f6a64] hover:bg-[#eaf1e7] dark:text-slate-300 dark:hover:bg-slate-800'
             }`}
-            aria-label="Open personal areas"
+            aria-label="More sections"
           >
-            <UserRound className="h-5 w-5 flex-shrink-0" />
-            <span className="max-w-full truncate">Personal</span>
+            <Menu className="h-5 w-5 flex-shrink-0" />
+            <span className="max-w-full truncate">More</span>
           </button>
         </div>
       </nav>
@@ -161,8 +161,8 @@ export const FamilyHubNavigation = ({
               leaveFrom="translate-x-0"
               leaveTo="-translate-x-full"
             >
-              <Dialog.Panel className="relative flex w-[85vw] max-w-[280px] flex-col bg-white p-4 shadow-lg dark:bg-slate-900 sm:max-w-xs pwa-safe-top">
-                <div className="flex items-center justify-between mb-4">
+              <Dialog.Panel className="relative flex h-full min-h-0 w-[85vw] max-w-[280px] flex-col bg-white p-4 shadow-lg dark:bg-slate-900 sm:max-w-xs pwa-safe-top">
+                <div className="mb-4 flex shrink-0 items-center justify-between">
                   <div className="flex min-w-0 items-center gap-3">
                     <OmosanyaLogo className="h-10 w-10" />
                     <div className="min-w-0">
@@ -179,7 +179,9 @@ export const FamilyHubNavigation = ({
                     <X className="h-5 w-5" />
                   </button>
                 </div>
-                {renderNav('mobile')}
+                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-[env(safe-area-inset-bottom)]">
+                  {renderNav('mobile')}
+                </div>
               </Dialog.Panel>
             </Transition.Child>
           </div>

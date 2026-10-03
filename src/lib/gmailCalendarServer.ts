@@ -1,7 +1,16 @@
 import { google, gmail_v1 } from 'googleapis';
+import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { createOAuthClient } from '@/lib/googleCalendarServer';
 import { ingestCalendarEmailPayload } from '@/lib/calendarEmailIngestion';
+import {
+  hasAuthenticatedStewartFlemingSender,
+  isExpectedGmailAccount,
+  isStewartFlemingSender,
+  STEWART_FLEMING_EMAIL_DOMAIN,
+} from '@/utils/schoolEmail';
+
+export { hasAuthenticatedStewartFlemingSender, isStewartFlemingSender } from '@/utils/schoolEmail';
 
 const decodeBase64Url = (value: string) =>
   Buffer.from(value.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8');
@@ -19,6 +28,9 @@ export const gmailForwardingAddress = (email: string | null | undefined) => {
 export const getAuthedGmailClient = async (familyId: string) => {
   const connection = await prisma.gmailConnection.findUnique({ where: { familyId } });
   if (!connection || !connection.enabled) throw new Error('Gmail is not connected');
+  if (!isExpectedGmailAccount(connection.googleUserEmail, process.env.GOOGLE_GMAIL_ACCOUNT)) {
+    throw new Error('The connected Gmail account does not match the configured Family Hub account. Reconnect the intended account.');
+  }
 
   const oauth2Client = createOAuthClient();
   oauth2Client.setCredentials({
@@ -126,6 +138,9 @@ export const syncGmailCalendarInbox = async (familyId: string) => {
   if (!googleUserEmail) {
     const profile = await gmail.users.getProfile({ userId: 'me' });
     googleUserEmail = profile.data.emailAddress || null;
+    if (!isExpectedGmailAccount(googleUserEmail, process.env.GOOGLE_GMAIL_ACCOUNT)) {
+      throw new Error('The connected Gmail account does not match the configured Family Hub account. Reconnect the intended account.');
+    }
     if (googleUserEmail) {
       await prisma.gmailConnection.update({ where: { familyId }, data: { googleUserEmail } });
     }
@@ -153,7 +168,10 @@ export const syncGmailCalendarInbox = async (familyId: string) => {
       const result = await ingestCalendarEmailPayload({
         type: 'gmail',
         data: parsed,
-      }, { familyId, eventSource: 'gmail-calendar-email' });
+      }, {
+        familyId,
+        eventSource: 'gmail-calendar-email',
+      });
       if (result.statusCode === 200) {
         processed += 1;
         if (result.body.duplicate) duplicates += 1;
@@ -176,6 +194,262 @@ export const syncGmailCalendarInbox = async (familyId: string) => {
     autoCreated,
     needsReview,
     duplicates,
+    errors,
+  };
+};
+
+export const buildStewartFlemingGmailQuery = (cursorInternalDateMs?: number, upperBoundMs?: number) => {
+  const after = cursorInternalDateMs && cursorInternalDateMs > 0
+    ? ` after:${Math.max(0, Math.floor(cursorInternalDateMs / 1000) - 1)}`
+    : '';
+  const before = upperBoundMs && upperBoundMs > 0 ? ` before:${Math.floor(upperBoundMs / 1000)}` : '';
+  return `from:${STEWART_FLEMING_EMAIL_DOMAIN} newer_than:90d${after}${before}`;
+};
+
+const schoolSyncCursorId = (familyId: string) => `gmail-school-cursor-${familyId}`;
+const jsonMetadata = (value: Prisma.JsonValue | null) =>
+  value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+const metadataEquals = (value: Prisma.JsonValue | null) => ({
+  equals: value === null ? Prisma.DbNull : value as Prisma.InputJsonValue,
+});
+
+type SchoolGmailSyncState = {
+  cursorMs?: number;
+  activeQuery?: string | null;
+  pageToken?: string | null;
+  backfillComplete?: boolean;
+  failedMessageIds?: string[];
+};
+
+const storeSchoolGmailSyncState = async (familyId: string, state: SchoolGmailSyncState) => {
+  const id = schoolSyncCursorId(familyId);
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const current = await prisma.notification.findUnique({ where: { id }, select: { metadata: true } });
+    const currentMetadata = jsonMetadata(current?.metadata ?? null);
+    const currentCursor = Number(currentMetadata.schoolGmailInternalDateMs) || 0;
+    const metadata: Record<string, unknown> = { ...currentMetadata };
+    if (state.cursorMs !== undefined) metadata.schoolGmailInternalDateMs = Math.max(currentCursor, state.cursorMs);
+    if (state.activeQuery !== undefined) {
+      if (state.activeQuery) metadata.schoolGmailActiveQuery = state.activeQuery;
+      else delete metadata.schoolGmailActiveQuery;
+    }
+    if (state.pageToken !== undefined) {
+      if (state.pageToken) metadata.schoolGmailPageToken = state.pageToken;
+      else delete metadata.schoolGmailPageToken;
+    }
+    if (state.backfillComplete !== undefined) metadata.schoolGmailBackfillComplete = state.backfillComplete;
+    if (state.failedMessageIds !== undefined) {
+      if (state.failedMessageIds.length > 0) metadata.schoolGmailFailedMessageIds = state.failedMessageIds;
+      else delete metadata.schoolGmailFailedMessageIds;
+    }
+    const nextMetadata = metadata as Prisma.InputJsonObject;
+    if (current) {
+      const updated = await prisma.notification.updateMany({
+        where: { id, metadata: metadataEquals(current.metadata) },
+        data: { metadata: nextMetadata },
+      });
+      if (updated.count === 1) return;
+      continue;
+    }
+    try {
+      await prisma.notification.create({
+        data: {
+          id,
+          familyId,
+          type: 'system',
+          title: 'School email sync state',
+          message: 'Internal Gmail synchronization checkpoint.',
+          priority: 'low',
+          category: 'system',
+          read: true,
+          actionRequired: false,
+          metadata: nextMetadata,
+        },
+      });
+      return;
+    } catch (error) {
+      if ((error as { code?: string })?.code !== 'P2002') throw error;
+    }
+  }
+};
+
+/** Import only mail sent by Stewart Fleming; repeated cron runs are deduplicated by RFC Message-ID. */
+export const syncStewartFlemingGmail = async (familyId: string) => {
+  const { connection, gmail } = await getAuthedGmailClient(familyId);
+  let googleUserEmail = connection.googleUserEmail;
+  if (!googleUserEmail) {
+    const profile = await gmail.users.getProfile({ userId: 'me' });
+    googleUserEmail = profile.data.emailAddress || null;
+    if (!isExpectedGmailAccount(googleUserEmail, process.env.GOOGLE_GMAIL_ACCOUNT)) {
+      throw new Error('The connected Gmail account does not match the configured Family Hub account. Reconnect the intended account.');
+    }
+    if (googleUserEmail) {
+      await prisma.gmailConnection.update({ where: { familyId }, data: { googleUserEmail } });
+    }
+  }
+  if (!googleUserEmail) throw new Error('The connected Google account email could not be determined.');
+  if (!isExpectedGmailAccount(googleUserEmail, process.env.GOOGLE_GMAIL_ACCOUNT)) {
+    throw new Error('The connected Gmail account does not match the configured Family Hub account. Reconnect the intended account.');
+  }
+
+  const cursorId = schoolSyncCursorId(familyId);
+  const cursorRecord = await prisma.notification.findUnique({ where: { id: cursorId }, select: { metadata: true } });
+  const cursorMetadata = jsonMetadata(cursorRecord?.metadata ?? null);
+  const cursorInternalDateMs = Number(cursorMetadata.schoolGmailInternalDateMs) || 0;
+  const storedQuery = typeof cursorMetadata.schoolGmailActiveQuery === 'string'
+    ? cursorMetadata.schoolGmailActiveQuery
+    : null;
+  const pageToken = typeof cursorMetadata.schoolGmailPageToken === 'string'
+    ? cursorMetadata.schoolGmailPageToken
+    : undefined;
+  const backfillComplete = cursorMetadata.schoolGmailBackfillComplete === true;
+  const query = storedQuery || buildStewartFlemingGmailQuery(
+    backfillComplete ? cursorInternalDateMs : undefined,
+    Date.now() + 1000,
+  );
+  const page = await gmail.users.messages.list({
+    userId: 'me',
+    q: query,
+    maxResults: 20,
+    ...(pageToken ? { pageToken } : {}),
+  });
+  const messageRefs = page.data.messages || [];
+  const nextPageToken = page.data.nextPageToken || null;
+  const pendingMessageIds = Array.isArray(cursorMetadata.schoolGmailFailedMessageIds)
+    ? cursorMetadata.schoolGmailFailedMessageIds.filter((id): id is string => typeof id === 'string')
+    : [];
+  const referencesById = new Map<string, gmail_v1.Schema$Message>();
+  for (const id of pendingMessageIds) referencesById.set(id, { id });
+  for (const reference of [...messageRefs].reverse()) {
+    if (reference.id) referencesById.set(reference.id, reference);
+  }
+  const messagesToProcess = [...referencesById.values()];
+
+  let processed = 0;
+  let autoCreated = 0;
+  let needsReview = 0;
+  let duplicates = 0;
+  let ignored = 0;
+  let unauthenticated = 0;
+  let nextCursorMs = cursorInternalDateMs;
+  const errors: string[] = [];
+  const failedMessageIds = new Set(pendingMessageIds);
+
+  for (const messageRef of messagesToProcess) {
+    if (!messageRef.id) continue;
+    failedMessageIds.delete(messageRef.id);
+    try {
+      const metadataResponse = await gmail.users.messages.get({
+        userId: 'me',
+        id: messageRef.id,
+        format: 'metadata',
+        metadataHeaders: ['From', 'To', 'Delivered-To', 'Message-ID', 'Subject', 'Authentication-Results'],
+      });
+      const headers = metadataResponse.data.payload?.headers;
+      const internalDateMs = Number(metadataResponse.data.internalDate);
+      if (!Number.isFinite(internalDateMs) || internalDateMs <= 0) {
+        errors.push(`${messageRef.id}: Gmail did not return the message receive time`);
+        failedMessageIds.add(messageRef.id);
+        continue;
+      }
+      const sender = headerValue(headers, 'From');
+      if (!isStewartFlemingSender(sender)) {
+        ignored += 1;
+        nextCursorMs = Math.max(nextCursorMs, internalDateMs);
+        continue;
+      }
+      if (!hasAuthenticatedStewartFlemingSender(headers || [])) {
+        unauthenticated += 1;
+        nextCursorMs = Math.max(nextCursorMs, internalDateMs);
+        continue;
+      }
+
+      const messageId = headerValue(headers, 'Message-ID') || messageRef.id;
+      const existing = await prisma.calendarEmailIntake.findFirst({
+        where: { familyId, messageId },
+        select: { id: true, status: true, parsedDrafts: true, metadata: true },
+      });
+      if (existing) {
+        const existingMetadata = jsonMetadata(existing.metadata ?? null);
+        if (existing.status === 'processing' && existingMetadata.schoolSenderVerified === true) {
+          const result = await ingestCalendarEmailPayload({
+            type: 'gmail',
+            data: { from: sender, messageId },
+          }, {
+            familyId,
+            eventSource: 'gmail-school-email',
+            authenticatedSchoolSender: true,
+          });
+          if (result.statusCode !== 200) {
+            errors.push(`${messageRef.id}: ${String(result.body.error || 'Import retry failed')}`);
+            failedMessageIds.add(messageRef.id);
+            continue;
+          }
+          processed += 1;
+          duplicates += 1;
+          autoCreated += Number(result.body.autoCreated || 0);
+          needsReview += Number(result.body.needsReview || 0);
+          nextCursorMs = Math.max(nextCursorMs, internalDateMs);
+          continue;
+        }
+        if (existing.status === 'processing') {
+          await prisma.calendarEmailIntake.update({
+            where: { id: existing.id },
+            data: {
+              status: 'review_required',
+              needsReview: Array.isArray(existing.parsedDrafts) ? existing.parsedDrafts.length : 1,
+            },
+          });
+        }
+        duplicates += 1;
+        nextCursorMs = Math.max(nextCursorMs, internalDateMs);
+        continue;
+      }
+
+      const parsed = await readGmailMessage(gmail, messageRef.id, googleUserEmail);
+      const result = await ingestCalendarEmailPayload({ type: 'gmail', data: parsed }, {
+        familyId,
+        eventSource: 'gmail-school-email',
+        authenticatedSchoolSender: true,
+      });
+      if (result.statusCode !== 200) {
+        errors.push(`${messageRef.id}: ${String(result.body.error || 'Import failed')}`);
+        failedMessageIds.add(messageRef.id);
+        continue;
+      }
+      processed += 1;
+      if (result.body.duplicate) duplicates += 1;
+      autoCreated += Number(result.body.autoCreated || 0);
+      needsReview += Number(result.body.needsReview || 0);
+      nextCursorMs = Math.max(nextCursorMs, internalDateMs);
+    } catch (error) {
+      errors.push(`${messageRef.id}: ${error instanceof Error ? error.message : 'Import failed'}`);
+      failedMessageIds.add(messageRef.id);
+    }
+  }
+
+  await storeSchoolGmailSyncState(familyId, {
+    activeQuery: nextPageToken ? query : null,
+    pageToken: nextPageToken,
+    cursorMs: nextCursorMs,
+    backfillComplete: nextPageToken ? backfillComplete : true,
+    failedMessageIds: [...failedMessageIds],
+  });
+  if (errors.length === 0 && !nextPageToken && failedMessageIds.size === 0) {
+    await prisma.gmailConnection.update({ where: { familyId }, data: { lastSyncAt: new Date() } });
+  }
+  return {
+    connectedEmail: googleUserEmail,
+    senderDomain: STEWART_FLEMING_EMAIL_DOMAIN,
+    matched: messagesToProcess.length,
+    processed,
+    autoCreated,
+    needsReview,
+    duplicates,
+    ignored,
+    unauthenticated,
+    batchLimit: 20,
+    hasMore: Boolean(nextPageToken || failedMessageIds.size),
     errors,
   };
 };

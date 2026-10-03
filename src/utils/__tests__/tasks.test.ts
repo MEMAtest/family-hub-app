@@ -6,6 +6,7 @@ import {
   formatTaskLabel,
   getTaskStatus,
   tasksActiveOn,
+  toggleTaskOccurrenceCompletion,
 } from '@/utils/tasks';
 
 const makeTask = (overrides: Partial<CalendarTask> = {}): CalendarTask => ({
@@ -103,6 +104,33 @@ describe('repeating work', () => {
     expect(occurrences[1].completedAt).toBeNull();
   });
 
+  it('expands a date-keyed completion only onto its matching recurring occurrence', () => {
+    const task = makeTask({
+      recurringPattern: { frequency: 'weekly', interval: 1 },
+      occurrenceCompletions: { '2026-09-09': '2026-09-10T10:00:00Z' },
+    });
+    const occurrences = expandTasks([task], '2026-09-01', '2026-09-20');
+    expect(occurrences.map((item) => item.completedAt)).toEqual([
+      null,
+      '2026-09-10T10:00:00Z',
+      null,
+    ]);
+  });
+
+  it('toggles completion for one date without changing other recurring dates', () => {
+    const task = makeTask({
+      recurringPattern: { frequency: 'weekly', interval: 1 },
+      occurrenceCompletions: { '2026-09-02': '2026-09-03T10:00:00Z' },
+    });
+    const completed = toggleTaskOccurrenceCompletion(task, '2026-09-09', '2026-09-10T10:00:00Z');
+    expect(completed.occurrenceCompletions).toEqual({
+      '2026-09-02': '2026-09-03T10:00:00Z',
+      '2026-09-09': '2026-09-10T10:00:00Z',
+    });
+    expect(toggleTaskOccurrenceCompletion(completed, '2026-09-09', '2026-09-11T10:00:00Z')
+      .occurrenceCompletions?.['2026-09-09']).toBeNull();
+  });
+
   it('gives each instance a unique id', () => {
     const task = makeTask({ recurringPattern: { frequency: 'weekly', interval: 1 } });
     const ids = expandTasks([task], '2026-09-01', '2026-09-30').map((o) => o.occurrenceId);
@@ -134,6 +162,13 @@ describe('labels', () => {
 });
 
 describe('rejects nonsense', () => {
+  it('toggles a one-off task in the normal completion field', () => {
+    const task = makeTask();
+    const completed = toggleTaskOccurrenceCompletion(task, task.assignedDate, '2026-09-03T10:00:00Z');
+    expect(completed.completedAt).toBe('2026-09-03T10:00:00Z');
+    expect(expandTasks([completed], '2026-09-01', '2026-09-30')[0].completedAt).toBe(completed.completedAt);
+    expect(toggleTaskOccurrenceCompletion(completed, task.assignedDate, '2026-09-04T10:00:00Z').completedAt).toBeNull();
+  });
   it('ignores tasks with malformed dates rather than crashing the grid', () => {
     expect(expandTasks([makeTask({ dueDate: 'whenever' })], '2026-09-01', '2026-09-30')).toEqual([]);
   });

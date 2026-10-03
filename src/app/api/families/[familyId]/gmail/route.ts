@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireFamilyAccess } from '@/lib/auth-utils';
-import { gmailForwardingAddress, syncGmailCalendarInbox } from '@/lib/gmailCalendarServer';
+import {
+  gmailForwardingAddress,
+  syncGmailCalendarInbox,
+  syncStewartFlemingGmail,
+} from '@/lib/gmailCalendarServer';
 
 export const runtime = 'nodejs';
 
@@ -24,8 +28,19 @@ export const GET = requireFamilyAccess(async (_request: NextRequest, context) =>
 export const POST = requireFamilyAccess(async (_request: NextRequest, context) => {
   try {
     const { familyId } = await context.params;
-    const result = await syncGmailCalendarInbox(familyId);
-    return NextResponse.json(result);
+    const school = await syncStewartFlemingGmail(familyId);
+    const forwarded = await syncGmailCalendarInbox(familyId);
+    return NextResponse.json({
+      ...school,
+      matched: school.matched + forwarded.matched,
+      processed: school.processed + forwarded.processed,
+      autoCreated: school.autoCreated + forwarded.autoCreated,
+      needsReview: school.needsReview + forwarded.needsReview,
+      duplicates: school.duplicates + forwarded.duplicates,
+      forwardedMatched: forwarded.matched,
+      schoolMatched: school.matched,
+      errors: [...school.errors, ...forwarded.errors],
+    });
   } catch (error) {
     console.error('Gmail calendar sync error:', error);
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Failed to sync Gmail' }, { status: 500 });

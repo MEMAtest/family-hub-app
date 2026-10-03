@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { encodeStoredRecurringPattern } from '../../src/lib/calendarEventMapping';
 
 /**
  * Mobile calendar journeys.
@@ -37,7 +38,7 @@ const unread = Array.from({ length: 50 }, (_, i) => ({
   actionRequired: false, actions: [], createdAt: '2026-09-14T08:00:00.000Z', updatedAt: '2026-09-14T08:00:00.000Z',
 }));
 
-const stubApis = async (page: Page) => {
+const stubApis = async (page: Page, events: unknown[]) => {
   await page.route('**/api/families/**', (route) =>
     route.request().url().includes('/notifications')
       ? route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(unread) })
@@ -52,7 +53,13 @@ const stubApis = async (page: Page) => {
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([child]) })
   );
   await page.route('**/api/families/*/events', (route) =>
-    route.fulfill({ status: 200, contentType: 'application/json', body: route.request().method() === 'GET' ? '[]' : '{}' })
+    route.fulfill({ status: 200, contentType: 'application/json', body: route.request().method() === 'GET'
+      ? JSON.stringify((events as any[]).map((event) => ({ ...event,
+          personId: event.person, eventDate: `${event.date}T00:00:00Z`,
+          eventTime: `${event.date}T${event.time}:00Z`, durationMinutes: event.duration,
+          eventType: event.type, recurringPattern: encodeStoredRecurringPattern(event.recurring, event.recurringPattern),
+        })))
+      : '{}' })
   );
   await page.route('**/api/auth/me', (route) =>
     route.fulfill({
@@ -81,10 +88,11 @@ const openCalendar = async (page: Page, events: unknown[], width: number, height
     localStorage.setItem('familyId', 'mobile-family');
     localStorage.setItem('calendarEvents', JSON.stringify(seed));
   }, events);
-  await stubApis(page);
+  await stubApis(page, events);
   await page.goto('/');
   await page.getByRole('button', { name: /^Calendar$/ }).last().click();
-  await expect(page.locator('.rbc-calendar')).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId('selected-day-agenda')).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole('button', { name: /^Day$/ })).toBeVisible();
   await page.waitForTimeout(1_000);
 };
 
@@ -113,6 +121,7 @@ for (const phone of PHONES) {
   test.describe(`${phone.name}`, () => {
     test('tapping a later occurrence selects the day tapped, not the day the series began', async ({ page }) => {
       await openCalendar(page, [swimming], phone.width, phone.height);
+      await page.getByRole('button', { name: /^Month$/ }).click();
 
       const blocks = page.locator('.rbc-event', { hasText: 'Swimming lesson' });
       await expect(blocks).toHaveCount(5);
@@ -128,6 +137,7 @@ for (const phone of PHONES) {
 
     test('a Sunday repeat opens on that Sunday', async ({ page }) => {
       await openCalendar(page, [sundayClub], phone.width, phone.height);
+      await page.getByRole('button', { name: /^Month$/ }).click();
 
       const blocks = page.locator('.rbc-event', { hasText: 'Sunday swimming' });
       await expect(blocks).toHaveCount(4);
@@ -259,10 +269,13 @@ test.describe('the school-document review card fits on a phone', () => {
 
       await page.goto('/');
       await page.getByRole('button', { name: /^Calendar$/ }).last().click();
-      await expect(page.locator('.rbc-calendar')).toBeVisible({ timeout: 20_000 });
+      await expect(page.getByTestId('selected-day-agenda')).toBeVisible({ timeout: 20_000 });
       await page.waitForTimeout(1_200);
 
-      await page.getByRole('button', { name: /Review events|Review/i }).first().click({ force: true }).catch(() => {});
+      await page.getByRole('button', { name: /School inbox & quick plan/ }).click();
+      const schoolInbox = page.getByRole('region', { name: 'School inbox and import' });
+      await expect(schoolInbox).toBeVisible();
+      await schoolInbox.getByRole('button', { name: /Phonics screening/ }).click();
       await page.waitForTimeout(800);
 
       const schedule = page.getByRole('button', { name: /Schedule weekly/i }).first();

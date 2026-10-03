@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { ArrowLeft, Mail, Users, FileText, Calendar, Bell, CheckSquare, Settings, Edit2, Plus, CalendarPlus, Phone, Building2, UserPlus, Upload, BarChart3, PieChart, Download, FileSpreadsheet, FileJson, Printer, ShoppingBasket } from 'lucide-react';
+import { ArrowLeft, MoreHorizontal, Bath, ShowerHead, LayoutDashboard, Mail, Users, FileText, Calendar, Bell, CheckSquare, Settings, Edit2, Plus, CalendarPlus, Phone, Building2, UserPlus, Upload, BarChart3, PieChart, Download, FileSpreadsheet, FileJson, Printer, ShoppingBasket } from 'lucide-react';
 import { ProjectEmailInbox } from './ProjectEmailInbox';
 import PDFQuoteExtractor from '@/components/projects/PDFQuoteExtractor';
 import QuoteCostBreakdownChart from '@/components/projects/charts/QuoteCostBreakdownChart';
@@ -29,6 +29,8 @@ import { CONTRACTOR_SPECIALTIES, type ContractorSpecialty } from '@/types/contra
 import { formatDate } from '@/utils/formatDate';
 import { exportQuotesToCSV, exportQuotesToExcel, exportQuotesToJSON, exportQuotesToHTML } from '@/utils/quoteExporters';
 import ProjectMaterialsView from './ProjectMaterialsView';
+import { isBathroomProject, roomName } from './bathroomProject.helpers';
+import type { SourcingRoomId } from '@/types/sourcing.types';
 
 const statusStyles: Record<ProjectStatus, { bg: string; text: string; label: string }> = {
   planning: { bg: 'bg-blue-100 dark:bg-blue-500/20', text: 'text-blue-700 dark:text-blue-300', label: 'Planning' },
@@ -45,7 +47,7 @@ const currencyFormatter = new Intl.NumberFormat('en-GB', {
   maximumFractionDigits: 0,
 });
 
-type TabId = 'emails' | 'contacts' | 'quotes' | 'materials' | 'visits' | 'followups' | 'tasks' | 'contractors';
+type TabId = 'overview' | SourcingRoomId | 'emails' | 'contacts' | 'quotes' | 'materials' | 'visits' | 'followups' | 'tasks' | 'contractors';
 
 interface ProjectDetailViewProps {
   project: PropertyProject;
@@ -96,7 +98,9 @@ export const ProjectDetailView = ({
   onRemoveTask,
   isReadOnly = false,
 }: ProjectDetailViewProps) => {
-  const [activeTab, setActiveTab] = useState<TabId>('emails');
+  const bathroom = isBathroomProject(project);
+  const [activeTab, setActiveTab] = useState<TabId>(() => bathroom ? 'overview' : 'emails');
+  const [sourcingRequirementId, setSourcingRequirementId] = useState<string | undefined>();
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [showAddVisitForm, setShowAddVisitForm] = useState(false);
   const [newVisit, setNewVisit] = useState({ contractorName: '', date: '', time: '', purpose: '' });
@@ -348,15 +352,23 @@ export const ProjectDetailView = ({
   const status = statusStyles[project.status];
 
   const tabs: { id: TabId; label: string; icon: typeof Mail; count: number }[] = [
+    ...(bathroom ? [
+      { id: 'overview' as const, label: 'Overview', icon: LayoutDashboard, count: 0 },
+      { id: 'main-bathroom' as const, label: roomName(project.sourcing, 'main-bathroom'), icon: Bath, count: 0 },
+      { id: 'shower-room' as const, label: roomName(project.sourcing, 'shower-room'), icon: ShowerHead, count: 0 },
+    ] : []),
     { id: 'emails', label: 'Emails', icon: Mail, count: project.emails?.length || 0 },
     { id: 'contacts', label: 'Contacts', icon: Users, count: project.contacts?.length || 0 },
     { id: 'quotes', label: 'Quotes', icon: FileText, count: project.quotes?.length || 0 },
-    { id: 'materials', label: 'Materials', icon: ShoppingBasket, count: project.sourcing?.basket.length || 0 },
+    { id: 'materials', label: bathroom ? 'Products' : 'Materials', icon: ShoppingBasket, count: project.sourcing?.basket.length || 0 },
     { id: 'visits', label: 'Visits', icon: Calendar, count: project.scheduledVisits?.length || 0 },
     { id: 'followups', label: 'Follow-ups', icon: Bell, count: project.followUps?.length || 0 },
     { id: 'tasks', label: 'Tasks', icon: CheckSquare, count: project.tasks?.length || 0 },
     { id: 'contractors', label: 'Contractors', icon: Building2, count: contractors.length },
   ];
+  const primaryTabs = tabs.filter((tab) => bathroom ? ['overview', 'main-bathroom', 'shower-room', 'materials'].includes(tab.id) : ['emails', 'quotes', 'materials'].includes(tab.id));
+  const secondaryTabs = tabs.filter((tab) => !primaryTabs.includes(tab));
+  const sourcingTab = ['overview', 'main-bathroom', 'shower-room', 'materials'].includes(activeTab);
 
   const handleAddTask = () => {
     if (!newTaskTitle.trim()) return;
@@ -596,24 +608,24 @@ export const ProjectDetailView = ({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-4 sm:space-y-6">
       {/* Header */}
       <div>
         <button
           onClick={onBack}
-          className="mb-4 inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-200"
+          className="mb-2 inline-flex min-h-10 items-center gap-1 text-sm text-gray-500 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-200"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to Projects
         </button>
 
         <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
+          <div className="min-w-0 flex-1">
             <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-100">
               {project.title}
             </h1>
             <div className="mt-2 flex flex-wrap items-center gap-3">
-              <span className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium ${status.bg} ${status.text}`}>
+              <span className={`${!isReadOnly ? 'hidden' : 'inline-flex'} items-center rounded-full px-3 py-1 text-sm font-medium ${status.bg} ${status.text}`}>
                 {status.label}
               </span>
               {(project.budgetMin || project.budgetMax) && (
@@ -652,21 +664,22 @@ export const ProjectDetailView = ({
 
       {/* Tabs */}
       <div className="border-b border-gray-200 dark:border-slate-700">
-        <nav className="flex gap-1 overflow-x-auto">
-          {tabs.map((tab) => {
+        <nav className="flex flex-wrap items-center gap-1" aria-label="Project views">
+          {primaryTabs.map((tab) => {
             const Icon = tab.icon;
             return (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 whitespace-nowrap border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
+                onClick={() => { setActiveTab(tab.id); setSourcingRequirementId(undefined); }}
+                aria-current={activeTab === tab.id ? 'page' : undefined}
+                className={`flex min-h-11 min-w-0 max-w-full items-center gap-2 border-b-2 px-3 py-3 text-sm font-medium transition-colors ${
                   activeTab === tab.id
-                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                    ? 'border-emerald-600 text-emerald-700 dark:text-emerald-300'
                     : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-200'
                 }`}
               >
-                <Icon className="h-4 w-4" />
-                {tab.label}
+                <Icon className="h-4 w-4 shrink-0" />
+                <span className="min-w-0 break-words text-left">{tab.label}</span>
                 {tab.count > 0 && (
                   <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs dark:bg-slate-700">
                     {tab.count}
@@ -675,11 +688,17 @@ export const ProjectDetailView = ({
               </button>
             );
           })}
+          <details className="relative ml-auto">
+            <summary aria-label="More project views" title="More project views" className="flex min-h-11 cursor-pointer list-none items-center rounded-md border border-gray-200 p-3 text-gray-600 dark:border-slate-700 dark:text-slate-300"><MoreHorizontal className="h-5 w-5" /></summary>
+            <div className="absolute right-0 top-full z-40 w-48 rounded-lg border border-gray-200 bg-white p-1 shadow-lg dark:border-slate-700 dark:bg-slate-900">
+              {secondaryTabs.map((tab) => <button key={tab.id} type="button" onClick={(event) => { setActiveTab(tab.id); event.currentTarget.closest('details')?.removeAttribute('open'); }} className={`flex min-h-11 w-full items-center gap-2 rounded-md px-3 text-left text-sm hover:bg-gray-50 dark:hover:bg-slate-800 ${activeTab === tab.id ? 'text-emerald-700 dark:text-emerald-300' : 'text-gray-600 dark:text-slate-300'}`}><tab.icon className="h-4 w-4" />{tab.label}{tab.count ? ` (${tab.count})` : ''}</button>)}
+            </div>
+          </details>
         </nav>
       </div>
 
       {/* Tab Content */}
-      <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+      <div className={sourcingTab ? 'min-w-0' : 'min-w-0 bg-white py-4 dark:bg-slate-900'}>
         {activeTab === 'emails' && (
           <ProjectEmailInbox
             project={project}
@@ -1369,11 +1388,15 @@ export const ProjectDetailView = ({
           </div>
         )}
 
-        {activeTab === 'materials' && (
+        {sourcingTab && (
           <ProjectMaterialsView
             project={project}
             onUpdateProject={onUpdateProject}
             isReadOnly={isReadOnly}
+            view={activeTab === 'overview' ? 'overview' : activeTab === 'materials' ? 'products' : 'room'}
+            selectedRoomId={activeTab === 'main-bathroom' || activeTab === 'shower-room' ? activeTab : undefined}
+            selectedRequirementId={sourcingRequirementId}
+            onNavigate={(roomId, requirementId) => { setActiveTab(roomId ?? (bathroom ? 'overview' : 'materials')); setSourcingRequirementId(requirementId); }}
           />
         )}
 

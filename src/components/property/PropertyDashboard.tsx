@@ -59,6 +59,8 @@ export const PropertyDashboard = () => {
   const propertyValues = useFamilyStore((state) => state.propertyValues);
   const propertyComponents = useFamilyStore((state) => state.propertyComponents);
   const propertyRole = useFamilyStore((state) => state.propertyRole);
+  const activeProjectId = useFamilyStore((state) => state.activeProjectId);
+  const propertyProjects = useFamilyStore((state) => state.propertyProjects);
 
   // Store Actions
   const addPropertyTask = useFamilyStore((state) => state.addPropertyTask);
@@ -80,7 +82,8 @@ export const PropertyDashboard = () => {
   const removeTaskFollowUp = useFamilyStore((state) => state.removeTaskFollowUp);
 
   // UI State
-  const [activeTab, setActiveTab] = useState<PropertyTabId>('overview');
+  const [activeTab, setActiveTab] = useState<PropertyTabId>(() => searchParams.get('tab') === 'projects' ? 'projects' : 'overview');
+  const focusedProject = activeTab === 'projects' && propertyProjects.some((project) => project.id === activeProjectId);
   const [selectedComponent, setSelectedComponent] = useState<string | null>(null);
   const [showAddTaskModal, setShowAddTaskModal] = useState(false);
   const [showLogWorkModal, setShowLogWorkModal] = useState(false);
@@ -236,20 +239,18 @@ export const PropertyDashboard = () => {
   return (
     <div className="space-y-4 sm:space-y-6 p-3 sm:p-4 lg:p-6">
       {/* Header */}
-      <section className="rounded-xl sm:rounded-2xl border border-gray-200 bg-white p-4 sm:p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+      <section className={focusedProject ? 'border-b border-gray-200 py-2 dark:border-slate-800' : 'rounded-lg border border-gray-200 bg-white p-4 sm:p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900'}>
+        <div className={`flex gap-3 sm:gap-4 ${focusedProject ? 'flex-wrap items-center justify-between' : 'flex-col sm:flex-row sm:items-center sm:justify-between'}`}>
           <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-            <div className="rounded-lg bg-blue-50 p-2.5 sm:p-3 text-blue-600 dark:bg-blue-500/20 dark:text-blue-200 flex-shrink-0">
+            <div className={focusedProject ? 'hidden' : 'rounded-lg bg-blue-50 p-2.5 sm:p-3 text-blue-600 dark:bg-blue-500/20 dark:text-blue-200 flex-shrink-0'}>
               <Home className="h-5 w-5 sm:h-6 sm:w-6" />
             </div>
             <div className="min-w-0 flex-1">
-              <h1 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-slate-100 truncate">
-                {propertyProfile.propertyName}
-              </h1>
-              <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-400 truncate">
+              {focusedProject ? <button type="button" onClick={() => setActiveTab('overview')} className="inline-flex min-h-10 items-center gap-2 text-sm font-medium text-emerald-700 dark:text-emerald-300"><Home className="h-4 w-4" />Property</button> : <h1 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-slate-100 truncate">{propertyProfile.propertyName}</h1>}
+              <p className={focusedProject ? 'hidden' : 'text-xs sm:text-sm text-gray-500 dark:text-slate-400 truncate'}>
                 {propertyProfile.address}
               </p>
-              {!shareMode && (
+              {!shareMode && !focusedProject && (
                 <div className="mt-1">
                   <SharedSyncBadge />
                 </div>
@@ -294,11 +295,11 @@ export const PropertyDashboard = () => {
       </section>
 
       {/* Tab Navigation */}
-      <div className="rounded-xl sm:rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 overflow-hidden">
-        <PropertyTabNavigation activeTab={activeTab} onTabChange={setActiveTab} />
+      <div className={focusedProject ? 'min-w-0 bg-white dark:bg-slate-900' : 'rounded-lg border border-gray-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 overflow-hidden'}>
+        {!focusedProject && <PropertyTabNavigation activeTab={activeTab} onTabChange={setActiveTab} />}
 
         {/* Tab Content */}
-        <div className="p-3 sm:p-5">
+        <div className={focusedProject ? 'min-w-0 p-2 sm:p-4' : 'p-3 sm:p-5'}>
           {activeTab === 'overview' && (
             <PropertyOverviewTab
               tasks={visibleTasks}

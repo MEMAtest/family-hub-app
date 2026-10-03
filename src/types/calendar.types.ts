@@ -22,6 +22,10 @@ export interface CalendarEvent {
   color?: string;
   source?: string;
   sourceId?: string;
+  /** UI-only date for a materialised recurring event instance. */
+  occurrenceDate?: string;
+  /** UI-only anchor date of the recurring series containing this instance. */
+  seriesStartDate?: string;
   googleCalendarId?: string;
   googleEventId?: string;
   createdAt: Date;
@@ -75,6 +79,8 @@ export interface CalendarTask {
   completedAt?: string | null;
   /** Family member id who marked it done. */
   completedBy?: string | null;
+  /** Completion timestamps by recurring occurrence date (YYYY-MM-DD). */
+  occurrenceCompletions?: Record<string, string | null>;
   taskType: 'homework' | 'chore' | 'admin' | 'reading' | 'practice' | 'other';
   /** "Maths", "Spelling" — free text, shown as a chip. */
   subject?: string;

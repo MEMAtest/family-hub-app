@@ -12,6 +12,7 @@ interface AIEnhancedFieldProps {
   multiline?: boolean;
   className?: string;
   disabled?: boolean;
+  mode?: 'polish' | 'spellcheck' | 'summarize';
 }
 
 const AIEnhancedField: React.FC<AIEnhancedFieldProps> = ({
@@ -23,15 +24,19 @@ const AIEnhancedField: React.FC<AIEnhancedFieldProps> = ({
   multiline = true,
   className = '',
   disabled = false,
+  mode = 'polish',
 }) => {
   const [enhancing, setEnhancing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [summarySuggestion, setSummarySuggestion] = useState<string | null>(null);
+  const actionLabel = mode === 'summarize' ? 'Summarise with AI' : 'AI enhance';
 
   const enhance = async () => {
     if (!value.trim() || enhancing || disabled) return;
 
     setEnhancing(true);
     setError(null);
+    setSummarySuggestion(null);
     try {
       const response = await fetch('/api/ai/text-enhance', {
         method: 'POST',
@@ -39,17 +44,18 @@ const AIEnhancedField: React.FC<AIEnhancedFieldProps> = ({
         body: JSON.stringify({
           text: value,
           context,
-          mode: 'polish',
+          mode,
         }),
       });
       const payload = await response.json();
       if (!response.ok || typeof payload?.enhanced !== 'string') {
         throw new Error(payload?.error || 'Enhancement failed');
       }
-      onChange(payload.enhanced);
+      if (mode === 'summarize') setSummarySuggestion(payload.enhanced);
+      else onChange(payload.enhanced);
     } catch (err) {
       console.error('AI text enhancement failed:', err);
-      setError('Enhance unavailable');
+      setError(err instanceof Error ? err.message : 'Enhance unavailable');
     } finally {
       setEnhancing(false);
     }
@@ -92,12 +98,22 @@ const AIEnhancedField: React.FC<AIEnhancedFieldProps> = ({
           onClick={() => void enhance()}
           disabled={!value.trim() || enhancing || disabled}
           className="absolute right-2 top-2 inline-flex h-8 w-8 items-center justify-center rounded-md text-[#147c72] transition hover:bg-[#eaf1e7] disabled:cursor-not-allowed disabled:opacity-40 dark:text-[#56c6b8] dark:hover:bg-slate-800"
-          title="AI enhance"
-          aria-label="AI enhance"
+          title={actionLabel}
+          aria-label={actionLabel}
         >
           {enhancing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
         </button>
       </div>
+      {summarySuggestion && (
+        <div className="space-y-2 rounded-md border border-[#c8ded8] bg-[#f5faf7] p-3 dark:border-slate-700 dark:bg-slate-900" role="status" aria-live="polite">
+          <p className="text-xs font-semibold text-gray-700 dark:text-slate-200">Suggested summary</p>
+          <p className="whitespace-pre-line text-sm leading-5 text-gray-700 dark:text-slate-200">{summarySuggestion}</p>
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={() => setSummarySuggestion(null)} className="rounded px-2 py-1 text-xs text-gray-600 hover:bg-white dark:text-slate-300 dark:hover:bg-slate-800">Keep original</button>
+            <button type="button" onClick={() => { onChange(summarySuggestion); setSummarySuggestion(null); }} className="rounded bg-[#147c72] px-2.5 py-1 text-xs font-semibold text-white hover:bg-[#116b63]">Use summary</button>
+          </div>
+        </div>
+      )}
       {error && <p className="text-xs text-amber-600 dark:text-amber-300">{error}</p>}
     </div>
   );
