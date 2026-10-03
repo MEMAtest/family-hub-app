@@ -275,7 +275,7 @@ test.describe('the school-document review card fits on a phone', () => {
       await page.getByRole('button', { name: /School inbox & quick plan/ }).click();
       const schoolInbox = page.getByRole('region', { name: 'School inbox and import' });
       await expect(schoolInbox).toBeVisible();
-      await schoolInbox.getByRole('button', { name: /Autumn term letter/ }).click();
+      await schoolInbox.getByRole('button', { name: /Phonics screening/ }).click();
       await page.waitForTimeout(800);
 
       const schedule = page.getByRole('button', { name: /Schedule weekly/i }).first();
