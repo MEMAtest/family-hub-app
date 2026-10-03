@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { ArrowRight, Bath, Check, Columns2, Grid2x2, Ruler, ShowerHead, TriangleAlert } from 'lucide-react';
 import type { ProjectSourcing, SourcedProduct, SourcingRequirement, SourcingRoomId } from '@/types/sourcing.types';
-import { bathroomRooms, basketTotal, isUncountedPrice, productLineCost, productSize, quoteSizeCheck, requirementSelection, roomName } from './bathroomProject.helpers';
+import { bathroomRooms, basketTotal, isUncountedPrice, leadingRequirementOption, productLineCost, productSize, quoteSizeCheck, requirementSelection, roomName } from './bathroomProject.helpers';
 
 const money = new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' });
 
@@ -105,7 +105,8 @@ function ChoiceCard({ sourcing, requirement, onOpen, onOpenProduct }: {
 }) {
   const { selected, missing, complete } = requirementSelection(sourcing, requirement);
   const candidates = sourcing.products.filter((product) => product.requirementIds?.includes(requirement.id));
-  const option = candidates.find((product) => product.topPick) ?? candidates[0];
+  const option = leadingRequirementOption(candidates, requirement);
+  const supporting = candidates.filter((product) => requirement.requiredComponents[0] && !product.components.includes(requirement.requiredComponents[0]));
   return <article className="min-w-0 rounded-lg border border-gray-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
     <button onClick={onOpen} className="flex min-h-10 w-full items-start justify-between gap-2 text-left text-sm font-semibold text-gray-900 hover:text-emerald-700 dark:text-white">
       <span className="min-w-0 break-words">{requirement.name}</span><ArrowRight className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
@@ -114,6 +115,7 @@ function ChoiceCard({ sourcing, requirement, onOpen, onOpenProduct }: {
     {selected.length === 0 ? <div className="mt-3 border-t border-gray-100 pt-3 text-xs text-gray-500 dark:border-slate-800">
       <p>No selection · {candidates.length} products</p>
       {option && <button onClick={() => onOpenProduct(option)} aria-label={`View option for ${requirement.name}: ${option.name}`} className="mt-2 flex w-full items-start gap-2 text-left"><SelectionImage product={option} /><span className="min-w-0"><span className="line-clamp-2 text-xs">Option: {option.name}</span><span className="block text-xs">{productSize(option)}</span></span></button>}
+      {supporting.length > 0 && <p className="mt-2">{supporting.length} supporting part{supporting.length === 1 ? '' : 's'} available separately</p>}
     </div> :
       <div className="mt-2 space-y-2">{selected.map(({ item, product }) => <div key={item.id} className="border-t border-gray-100 pt-2 dark:border-slate-800">
         <button onClick={() => onOpenProduct(product)} aria-label={`View details for ${product.name}`} className="flex w-full items-start gap-2 text-left">

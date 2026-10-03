@@ -21,6 +21,7 @@ import {
 import { CalendarEvent, Reminder, RecurringPattern, EventTemplate, Person } from '@/types/calendar.types'
 import AIEnhancedField from '@/components/common/AIEnhancedField'
 import { addDays, parseDateKey } from '@/utils/recurrence'
+import { recurringSourceDateWarning } from '@/utils/schoolEventPresentation'
 
 type CreateEventResult =
   | { status: 'conflict' }
@@ -512,6 +513,7 @@ const EventForm: React.FC<EventFormProps> = ({
         <div className="overflow-y-auto p-4 pb-0 sm:p-6 sm:pb-0">
           {event?.isRecurring && (
             <div role="status" className="mb-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-400/20 dark:bg-amber-500/10 dark:text-amber-100">
+              {recurringSourceDateWarning({ ...event, date: event.seriesStartDate || event.date }) && <p role="alert" className="mb-2 font-semibold">{recurringSourceDateWarning({ ...event, date: event.seriesStartDate || event.date })}</p>}
               <p>{showRecurring ? `Repeats ${formData.recurringPattern?.frequency || formData.recurring}. Changes affect all occurrences, not just one date.` : 'Repeats will stop when you save. The original event will remain.'}</p>
               <label className="mt-2 flex min-h-10 items-center gap-2 text-xs font-semibold">
                 <input type="checkbox" checked={!showRecurring} onChange={(change) => {
@@ -760,11 +762,12 @@ const EventForm: React.FC<EventFormProps> = ({
 
               {/* Location */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-slate-300">
+                <label htmlFor="calendar-event-location" className="block text-sm font-medium text-gray-700 mb-1 dark:text-slate-300">
                   <MapPin className="w-4 h-4 inline mr-1" />
                   Location
                 </label>
                 <AIEnhancedField
+                  id="calendar-event-location"
                   value={formData.location || ''}
                   onChange={(value) => setFormData(prev => ({ ...prev, location: value }))}
                   multiline={false}
@@ -775,11 +778,12 @@ const EventForm: React.FC<EventFormProps> = ({
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-slate-300">
+                <label htmlFor="calendar-event-context" className="block text-sm font-medium text-gray-700 mb-1 dark:text-slate-300">
                   <FileText className="w-4 h-4 inline mr-1" />
                   What is this event about? <span className="font-normal text-gray-500">(optional)</span>
                 </label>
                 <AIEnhancedField
+                  id="calendar-event-context"
                   value={formData.notes || ''}
                   onChange={(value) => setFormData(prev => ({ ...prev, notes: value }))}
                   rows={2}

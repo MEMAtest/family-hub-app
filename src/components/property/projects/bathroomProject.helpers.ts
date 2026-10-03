@@ -37,6 +37,13 @@ export function requirementSelection(sourcing: ProjectSourcing, requirement: Sou
   return { selected, missing, complete: selected.length > 0 && missing.length === 0 };
 }
 
+/** The quote's first component is the fixture; remaining components are supporting parts. */
+export function leadingRequirementOption(candidates: SourcedProduct[], requirement: SourcingRequirement) {
+  const primary = requirement.requiredComponents[0];
+  const fixtures = primary ? candidates.filter((product) => product.components.includes(primary)) : candidates;
+  return fixtures.find((product) => product.topPick) ?? fixtures[0];
+}
+
 export const basketStatuses: { value: SourcingBasketItem['status']; label: string }[] = [
   { value: 'review', label: 'Review' }, { value: 'ask_fitter', label: 'Ask fitter' },
   { value: 'approved', label: 'Approved' }, { value: 'ordered', label: 'Ordered' },

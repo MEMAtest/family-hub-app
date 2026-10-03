@@ -7,6 +7,29 @@ const people: Person[] = [
 ];
 
 describe('calendar import parser', () => {
+  it('does not turn attachment filenames into events or dotted dates into clock times', () => {
+    const text = normalizeCalendarEmailText({ subject: 'Weekly update email', text: 'School photos Wednesday 7 October 2026\nMerit assembly 02.10.2026.pdf\nTPA term dates 27 - 28.pdf' });
+    const drafts = parseCalendarImportText({ text, people, today: new Date('2026-10-03T09:00:00Z') });
+    expect(drafts).toHaveLength(1);
+    const [numeric] = parseCalendarImportText({ text: 'School photos 02.10.2026', people, today: new Date('2026-10-03T09:00:00Z') });
+    expect(numeric.timeSpecified).toBe(false);
+  });
+  it('keeps newsletter instructions in source, with short school headings', () => {
+    const [draft] = parseCalendarImportText({ text: 'African Storytelling Assembly The children will enjoy a special assembly on Tuesday 6 October 2026. Bring a coat.', people, today: new Date('2026-10-03T09:00:00Z') });
+    expect(draft.title).toBe('African storytelling assembly');
+    expect(draft.notes).toContain('Bring a coat');
+  });
+
+  it('holds a PTA meeting for adult assignment rather than mapping it to the default pupil', () => {
+    const [draft] = parseCalendarImportText({ text: 'Everyone is welcome to join our PTA AGM on Wednesday 7 October 2026 at 5pm at school. Come along to have your say on fundraising.', people, defaultPersonId: 'child-1', today: new Date('2026-10-03T09:00:00Z') });
+    expect(draft).toMatchObject({ title: 'PTA AGM', person: '', importStatus: 'needs_review', location: 'School' });
+    expect(draft.warnings.join(' ')).toContain('adult attending');
+  });
+
+  it('accepts an explicitly named adult without inferring one from a pupil', () => {
+    const [draft] = parseCalendarImportText({ text: 'Ade: PTA AGM Wednesday 7 October 2026 at 5pm', people: [...people, { id: 'adult', name: 'Ade', role: 'Parent', icon: '', color: '#123456' }], today: new Date('2026-10-03T09:00:00Z') });
+    expect(draft).toMatchObject({ title: 'PTA AGM', person: 'adult', importStatus: 'ready' });
+  });
   it('extracts school date ranges from pasted term text', () => {
     const drafts = parseCalendarImportText({
       text: 'Summer Holiday: Monday 20 July 2026 - Friday 28 August 2026',

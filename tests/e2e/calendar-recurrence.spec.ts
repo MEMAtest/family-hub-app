@@ -330,7 +330,7 @@ test.describe('everything else that answers "what is on" agrees with the grid', 
     await page.getByRole('button', { name: 'Day', exact: true }).first().click();
     await page.getByRole('button', { name: 'Next calendar period' }).click();
     await page.getByRole('button', { name: 'Next calendar period' }).click();
-    const done = page.getByRole('checkbox', { name: 'Complete Weekly homework' });
+    const done = page.getByRole('checkbox', { name: 'Complete Weekly homework', exact: true });
     await expect(done).toBeVisible();
     await expect(done).not.toBeChecked();
     await done.check();

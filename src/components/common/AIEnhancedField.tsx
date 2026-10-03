@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { Loader2, Sparkles } from 'lucide-react';
 
 interface AIEnhancedFieldProps {
+  id?: string;
   value: string;
   onChange: (value: string) => void;
   context: string;
@@ -16,6 +17,7 @@ interface AIEnhancedFieldProps {
 }
 
 const AIEnhancedField: React.FC<AIEnhancedFieldProps> = ({
+  id,
   value,
   onChange,
   context,
@@ -70,6 +72,7 @@ const AIEnhancedField: React.FC<AIEnhancedFieldProps> = ({
       <div className="relative">
         {multiline ? (
           <textarea
+            id={id}
             value={value}
             onChange={(event) => onChange(event.target.value)}
             onInput={(event) => onChange(event.currentTarget.value)}
@@ -82,6 +85,7 @@ const AIEnhancedField: React.FC<AIEnhancedFieldProps> = ({
           />
         ) : (
           <input
+            id={id}
             type="text"
             value={value}
             onChange={(event) => onChange(event.target.value)}

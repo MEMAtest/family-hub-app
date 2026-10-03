@@ -265,6 +265,35 @@ test.describe('school document calendar intake', () => {
   test.beforeEach(async ({ page }) => {
     await page.clock.setFixedTime(new Date('2026-09-30T10:00:00Z'));
   });
+  test('school review count is visible before opening the collapsed inbox, including on phones', async ({ page }) => {
+    const state = { documentRequestBody: '', eventPosts: [] as unknown[], gmailSyncs: 0 };
+    await page.setViewportSize({ width: 390, height: 844 });
+    await stubFamilyApis(page, state, { inboxItems: [{ id: 'pending-school-mail', status: 'partial_review', needsReview: 8, autoCreated: 9, conflictCount: 0, duplicateCount: 0, parsedDrafts: [] }] });
+    await page.goto('/?view=calendar');
+    const action = page.getByRole('button', { name: 'School inbox & quick plan', exact: true });
+    await expect(action).toContainText('8 to review');
+    await expect(action).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.getByRole('region', { name: 'School inbox and import' })).not.toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await action.click();
+    await expect(page.getByRole('heading', { name: 'Add school dates' })).toBeVisible();
+  });
+
+  test('conflicting Phonics series is flagged at calendar entry without modifying the saved source', async ({ page }) => {
+    const state = { documentRequestBody: '', eventPosts: [] as unknown[], gmailSyncs: 0 };
+    await stubFamilyApis(page, state, { calendarEvents: [{ id: 'phonics-source-conflict', title: 'Phonics', personId: member.id, eventDate: '2026-09-18T00:00:00Z', eventTime: '2026-09-18T15:30:00Z', durationMinutes: 60, recurringPattern: 'weekly', isRecurring: true, eventType: 'education', notes: 'Screening check June –Friday 18', cost: 0 }] });
+    await page.goto('/?view=calendar');
+    const warning = page.getByRole('region', { name: 'School dates to confirm' });
+    await expect(warning).toContainText('Source says June');
+    await expect(warning).toContainText('Held from the calendar until confirmed.');
+    await expect(page.locator('.rbc-event').filter({ hasText: 'Phonics' })).toHaveCount(0);
+    await expect(page.getByRole('region', { name: 'Upcoming this week' })).not.toContainText('Phonics');
+    await warning.getByRole('button', { name: /Phonics: check school date/ }).click();
+    await expect(page.getByRole('checkbox', { name: 'Stop repeating on save' })).toBeVisible();
+    await expect(page.getByLabel('What is this event about? (optional)')).toHaveValue('Screening check June –Friday 18');
+    await page.getByRole('button', { name: 'Close event form' }).click();
+    expect(state.eventPosts).toEqual([]);
+  });
   test('uploads a school PDF, preserves the source link, and schedules a weekly routine', async ({ page }) => {
     test.setTimeout(120_000);
     const state = { documentRequestBody: '', eventPosts: [] as unknown[], gmailSyncs: 0, inboxPatches: [] as Record<string, unknown>[] };
@@ -447,6 +476,26 @@ test.describe('school document calendar intake', () => {
     await expect(popup).toHaveURL(/oauth-test\?scope=gmail\.readonly/);
   });
 
+  test('holds an older parent meeting incorrectly assigned to a pupil until an adult is selected', async ({ page }) => {
+    const state = { documentRequestBody: '', eventPosts: [] as unknown[], gmailSyncs: 0 };
+    await stubFamilyApis(page, state, { inboxItems: [{
+      id: 'legacy-parent-meeting', subject: 'Parent meeting email', status: 'review_required',
+      needsReview: 1, autoCreated: 0, conflictCount: 0, duplicateCount: 0,
+      parsedDrafts: [{ importId: 'legacy-pta', title: 'Everyone Is Welcome To Join Our PTA AGM',
+        person: member.id, date: '2026-10-07', time: '17:00', duration: 60, recurring: 'none',
+        cost: 0, type: 'education', notes: 'Parents can discuss school fundraising.', isRecurring: false,
+        priority: 'high', status: 'confirmed', confidence: 0.9, source: 'PTA AGM 7 October 2026',
+        sourceLine: 1, importStatus: 'ready', warnings: [] }],
+    }] });
+    await openSchoolInbox(page);
+    await page.getByRole('button', { name: /Parent meeting email.*Review/ }).click();
+    await expect(page.getByLabel('Assign PTA AGM to')).toHaveValue('');
+    await expect(page.getByText('Choose the adult attending this school meeting.')).toBeVisible();
+    await expect(page.getByRole('checkbox', { name: 'Select PTA AGM' })).toBeDisabled();
+    await expect(page.getByLabel('Assign PTA AGM to').getByRole('option', { name: member.name })).toHaveCount(0);
+    expect(state.eventPosts).toEqual([]);
+  });
+
   test('keeps failed email events in the review queue after a partial import', async ({ page }) => {
     test.setTimeout(120_000);
     const state = {
@@ -488,7 +537,7 @@ test.describe('school document calendar intake', () => {
       conflictCount: 0,
       createdEventIds: [],
       parsedDrafts: [
-        draft('workshop-draft', 'Parent Workshop', '2026-10-01'),
+        draft('workshop-draft', 'School Workshop', '2026-10-01'),
         draft('book-fair-draft', 'Book Fair', '2026-10-02'),
       ],
       attachments: [],

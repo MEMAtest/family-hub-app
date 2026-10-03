@@ -25,6 +25,9 @@ test('two-room overview preserves the existing selection and offers direct next 
   await page.setViewportSize({ width: 1440, height: 1000 });
   await openProject(page);
   await expect(page.getByRole('heading', { name: 'Project overview' })).toBeVisible();
+  const toiletOption = page.getByRole('button', { name: /^View option for Grove back-to-wall toilet:/ }).first();
+  await expect(toiletOption).toBeVisible();
+  await expect(toiletOption).not.toContainText(/cistern/i);
   await expect(page.getByText('£239.00').first()).toBeVisible();
   await page.getByRole('button', { name: 'Compare rooms', exact: true }).click();
   await expect(page.getByText('No selection').first()).toBeVisible();

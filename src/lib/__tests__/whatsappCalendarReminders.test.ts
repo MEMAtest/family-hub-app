@@ -158,6 +158,20 @@ describe('WhatsApp opt-in and idempotency', () => {
     expect(prisma.calendarEvent.findMany).not.toHaveBeenCalled();
   });
 
+  it('holds a recurring Phonics reminder when its source month contradicts its saved date', async () => {
+    (prisma.notification.findUnique as jest.Mock).mockResolvedValue({ metadata: {
+      whatsappConsent: 'opted_in', recipientHash: createHash('sha256').update('447700900123').digest('hex'),
+    } });
+    (prisma.calendarEvent.findMany as jest.Mock).mockResolvedValue([{
+      id: 'phonics', title: 'Phonics', isRecurring: true,
+      eventDate: new Date('2026-09-18T00:00:00Z'), eventTime: '15:30',
+      notes: 'Screening check June - Friday 18', person: { name: 'Child' },
+    }]);
+    const result = await sendUpcomingSchoolWhatsAppReminders('family-id', new Date('2026-09-17T14:30:00Z'));
+    expect(result).toMatchObject({ accepted: 0, skipped: 1 });
+    expect(prisma.notification.create).not.toHaveBeenCalled();
+  });
+
   it('records START and STOP only for the configured recipient', async () => {
     (prisma.notification.findUnique as jest.Mock).mockResolvedValue(null);
     (prisma.notification.create as jest.Mock).mockResolvedValue({ id: 'wa-consent-family-id' });

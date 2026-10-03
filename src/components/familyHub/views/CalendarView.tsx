@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronUp, Import, Settings, LayoutGrid, Plus, CalendarDays, Loader2 } from 'lucide-react';
 import CalendarMain from '@/components/calendar/CalendarMain';
 import CalendarCopilotPanel from '@/components/calendar/CalendarCopilotPanel';
@@ -8,7 +8,9 @@ import { useCalendarContext } from '@/contexts/familyHub/CalendarContext';
 import { useFamilyContext } from '@/contexts/familyHub/FamilyContext';
 import { useAppView } from '@/contexts/familyHub/AppViewContext';
 import type { CalendarEvent } from '@/types/calendar.types';
-import { addDays, expandEvents } from '@/utils/recurrence';
+import { weeklyCalendarPriorities } from '@/utils/weeklyCalendarPriorities';
+import { useFamilyStore } from '@/store/familyStore';
+import { isAdultSchoolEvent, isChildProfile, recurringSourceDateWarning, schoolEventLocation, schoolEventTitle } from '@/utils/schoolEventPresentation';
 import { formatDateForInput } from '@/utils/formatDate';
 import toast from 'react-hot-toast';
 import { hasUnspecifiedEventTime } from '@/utils/eventSemantics';
@@ -28,11 +30,26 @@ export const CalendarView = () => {
   const [recurring, setRecurring] = useState<'none' | 'weekly'>('none');
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
+  const [pendingReview, setPendingReview] = useState<number | null>(null);
+  const familyId = useFamilyStore((state) => state.databaseStatus.familyId);
   const importRef = useRef<HTMLElement>(null);
   const people = useMemo(() => members.map(({ id, name, icon, color, role, ageGroup }) => ({ id, name, icon, color, role, ageGroup })), [members]);
   const dateKey = formatDateForInput(currentDate);
-  const upcoming = useMemo(() => expandEvents(events, dateKey, addDays(dateKey, 6))
-    .sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time)).slice(0, 5), [events, dateKey]);
+  const upcoming = useMemo(() => weeklyCalendarPriorities(events, tasks, dateKey), [events, tasks, dateKey]);
+  const dateWarnings = events.filter((event) => recurringSourceDateWarning(event));
+  const confirmedDateEvents = useMemo(() => events.filter((event) => !recurringSourceDateWarning(event)), [events]);
+  const loadReviewCount = useCallback(async () => {
+    if (!familyId) { setPendingReview(null); return; }
+    try {
+      const response = await fetch(`/api/families/${familyId}/calendar-intake/inbox`);
+      if (!response.ok) throw new Error('Inbox unavailable');
+      const payload = await response.json();
+      setPendingReview(payload.pendingReviewCount ?? (payload.intakes || []).reduce((count: number, item: { needsReview?: number }) => count + (item.needsReview || 0), 0));
+    } catch { setPendingReview(null); }
+  }, [familyId]);
+  useEffect(() => { void loadReviewCount(); }, [loadReviewCount]);
+  const openImport = () => { setShowImport((value) => !value); if (!showImport) requestAnimationFrame(() => importRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })); };
+  const titleFor = (event: CalendarEvent) => event.source === 'gmail-school-email' ? schoolEventTitle(event.title) : event.title;
   const handleEventsSync = useCallback(async (importedEvents: CalendarEvent[]) => {
     for (const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, ...draft } of importedEvents) await createEvent(draft);
   }, [createEvent]);
@@ -57,14 +74,17 @@ export const CalendarView = () => {
     <header className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 bg-white px-4 py-4 dark:border-slate-800 dark:bg-slate-900 sm:px-6">
       <h2 className="text-xl font-semibold sm:text-2xl">Family Calendar</h2>
       <div className="flex items-center gap-2">
-        <button type="button" onClick={() => { setShowImport(!showImport); if (!showImport) requestAnimationFrame(() => importRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })); }} aria-expanded={showImport} className="inline-flex min-h-10 items-center gap-2 rounded-md border border-gray-200 px-3 text-sm font-medium dark:border-slate-700"><Import className="h-4 w-4" />School inbox &amp; quick plan {showImport ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}</button>
+        <button type="button" onClick={openImport} aria-label="School inbox & quick plan" aria-describedby={pendingReview ? 'school-review-count' : undefined} aria-expanded={showImport} className="inline-flex min-h-10 items-center gap-2 rounded-md border border-gray-200 px-3 text-sm font-medium dark:border-slate-700"><Import className="h-4 w-4" />School inbox &amp; quick plan {pendingReview !== null && pendingReview > 0 && <span id="school-review-count" className="rounded bg-amber-100 px-1.5 text-xs text-amber-900">{pendingReview} to review</span>}{showImport ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}</button>
         <button type="button" onClick={openTemplateManager} title="Event templates" aria-label="Event templates" className="min-h-10 rounded-md border border-gray-200 p-2.5 dark:border-slate-700"><LayoutGrid className="h-4 w-4" /></button>
         <button type="button" onClick={openConflictSettings} title="Conflict rules" aria-label="Conflict rules" className="min-h-10 rounded-md border border-gray-200 p-2.5 dark:border-slate-700"><Settings className="h-4 w-4" /></button>
       </div>
     </header>
+    {dateWarnings.length > 0 && <section aria-label="School dates to confirm" className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-200">
+      {dateWarnings.map((event) => <button key={event.id} onClick={() => openEditForm(event)} className="block min-h-10 w-full text-left"><strong>{event.title}: check school date</strong><span className="mt-1 block text-xs">{recurringSourceDateWarning(event)} Held from the calendar until confirmed.</span></button>)}
+    </section>}
     <div className="grid min-w-0 gap-5 px-3 py-4 sm:px-5 xl:grid-cols-[minmax(0,1fr)_300px]">
       <div className="min-w-0 overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-        <CalendarMain events={events} tasks={tasks} onTaskToggle={(id, occurrenceDate) => { void toggleTaskComplete(id, undefined, occurrenceDate).catch(() => toast.error('Could not update this reminder. Please try again.')); }} people={people} onEventClick={openEditForm} onEventCreate={openCreateForm}
+        <CalendarMain events={confirmedDateEvents} tasks={tasks} onTaskToggle={(id, occurrenceDate) => { void toggleTaskComplete(id, undefined, occurrenceDate).catch(() => toast.error('Could not update this reminder. Please try again.')); }} people={people} onEventClick={openEditForm} onEventCreate={openCreateForm}
           onEventUpdate={updateEvent} onEventDelete={deleteEvent} currentDate={currentDate} onDateChange={setCurrentDate}
           onTemplateManage={openTemplateManager} onConflictSettings={openConflictSettings} onEventsSync={handleEventsSync} />
       </div>
@@ -90,15 +110,20 @@ export const CalendarView = () => {
         </section>
         <section className="order-1" aria-label="Upcoming this week">
           <h3 className="mb-3 flex items-center gap-2 text-base font-semibold"><CalendarDays className="h-5 w-5 text-violet-500" />Coming up this week</h3>
-          {upcoming.length ? <div className="divide-y divide-gray-200 dark:divide-slate-800">{upcoming.map((item) => <button key={item.occurrenceId} type="button" onClick={() => openEditForm({ ...item.event, date: item.date, time: item.time, duration: item.duration, endDate: item.endDate, occurrenceDate: item.date, seriesStartDate: item.event.isRecurring ? item.event.date : undefined })} className="flex w-full items-start gap-3 py-3 text-left">
+          {upcoming.length ? <div className="divide-y divide-gray-200 dark:divide-slate-800">{upcoming.map((entry) => {
+            if (entry.kind === 'task') { const item = entry.occurrence; return <label key={item.occurrenceId} className="flex min-h-11 items-start gap-3 py-3 text-sm"><input type="checkbox" aria-label={`Complete ${item.task.title} on ${item.assignedDate}`} checked={Boolean(item.completedAt)} onChange={() => { void toggleTaskComplete(item.task.id, undefined, item.isRecurring ? item.assignedDate : undefined).catch(() => toast.error('Could not update this reminder.')); }} className="mt-1 h-5 w-5 rounded border-gray-300 text-teal-700" /><span className="min-w-0"><strong className="block">{item.task.title}</strong><span className="mt-1 block text-xs text-gray-500">Due {new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }).format(new Date(`${item.dueDate}T12:00:00`))} · {item.task.assignees.map((id) => people.find((person) => person.id === id)?.name).filter(Boolean).join(', ') || 'Family'} · Reminder</span></span></label>; }
+            const item = entry.occurrence;
+            const person = people.find((person) => person.id === item.event.person);
+            const adultAttendanceUnknown = item.event.source === 'gmail-school-email' && isAdultSchoolEvent(item.event.title) && person && isChildProfile(person);
+            return <button key={item.occurrenceId} type="button" onClick={() => openEditForm({ ...item.event, date: item.date, time: item.time, duration: item.duration, endDate: item.endDate, occurrenceDate: item.date, seriesStartDate: item.event.isRecurring ? item.event.date : undefined })} className="flex w-full items-start gap-3 py-3 text-left">
             <span className="w-11 shrink-0 text-center text-xs text-gray-500 dark:text-slate-400">{new Intl.DateTimeFormat('en-GB', { weekday: 'short' }).format(new Date(`${item.date}T12:00:00`))}<strong className="mt-1 block text-base text-gray-800 dark:text-slate-200">{item.date.slice(8)}</strong></span>
-            <span className="min-w-0"><span className="block text-sm font-semibold">{item.event.title}</span><span className="mt-1 block text-xs text-gray-500 dark:text-slate-400">{hasUnspecifiedEventTime(item.event) ? 'All day' : item.time} · {people.find((person) => person.id === item.event.person)?.name || 'Family'}</span>{item.event.location && <span className="mt-1 block truncate text-xs text-gray-500">{item.event.location}</span>}</span>
-          </button>)}</div> : <p className="text-sm text-gray-500 dark:text-slate-400">No events in the next seven days.</p>}
+            <span className="min-w-0"><span className="block text-sm font-semibold">{titleFor(item.event)}</span><span className="mt-1 block text-xs text-gray-500 dark:text-slate-400">{hasUnspecifiedEventTime(item.event) ? 'All day' : item.time} · {adultAttendanceUnknown ? `For ${person.name}; adult attendee to confirm` : person?.name || 'Family'}</span>{item.event.location && <span className="mt-1 block truncate text-xs text-gray-500">{item.event.source === 'gmail-school-email' ? schoolEventLocation(item.event.location) : item.event.location}</span>}</span>
+          </button>; })}</div> : <p className="text-sm text-gray-500 dark:text-slate-400">No events or outstanding reminders in the next seven days.</p>}
         </section>
       </aside>
     </div>
     {showImport && <section ref={importRef} className="scroll-mt-4 border-t border-gray-200 dark:border-slate-800" aria-label="School inbox and import">
-      <CalendarCopilotPanel events={events} tasks={tasks} people={people} currentDate={currentDate} createEvent={createEvent} createTask={createTask} onOpenCalendar={() => setCurrentDate(currentDate)} />
+      <CalendarCopilotPanel events={events} tasks={tasks} people={people} currentDate={currentDate} createEvent={createEvent} createTask={createTask} onOpenCalendar={() => setCurrentDate(currentDate)} onInboxChanged={setPendingReview} />
     </section>}
   </div>;
 };

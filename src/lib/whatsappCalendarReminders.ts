@@ -1,6 +1,7 @@
 import { createHash, createHmac, timingSafeEqual } from 'crypto';
 import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
+import { recurringSourceDateWarning, schoolEventTitle } from '@/utils/schoolEventPresentation';
 
 type WhatsAppConfig = {
   accessToken: string;
@@ -345,6 +346,10 @@ export const sendUpcomingSchoolWhatsAppReminders = async (familyId: string, now 
   const errors: string[] = [];
   for (const event of events) {
     if (await getWhatsAppConsentState(familyId) !== 'opted_in') break;
+    if (recurringSourceDateWarning({ title: event.title, date: event.eventDate.toISOString().slice(0, 10), notes: event.notes || undefined, isRecurring: event.isRecurring })) {
+      skipped += 1;
+      continue;
+    }
     const start = eventStart(event);
     const minutesUntil = Math.round((start.getTime() - now.getTime()) / 60_000);
     if (minutesUntil < 0) continue;
@@ -367,7 +372,8 @@ export const sendUpcomingSchoolWhatsAppReminders = async (familyId: string, now 
         skipped += 1;
         break;
       }
-      const title = event.person?.name ? `${event.title} for ${event.person.name}` : event.title;
+      const shortTitle = schoolEventTitle(event.title);
+      const title = event.person?.name ? `${shortTitle} for ${event.person.name}` : shortTitle;
       const providerMessageId = await sendTemplate(config, title, eventDateLabel(start, timeConfirmed));
       for (let attempt = 0; attempt < 3; attempt += 1) {
         const current = await prisma.notification.findUnique({ where: { id: markerId }, select: { metadata: true } });

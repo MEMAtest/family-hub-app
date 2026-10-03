@@ -1,0 +1,28 @@
+import type { CalendarEvent } from '@/types/calendar.types';
+
+const schoolTitles: Array<[RegExp, string]> = [
+  [/\bAfrican storytelling assembly\b/i, 'African storytelling assembly'],
+  [/\bindividual and sibling photographs?\b/i, 'Individual and sibling photographs'],
+  [/\bPTA AGM\b/i, 'PTA AGM'],
+];
+
+export const schoolEventTitle = (title: string) =>
+  schoolTitles.find(([pattern]) => pattern.test(title))?.[1] ?? title;
+
+export const isAdultSchoolEvent = (title: string) =>
+  /\b(?:PTA AGM|parent(?:s)?['’]? (?:evening|workshop|meeting)|parent workshop)\b/i.test(title);
+
+export const isChildProfile = (person: { role: string; ageGroup?: string }) =>
+  /child|kid|son|daughter|student/i.test(person.role) || /child|primary|secondary|preschool|toddler|teen/i.test(person.ageGroup || '');
+
+export const schoolEventLocation = (location?: string) => location && /^school\.\s/i.test(location) ? 'School' : location;
+
+/** A source month that disagrees with the series anchor is a review signal, not a replacement date. */
+export const recurringSourceDateWarning = (event: Pick<CalendarEvent, 'title' | 'date' | 'notes' | 'isRecurring'>) => {
+  if (!event.isRecurring || !/\bphonics\b/i.test(event.title)) return null;
+  const month = event.notes?.match(/\b(January|February|March|April|May|June|July|August|September|October|November|December)\s*[-–—:,]?\s*(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)?\s+\d{1,2}\b/i)?.[1];
+  if (!month) return null;
+  const months = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
+  if (months.indexOf(month.toLowerCase()) + 1 === Number(event.date.slice(5, 7))) return null;
+  return `Source says ${month}; this series starts ${event.date}. Confirm the school date before using this weekly reminder.`;
+};

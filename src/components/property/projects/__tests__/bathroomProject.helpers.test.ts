@@ -1,5 +1,5 @@
 import type { ProjectSourcing, SourcedProduct, SourcingRequirement } from '@/types/sourcing.types';
-import { basketTotal, isBathroomProject, productLineCost, productSize, quoteSizeCheck, requirementSelection, roomName } from '../bathroomProject.helpers';
+import { basketTotal, isBathroomProject, leadingRequirementOption, productLineCost, productSize, quoteSizeCheck, requirementSelection, roomName } from '../bathroomProject.helpers';
 
 const requirement: SourcingRequirement = {
   id: 'vanity', roomId: 'main-bathroom', name: 'Vanity', category: 'Furniture', specification: 'Vanity and basin',
@@ -13,6 +13,20 @@ const sourcing: ProjectSourcing = {
   requirements: [requirement, { ...requirement, id: 'shower-vanity', roomId: 'shower-room' }], products: [product],
   basket: [{ id: 'selected', requirementId: requirement.id, productId: product.id, quantity: 3, status: 'review' }],
 };
+
+test('the toilet fixture ranks ahead of a top-picked supporting cistern', () => {
+  const toilet = { ...requirement, requiredComponents: ['toilet-pan', 'cistern'] };
+  const cistern = { ...product, id: 'cistern', components: ['cistern'], topPick: true };
+  const pan = { ...product, id: 'pan', components: ['toilet-pan'], topPick: false };
+  expect(leadingRequirementOption([cistern, pan], toilet)).toBe(pan);
+  expect(leadingRequirementOption([cistern], toilet)).toBeUndefined();
+});
+
+test('top pick breaks ties only among fixture candidates; tiles keep their top pick', () => {
+  const preferred = { ...product, id: 'preferred', topPick: true };
+  expect(leadingRequirementOption([product, preferred], requirement)).toBe(preferred);
+  expect(leadingRequirementOption([product, preferred], { ...requirement, requiredComponents: [] })).toBe(preferred);
+});
 
 test('real room names and size notes use optional metadata without renaming legacy rooms', () => {
   expect(roomName(undefined, 'main-bathroom')).toBe('Main Bathroom');
