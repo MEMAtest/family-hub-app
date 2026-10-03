@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 import { CalendarEvent, Reminder, RecurringPattern, EventTemplate, Person } from '@/types/calendar.types'
 import AIEnhancedField from '@/components/common/AIEnhancedField'
+import { addDays, parseDateKey } from '@/utils/recurrence'
 
 type CreateEventResult =
   | { status: 'conflict' }
@@ -30,6 +31,9 @@ const toDateInputValue = (date: Date) =>
 
 const toTimeInputValue = (date: Date) =>
   `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+
+const formatCalendarDate = (date: string) =>
+  new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }).format(new Date(`${date}T12:00:00`));
 
 const buildEmptyFormData = (defaultPersonId = ''): Partial<CalendarEvent> => ({
   title: '',
@@ -224,7 +228,7 @@ const EventForm: React.FC<EventFormProps> = ({
     const defaultSlotKey = defaultSlot
       ? `${defaultSlot.start.toISOString()}-${defaultSlot.end.toISOString()}`
       : 'none'
-    const formKey = event ? `event:${event.id}` : `new:${defaultSlotKey}`
+    const formKey = event ? `event:${event.id}:${event.occurrenceDate || event.date}` : `new:${defaultSlotKey}`
 
     if (initializedFormKeyRef.current === formKey) return
     initializedFormKeyRef.current = formKey
@@ -235,9 +239,16 @@ const EventForm: React.FC<EventFormProps> = ({
     if (event) {
       // Edit mode
       const multiDay = Boolean(event.endDate && event.endDate !== event.date)
+      const seriesDate = event.seriesStartDate || event.date
+      // The clicked occurrence may be weeks after the stored series start.
+      const spanDays = multiDay
+        ? Math.round(((parseDateKey(event.endDate!)?.getTime() || 0) - (parseDateKey(event.date)?.getTime() || 0)) / 86400000)
+        : 0
       setFormData({
         ...buildEmptyFormData(defaultPersonId),
         ...event,
+        date: event.isRecurring ? seriesDate : event.date,
+        endDate: event.isRecurring && multiDay ? addDays(seriesDate, spanDays) : event.endDate,
         attendees: event.attendees || []
       })
       setShowRecurring(event.isRecurring)
@@ -397,11 +408,14 @@ const EventForm: React.FC<EventFormProps> = ({
       ? calculateMultiDayDuration(formData.date, formData.time, formData.endDate, formData.duration || 60)
       : formData.duration || 60
 
+    const safeFormData = { ...formData }
+    delete safeFormData.occurrenceDate
+    delete safeFormData.seriesStartDate
     const eventData = {
-      ...formData,
+      ...safeFormData,
       endDate: isMultiDay ? (formData.endDate || formData.date) : undefined,
       duration,
-      isRecurring: formData.recurring !== 'none',
+      isRecurring: showRecurring && (Boolean(formData.recurringPattern) || formData.recurring !== 'none'),
       attendees: formData.attendees || []
     } as Omit<CalendarEvent, 'id' | 'createdAt' | 'updatedAt'>
 
@@ -496,6 +510,15 @@ const EventForm: React.FC<EventFormProps> = ({
         </div>
 
         <div className="overflow-y-auto p-4 pb-0 sm:p-6 sm:pb-0">
+          {event?.isRecurring && (
+            <div role="status" className="mb-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-400/20 dark:bg-amber-500/10 dark:text-amber-100">
+              <p>{showRecurring ? `Repeats ${formData.recurringPattern?.frequency || formData.recurring}. Changes affect all occurrences, not just one date.` : 'Repeats will stop when you save. The original event will remain.'}</p>
+              <button type="button" onClick={() => { setFormData((prev) => ({ ...prev, recurring: 'none', recurringPattern: undefined, isRecurring: false })); setShowRecurring(false); }} className="mt-2 min-h-10 rounded-md border border-amber-300 px-3 text-xs font-semibold dark:border-amber-400/30">Stop repeating on save</button>
+              {event.occurrenceDate && event.seriesStartDate && event.occurrenceDate !== event.seriesStartDate && (
+                <p className="mt-1">You opened {formatCalendarDate(event.occurrenceDate)}; the series starts {formatCalendarDate(event.seriesStartDate)}.</p>
+              )}
+            </div>
+          )}
           {!event && (
             <div className="mb-6 rounded-lg border border-[#dde5e0] bg-[#f7fbf8] p-3 dark:border-slate-800 dark:bg-slate-950">
               <div className="mb-3 flex items-center justify-between gap-3">
@@ -741,6 +764,22 @@ const EventForm: React.FC<EventFormProps> = ({
                   placeholder="Enter location"
                 />
               </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-slate-300">
+                  <FileText className="w-4 h-4 inline mr-1" />
+                  What is this event about? <span className="font-normal text-gray-500">(optional)</span>
+                </label>
+                <AIEnhancedField
+                  value={formData.notes || ''}
+                  onChange={(value) => setFormData(prev => ({ ...prev, notes: value }))}
+                  rows={2}
+                  context="Calendar event description"
+                  mode="summarize"
+                  className={fieldClass()}
+                  placeholder="Add the useful context: what to bring, who to meet, or what happens there"
+                />
+              </div>
             </div>
 
             {/* Advanced Options Toggle */}
@@ -889,7 +928,9 @@ const EventForm: React.FC<EventFormProps> = ({
                       onChange={(e) => {
                         setShowRecurring(e.target.checked)
                         if (!e.target.checked) {
-                          setFormData(prev => ({ ...prev, recurring: 'none', isRecurring: false }))
+                          setFormData(prev => ({ ...prev, recurring: 'none', recurringPattern: undefined, isRecurring: false }))
+                        } else if (!formData.recurringPattern && formData.recurring === 'none') {
+                          setFormData(prev => ({ ...prev, recurring: 'weekly', isRecurring: true }))
                         }
                       }}
                       className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
@@ -904,7 +945,7 @@ const EventForm: React.FC<EventFormProps> = ({
                     <div className="mt-2">
                       <select
                         value={formData.recurring || 'weekly'}
-                        onChange={(e) => setFormData(prev => ({ ...prev, recurring: e.target.value as 'weekly' | 'monthly' | 'yearly' }))}
+                        onChange={(e) => setFormData(prev => ({ ...prev, recurring: e.target.value as 'weekly' | 'monthly' | 'yearly', recurringPattern: undefined }))}
                     className={fieldClass()}
                   >
                         <option value="weekly">Weekly</option>
@@ -915,21 +956,6 @@ const EventForm: React.FC<EventFormProps> = ({
                   )}
                 </div>
 
-                {/* Notes */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-slate-300">
-                    <FileText className="w-4 h-4 inline mr-1" />
-                    Notes
-                  </label>
-                  <AIEnhancedField
-                    value={formData.notes || ''}
-                    onChange={(value) => setFormData(prev => ({ ...prev, notes: value }))}
-                    rows={3}
-                    context="Calendar event notes"
-                    className={fieldClass()}
-                    placeholder="Add any additional notes..."
-                  />
-                </div>
               </div>
             )}
           </div>

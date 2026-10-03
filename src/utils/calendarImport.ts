@@ -139,10 +139,27 @@ const parseDelimitedRows = (text: string) => {
   return rows;
 };
 
+const plainHtmlCell = (value: string) => value
+  .replace(/<br\s*\/?>/gi, ' ')
+  .replace(/<[^>]+>/g, ' ')
+  .replace(/&nbsp;/gi, ' ')
+  .replace(/&amp;/gi, '&')
+  .replace(/&quot;/gi, '"')
+  .replace(/&#39;/gi, "'")
+  .replace(/\s+/g, ' ')
+  .trim();
+
 const stripHtml = (html: string) =>
   html
     .replace(/<style[\s\S]*?<\/style>/gi, ' ')
     .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi, (_row, contents: string) => {
+      const cells = Array.from(contents.matchAll(/<(?:td|th)\b[^>]*>([\s\S]*?)<\/(?:td|th)>/gi))
+        .map((match) => plainHtmlCell(match[1]))
+        .filter(Boolean);
+      if (cells.length === 2) return `${cells[0]}: ${cells[1]}\n`;
+      return `${cells.join(' • ')}\n`;
+    })
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<\/(p|div|li|tr|h[1-6])>/gi, '\n')
     .replace(/<[^>]+>/g, ' ')
@@ -154,6 +171,18 @@ const stripHtml = (html: string) =>
     .replace(/\n\s+/g, '\n')
     .replace(/[ \t]+/g, ' ')
     .trim();
+
+const looksLikeHtml = (value: string) => /<(?:html|head|body|table|thead|tbody|tr|td|th|div|p|br|ul|ol|li|span)\b[^>]*>/i.test(value);
+
+const decodeEmailEntities = (value: string) => value
+  .replace(/&nbsp;/gi, ' ')
+  .replace(/&ndash;|&#8211;|&#x2013;/gi, '–')
+  .replace(/&mdash;|&#8212;|&#x2014;/gi, '—')
+  .replace(/&amp;/gi, '&')
+  .replace(/&lt;/gi, '<')
+  .replace(/&gt;/gi, '>')
+  .replace(/&quot;/gi, '"')
+  .replace(/&#39;|&apos;/gi, "'");
 
 const cleanEmailLine = (line: string) =>
   line
@@ -185,7 +214,8 @@ export const normalizeCalendarEmailText = ({
   html,
 }: CalendarEmailInput) => {
   const cleanSubject = cleanEmailLine(subject || '');
-  const body = text?.trim() || (html ? stripHtml(html) : '');
+  const decodedBody = decodeEmailEntities(text?.trim() || html || '');
+  const body = looksLikeHtml(decodedBody) ? stripHtml(decodedBody) : decodedBody;
   const lines = body
     .split(/\r?\n/)
     .map(cleanEmailLine)
@@ -214,9 +244,20 @@ export const normalizeCalendarEmailText = ({
     }
 
     if (hasDate || hasTime) {
-      const context = [cleanSubject, previousTwo, previous, line, next, nextTwo, nextThree]
-        .filter(Boolean)
-        .join(' • ');
+      const previousContext = lines
+        .slice(Math.max(0, index - 6), index)
+        .filter((candidate) => candidate && !parseDateValue(candidate, new Date().getFullYear()))
+        .slice(-2);
+      const contextParts = [cleanSubject, ...previousContext, line].filter(Boolean);
+      if (!/\b\d{1,2}(?::|\.)(\d{2})\s*(?:am|pm)?\b|\b\d{1,2}\s*(?:am|pm)\b/i.test(contextParts.join(' '))) {
+        for (const nextLine of [next, nextTwo, nextThree]) {
+          if (!nextLine || parseDateValue(nextLine, new Date().getFullYear())) break;
+          contextParts.push(nextLine);
+          if (/\b\d{1,2}(?::|\.)(\d{2})\s*(?:am|pm)?\b|\b\d{1,2}\s*(?:am|pm)\b/i.test(nextLine)) break;
+        }
+      }
+      if (/^(?:location|venue|where|place)\s*:/i.test(next)) contextParts.push(next);
+      const context = contextParts.join(' • ');
       candidateLines.add(context);
     }
   });

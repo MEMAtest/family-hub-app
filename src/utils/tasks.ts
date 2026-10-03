@@ -152,7 +152,9 @@ export const expandTasks = (
         dueDate,
         // A repeating task's completion is per-instance; the parent record's
         // completedAt only describes the first one.
-        completedAt: occ.date === task.assignedDate ? task.completedAt ?? null : null,
+        completedAt: task.occurrenceCompletions && Object.prototype.hasOwnProperty.call(task.occurrenceCompletions, occ.date)
+          ? task.occurrenceCompletions[occ.date]
+          : occ.date === task.assignedDate ? task.completedAt ?? null : null,
         isRecurring: true,
       });
     }
@@ -163,6 +165,23 @@ export const expandTasks = (
       ? a.assignedDate.localeCompare(b.assignedDate)
       : a.dueDate.localeCompare(b.dueDate)
   );
+};
+
+/** Toggle one dated task instance without affecting other recurring instances. */
+export const toggleTaskOccurrenceCompletion = (
+  task: CalendarTask,
+  occurrenceDate: string,
+  completedAt: string
+): CalendarTask => {
+  if (!task.recurringPattern) {
+    return { ...task, completedAt: task.completedAt ? null : completedAt, updatedAt: new Date() };
+  }
+  const occurrenceCompletions = { ...task.occurrenceCompletions };
+  const currentCompletion = Object.prototype.hasOwnProperty.call(occurrenceCompletions, occurrenceDate)
+    ? occurrenceCompletions[occurrenceDate]
+    : occurrenceDate === task.assignedDate ? task.completedAt : null;
+  occurrenceCompletions[occurrenceDate] = currentCompletion ? null : completedAt;
+  return { ...task, occurrenceCompletions, updatedAt: new Date() };
 };
 
 // ---------------------------------------------------------------------------

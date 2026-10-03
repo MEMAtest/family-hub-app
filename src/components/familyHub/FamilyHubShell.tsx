@@ -40,7 +40,6 @@ import { PerfumeView } from './views/PerfumeView';
 import { CycleView } from './views/CycleView';
 import { FamilyHubModals } from './FamilyHubModals';
 import Breadcrumb from '@/components/common/Breadcrumb';
-import SetupWizard from '@/components/common/SetupWizard';
 import { useAppView } from '@/contexts/familyHub/AppViewContext';
 import { useCalendarContext } from '@/contexts/familyHub/CalendarContext';
 import { useBudgetContext } from '@/contexts/familyHub/BudgetContext';
@@ -71,10 +70,6 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'cycle', label: 'Health & Cycle', icon: HeartPulse, section: 'Personal' },
 ];
 
-const SHOULD_SKIP_SETUP =
-  process.env.NEXT_PUBLIC_SKIP_SETUP === 'true' ||
-  process.env.NEXT_PUBLIC_E2E === 'true';
-
 export const FamilyHubShell = () => {
   const {
     currentView,
@@ -98,9 +93,6 @@ export const FamilyHubShell = () => {
   const { openForm: openBudgetForm } = useBudgetContext();
   const { openForm: openShoppingForm, lists } = useShoppingContext();
   const { openQuickAppointment } = useContractorContext();
-
-  // Setup Wizard state
-  const [showSetupWizard, setShowSetupWizard] = useState(false);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -227,21 +219,6 @@ export const FamilyHubShell = () => {
   const openHeaderEventForm = useCallback(() => {
     openCreateForm(currentView === 'calendar' ? buildCalendarQuickAddSlot() : undefined);
   }, [buildCalendarQuickAddSlot, currentView, openCreateForm]);
-
-  // Check if setup wizard should be shown on mount (client-side only)
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      if (SHOULD_SKIP_SETUP) {
-        localStorage.setItem('familyHub_setupComplete', 'skipped');
-        return;
-      }
-      const setupComplete = localStorage.getItem('familyHub_setupComplete');
-      if (!setupComplete) {
-        // Show wizard after a brief delay for better UX
-        setTimeout(() => setShowSetupWizard(true), 1000);
-      }
-    }
-  }, []);
 
   const rightContent = useMemo(() => (
     <div className="hidden items-center gap-2 lg:flex">
@@ -399,28 +376,9 @@ export const FamilyHubShell = () => {
 
       <FamilyHubModals />
 
-      {currentView === 'calendar' && (
-        <button
-          type="button"
-          onClick={openHeaderEventForm}
-          className="fixed bottom-24 right-4 z-40 inline-flex h-12 items-center gap-2 rounded-full bg-[#147c72] px-4 text-sm font-semibold text-white shadow-lg shadow-[#147c72]/20 transition hover:bg-[#0f625a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#147c72]/30 lg:hidden"
-          aria-label="Quick add calendar event"
-        >
-          <Plus className="h-5 w-5" />
-          Quick add
-        </button>
-      )}
-
       {process.env.NEXT_PUBLIC_SHOW_DEBUG_PANEL === 'true' && <DebugPanel />}
       <PWAInstallPrompt />
 
-      {/* Setup Wizard */}
-      {showSetupWizard && (
-        <SetupWizard
-          onClose={() => setShowSetupWizard(false)}
-          onComplete={() => setShowSetupWizard(false)}
-        />
-      )}
     </div>
   );
 };

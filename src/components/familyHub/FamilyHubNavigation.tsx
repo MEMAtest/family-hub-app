@@ -2,7 +2,7 @@
 
 import { Fragment } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
-import { LucideIcon, UserRound, X } from 'lucide-react';
+import { LucideIcon, Menu, X } from 'lucide-react';
 import OmosanyaLogo from '@/components/common/OmosanyaLogo';
 
 export interface NavItem {
@@ -72,7 +72,7 @@ export const FamilyHubNavigation = ({
 
   const renderNav = (variant: 'desktop' | 'mobile') => (
     <nav className="flex flex-col gap-5">
-      {(variant === 'mobile' ? [...groupedItems].sort((left, right) => Number(right.title === 'Personal') - Number(left.title === 'Personal')) : groupedItems).map((group) => (
+      {groupedItems.map((group) => (
         <div key={`${variant}-${group.title}`} className="space-y-1.5">
           <p className="px-3 text-[10px] font-extrabold uppercase tracking-[0.16em] text-[#8a9690] dark:text-slate-500">
             {group.title}
@@ -114,10 +114,10 @@ export const FamilyHubNavigation = ({
                 ? 'bg-[#eaf1e7] text-[#147c72] dark:bg-[#147c72]/20 dark:text-[#56c6b8]'
                 : 'text-[#5f6a64] hover:bg-[#eaf1e7] dark:text-slate-300 dark:hover:bg-slate-800'
             }`}
-            aria-label="Open personal areas"
+            aria-label="More sections"
           >
-            <UserRound className="h-5 w-5 flex-shrink-0" />
-            <span className="max-w-full truncate">Personal</span>
+            <Menu className="h-5 w-5 flex-shrink-0" />
+            <span className="max-w-full truncate">More</span>
           </button>
         </div>
       </nav>

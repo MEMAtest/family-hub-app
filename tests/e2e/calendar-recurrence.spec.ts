@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { encodeStoredRecurringPattern } from '@/lib/calendarEventMapping';
 
 /**
  * The bug this suite exists for: a weekly event was stored as one row with one
@@ -54,7 +55,9 @@ const skipSetupWizard = () => {
   localStorage.setItem('calendarEvents', '[]');
 };
 
-const stubApis = async (page: Page) => {
+const stubApis = async (page: Page, events: unknown[]) => {
+  const summaryRequests: Record<string, unknown>[] = [];
+  const eventUpdates: Record<string, unknown>[] = [];
   await page.route('**/api/auth/me', (route) =>
     route.fulfill({
       status: 200,
@@ -65,14 +68,6 @@ const stubApis = async (page: Page) => {
         familyMember: null,
         needsOnboarding: false,
       }),
-    })
-  );
-
-  await page.route('**/api/families/*/events', (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: route.request().method() === 'GET' ? JSON.stringify([]) : '{}',
     })
   );
 
@@ -98,6 +93,43 @@ const stubApis = async (page: Page) => {
       body: route.request().method() === 'GET' ? '[]' : '{}',
     })
   );
+
+  // This specific handler is registered after the fallback above because
+  // Playwright evaluates matching routes in reverse registration order.
+  await page.route('**/api/families/*/events', (route) => {
+    if (route.request().method() === 'PUT') eventUpdates.push(route.request().postDataJSON());
+    const databaseEvents = (events as Record<string, any>[]).map((event) => ({
+      id: event.id,
+      title: event.title,
+      personId: event.person,
+      eventDate: `${event.date}T00:00:00.000Z`,
+      eventTime: `${event.date}T${event.time || '00:00'}:00.000Z`,
+      durationMinutes: event.duration ?? 60,
+      location: event.location ?? null,
+      recurringPattern: encodeStoredRecurringPattern(event.recurring, event.recurringPattern),
+      isRecurring: event.isRecurring ?? false,
+      cost: event.cost ?? 0,
+      eventType: event.type ?? 'other',
+      notes: event.notes ?? null,
+      createdAt: event.createdAt ?? '2026-09-01T00:00:00.000Z',
+      updatedAt: event.updatedAt ?? '2026-09-01T00:00:00.000Z',
+    }));
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: route.request().method() === 'GET' ? JSON.stringify(databaseEvents) : '{}',
+    });
+  });
+
+  await page.route('**/api/families/*/events/summary', async (route) => {
+    if (route.request().method() === 'POST') summaryRequests.push(route.request().postDataJSON());
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ summary: '- Purpose: Weekly phonics session.\n- Details: Check the school message for current arrangements.' }),
+    });
+  });
+  return { summaryRequests, eventUpdates };
 };
 
 /**
@@ -118,11 +150,12 @@ const openCalendarWith = async (page: Page, events: unknown[]) => {
     localStorage.setItem('familyId', 'recurrence-e2e-family');
   }, events);
 
-  await stubApis(page);
+  const apiState = await stubApis(page, events);
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto('/');
   await page.getByRole('button', { name: /calendar/i }).first().click();
   await expect(page.locator('.rbc-calendar')).toBeVisible({ timeout: 20_000 });
+  return apiState;
 };
 
 /**
@@ -143,7 +176,8 @@ const renderedByDate = (page: Page) =>
       row.querySelectorAll('.rbc-event').forEach((ev) => {
         const b = ev.getBoundingClientRect();
         const cell = cells.find((c) => b.left + 4 >= c.box.left && b.left + 4 < c.box.right);
-        out.push(`${cell ? cell.day : '??'}:${(ev.textContent || '').trim()}`);
+        const title = ev.querySelector('[data-calendar-event-title]')?.textContent || ev.textContent;
+        out.push(`${cell ? cell.day : '??'}:${(title || '').trim()}`);
       });
     });
     return out;
@@ -273,6 +307,85 @@ test.describe('the other patterns reach the grid too', () => {
  * of a series. Both are user-visible and neither was caught by the grid tests.
  */
 test.describe('everything else that answers "what is on" agrees with the grid', () => {
+  test('dashboard Next includes a later recurring occurrence and opens its details', async ({ page }) => {
+    await openCalendarWith(page, [weeklyEvent]);
+    await page.getByRole('button', { name: 'Dashboard', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Upcoming Events 5 Next: Swimming lesson', exact: true })).toBeVisible();
+    const upcoming = page.getByRole('heading', { name: 'Upcoming Schedule' }).locator('../..');
+    await upcoming.getByRole('button', { name: /Swimming lesson.*2026-09-16/ }).click();
+    await expect(page.getByRole('dialog', { name: 'Edit Event' })).toContainText('You opened');
+  });
+
+  test('recurring mobile tasks complete one occurrence only and survive reload', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    await page.addInitScript(() => { if (!localStorage.getItem('familyHubTasks')) localStorage.setItem('familyHubTasks', JSON.stringify([{
+      id: 'weekly-homework', title: 'Weekly homework', assignedDate: '2026-09-02', dueDate: '2026-09-06',
+      assignees: ['recurrence-e2e-child'], recurringPattern: { frequency: 'weekly', interval: 1 },
+      taskType: 'homework', priority: 'medium', createdAt: '2026-09-01', updatedAt: '2026-09-01',
+    }])); });
+    await openCalendarWith(page, []);
+    await page.locator('.rbc-event').first().hover();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.getByRole('button', { name: 'Day', exact: true }).first().click();
+    await page.getByRole('button', { name: 'Next calendar period' }).click();
+    await page.getByRole('button', { name: 'Next calendar period' }).click();
+    const done = page.getByRole('checkbox', { name: 'Complete Weekly homework' });
+    await expect(done).toBeVisible();
+    await expect(done).not.toBeChecked();
+    await done.check();
+    await expect(done).toBeChecked();
+    const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('familyHubTasks') || '[]'));
+    expect(stored[0].occurrenceCompletions).toHaveProperty('2026-09-16');
+    expect(stored[0].completedAt).toBeUndefined();
+    await page.reload();
+    await page.getByRole('button', { name: 'Day', exact: true }).first().click();
+    await page.getByRole('button', { name: 'Next calendar period' }).click();
+    await page.getByRole('button', { name: 'Next calendar period' }).click();
+    await expect(done).toBeChecked();
+    for (let day = 0; day < 7; day += 1) await page.getByRole('button', { name: 'Next calendar period' }).click();
+    await expect(done).not.toBeChecked();
+    expect(errors).toEqual([]);
+  });
+
+  test('opening a later multi-day occurrence preserves the original two-day span', async ({ page }) => {
+    const { eventUpdates } = await openCalendarWith(page, [withPattern({ title: 'Two-day trip', date: '2026-09-01', time: '09:00', duration: 2339 })]);
+    const row = page.locator('.rbc-month-row').filter({ has: page.locator('.rbc-date-cell').filter({ hasText: /^15$/ }) });
+    await row.locator('.rbc-event').filter({ hasText: 'Two-day trip' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Edit Event' });
+    await expect(dialog.locator('input[type="date"]').nth(0)).toHaveValue('2026-09-01');
+    await expect(dialog.locator('input[type="date"]').nth(1)).toHaveValue('2026-09-02');
+    await dialog.getByRole('button', { name: 'Update Event', exact: true }).click();
+    await expect(dialog).not.toBeVisible();
+    expect(eventUpdates[0]).toMatchObject({ date: '2026-09-01', endDate: '2026-09-02' });
+    expect(eventUpdates[0].duration).toBeLessThan(2341);
+  });
+
+  test('calendar remains usable after reload without the old welcome marker', async ({ page }) => {
+    await openCalendarWith(page, [weeklyEvent]);
+    await page.addInitScript(() => localStorage.removeItem('familyHub_setupComplete'));
+    await page.reload();
+    await expect(page.locator('.rbc-calendar')).toBeVisible();
+    await page.getByRole('button', { name: 'Next calendar period' }).click();
+    await expect.poll(() => renderedByDate(page)).toHaveLength(5);
+    await expect(page.getByText('Welcome to Omosanya Home', { exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'New Event', exact: true })).toBeVisible();
+  });
+
+  test('stopping a series saves a one-off without moving the original date', async ({ page }) => {
+    const { eventUpdates } = await openCalendarWith(page, [withPattern({ title: 'Phonics', date: '2026-09-18', time: '15:30' })]);
+    await page.locator('.rbc-event').filter({ hasText: 'Phonics' }).first().click();
+    const dialog = page.getByRole('dialog', { name: 'Edit Event' });
+    await dialog.getByRole('button', { name: 'Stop repeating on save' }).click();
+    await expect(dialog).toContainText('Repeats will stop when you save');
+    await dialog.getByRole('button', { name: 'Update Event', exact: true }).click();
+    await expect(dialog).not.toBeVisible();
+    expect(eventUpdates).toHaveLength(1);
+    expect(eventUpdates[0]).toMatchObject({ date: '2026-09-18', recurring: 'none', isRecurring: false });
+    expect(eventUpdates[0].recurringPattern).toBeUndefined();
+    await nextMonth(page);
+    await expect.poll(() => renderedByDate(page)).toEqual([]);
+  });
   test('clicking a later occurrence shows it in the day panel', async ({ page }) => {
     await openCalendarWith(page, [weeklyEvent]);
     await expect.poll(() => renderedByDate(page), { timeout: 15_000 }).toHaveLength(5);
@@ -287,8 +400,49 @@ test.describe('everything else that answers "what is on" agrees with the grid', 
     await expect(panel).toContainText('Swimming lesson');
   });
 
+  test('a recurring occurrence shows its own date and keeps series edits anchored to the start', async ({ page }) => {
+    const event = withPattern({
+      id: 'recurrence-e2e-phonics',
+      title: 'Phonics',
+      date: '2026-09-18',
+      time: '15:30',
+      duration: 60,
+      recurring: 'weekly',
+      isRecurring: true,
+      type: 'education',
+      notes: 'Check the school message for current arrangements.',
+    });
+    const { summaryRequests } = await openCalendarWith(page, [event]);
+    await expect.poll(() => renderedByDate(page), { timeout: 15_000 }).toContain('18:Phonics');
+
+    await nextMonth(page);
+    await expect.poll(() => renderedByDate(page), { timeout: 15_000 }).toContain('02:Phonics');
+
+    const octoberRow = page.locator('.rbc-month-row').filter({
+      has: page.locator('.rbc-date-cell').filter({ hasText: /^0?2$/ }),
+    });
+    const occurrence = octoberRow.locator('.rbc-event').filter({ hasText: 'Phonics' });
+    await occurrence.hover();
+    await expect(page.getByText('Fri 2 Oct · 15:30 (60 min)')).toBeVisible();
+    await page.getByRole('button', { name: 'AI summary' }).click();
+    await expect(page.getByText(/Purpose: Weekly phonics session/)).toBeVisible();
+    expect(summaryRequests).toEqual([{ eventId: 'recurrence-e2e-phonics', occurrenceDate: '2026-10-02' }]);
+
+    await octoberRow.locator('.rbc-date-cell').filter({ hasText: /^0?2$/ }).click();
+    await page.getByRole('dialog', { name: 'New Event' }).getByRole('button', { name: 'Close event form' }).click();
+    const panel = page.getByTestId('selected-day-agenda');
+    await expect(panel).toContainText('Friday, 2 October');
+    await panel.getByRole('button', { name: /Phonics/ }).click();
+    const dialog = page.getByRole('dialog', { name: 'Edit Event' });
+    await expect(dialog).toContainText('You opened');
+    await expect(dialog).toContainText(/2 Oct/);
+    await expect(dialog).toContainText(/18 Sept?/);
+    await expect(dialog.locator('input[type="date"]')).toHaveValue('2026-09-18');
+  });
+
   test('the month analytics count occurrences, not stored rows', async ({ page }) => {
     await openCalendarWith(page, [weeklyEvent]);
+    await page.getByRole('button', { name: 'Calendar settings', exact: true }).last().click();
 
     const total = page.getByText('Total Events').locator('..');
     // Was 1 — one database row — for a series the grid drew five times.
@@ -306,10 +460,11 @@ test.describe('everything else that answers "what is on" agrees with the grid', 
       withPattern({ title: 'Swimming lesson', date: '2026-08-17', recurring: 'weekly' }),
     ]);
 
-    const today = page.getByText('WHERE EVERYONE IS TODAY').locator('..');
+    const quickPlan = page.getByRole('heading', { name: 'Quick plan' }).locator('../..');
+    await page.getByRole('button', { name: 'School inbox', exact: true }).click();
     // Was empty: the panel only ever knew about the week the event was created.
-    await expect(today).toContainText('1 today', { timeout: 10_000 });
-    await expect(today).toContainText('Swimming lesson');
+    await expect(quickPlan).toContainText('1 today', { timeout: 10_000 });
+    await expect(quickPlan).toContainText('Swimming lesson');
   });
 
   test('the year view counts every week of a series, not just the first', async ({ page }) => {

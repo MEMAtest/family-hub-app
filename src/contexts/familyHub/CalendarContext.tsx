@@ -11,6 +11,8 @@ import { createId } from '@/utils/id';
 import { useNotifications } from '@/contexts/NotificationContext';
 import { DEFAULT_FAMILY_ID } from '@/lib/defaultFamilyProfile';
 import { getCalendarEventIcon, getEventNotificationMetadata } from '@/utils/eventSemantics';
+import { decodeStoredRecurringPattern } from '@/lib/calendarEventMapping';
+import { toggleTaskOccurrenceCompletion } from '@/utils/tasks';
 
 interface CalendarContextValue {
   events: CalendarEvent[];
@@ -20,7 +22,7 @@ interface CalendarContextValue {
   updateTask: (id: string, updates: Partial<CalendarTask>) => void;
   deleteTask: (id: string) => void;
   /** Mark done / not done. Completion is what a task is for. */
-  toggleTaskComplete: (id: string, completedBy?: string) => void;
+  toggleTaskComplete: (id: string, completedBy?: string, occurrenceDate?: string) => void;
   eventTemplates: EventTemplate[];
   selectedEvent: CalendarEvent | null;
   defaultSlot: { start: Date; end: Date } | null;
@@ -182,6 +184,7 @@ const mapDatabaseEventsToCalendarEvents = (dbEvents: any[]): CalendarEvent[] =>
     const hours = eventTime.getUTCHours().toString().padStart(2, '0');
     const minutes = eventTime.getUTCMinutes().toString().padStart(2, '0');
     const date = e.eventDate ? e.eventDate.split('T')[0] : new Date().toISOString().split('T')[0];
+    const recurrence = decodeStoredRecurringPattern(e.recurringPattern);
 
     return {
       id: e.id,
@@ -192,7 +195,7 @@ const mapDatabaseEventsToCalendarEvents = (dbEvents: any[]): CalendarEvent[] =>
       time: `${hours}:${minutes}`,
       duration: e.durationMinutes,
       location: e.location,
-      recurring: e.recurringPattern,
+      ...recurrence,
       cost: e.cost,
       type: e.eventType,
       notes: e.notes,
@@ -519,11 +522,16 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
   );
 
   const toggleTaskComplete = useCallback(
-    (id: string, completedBy?: string) => {
+    (id: string, completedBy?: string, occurrenceDate?: string) => {
       persistTasks(
         tasks.map((task) =>
           task.id === id
-            ? {
+            ? occurrenceDate
+              ? {
+                  ...toggleTaskOccurrenceCompletion(task, occurrenceDate, new Date().toISOString()),
+                  updatedAt: new Date(),
+                }
+              : {
                 ...task,
                 completedAt: task.completedAt ? null : new Date().toISOString(),
                 completedBy: task.completedAt ? null : completedBy ?? null,

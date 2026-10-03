@@ -1,4 +1,47 @@
-import type { CalendarEvent } from '@/types/calendar.types';
+import type { CalendarEvent, RecurringPattern } from '@/types/calendar.types';
+
+const RICH_RECURRENCE_PREFIX = 'kinboard:v1:';
+
+const isRecurringPattern = (value: unknown): value is RecurringPattern => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const pattern = value as Partial<RecurringPattern>;
+  return ['daily', 'weekly', 'monthly', 'yearly'].includes(String(pattern.frequency)) &&
+    Number.isInteger(pattern.interval) && Number(pattern.interval) > 0 &&
+    (pattern.daysOfWeek === undefined || (
+      Array.isArray(pattern.daysOfWeek) &&
+      pattern.daysOfWeek.every((day) => Number.isInteger(day) && day >= 0 && day <= 6)
+    ));
+};
+
+/** Store richer recurrence rules in the existing text column without changing legacy values. */
+export const encodeStoredRecurringPattern = (value: unknown, richPattern?: unknown) => {
+  if (typeof value === 'string' && value.startsWith(RICH_RECURRENCE_PREFIX)) return value;
+  const pattern = isRecurringPattern(richPattern) ? richPattern : isRecurringPattern(value) ? value : null;
+  if (pattern) return `${RICH_RECURRENCE_PREFIX}${JSON.stringify(pattern)}`;
+  return value === 'weekly' || value === 'monthly' || value === 'yearly' ? value : 'none';
+};
+
+export const decodeStoredRecurringPattern = (value: unknown): {
+  recurring: CalendarEvent['recurring'];
+  recurringPattern?: RecurringPattern;
+} => {
+  if (typeof value !== 'string') return { recurring: 'none' };
+  if (value.startsWith(RICH_RECURRENCE_PREFIX)) {
+    try {
+      const pattern: unknown = JSON.parse(value.slice(RICH_RECURRENCE_PREFIX.length));
+      if (isRecurringPattern(pattern)) {
+        return {
+          recurring: pattern.frequency === 'daily' ? 'none' : pattern.frequency,
+          recurringPattern: pattern,
+        };
+      }
+    } catch {
+      return { recurring: 'none' };
+    }
+  }
+  if (value === 'weekly' || value === 'monthly' || value === 'yearly') return { recurring: value };
+  return { recurring: 'none' };
+};
 
 export const buildUtcDateTime = (
   dateValue?: string | null,
@@ -36,20 +79,23 @@ export const inferEndDate = (eventDate: Date, eventTime: Date, durationMinutes?:
   return endDate > date ? endDate : undefined;
 };
 
-export const toCalendarEventResponse = (event: any) => ({
-  ...event,
-  date: toDateKey(event.eventDate),
-  endDate: inferEndDate(event.eventDate, event.eventTime, event.durationMinutes),
-  time: toTimeKey(event.eventTime),
-  person: event.personId,
-  duration: event.durationMinutes,
-  type: event.eventType,
-  recurring: event.recurringPattern,
-  source: event.source ?? undefined,
-  sourceId: event.sourceId ?? undefined,
-  googleCalendarId: event.googleCalendarId ?? undefined,
-  googleEventId: event.googleEventId ?? undefined,
-});
+export const toCalendarEventResponse = (event: any) => {
+  const recurrence = decodeStoredRecurringPattern(event.recurringPattern);
+  return {
+    ...event,
+    date: toDateKey(event.eventDate),
+    endDate: inferEndDate(event.eventDate, event.eventTime, event.durationMinutes),
+    time: toTimeKey(event.eventTime),
+    person: event.personId,
+    duration: event.durationMinutes,
+    type: event.eventType,
+    ...recurrence,
+    source: event.source ?? undefined,
+    sourceId: event.sourceId ?? undefined,
+    googleCalendarId: event.googleCalendarId ?? undefined,
+    googleEventId: event.googleEventId ?? undefined,
+  };
+};
 
 export const calendarEventDraftToDbData = (
   familyId: string,
@@ -73,7 +119,7 @@ export const calendarEventDraftToDbData = (
     location: draft.location || '',
     cost: draft.cost || 0,
     eventType: draft.type || 'other',
-    recurringPattern: draft.recurring || 'none',
+    recurringPattern: encodeStoredRecurringPattern(draft.recurring, draft.recurringPattern),
     isRecurring: draft.isRecurring || false,
     notes: draft.notes || '',
     source: draft.source,

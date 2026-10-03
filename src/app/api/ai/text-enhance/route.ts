@@ -5,7 +5,7 @@ import { aiService } from '@/services/aiService';
 const requestSchema = z.object({
   text: z.string().min(1).max(4000),
   context: z.string().max(160).optional(),
-  mode: z.enum(['polish', 'spellcheck']).default('polish'),
+  mode: z.enum(['polish', 'spellcheck', 'summarize']).default('polish'),
 });
 
 const fallbackEnhance = (text: string) =>
@@ -20,10 +20,18 @@ export async function POST(request: NextRequest) {
   try {
     const body = requestSchema.parse(await request.json());
 
+    if (body.mode === 'summarize' && !process.env.ANTHROPIC_API_KEY && !process.env.OPENROUTER_API_KEY) {
+      return NextResponse.json({ error: 'AI summaries are temporarily unavailable.' }, { status: 503 });
+    }
+
     try {
       const enhanced = await aiService.enhanceFreeText(body);
       return NextResponse.json({ enhanced: enhanced.trim(), source: 'ai' });
     } catch (error) {
+      if (body.mode === 'summarize') {
+        console.error('AI text summary unavailable:', error);
+        return NextResponse.json({ error: 'AI summary failed. Please try again.' }, { status: 503 });
+      }
       console.warn('AI text enhancement unavailable, using local cleanup:', error);
       return NextResponse.json({
         enhanced: fallbackEnhance(body.text),

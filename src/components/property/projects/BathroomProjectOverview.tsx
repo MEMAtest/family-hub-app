@@ -1,0 +1,162 @@
+'use client';
+
+import { useState } from 'react';
+import { ArrowRight, Bath, Check, Columns2, Grid2x2, Ruler, ShowerHead, TriangleAlert } from 'lucide-react';
+import type { ProjectSourcing, SourcedProduct, SourcingRequirement, SourcingRoomId } from '@/types/sourcing.types';
+import { bathroomRooms, basketTotal, isUncountedPrice, productLineCost, productSize, quoteSizeCheck, requirementSelection, roomName } from './bathroomProject.helpers';
+
+const money = new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' });
+
+type Props = {
+  sourcing: ProjectSourcing;
+  roomId?: SourcingRoomId;
+  isReadOnly: boolean;
+  onOpenRoom: (roomId: SourcingRoomId) => void;
+  onOpenRequirement: (requirement: SourcingRequirement) => void;
+  onOpenProduct: (product: SourcedProduct, requirement: SourcingRequirement) => void;
+  onSaveRoom: (id: SourcingRoomId, metadata: { name: string; sizeNotes: string }) => void;
+};
+
+export default function BathroomProjectOverview({ sourcing, roomId, isReadOnly, onOpenRoom, onOpenRequirement, onOpenProduct, onSaveRoom }: Props) {
+  const [comparing, setComparing] = useState(false);
+  const visibleRooms = bathroomRooms.filter((room) => !roomId || room.id === roomId);
+  const requirements = sourcing.requirements.filter((item) => !roomId || item.roomId === roomId);
+  const selected = requirements.filter((item) => requirementSelection(sourcing, item).selected.length > 0);
+  const incomplete = requirements.filter((item) => !requirementSelection(sourcing, item).complete);
+  const fitterChecks = requirements.filter((item) => item.status === 'fitter_check');
+  const excluded = sourcing.basket.filter((item) => {
+    const product = sourcing.products.find((candidate) => candidate.id === item.productId);
+    return product && isUncountedPrice(product) && requirements.some((requirement) => requirement.id === item.requirementId);
+  }).length;
+
+  return <div className="min-w-0 space-y-6">
+    <header className="flex items-start justify-between gap-3">
+      <div className="min-w-0">
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-white">{roomId ? roomName(sourcing, roomId) : 'Project overview'}</h2>
+        <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">{selected.length} of {requirements.length} quote items have selections · {incomplete.length} incomplete · {fitterChecks.length} fitter checks</p>
+      </div>
+      {!roomId && <button onClick={() => setComparing((value) => !value)} aria-label={comparing ? 'Close comparison' : 'Compare rooms'} title={comparing ? 'Close comparison' : 'Compare rooms'} aria-pressed={comparing} className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-lg border border-emerald-600 px-3 text-sm font-medium text-emerald-700 dark:text-emerald-300"><Columns2 className="h-4 w-4" /><span className="hidden sm:inline">{comparing ? 'Close comparison' : 'Compare rooms'}</span></button>}
+    </header>
+
+    <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1 border-y border-gray-200 py-3 dark:border-slate-700">
+      <span className="text-sm text-gray-600 dark:text-slate-300">Selected subtotal <strong className="ml-2 text-lg text-gray-900 dark:text-white">{money.format(basketTotal(sourcing, roomId))}</strong></span>
+      <span className="text-xs text-gray-500">{excluded ? `${excluded} box/tile-priced selections excluded. ` : ''}Before delivery, waste and unselected items.</span>
+    </div>
+
+    {!roomId && <nav aria-label="Bathroom quick view" className="grid min-w-0 grid-cols-2 gap-3">
+      {bathroomRooms.map((room, index) => {
+        const items = sourcing.requirements.filter((item) => item.roomId === room.id);
+        const selectedCount = items.filter((item) => requirementSelection(sourcing, item).selected.length > 0).length;
+        const Icon = room.id === 'main-bathroom' ? Bath : ShowerHead;
+        return <button key={room.id} type="button" onClick={() => onOpenRoom(room.id)} className={`min-w-0 border-l-4 py-2 pl-3 text-left ${index === 0 ? 'border-emerald-500' : 'border-sky-500'}`}>
+          <span className="flex items-start gap-2 text-sm font-semibold text-gray-900 dark:text-white"><Icon className="h-5 w-5 shrink-0" /><span className="break-words">{roomName(sourcing, room.id)}</span></span>
+          <span className="mt-2 block text-xs text-gray-500 dark:text-slate-400">{selectedCount}/{items.length} choices · {money.format(basketTotal(sourcing, room.id))}</span>
+          <span className="mt-1 block text-xs font-medium text-emerald-700 dark:text-emerald-300">Open room <ArrowRight className="inline h-3.5 w-3.5" /></span>
+        </button>;
+      })}
+    </nav>}
+
+    {comparing && !roomId && <RoomComparison sourcing={sourcing} onOpenRequirement={onOpenRequirement} onOpenProduct={onOpenProduct} />}
+
+    <div className={`grid min-w-0 gap-6 ${!roomId ? 'xl:grid-cols-2' : ''}`}>
+      {visibleRooms.map((room, index) => {
+        const items = sourcing.requirements.filter((item) => item.roomId === room.id);
+        const completed = items.filter((item) => requirementSelection(sourcing, item).complete).length;
+        const Icon = room.id === 'main-bathroom' ? Bath : ShowerHead;
+        return <section key={room.id} className="min-w-0" aria-label={`${roomName(sourcing, room.id)} choices`}>
+          {!roomId && <div className={`mb-3 flex items-start justify-between gap-3 border-l-4 pl-3 ${index === 0 ? 'border-emerald-500' : 'border-sky-500'}`}>
+            <div className="min-w-0">
+              <h3 className="flex items-start gap-2 font-semibold text-gray-900 dark:text-white"><Icon className="mt-0.5 h-5 w-5 shrink-0" />{roomName(sourcing, room.id)}</h3>
+              <p className="mt-1 text-xs text-gray-500">{completed}/{items.length} items complete · {money.format(basketTotal(sourcing, room.id))} selected</p>
+            </div>
+            <button aria-label={`Open ${roomName(sourcing, room.id)}`} onClick={() => onOpenRoom(room.id)} title={`Open ${roomName(sourcing, room.id)}`} className="shrink-0 rounded-lg p-3 text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300"><ArrowRight className="h-5 w-5" /></button>
+          </div>}
+          <RoomNotes key={`${room.id}-${sourcing.rooms?.[room.id]?.name}-${sourcing.rooms?.[room.id]?.sizeNotes}`} sourcing={sourcing} roomId={room.id} isReadOnly={isReadOnly} onSave={onSaveRoom} />
+          <div className={`mt-3 grid min-w-0 gap-3 ${roomId ? 'sm:grid-cols-2 lg:grid-cols-3' : 'sm:grid-cols-2'}`}>
+            {items.map((item) => <ChoiceCard key={item.id} sourcing={sourcing} requirement={item} onOpen={() => onOpenRequirement(item)} onOpenProduct={(product) => onOpenProduct(product, item)} />)}
+          </div>
+          {items.length === 0 && <p className="py-4 text-sm text-gray-500">No quote items in this room.</p>}
+        </section>;
+      })}
+    </div>
+  </div>;
+}
+
+function RoomNotes({ sourcing, roomId, isReadOnly, onSave }: {
+  sourcing: ProjectSourcing; roomId: SourcingRoomId; isReadOnly: boolean;
+  onSave: Props['onSaveRoom'];
+}) {
+  const [name, setName] = useState(roomName(sourcing, roomId));
+  const [notes, setNotes] = useState(sourcing.rooms?.[roomId]?.sizeNotes ?? '');
+  const [editing, setEditing] = useState(false);
+  return <div className="text-sm">
+    <p className="flex items-start gap-2 text-gray-600 dark:text-slate-300"><Ruler className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" /><span className="break-words">{sourcing.rooms?.[roomId]?.sizeNotes || 'Room measurements not recorded. Check measurements with your fitter.'}</span></p>
+    {!isReadOnly && <button onClick={() => setEditing((value) => !value)} className="mt-1 min-h-10 text-xs font-medium text-emerald-700 dark:text-emerald-300">{editing ? 'Cancel' : 'Edit room name & size notes'}</button>}
+    {editing && !isReadOnly && <form onSubmit={(event) => { event.preventDefault(); onSave(roomId, { name: name.trim(), sizeNotes: notes.trim() }); setEditing(false); }} className="mt-2 space-y-2 border-l-2 border-emerald-200 pl-3">
+      <label className="block text-xs text-gray-600 dark:text-slate-300">Room name<input maxLength={80} value={name} onChange={(event) => setName(event.target.value)} className="mt-1 w-full rounded-lg border-gray-300 text-sm dark:bg-slate-800" /></label>
+      <label className="block text-xs text-gray-600 dark:text-slate-300">Size & layout notes<textarea maxLength={1000} rows={2} value={notes} onChange={(event) => setNotes(event.target.value)} className="mt-1 w-full rounded-lg border-gray-300 text-sm dark:bg-slate-800" /></label>
+      <button disabled={!name.trim()} className="inline-flex min-h-10 items-center gap-1 rounded-lg bg-emerald-700 px-3 text-xs font-medium text-white disabled:opacity-50"><Check className="h-4 w-4" /> Save room</button>
+    </form>}
+  </div>;
+}
+
+function ChoiceCard({ sourcing, requirement, onOpen, onOpenProduct }: {
+  sourcing: ProjectSourcing; requirement: SourcingRequirement; onOpen: () => void; onOpenProduct: (product: SourcedProduct) => void;
+}) {
+  const { selected, missing, complete } = requirementSelection(sourcing, requirement);
+  const candidates = sourcing.products.filter((product) => product.requirementIds?.includes(requirement.id));
+  const option = candidates.find((product) => product.topPick) ?? candidates[0];
+  return <article className="min-w-0 rounded-lg border border-gray-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
+    <button onClick={onOpen} className="flex min-h-10 w-full items-start justify-between gap-2 text-left text-sm font-semibold text-gray-900 hover:text-emerald-700 dark:text-white">
+      <span className="min-w-0 break-words">{requirement.name}</span><ArrowRight className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+    </button>
+    <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">Quote: {requirement.size || 'Size not stated'} · Qty {requirement.quantity}{requirement.unit ? ` ${requirement.unit}` : ''}</p>
+    {selected.length === 0 ? <div className="mt-3 border-t border-gray-100 pt-3 text-xs text-gray-500 dark:border-slate-800">
+      <p>No selection · {candidates.length} products</p>
+      {option && <button onClick={() => onOpenProduct(option)} aria-label={`View option for ${requirement.name}: ${option.name}`} className="mt-2 flex w-full items-start gap-2 text-left"><SelectionImage product={option} /><span className="min-w-0"><span className="line-clamp-2 text-xs">Option: {option.name}</span><span className="block text-xs">{productSize(option)}</span></span></button>}
+    </div> :
+      <div className="mt-2 space-y-2">{selected.map(({ item, product }) => <div key={item.id} className="border-t border-gray-100 pt-2 dark:border-slate-800">
+        <button onClick={() => onOpenProduct(product)} aria-label={`View details for ${product.name}`} className="flex w-full items-start gap-2 text-left">
+          <SelectionImage product={product} />
+          <span className="min-w-0"><span className="line-clamp-2 text-xs font-medium text-gray-800 dark:text-slate-200">{product.name}</span><span className="mt-0.5 block text-xs text-gray-500">{productSize(product)}</span></span>
+        </button>
+        <p className="mt-1 text-xs text-gray-600 dark:text-slate-300">{isUncountedPrice(product) ? `${money.format(product.price)} ${product.priceUnit} · excluded` : `${money.format(productLineCost(product, item.quantity))} · Qty ${item.quantity}`} · {item.status.replace(/_/g, ' ')}</p>
+        <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">{quoteSizeCheck(requirement, product)}</p>
+      </div>)}</div>}
+    <p className={`mt-2 flex items-start gap-1 text-xs ${complete ? 'text-emerald-700 dark:text-emerald-300' : 'text-amber-700 dark:text-amber-300'}`}>
+      {complete ? <Check className="h-3.5 w-3.5 shrink-0" /> : <TriangleAlert className="h-3.5 w-3.5 shrink-0" />}
+      <span>{complete ? 'All required parts selected' : missing.length ? `Missing: ${missing.map((part) => part.replace(/-/g, ' ')).join(', ')}` : 'Selection needed'}{requirement.status === 'fitter_check' ? ' · Fitter check' : ''}</span>
+    </p>
+  </article>;
+}
+
+function SelectionImage({ product }: { product: SourcedProduct }) {
+  const [failed, setFailed] = useState(false);
+  return product.imageUrl && !failed ? <img src={product.imageUrl} alt="" onError={() => setFailed(true)} loading="lazy" referrerPolicy="no-referrer" className="h-14 w-14 shrink-0 rounded-md bg-white object-contain" /> : <Grid2x2 className="h-14 w-14 shrink-0 bg-gray-50 p-4 text-gray-400 dark:bg-slate-800" />;
+}
+
+function RoomComparison({ sourcing, onOpenRequirement, onOpenProduct }: Pick<Props, 'sourcing' | 'onOpenRequirement' | 'onOpenProduct'>) {
+  const categories = Array.from(new Set(sourcing.requirements.map((item) => item.category)));
+  return <section aria-label="Room comparison" className="min-w-0 border-y border-gray-200 py-4 dark:border-slate-700">
+    <h3 className="font-semibold text-gray-900 dark:text-white">Compare rooms</h3>
+    <p className="mt-1 text-xs text-gray-500">Quoted sizes and actual selections. Room clearance, connections and layout still need fitter confirmation.</p>
+    {categories.map((category) => <div key={category} className="mt-4">
+      <h4 className="border-b border-gray-100 pb-2 text-sm font-semibold text-emerald-700 dark:border-slate-800 dark:text-emerald-300">{category}</h4>
+      <div className="grid min-w-0 gap-4 md:grid-cols-2">{bathroomRooms.map((room) => {
+        const items = sourcing.requirements.filter((item) => item.roomId === room.id && item.category === category);
+        return <div key={room.id} className="min-w-0 pt-2">
+          <p className="mb-2 text-xs font-semibold text-gray-500">{roomName(sourcing, room.id)}</p>
+          {items.length === 0 && <p className="text-xs text-gray-400">Not in quote</p>}
+          {items.map((item) => <div key={item.id} className="mb-3 min-w-0">
+            <button onClick={() => onOpenRequirement(item)} className="text-left text-sm font-medium text-gray-900 hover:text-emerald-700 dark:text-white">{item.name} <ArrowRight className="inline h-3.5 w-3.5" /></button>
+            <p className="text-xs text-gray-500">Quote: {item.size || 'Size not stated'} · Qty {item.quantity}{item.unit ? ` ${item.unit}` : ''}</p>
+            {requirementSelection(sourcing, item).selected.length === 0 && <p className="mt-1 text-xs text-amber-700">No selection</p>}
+            {requirementSelection(sourcing, item).selected.map(({ item: entry, product }) => <button key={entry.id} onClick={() => onOpenProduct(product, item)} className="mt-2 flex w-full items-start gap-2 text-left">
+              <SelectionImage product={product} /><span className="min-w-0 break-words text-xs text-gray-700 dark:text-slate-200">{product.name}<span className="block text-gray-500">{productSize(product)} · {entry.status.replace(/_/g, ' ')}</span><span className="block">{isUncountedPrice(product) ? `${money.format(product.price)} ${product.priceUnit} · excluded` : `${money.format(productLineCost(product, entry.quantity))} · Qty ${entry.quantity}`}</span><span className="block text-amber-700 dark:text-amber-300">{quoteSizeCheck(item, product)}</span></span>
+            </button>)}
+          </div>)}
+        </div>;
+      })}</div>
+    </div>)}
+  </section>;
+}

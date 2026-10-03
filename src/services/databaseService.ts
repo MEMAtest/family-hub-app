@@ -1,5 +1,6 @@
 // Database Service - Handles all database operations and syncs with localStorage
 import { CalendarEvent, Person } from '@/types/calendar.types';
+import { decodeStoredRecurringPattern, encodeStoredRecurringPattern } from '@/lib/calendarEventMapping';
 
 const API_BASE = '/api/families';
 
@@ -247,6 +248,7 @@ class DatabaseService {
           const eventTime = new Date(e.eventTime);
           const hours = eventTime.getUTCHours().toString().padStart(2, '0');
           const minutes = eventTime.getUTCMinutes().toString().padStart(2, '0');
+          const recurrence = decodeStoredRecurringPattern(e.recurringPattern);
 
           return {
             id: e.id,
@@ -261,7 +263,7 @@ class DatabaseService {
             time: `${hours}:${minutes}`,
             duration: e.durationMinutes,
             location: e.location,
-            recurring: e.recurringPattern,
+            ...recurrence,
             cost: e.cost,
             type: e.eventType,
             notes: e.notes,
@@ -336,7 +338,7 @@ class DatabaseService {
           location: event.location || '',
           cost: event.cost || 0,
           eventType: event.type || 'other',
-          recurringPattern: event.recurring || 'none',
+          recurringPattern: encodeStoredRecurringPattern(event.recurring, event.recurringPattern),
           isRecurring: event.isRecurring || false,
           notes: event.notes || '',
           source: event.source,

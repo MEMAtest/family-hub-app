@@ -3,21 +3,20 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
-  Armchair, ArrowLeft, ArrowRight, Bath, Check, ExternalLink, Grid2x2, Heater, LayoutGrid, LoaderCircle, Plus, RefreshCw,
-  Search, ShoppingBasket, ShowerHead, Trash2, TriangleAlert, Truck, Wrench, X,
+  Armchair, ArrowLeft, Bath, Check, ExternalLink, Grid2x2, Heater, LayoutGrid, LoaderCircle, Plus, RefreshCw,
+  Search, ShoppingBasket, ShowerHead, Trash2, Truck, Wrench, X,
 } from 'lucide-react';
 import type {
   ProjectSourcing, SourcedProduct, SourcingBasketStatus, SourcingRequirement, SourcingRoomId, SourcingStock,
 } from '@/types/sourcing.types';
 import type { PropertyProject } from '@/types/property.types';
 import { SOURCING_SEED_VERSION, createBathroomSourcingSeed } from '@/lib/sourcing/seed';
+import BathroomProjectOverview from './BathroomProjectOverview';
+import { bathroomRooms, basketStatuses, basketTotal as sourcingBasketTotal, isBathroomProject as bathroomProject, isUncountedPrice, productLineCost, productSize, quoteSizeCheck, roomName } from './bathroomProject.helpers';
 
 const money = new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' });
 
-const rooms: { id: SourcingRoomId; label: string; heroProductId: string }[] = [
-  { id: 'main-bathroom', label: 'Main Bathroom', heroProductId: 'sw-14140039' },
-  { id: 'shower-room', label: 'Shower Room', heroProductId: 'sw-32086100' },
-];
+const rooms = bathroomRooms;
 
 const categories: { id: string; label: string; icon: LucideIcon }[] = [
   { id: 'All', label: 'All', icon: LayoutGrid },
@@ -37,7 +36,15 @@ const stockStyles: Record<SourcingStock, { label: string; dot: string; text: str
   UNKNOWN: { label: 'Check stock', dot: 'bg-gray-400', text: 'text-gray-600 dark:text-slate-300' },
 };
 
-type Props = { project: PropertyProject; onUpdateProject: (updates: Partial<PropertyProject>) => void; isReadOnly?: boolean };
+type Props = {
+  project: PropertyProject;
+  onUpdateProject: (updates: Partial<PropertyProject>) => void;
+  isReadOnly?: boolean;
+  view?: 'overview' | 'room' | 'products';
+  selectedRoomId?: SourcingRoomId;
+  selectedRequirementId?: string;
+  onNavigate?: (roomId: SourcingRoomId | null, requirementId?: string) => void;
+};
 type SortOrder = 'recommended' | 'price' | 'stock';
 
 const productsFor = (sourcing: ProjectSourcing, requirement: SourcingRequirement) =>
@@ -49,21 +56,9 @@ const STOCK_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 // A box or single-tile price can't be totalled without knowing how many are needed, so those stay
 // out of totals (the basket says so) rather than counting as if one box covered the room.
-const isUncountedPrice = (product: SourcedProduct) => product.priceUnit === 'per box' || product.priceUnit === 'per tile';
 const lineCost = (requirement: SourcingRequirement | undefined, product: SourcedProduct) =>
-  isUncountedPrice(product) ? 0 : product.price * (product.priceUnit === 'per m²' ? requirement?.quantity ?? 1 : 1);
+  productLineCost(product, requirement?.quantity ?? 1);
 
-/** Cheapest top-pick product for each part the quote item needs, so a bath estimate includes its screen and panels. */
-function estimateFor(sourcing: ProjectSourcing, requirement: SourcingRequirement) {
-  const picks = productsFor(sourcing, requirement).filter((product) => product.topPick);
-  const chosen = new Map<string, SourcedProduct>();
-  const parts = requirement.requiredComponents.length ? requirement.requiredComponents : [''];
-  parts.forEach((part) => {
-    const cheapest = picks.filter((product) => !part || product.components.includes(part)).sort((a, b) => a.price - b.price)[0];
-    if (cheapest) chosen.set(cheapest.id, cheapest);
-  });
-  return Array.from(chosen.values()).reduce((total, product) => total + lineCost(requirement, product), 0);
-}
 
 function coverage(requirement: SourcingRequirement, products: SourcedProduct[]) {
   const covered = new Set(products.flatMap((product) => product.components));
@@ -96,22 +91,24 @@ export function migrate(saved: ProjectSourcing): ProjectSourcing {
   const productIds = new Set(products.map((product) => product.id));
   return {
     ...seed,
+    rooms: saved.rooms,
     requirements: [...seed.requirements, ...custom],
     products,
     basket: saved.basket.filter((item) => productIds.has(item.productId) && requirementIds.has(item.requirementId)),
   };
 }
 
-export default function ProjectMaterialsView({ project, onUpdateProject, isReadOnly = false }: Props) {
-  const isBathroomProject = /bath|shower/i.test(`${project.category} ${project.title} ${project.description ?? ''}`);
+export default function ProjectMaterialsView({ project, onUpdateProject, isReadOnly = false, view = 'overview', selectedRoomId, selectedRequirementId, onNavigate }: Props) {
+  const isBathroomProject = bathroomProject(project);
   const needsSeed = isBathroomProject && (!project.sourcing || (project.sourcing.version ?? 1) < SOURCING_SEED_VERSION);
   const sourcing = useMemo<ProjectSourcing>(() => {
     if (!needsSeed) return project.sourcing ?? { requirements: [], products: [], basket: [] };
     return project.sourcing ? migrate(project.sourcing) : createBathroomSourcingSeed();
   }, [needsSeed, project.sourcing]);
 
-  const [roomId, setRoomId] = useState<SourcingRoomId | null>(null);
-  const [requirementId, setRequirementId] = useState<string | null>(null);
+  const [roomId, setRoomId] = useState<SourcingRoomId | null>(selectedRoomId ?? null);
+  const [requirementId, setRequirementId] = useState<string | null>(selectedRequirementId ?? null);
+  const [detailRequirementId, setDetailRequirementId] = useState<string | null>(null);
   const [category, setCategory] = useState('All');
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<SortOrder>('recommended');
@@ -125,6 +122,12 @@ export default function ProjectMaterialsView({ project, onUpdateProject, isReadO
   const [newSize, setNewSize] = useState('');
 
   useEffect(() => {
+    setRoomId(selectedRoomId ?? null);
+    setRequirementId(selectedRequirementId ?? null);
+    setCategory('All'); setQuery(''); setMessage(''); setAdding(false); setDetailId(null);
+  }, [view, selectedRoomId, selectedRequirementId]);
+
+  useEffect(() => {
     if (needsSeed && !isReadOnly) onUpdateProject({ sourcing, updatedAt: new Date().toISOString() });
   }, [needsSeed, isReadOnly, onUpdateProject, sourcing]);
 
@@ -132,20 +135,19 @@ export default function ProjectMaterialsView({ project, onUpdateProject, isReadO
   // basket changes made meanwhile are not overwritten.
   const latest = useRef(sourcing);
   latest.current = sourcing;
+  const readOnly = useRef(isReadOnly);
+  readOnly.current = isReadOnly;
   function save(next: ProjectSourcing) {
+    if (readOnly.current) return;
     latest.current = next;
     onUpdateProject({ sourcing: next, updatedAt: new Date().toISOString() });
   }
 
   const room = rooms.find((item) => item.id === roomId);
-  const roomRequirements = sourcing.requirements.filter((item) => item.roomId === roomId);
+  const roomRequirements = sourcing.requirements.filter((item) => !roomId || item.roomId === roomId);
   const requirement = roomRequirements.find((item) => item.id === requirementId);
   const detail = sourcing.products.find((product) => product.id === detailId);
-  const basketTotal = sourcing.basket.reduce((total, item) => {
-    const product = sourcing.products.find((candidate) => candidate.id === item.productId);
-    const linked = sourcing.requirements.find((candidate) => candidate.id === item.requirementId);
-    return total + (product ? lineCost(linked, product) : 0);
-  }, 0);
+  const basketTotal = sourcingBasketTotal(sourcing);
 
   const roomProducts = useMemo(() => {
     const ids = new Set((requirement ? [requirement] : roomRequirements).map((item) => item.id));
@@ -178,8 +180,7 @@ export default function ProjectMaterialsView({ project, onUpdateProject, isReadO
       ?? sourcing.requirements.find((item) => product.requirementIds?.includes(item.id));
   }
 
-  function addToBasket(product: SourcedProduct, status: SourcingBasketStatus = 'review') {
-    const linked = requirementForProduct(product);
+  function addToBasket(product: SourcedProduct, status: SourcingBasketStatus = 'review', linked = requirementForProduct(product)) {
     if (!linked || isReadOnly) return;
     const current = latest.current;
     const basket = current.basket.filter((item) => !(item.requirementId === linked.id && item.productId === product.id));
@@ -193,7 +194,7 @@ export default function ProjectMaterialsView({ project, onUpdateProject, isReadO
   }
 
   async function searchSupplier() {
-    if (!requirement) return;
+    if (!requirement || isReadOnly) return;
     const tiles = requirement.category === 'Tiles';
     setSearching(true);
     setMessage('');
@@ -254,6 +255,7 @@ export default function ProjectMaterialsView({ project, onUpdateProject, isReadO
     let next = 0;
     const worker = async () => {
       while (next < stale.length) {
+        if (readOnly.current) break;
         const product = stale[next++];
         try {
           const response = await fetch('/api/property/sourcing/search', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'stock', url: product.url }) });
@@ -269,7 +271,7 @@ export default function ProjectMaterialsView({ project, onUpdateProject, isReadO
   }, [roomId, isReadOnly, sourcing.basket.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function addRequirement() {
-    if (!roomId || !newName.trim()) return;
+    if (!roomId || !newName.trim() || isReadOnly) return;
     const item: SourcingRequirement = {
       id: `req-${Date.now()}`, roomId, name: newName.trim(), category: 'Other', specification: newName.trim(), size: newSize.trim() || 'Size to confirm',
       quantity: 1, status: 'fitter_check', constraints: {}, requiredComponents: [],
@@ -279,23 +281,35 @@ export default function ProjectMaterialsView({ project, onUpdateProject, isReadO
     setNewName(''); setNewSize(''); setAdding(false);
   }
 
-  const openRoom = (id: SourcingRoomId) => { setRoomId(id); setRequirementId(null); setCategory('All'); setQuery(''); setMessage(''); };
+  const openRoom = (id: SourcingRoomId) => { setRoomId(id); setRequirementId(null); setCategory('All'); setQuery(''); setMessage(''); onNavigate?.(id); };
+  const openRequirement = (item: SourcingRequirement) => { setRoomId(item.roomId); setRequirementId(item.id); setCategory('All'); setQuery(''); setMessage(''); onNavigate?.(item.roomId, item.id); };
+  const openProduct = (product: SourcedProduct, linked?: SourcingRequirement) => { setDetailId(product.id); setDetailRequirementId(linked?.id ?? null); };
+  const detailRequirement = sourcing.requirements.find((item) => item.id === detailRequirementId) ?? (detail ? requirementForProduct(detail) : undefined);
+  const detailPanel = detail && <ProductDetail product={detail} requirement={detailRequirement} disabled={isReadOnly}
+    inBasket={sourcing.basket.some((item) => item.productId === detail.id && item.requirementId === detailRequirement?.id)}
+    onClose={() => setDetailId(null)} onAdd={(status) => addToBasket(detail, status, detailRequirement)} onUpdate={(updates) => updateProduct(detail.id, updates)} />;
+  const showOverview = view === 'overview' ? !room : view === 'room' && !requirement;
+  const visibleBasket = roomId ? { ...sourcing, basket: sourcing.basket.filter((item) => roomRequirements.some((linked) => linked.id === item.requirementId)) } : sourcing;
+  const basket = visibleBasket.basket.length > 0 && <BasketTable sourcing={visibleBasket} total={sourcingBasketTotal(visibleBasket)} isReadOnly={isReadOnly} onOpen={(product, linked) => openProduct(product, linked)}
+    onUpdate={(entries) => save({ ...latest.current, basket: roomId ? [...latest.current.basket.filter((item) => !roomRequirements.some((linked) => linked.id === item.requirementId)), ...entries] : entries })} />;
 
-  if (!room) {
-    return <MaterialsOverview sourcing={sourcing} basketTotal={basketTotal} isReadOnly={isReadOnly} onOpenRoom={openRoom}
-      onUpdateBasket={(basket) => save({ ...latest.current, basket })} />;
+  if (showOverview) {
+    return <div className="min-w-0 space-y-6"><BathroomProjectOverview sourcing={sourcing} roomId={view === 'room' ? roomId ?? undefined : undefined} isReadOnly={isReadOnly}
+      onOpenRoom={openRoom} onOpenRequirement={openRequirement} onOpenProduct={openProduct}
+      onSaveRoom={(id, metadata) => save({ ...latest.current, rooms: { ...latest.current.rooms, [id]: { ...latest.current.rooms?.[id], ...metadata } } })} />{basket}{detailPanel}</div>;
   }
 
   const tiles = requirement?.category === 'Tiles';
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <button onClick={() => setRoomId(null)} className="-my-2 inline-flex items-center gap-1.5 py-3 text-sm text-gray-500 hover:text-gray-800 dark:text-slate-400 dark:hover:text-white"><ArrowLeft className="h-4 w-4" /> All rooms</button>
-          <div className="mt-2 flex items-center gap-2">
-            <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">{room.label}</h2>
-            <select aria-label="Switch room" value={room.id} onChange={(event) => openRoom(event.target.value as SourcingRoomId)} className="min-h-10 rounded-lg border-gray-200 py-1 text-sm dark:border-slate-700 dark:bg-slate-800">
-              {rooms.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+        <div className="min-w-0 max-w-full">
+          <button onClick={() => { setRequirementId(null); if (onNavigate) onNavigate(roomId); else setRoomId(null); }} className="-my-2 inline-flex items-center gap-1.5 py-3 text-sm text-gray-500 hover:text-gray-800 dark:text-slate-400 dark:hover:text-white"><ArrowLeft className="h-4 w-4" /> {room ? 'Room overview' : 'Project overview'}</button>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <h2 className="min-w-0 break-words text-xl font-semibold text-gray-900 dark:text-white">{room ? roomName(sourcing, room.id) : 'Products'}</h2>
+            <select aria-label="Switch room" value={roomId ?? ''} onChange={(event) => { const id = event.target.value as SourcingRoomId; if (id) openRoom(id); else { setRoomId(null); setRequirementId(null); } }} className="min-h-10 max-w-full rounded-lg border-gray-200 py-1 text-sm dark:border-slate-700 dark:bg-slate-800">
+              {!room && <option value="">All rooms</option>}
+              {rooms.map((item) => <option key={item.id} value={item.id}>{roomName(sourcing, item.id)}</option>)}
             </select>
           </div>
           <p className="text-sm text-gray-500 dark:text-slate-400">Materials & products · {roomRequirements.length} quote items</p>
@@ -306,37 +320,25 @@ export default function ProjectMaterialsView({ project, onUpdateProject, isReadO
       <section aria-label="Quote items">
         <div className="mb-2 flex items-center justify-between">
           <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">From your quote</h3>
-          {!isReadOnly && <button onClick={() => setAdding((value) => !value)} className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"><Plus className="h-4 w-4" /> Add item</button>}
+          {!isReadOnly && roomId && <button onClick={() => setAdding((value) => !value)} className="inline-flex items-center gap-1 text-sm font-medium text-emerald-700 hover:underline dark:text-emerald-300"><Plus className="h-4 w-4" /> Add item</button>}
         </div>
         {adding && <div className="mb-3 grid gap-2 rounded-xl border border-blue-200 bg-blue-50/60 p-3 dark:border-blue-900 dark:bg-blue-950/30 sm:grid-cols-[2fr_1fr_auto]">
           <input value={newName} onChange={(event) => setNewName(event.target.value)} placeholder="What is it? e.g. Mirror cabinet" className="rounded-lg border-gray-300 text-sm dark:border-slate-600 dark:bg-slate-900" />
           <input value={newSize} onChange={(event) => setNewSize(event.target.value)} placeholder="Size, e.g. 600 × 700mm" className="rounded-lg border-gray-300 text-sm dark:border-slate-600 dark:bg-slate-900" />
           <button onClick={addRequirement} disabled={!newName.trim()} className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-50">Add</button>
         </div>}
-        <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-2">
-          <button onClick={() => setRequirementId(null)} className={`shrink-0 rounded-xl border px-3 py-2 text-left text-sm ${!requirement ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300' : 'border-gray-200 bg-white text-gray-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200'}`}>
-            <div className="font-medium">All items</div><div className="text-xs text-gray-500">{roomRequirements.length} in quote</div>
-          </button>
-          {roomRequirements.map((item) => {
-            const picked = sourcing.basket.some((entry) => entry.requirementId === item.id);
-            const hasProducts = productsFor(sourcing, item).length > 0;
-            return <button key={item.id} onClick={() => { setRequirementId(item.id); setCategory('All'); setMessage(''); }} aria-pressed={requirement?.id === item.id}
-              className={`w-56 shrink-0 rounded-xl border px-3 py-2 text-left ${requirement?.id === item.id ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-200 dark:bg-blue-950/40 dark:ring-blue-900' : 'border-gray-200 bg-white hover:border-gray-300 dark:border-slate-700 dark:bg-slate-900'}`}>
-              <div className="flex items-start justify-between gap-2">
-                <span className="text-sm font-semibold text-gray-900 dark:text-white">{item.name}</span>
-                {picked ? <Check aria-label="In basket" className="h-4 w-4 shrink-0 text-blue-600" /> : item.status === 'fitter_check' ? <TriangleAlert aria-label="Fitter check" className="h-4 w-4 shrink-0 text-amber-500" /> : null}
-              </div>
-              <div className="mt-0.5 text-xs font-medium text-gray-700 dark:text-slate-300">{item.size}</div>
-              <div className="mt-0.5 line-clamp-2 text-xs text-gray-500 dark:text-slate-400">{hasProducts ? item.specification : item.notes ?? 'No supplier match yet'}</div>
-            </button>;
-          })}
-        </div>
+        <label className="block text-xs font-medium text-gray-600 dark:text-slate-300">Quote item
+          <select value={requirement?.id ?? ''} onChange={(event) => { const item = sourcing.requirements.find((candidate) => candidate.id === event.target.value); if (item && onNavigate) openRequirement(item); else { setRequirementId(item?.id ?? null); setCategory('All'); setMessage(''); } }} className="mt-1 min-h-11 w-full min-w-0 rounded-lg border-gray-200 text-sm dark:border-slate-700 dark:bg-slate-800">
+            <option value="">All items ({roomRequirements.length})</option>
+            {roomRequirements.map((item) => <option key={item.id} value={item.id}>{!room ? `${roomName(sourcing, item.roomId)} · ` : ''}{item.name} · {item.size || 'Size not stated'}{sourcing.basket.some((entry) => entry.requirementId === item.id) ? ' · Selected' : ''}</option>)}
+          </select>
+        </label>
       </section>
 
       {requirement && <RequirementPanel requirement={requirement} products={productsFor(sourcing, requirement)} basketIds={sourcing.basket.filter((item) => item.requirementId === requirement.id).map((item) => item.productId)}
-        searching={searching} tiles={tiles} message={message} onSearch={searchSupplier} />}
+        searching={searching} tiles={tiles} message={message} onSearch={searchSupplier} isReadOnly={isReadOnly} />}
 
-      <div className="flex gap-1 overflow-x-auto border-b border-gray-200 dark:border-slate-700" role="tablist" aria-label="Product categories">
+      <div className="flex flex-wrap gap-1 border-b border-gray-200 dark:border-slate-700" role="tablist" aria-label="Product categories">
         {categories.map(({ id, label, icon: Icon }) => (
           <button key={id} role="tab" aria-selected={category === id} onClick={() => setCategory(id)} disabled={id !== 'All' && categoryCounts[id] === 0}
             className={`flex min-w-[88px] shrink-0 flex-col items-center gap-1 border-b-2 px-3 pb-2 pt-1 text-xs font-medium disabled:opacity-35 ${category === id ? 'border-blue-600 text-blue-600 dark:text-blue-400' : 'border-transparent text-gray-500 hover:text-gray-800 dark:text-slate-400'}`}>
@@ -367,15 +369,14 @@ export default function ProjectMaterialsView({ project, onUpdateProject, isReadO
               const linked = requirementForProduct(product);
               const inBasket = sourcing.basket.some((item) => item.productId === product.id && item.requirementId === linked?.id);
               return <ProductCard key={product.id} product={product} requirement={linked} showRequirement={!requirement} inBasket={inBasket} disabled={isReadOnly}
-                onOpen={() => setDetailId(product.id)} onAdd={() => addToBasket(product, product.note || product.stock !== 'IN_STOCK' ? 'ask_fitter' : 'review')} />;
+                onOpen={() => openProduct(product, linked)} onAdd={() => addToBasket(product, product.note || product.stock !== 'IN_STOCK' ? 'ask_fitter' : 'review')} />;
             })}
           </div>
         )}
       </div>
 
-      {detail && <ProductDetail product={detail} requirement={requirementForProduct(detail)} disabled={isReadOnly}
-        inBasket={sourcing.basket.some((item) => item.productId === detail.id)}
-        onClose={() => setDetailId(null)} onAdd={(status) => addToBasket(detail, status)} onUpdate={(updates) => updateProduct(detail.id, updates)} />}
+      {basket}
+      {detailPanel}
     </div>
   );
 }
@@ -394,84 +395,13 @@ function StockBadge({ stock, compact = false }: { stock: SourcingStock; compact?
   </span>;
 }
 
-function MaterialsOverview({ sourcing, basketTotal, isReadOnly, onOpenRoom, onUpdateBasket }: {
-  sourcing: ProjectSourcing; basketTotal: number; isReadOnly: boolean; onOpenRoom: (id: SourcingRoomId) => void; onUpdateBasket: (basket: ProjectSourcing['basket']) => void;
-}) {
-  const estimates = rooms.map((room) => {
-    const items = sourcing.requirements.filter((item) => item.roomId === room.id);
-    return { room, items, estimate: items.reduce((total, item) => total + estimateFor(sourcing, item), 0), hero: sourcing.products.find((product) => product.id === room.heroProductId) };
-  });
-  const byCategory = categories.slice(1).map((item) => ({
-    label: item.label,
-    total: sourcing.requirements.reduce((total, requirement) => total + (productsFor(sourcing, requirement)[0]?.category === item.id ? estimateFor(sourcing, requirement) : 0), 0),
-  })).filter((item) => item.total > 0);
-  const estimate = estimates.reduce((total, item) => total + item.estimate, 0);
-  const inStock = sourcing.products.filter((product) => product.stock === 'IN_STOCK').length;
-  const toOrder = sourcing.products.filter((product) => product.stock === 'TO_ORDER').length;
-  const unmatched = sourcing.requirements.filter((item) => item.category !== 'Fitter check' && productsFor(sourcing, item).length === 0);
 
-  return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-600 dark:text-blue-400">Quote items · product fit · stock</p>
-          <h2 className="mt-1 text-xl font-semibold text-gray-900 dark:text-white">Materials sourcing</h2>
-          <p className="mt-1 max-w-2xl text-sm text-gray-500 dark:text-slate-400">Every item from the bathroom quote, matched to supplier products with direct links, photos and live stock. Prices and stock can change; check before ordering.</p>
-        </div>
-        <BasketPill count={sourcing.basket.length} total={basketTotal} />
-      </div>
-
-      <section>
-        <h3 className="mb-3 font-semibold text-gray-900 dark:text-white">Rooms in this project</h3>
-        <div className="grid gap-4 sm:grid-cols-2">
-          {estimates.map(({ room, items, estimate: roomEstimate, hero }) => (
-            <button key={room.id} onClick={() => onOpenRoom(room.id)} aria-label={`Open ${room.label}`} className="group overflow-hidden rounded-2xl border border-gray-200 bg-white text-left shadow-sm transition hover:shadow-md dark:border-slate-700 dark:bg-slate-900">
-              <div className="aspect-[16/9] overflow-hidden bg-gray-100 dark:bg-slate-800">
-                {hero && <img src={hero.imageUrl} alt={`${room.label}: ${hero.name}`} className="h-full w-full object-cover transition group-hover:scale-[1.02]" />}
-              </div>
-              <div className="flex items-center justify-between p-4">
-                <div>
-                  <div className="font-semibold text-gray-900 dark:text-white">{room.label}</div>
-                  <div className="text-sm text-gray-500 dark:text-slate-400">{items.length} quote items · {money.format(roomEstimate)} est.</div>
-                </div>
-                <ArrowRight className="h-5 w-5 text-gray-400 group-hover:text-blue-600" />
-              </div>
-            </button>
-          ))}
-        </div>
-      </section>
-
-      <section className="grid gap-4 lg:grid-cols-[1fr_320px]">
-        <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
-          <h3 className="font-semibold text-gray-900 dark:text-white">Stock at a glance</h3>
-          <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
-            <div className="rounded-xl bg-emerald-50 p-3 dark:bg-emerald-950/30"><div className="text-2xl font-semibold text-emerald-700 dark:text-emerald-300">{inStock}</div><div className="text-xs text-emerald-800 dark:text-emerald-200">products in stock</div></div>
-            <div className="rounded-xl bg-amber-50 p-3 dark:bg-amber-950/30"><div className="text-2xl font-semibold text-amber-700 dark:text-amber-300">{toOrder}</div><div className="text-xs text-amber-800 dark:text-amber-200">available to order (longer delivery)</div></div>
-            <div className="rounded-xl bg-gray-50 p-3 dark:bg-slate-800"><div className="text-2xl font-semibold text-gray-700 dark:text-slate-200">{unmatched.length}</div><div className="text-xs text-gray-600 dark:text-slate-300">quote items with no supplier match</div></div>
-          </div>
-          {unmatched.length > 0 && <p className="mt-3 text-xs text-gray-500 dark:text-slate-400">Not sold by Stonewater: {unmatched.map((item) => `${item.name} (${roomLabel(item.roomId)})`).join(', ')}.</p>}
-        </div>
-        <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4 dark:border-slate-700 dark:bg-slate-800/60">
-          <div className="text-sm text-gray-500 dark:text-slate-400">Estimated materials</div>
-          <div className="text-3xl font-semibold text-gray-900 dark:text-white">{money.format(estimate)}</div>
-          <p className="mt-1 text-xs text-gray-500">Cheapest top pick for each part of each quote item.</p>
-          <dl className="mt-3 space-y-1.5 text-sm">{byCategory.map((item) => <div key={item.label} className="flex justify-between"><dt className="text-gray-600 dark:text-slate-300">{item.label}</dt><dd className="font-medium text-gray-900 dark:text-white">{money.format(item.total)}</dd></div>)}</dl>
-        </div>
-      </section>
-
-      {sourcing.basket.length > 0 && <BasketTable sourcing={sourcing} total={basketTotal} isReadOnly={isReadOnly} onUpdate={onUpdateBasket} />}
-    </div>
-  );
-}
-
-const roomLabel = (id: SourcingRoomId) => rooms.find((room) => room.id === id)?.label ?? id;
-
-function BasketTable({ sourcing, total, isReadOnly, onUpdate }: { sourcing: ProjectSourcing; total: number; isReadOnly: boolean; onUpdate: (basket: ProjectSourcing['basket']) => void }) {
+function BasketTable({ sourcing, total, isReadOnly, onUpdate, onOpen }: { sourcing: ProjectSourcing; total: number; isReadOnly: boolean; onUpdate: (basket: ProjectSourcing['basket']) => void; onOpen: (product: SourcedProduct, requirement?: SourcingRequirement) => void }) {
   const perBox = sourcing.basket.filter((item) => {
     const product = sourcing.products.find((candidate) => candidate.id === item.productId);
     return product ? isUncountedPrice(product) : false;
   }).length;
-  return <section className="overflow-hidden rounded-2xl border border-gray-200 dark:border-slate-700">
+  return <section className="min-w-0 border-y border-gray-200 dark:border-slate-700">
     <div className="flex items-center justify-between bg-white px-4 py-3 dark:bg-slate-900"><div><h3 className="font-semibold text-gray-900 dark:text-white">Project basket</h3><p className="text-xs text-gray-500 dark:text-slate-400">Review before ordering. No orders are placed from here.</p></div><div className="text-right"><span className="font-semibold text-gray-900 dark:text-white">{money.format(total)}</span>{perBox > 0 && <p className="text-xs text-amber-700 dark:text-amber-300">+ {perBox} priced per box or tile (not in total)</p>}</div></div>
     <div className="divide-y divide-gray-100 dark:divide-slate-800">{sourcing.basket.map((item) => {
       const product = sourcing.products.find((candidate) => candidate.id === item.productId);
@@ -480,12 +410,16 @@ function BasketTable({ sourcing, total, isReadOnly, onUpdate }: { sourcing: Proj
       // On a phone the details get the whole first line and the controls drop to a second line;
       // squeezed into one row the name shrank to a single letter and the price overlapped it.
       return <div key={item.id} data-testid="basket-row" className="flex flex-wrap items-center gap-3 bg-white px-4 py-3 dark:bg-slate-900">
-        <img src={product.imageUrl} alt="" className="h-12 w-12 shrink-0 rounded-lg bg-gray-100 object-cover" />
+        <button aria-label={`View details for ${product.name}`} title={`View details for ${product.name}`} onClick={() => onOpen(product, linked)} className="shrink-0"><ProductImage product={product} className="h-12 w-12 rounded-lg" /></button>
         <div className="min-w-0 basis-[calc(100%-3.75rem)] sm:basis-0 sm:flex-1"><a href={product.url} target="_blank" rel="noreferrer" className="line-clamp-2 text-sm font-medium text-gray-900 hover:text-blue-700 sm:block sm:truncate dark:text-white">{product.name}</a>
-          <div className="text-xs text-gray-500">{linked?.name} · {linked ? roomLabel(linked.roomId) : ''} · {product.supplier} · <StockBadge stock={product.stock} /></div></div>
-        <div className="flex w-full items-center justify-end gap-2 sm:w-auto sm:gap-3">
-          <span className="mr-auto text-sm font-semibold text-gray-800 sm:mr-0 dark:text-slate-200">{isUncountedPrice(product) ? `${money.format(product.price)} ${product.priceUnit!.replace('per ', '/ ')}` : money.format(lineCost(linked, product))}</span>
-          <select aria-label={`Status for ${product.name}`} disabled={isReadOnly} value={item.status} onChange={(event) => onUpdate(sourcing.basket.map((entry) => entry.id === item.id ? { ...entry, status: event.target.value as SourcingBasketStatus } : entry))} className="min-h-10 rounded-lg border-gray-200 py-1.5 text-xs dark:border-slate-700 dark:bg-slate-800"><option value="review">Review</option><option value="ask_fitter">Ask fitter</option><option value="approved">Approved</option><option value="ordered">Ordered</option></select>
+          <div className="text-xs text-gray-500">{linked?.name} · {linked ? roomName(sourcing, linked.roomId) : ''} · {product.supplier} · <StockBadge stock={product.stock} /></div>
+          <p className="mt-1 text-xs text-gray-500">{productSize(product)}</p></div>
+        <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto sm:gap-3">
+          <span className="mr-auto text-sm font-semibold text-gray-800 sm:mr-0 dark:text-slate-200">{isUncountedPrice(product) ? `${money.format(product.price)} ${product.priceUnit!.replace('per ', '/ ')} · excluded` : money.format(productLineCost(product, item.quantity))}</span>
+          <label className="flex items-center gap-1 text-xs text-gray-500">Qty
+            <input type="number" aria-label={`Quantity for ${product.name}`} disabled={isReadOnly} min={product.priceUnit === 'per m²' ? 0.01 : 1} step={product.priceUnit === 'per m²' ? 'any' : 1} value={item.quantity} onChange={(event) => { const quantity = Number(event.target.value); if (Number.isFinite(quantity) && quantity > 0 && (product.priceUnit === 'per m²' || Number.isInteger(quantity))) onUpdate(sourcing.basket.map((entry) => entry.id === item.id ? { ...entry, quantity } : entry)); }} className="min-h-10 w-20 rounded-lg border-gray-200 text-xs dark:border-slate-700 dark:bg-slate-800" />
+          </label>
+          <select aria-label={`Status for ${product.name}`} disabled={isReadOnly} value={item.status} onChange={(event) => onUpdate(sourcing.basket.map((entry) => entry.id === item.id ? { ...entry, status: event.target.value as SourcingBasketStatus } : entry))} className="min-h-10 rounded-lg border-gray-200 py-1.5 text-xs dark:border-slate-700 dark:bg-slate-800">{basketStatuses.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}</select>
           {!isReadOnly && <button aria-label={`Remove ${product.name} from basket`} onClick={() => onUpdate(sourcing.basket.filter((entry) => entry.id !== item.id))} className="rounded-md p-3 text-gray-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/30"><Trash2 className="h-4 w-4" /></button>}
         </div>
       </div>;
@@ -493,11 +427,11 @@ function BasketTable({ sourcing, total, isReadOnly, onUpdate }: { sourcing: Proj
   </section>;
 }
 
-function RequirementPanel({ requirement, products, basketIds, searching, tiles, message, onSearch }: {
-  requirement: SourcingRequirement; products: SourcedProduct[]; basketIds: string[]; searching: boolean; tiles: boolean; message: string; onSearch: () => void;
+function RequirementPanel({ requirement, products, basketIds, searching, tiles, message, onSearch, isReadOnly }: {
+  requirement: SourcingRequirement; products: SourcedProduct[]; basketIds: string[]; searching: boolean; tiles: boolean; message: string; onSearch: () => void; isReadOnly: boolean;
 }) {
   const parts = coverage(requirement, products.filter((product) => basketIds.includes(product.id)));
-  return <div className="rounded-2xl border border-gray-200 bg-gray-50/70 p-4 dark:border-slate-700 dark:bg-slate-800/50">
+  return <section className="border-y border-gray-200 py-4 dark:border-slate-700">
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2"><h3 className="text-lg font-semibold text-gray-900 dark:text-white">{requirement.name}</h3>
@@ -508,11 +442,11 @@ function RequirementPanel({ requirement, products, basketIds, searching, tiles, 
         {requirement.referenceProduct && <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">Reference product outside Topps Tiles: <strong>{requirement.referenceProduct.name}</strong> by {requirement.referenceProduct.supplier}. {requirement.recommendationNote}</p>}
         {parts.length > 0 && <div className="mt-2 flex flex-wrap gap-1.5">{parts.map(({ part, covered }) => <span key={part} className={`rounded-full px-2 py-0.5 text-xs ${covered ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' : 'bg-white text-gray-500 ring-1 ring-gray-200 dark:bg-slate-900 dark:ring-slate-700'}`}>{covered ? '✓ ' : ''}{part.replace(/-/g, ' ')}</span>)}</div>}
       </div>
-      {requirement.category !== 'Fitter check' && <button onClick={onSearch} disabled={searching} className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-60">
+      {requirement.category !== 'Fitter check' && <button onClick={onSearch} disabled={searching || isReadOnly} className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-60">
         {searching ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}{searching ? 'Searching…' : tiles ? 'Search UK tile shops' : 'Search Stonewater'}</button>}
     </div>
     {message && <p role="status" className="mt-3 text-sm text-gray-600 dark:text-slate-300">{message}</p>}
-  </div>;
+  </section>;
 }
 
 function marketLinks(requirement: SourcingRequirement) {
@@ -543,7 +477,7 @@ function ProductImage({ product, className }: { product: SourcedProduct; classNa
 function ProductCard({ product, requirement, showRequirement, inBasket, disabled, onOpen, onAdd }: {
   product: SourcedProduct; requirement?: SourcingRequirement; showRequirement: boolean; inBasket: boolean; disabled: boolean; onOpen: () => void; onAdd: () => void;
 }) {
-  return <article className="flex flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white transition hover:shadow-md dark:border-slate-700 dark:bg-slate-900">
+  return <article className="flex min-w-0 flex-col overflow-hidden rounded-lg border border-gray-200 bg-white transition hover:shadow-md dark:border-slate-700 dark:bg-slate-900">
     <button onClick={onOpen} className="relative block text-left" aria-label={`View details for ${product.name}`}>
       <ProductImage product={product} className="aspect-[4/3] w-full" />
       {product.topPick && <span className="absolute left-2 top-2 rounded-md bg-emerald-600 px-2 py-0.5 text-xs font-semibold text-white">Top pick</span>}
@@ -552,7 +486,8 @@ function ProductCard({ product, requirement, showRequirement, inBasket, disabled
     <div className="flex flex-1 flex-col p-3">
       {showRequirement && requirement && <span className="text-[11px] font-medium uppercase tracking-wide text-blue-600 dark:text-blue-400">For: {requirement.name}</span>}
       <button onClick={onOpen} className="text-left"><h4 className="line-clamp-2 text-sm font-semibold text-gray-900 hover:text-blue-700 dark:text-white">{product.name}</h4></button>
-      {product.size && <p className="mt-0.5 text-xs text-gray-500 dark:text-slate-400">{product.size}</p>}
+      <p className="mt-0.5 text-xs text-gray-500 dark:text-slate-400">{productSize(product)}</p>
+      <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">{quoteSizeCheck(requirement, product)}</p>
       <div className="mt-2 text-lg font-semibold text-gray-900 dark:text-white">{money.format(product.price)}{product.priceUnit && <span className="text-sm font-normal text-gray-500"> {product.priceUnit.replace('per ', '/ ')}</span>}</div>
       <a href={product.url} target="_blank" rel="noreferrer" className="mt-0.5 inline-flex w-fit items-center gap-1 text-xs text-gray-500 hover:text-blue-700 dark:text-slate-400">{product.supplier} <ExternalLink className="h-3 w-3" /></a>
       {product.aiReview && (!requirement || product.aiReview.requirementId === requirement.id) && <AiBadge review={product.aiReview} />}
@@ -586,6 +521,7 @@ function ProductDetail({ product, requirement, inBasket, disabled, onClose, onAd
   }, [onClose]);
 
   async function checkStock() {
+    if (disabled) return;
     setChecking(true);
     setCheckError('');
     try {
@@ -620,7 +556,7 @@ function ProductDetail({ product, requirement, inBasket, disabled, onClose, onAd
           </div>
           <div>
             <h3 className="text-lg font-semibold leading-snug text-gray-900 dark:text-white">{product.name}</h3>
-            {product.size && <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">{product.size}</p>}
+            <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">{productSize(product)}</p>
             <div className="mt-3 text-2xl font-semibold text-gray-900 dark:text-white">{money.format(product.price)}{product.priceUnit && <span className="text-base font-normal text-gray-500"> {product.priceUnit.replace('per ', '/ ')}</span>}</div>
             {product.priceUnit === 'per m²' && requirement && <p className="text-xs text-gray-500">{money.format(lineCost(requirement, product))} for {requirement.quantity}m² (before waste)</p>}
             <a href={product.url} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:underline dark:text-blue-400">{product.supplier} product page <ExternalLink className="h-3.5 w-3.5" /></a>
@@ -628,7 +564,7 @@ function ProductDetail({ product, requirement, inBasket, disabled, onClose, onAd
               <StockBadge stock={product.stock} />
               <p className="mt-1 flex items-start gap-1.5 text-xs text-gray-600 dark:text-slate-300"><Truck className="mt-0.5 h-3.5 w-3.5 shrink-0" />{product.stockEvidence}</p>
               <p className="mt-1 text-[11px] text-gray-400">Checked {new Date(product.lastChecked).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>
-              {canCheck && <button onClick={checkStock} disabled={checking} className="mt-1 inline-flex items-center gap-1 py-2.5 text-xs font-medium text-blue-600 disabled:opacity-60 dark:text-blue-400"><RefreshCw className={`h-3.5 w-3.5 ${checking ? 'animate-spin' : ''}`} />{checking ? 'Checking…' : 'Check live stock'}</button>}
+              {canCheck && <button onClick={checkStock} disabled={checking || disabled} className="mt-1 inline-flex items-center gap-1 py-2.5 text-xs font-medium text-blue-600 disabled:opacity-60 dark:text-blue-400"><RefreshCw className={`h-3.5 w-3.5 ${checking ? 'animate-spin' : ''}`} />{checking ? 'Checking…' : 'Check live stock'}</button>}
               {checkError && <p className="mt-1 text-xs text-red-600">{checkError}</p>}
             </div>
           </div>
@@ -636,7 +572,7 @@ function ProductDetail({ product, requirement, inBasket, disabled, onClose, onAd
 
         {product.aiReview && product.aiReview.requirementId === requirement?.id && <div className="rounded-xl border border-gray-200 p-3 dark:border-slate-700"><AiBadge review={product.aiReview} /><p className="mt-1 text-[11px] text-gray-400">Checked by AI ({product.aiReview.model.split('/').pop()}) from the supplier description. Confirm sizes with your fitter.</p></div>}
         {requirement && <div className={`rounded-xl border p-3 text-sm ${needsFitter ? 'border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30' : 'border-emerald-200 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950/30'}`}>
-          <div className={`font-semibold ${needsFitter ? 'text-amber-800 dark:text-amber-200' : 'text-emerald-800 dark:text-emerald-200'}`}>{needsFitter ? 'Fitter check' : 'Matches the quote'}</div>
+          <div className="font-semibold text-amber-800 dark:text-amber-200">{quoteSizeCheck(requirement, product)}</div>
           <p className="mt-0.5 text-gray-700 dark:text-slate-200">For <strong>{requirement.name}</strong> ({requirement.size}).</p>
           {product.note && <p className="mt-1 text-gray-700 dark:text-slate-200">{product.note}</p>}
         </div>}

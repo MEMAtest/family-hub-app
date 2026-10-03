@@ -75,6 +75,8 @@ export interface SourcingBasketItem {
 export interface ProjectSourcing {
   /** Bumped when the starter catalogue changes so older saved workspaces are refreshed. */
   version?: number;
+  /** Household room names and measurement notes; not a guarantee that a product fits. */
+  rooms?: Partial<Record<SourcingRoomId, { name?: string; sizeNotes?: string }>>;
   requirements: SourcingRequirement[];
   products: SourcedProduct[];
   basket: SourcingBasketItem[];

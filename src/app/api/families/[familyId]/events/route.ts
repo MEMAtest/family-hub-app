@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireFamilyAccess } from '@/lib/auth-utils';
-import { buildUtcDateTime, toCalendarEventResponse, toDateKey, toTimeKey } from '@/lib/calendarEventMapping';
+import { buildUtcDateTime, encodeStoredRecurringPattern, toCalendarEventResponse, toDateKey, toTimeKey } from '@/lib/calendarEventMapping';
 
 // GET all calendar events for a family
 export const GET = requireFamilyAccess(async (_request: NextRequest, context, _authUser) => {
@@ -42,6 +42,7 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context, _a
       cost,
       eventType,
       recurringPattern,
+      recurring,
       isRecurring,
       notes,
       date,
@@ -66,7 +67,7 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context, _a
         location,
         cost: cost || 0,
         eventType,
-        recurringPattern: recurringPattern || 'none',
+        recurringPattern: encodeStoredRecurringPattern(recurringPattern ?? recurring, recurringPattern),
         isRecurring: isRecurring || false,
         notes,
         source,
@@ -91,7 +92,7 @@ export const PUT = requireFamilyAccess(async (request: NextRequest, context, _au
   try {
     const { familyId } = await context.params;
     const body = await request.json();
-    const { id, date, time, person, type, duration, recurring, ...rest } = body;
+    const { id, date, time, person, type, duration, recurring, recurringPattern, ...rest } = body;
 
     if (!id) {
       return NextResponse.json({ error: 'Event ID required' }, { status: 400 });
@@ -134,9 +135,9 @@ export const PUT = requireFamilyAccess(async (request: NextRequest, context, _au
     }
 
     // Map recurring to recurringPattern
-    if (recurring !== undefined) {
-      updateData.recurringPattern = recurring;
-      updateData.isRecurring = recurring !== 'none';
+    if (recurring !== undefined || recurringPattern !== undefined) {
+      updateData.recurringPattern = encodeStoredRecurringPattern(recurringPattern ?? recurring, recurringPattern);
+      updateData.isRecurring = updateData.recurringPattern !== 'none';
     }
 
     // Include other fields

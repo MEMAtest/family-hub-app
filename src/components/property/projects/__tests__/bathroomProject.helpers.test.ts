@@ -1,0 +1,94 @@
+import type { ProjectSourcing, SourcedProduct, SourcingRequirement } from '@/types/sourcing.types';
+import { basketTotal, isBathroomProject, productLineCost, productSize, quoteSizeCheck, requirementSelection, roomName } from '../bathroomProject.helpers';
+
+const requirement: SourcingRequirement = {
+  id: 'vanity', roomId: 'main-bathroom', name: 'Vanity', category: 'Furniture', specification: 'Vanity and basin',
+  size: '600mm wide', quantity: 2, status: 'confirmed', constraints: { maxWidthMm: 600 }, requiredComponents: ['vanity', 'basin'],
+};
+const product: SourcedProduct = {
+  id: 'real-vanity', name: 'Supplier vanity', supplier: 'Supplier', url: 'https://example.com/vanity', imageUrl: '', price: 120,
+  requirementIds: [requirement.id], stock: 'UNKNOWN', stockEvidence: 'Check stock', dimensions: {}, components: ['vanity'], lastChecked: '',
+};
+const sourcing: ProjectSourcing = {
+  requirements: [requirement, { ...requirement, id: 'shower-vanity', roomId: 'shower-room' }], products: [product],
+  basket: [{ id: 'selected', requirementId: requirement.id, productId: product.id, quantity: 3, status: 'review' }],
+};
+
+test('real room names and size notes use optional metadata without renaming legacy rooms', () => {
+  expect(roomName(undefined, 'main-bathroom')).toBe('Main Bathroom');
+  expect(roomName(sourcing, 'shower-room')).toBe('Shower Room');
+  expect(roomName({ ...sourcing, rooms: { 'main-bathroom': { name: ' Family Bathroom ', sizeNotes: 'Measure door clearance' } } }, 'main-bathroom')).toBe('Family Bathroom');
+  expect(roomName({ ...sourcing, rooms: { 'shower-room': { name: ' ' } } }, 'shower-room')).toBe('Shower Room');
+});
+
+test('bathroom default is restricted to bathroom or shower projects', () => {
+  expect(isBathroomProject({ title: 'Renovation', category: 'bathroom' })).toBe(true);
+  expect(isBathroomProject({ title: 'Shower upgrade', category: 'Other' })).toBe(true);
+  expect(isBathroomProject({ title: 'Kitchen', category: 'kitchen' })).toBe(false);
+});
+
+test('fixture totals use actual basket quantities, not quote quantities or one unit', () => {
+  expect(productLineCost(product, 2)).toBe(240);
+  expect(basketTotal(sourcing)).toBe(360);
+  expect(basketTotal(sourcing, 'main-bathroom')).toBe(360);
+  expect(basketTotal(sourcing, 'shower-room')).toBe(0);
+});
+
+test('tile area prices use the edited area; box and single-tile prices remain excluded', () => {
+  expect(productLineCost({ ...product, priceUnit: 'per m²' }, 5.5)).toBe(660);
+  expect(productLineCost({ ...product, priceUnit: 'per box' }, 8)).toBe(0);
+  expect(productLineCost({ ...product, priceUnit: 'per tile' }, 10)).toBe(0);
+  expect(basketTotal({ ...sourcing, products: [{ ...product, priceUnit: 'per box' }] })).toBe(0);
+});
+
+test.each([0, -1, NaN, Infinity])('invalid quantity %s cannot add a misleading cost', (quantity) => {
+  expect(productLineCost(product, quantity)).toBe(0);
+});
+
+test('orphaned basket products do not invent a price or selection', () => {
+  const orphaned = { ...sourcing, products: [] };
+  expect(basketTotal(orphaned)).toBe(0);
+  expect(requirementSelection(orphaned, requirement)).toMatchObject({ selected: [], complete: false });
+});
+
+test('selection completeness is based on required parts, not simply having one basket item', () => {
+  expect(requirementSelection(sourcing, requirement)).toMatchObject({ missing: ['basin'], complete: false });
+  const basin = { ...product, id: 'basin', components: ['basin'] };
+  const complete = { ...sourcing, products: [product, basin], basket: [...sourcing.basket, { ...sourcing.basket[0], id: 'b2', productId: basin.id }] };
+  expect(requirementSelection(complete, requirement)).toMatchObject({ missing: [], complete: true });
+});
+
+test('a tile requirement without components still requires a real selection', () => {
+  const tile = { ...requirement, requiredComponents: [] };
+  expect(requirementSelection({ ...sourcing, basket: [] }, tile).complete).toBe(false);
+  expect(requirementSelection(sourcing, tile).complete).toBe(true);
+});
+
+test('quote-size checks never infer a room fit from supplier marketing or room names', () => {
+  expect(quoteSizeCheck(requirement, { ...product, size: 'Compact, ideal for a small room' })).toBe('Check measurements');
+  expect(quoteSizeCheck({ ...requirement, constraints: {} }, product)).toBe('Check measurements');
+  expect(quoteSizeCheck(undefined, product)).toBe('Check measurements');
+});
+
+test('known supplier specs compare against quote limits and retain measurement caution', () => {
+  expect(quoteSizeCheck(requirement, { ...product, specs: { Width: '600mm' } })).toBe('Within checked quote sizes · Confirm room measurements');
+  expect(quoteSizeCheck(requirement, { ...product, dimensions: { widthMm: 650 } })).toBe('Different from quote · Check measurements');
+  expect(quoteSizeCheck(requirement, { ...product, specs: { Width: '60cm' } })).toBe('Check measurements');
+});
+
+test('unknown dimensions remain unknown even when one constraint is met', () => {
+  expect(quoteSizeCheck({ ...requirement, constraints: { maxWidthMm: 600, depthMm: 400 } }, { ...product, dimensions: { widthMm: 600 } })).toBe('Check measurements');
+});
+
+test('exact sizes and explicit tile tolerance are respected', () => {
+  const tile = { ...requirement, constraints: { widthMm: 596, lengthMm: 596, tileToleranceMm: 1 } };
+  expect(quoteSizeCheck(tile, { ...product, dimensions: { widthMm: 595, lengthMm: 595 } })).toBe('Within checked quote sizes · Confirm room measurements');
+  expect(quoteSizeCheck(tile, { ...product, dimensions: { widthMm: 600, lengthMm: 600 } })).toBe('Different from quote · Check measurements');
+});
+
+test('size presentation preserves supplier size or labelled specs and identifies unknowns', () => {
+  expect(productSize({ ...product, size: '600W x 445D mm' })).toBe('600W x 445D mm');
+  expect(productSize({ ...product, specs: { Width: '600mm', Finish: 'White' } })).toBe('Width: 600mm');
+  expect(productSize({ ...product, dimensions: { widthMm: 400 } })).toBe('width: 400mm');
+  expect(productSize(product)).toBe('Size not stated');
+});
