@@ -1,3 +1,5 @@
+/** @jest-environment node */
+
 import { AIService } from '@/services/aiService';
 
 describe('AIService calendar summaries', () => {
