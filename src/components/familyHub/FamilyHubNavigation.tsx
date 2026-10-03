@@ -161,8 +161,8 @@ export const FamilyHubNavigation = ({
               leaveFrom="translate-x-0"
               leaveTo="-translate-x-full"
             >
-              <Dialog.Panel className="relative flex w-[85vw] max-w-[280px] flex-col bg-white p-4 shadow-lg dark:bg-slate-900 sm:max-w-xs pwa-safe-top">
-                <div className="flex items-center justify-between mb-4">
+              <Dialog.Panel className="relative flex h-full min-h-0 w-[85vw] max-w-[280px] flex-col bg-white p-4 shadow-lg dark:bg-slate-900 sm:max-w-xs pwa-safe-top">
+                <div className="mb-4 flex shrink-0 items-center justify-between">
                   <div className="flex min-w-0 items-center gap-3">
                     <OmosanyaLogo className="h-10 w-10" />
                     <div className="min-w-0">
@@ -179,7 +179,9 @@ export const FamilyHubNavigation = ({
                     <X className="h-5 w-5" />
                   </button>
                 </div>
-                {renderNav('mobile')}
+                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-[env(safe-area-inset-bottom)]">
+                  {renderNav('mobile')}
+                </div>
               </Dialog.Panel>
             </Transition.Child>
           </div>

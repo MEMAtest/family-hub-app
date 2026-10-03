@@ -573,7 +573,7 @@ test('calendar assistant imports a timed holiday club range as daily sessions', 
   const commandInput = page.getByPlaceholder('Find summer holidays, or create swimming lesson next Tuesday at 5pm');
   await expect(commandInput).toBeVisible({ timeout: 20_000 });
   await commandInput.fill(source);
-  await page.getByRole('button', { name: /^Run$/ }).click();
+  await page.getByRole('button', { name: /^Preview$/ }).click();
 
   await expect(page.getByText('Review 5 daily sessions before I add them to the calendar.')).toBeVisible({ timeout: 20_000 });
   await page.getByRole('button', { name: 'Confirm and add 5' }).click();
