@@ -88,7 +88,7 @@ test('iPhone month shows same-day events before any tap', async ({ page }) => {
   await page.addInitScript(({ date, titles }) => {
     const now = new Date().toISOString();
     localStorage.setItem('calendarEvents', JSON.stringify(titles.map((title, index) => ({
-      id: `same-day-${index}`,
+      id: `event-same-day-${index}`,
       title,
       person: '',
       date,

@@ -424,7 +424,7 @@ test.describe('school document calendar intake', () => {
     await expect(calendarEvent).toBeVisible({ timeout: 60_000 });
     await calendarEvent.hover();
     await expect(page.getByText('Wed 30 Sep · Time not provided')).toBeVisible();
-    await expect(page.getByText('Bring the reading record. Sign in at the school office.', { exact: true })).toBeVisible();
+    await expect(page.getByRole('paragraph').filter({ hasText: /^Bring the reading record\. Sign in at the school office\.$/ })).toBeVisible();
     const aiSummaryButton = page.getByRole('button', { name: 'AI summary' });
     await aiSummaryButton.hover();
     await expect(aiSummaryButton).toBeVisible();
