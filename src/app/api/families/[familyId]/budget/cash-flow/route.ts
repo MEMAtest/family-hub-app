@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireFamilyAccess } from '@/lib/auth-utils';
+import { reconcileStatement } from '@/utils/statementReconciliation';
 
 const asMonthRange = (value: string | null) => {
   const match = value?.match(/^(\d{4})-(\d{2})$/);
@@ -34,8 +35,9 @@ export const GET = requireFamilyAccess(async (request: NextRequest, context) => 
       prisma.budgetIncome.findMany({ where: { familyId } }),
       prisma.budgetExpense.findMany({ where: { familyId } }),
       prisma.statementImport.findMany({
-        where: { familyId, statementStart: { gte: start, lt: end } },
+        where: { familyId, statementStart: { lt: end }, statementEnd: { gte: start } },
         select: { accountId: true, openingBalance: true, closingBalance: true, statementStart: true, statementEnd: true },
+        orderBy: { createdAt: 'desc' },
       }),
     ]);
 
@@ -63,27 +65,22 @@ export const GET = requireFamilyAccess(async (request: NextRequest, context) => 
       .filter((item) => plannedForMonth(item, start, end))
       .reduce((total, item) => total + item.amount, 0);
 
-    const reconciliations = accounts.map((account) => {
-      const accountTransactions = transactions.filter((transaction) => transaction.accountId === account.id);
-      const debit = accountTransactions.filter((transaction) => transaction.direction === 'debit').reduce((sum, transaction) => sum + transaction.amount, 0);
-      const credit = accountTransactions.filter((transaction) => transaction.direction === 'credit').reduce((sum, transaction) => sum + transaction.amount, 0);
+    const reconciliations = await Promise.all(accounts.map(async (account) => {
       const statement = imports.find((item) => item.accountId === account.id && item.openingBalance !== null && item.closingBalance !== null);
-      const expectedClosingBalance = statement?.openingBalance === null || statement?.openingBalance === undefined
-        ? null
-        : statement.openingBalance + credit - debit;
-      const mismatch = expectedClosingBalance === null || statement?.closingBalance === null || statement?.closingBalance === undefined
-        ? null
-        : Number((statement.closingBalance - expectedClosingBalance).toFixed(2));
+      const coveredRows = statement?.statementStart && statement.statementEnd ? await prisma.budgetTransaction.findMany({
+        where: { familyId, accountId: account.id, transactionDate: {
+          gte: new Date(`${statement.statementStart.toISOString().slice(0, 10)}T00:00:00Z`),
+          lt: new Date(new Date(`${statement.statementEnd.toISOString().slice(0, 10)}T00:00:00Z`).getTime() + 86400000),
+        } }, select: { transactionDate: true, amount: true, direction: true },
+      }) : [];
       return {
         accountId: account.id,
         accountName: account.name,
         openingBalance: statement?.openingBalance ?? account.openingBalance ?? null,
         closingBalance: statement?.closingBalance ?? null,
-        expectedClosingBalance,
-        mismatch,
-        reconciled: mismatch === null ? null : Math.abs(mismatch) < 0.01,
+        ...reconcileStatement(statement, coveredRows),
       };
-    });
+    }));
 
     return NextResponse.json({
       month: key,

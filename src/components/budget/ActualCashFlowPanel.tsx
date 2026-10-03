@@ -17,9 +17,9 @@ type CashFlow = {
   reconciliations: Array<{ accountId: string; accountName: string; mismatch: number | null; reconciled: boolean | null }>;
 };
 
-const formatMoney = (value: number) => new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 0 }).format(value);
+const formatMoney = (value: number) => new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 2 }).format(value);
 
-export function ActualCashFlowPanel({ familyId, month }: { familyId: string | null; month: string }) {
+export function ActualCashFlowPanel({ familyId, month, revision = 0 }: { familyId: string | null; month: string; revision?: number }) {
   const [data, setData] = useState<CashFlow | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -40,7 +40,7 @@ export function ActualCashFlowPanel({ familyId, month }: { familyId: string | nu
     }
   };
 
-  useEffect(() => { void refresh(); }, [familyId, month]);
+  useEffect(() => { void refresh(); }, [familyId, month, revision]);
 
   const hasMismatch = useMemo(() => data?.reconciliations.some((item) => item.reconciled === false) ?? false, [data]);
   const hasActualTransactions = Boolean(
@@ -55,7 +55,10 @@ export function ActualCashFlowPanel({ familyId, month }: { familyId: string | nu
           <div className="flex items-center gap-2"><WalletCards className="h-4 w-4 text-[#147c72]" /><h2 className="text-base font-semibold text-[#18221f] dark:text-slate-100">Actual cash flow</h2></div>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Imported statement transactions are separate from planned bills.</p>
         </div>
-        <button type="button" onClick={refresh} className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800" title="Refresh actual cash flow" aria-label="Refresh actual cash flow"><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /></button>
+        <div className="flex items-center gap-2">
+          <a href="http://127.0.0.1:3941/" target="_blank" rel="noreferrer" title="Open the local Virgin Money pilot on this Mac" className="inline-flex min-h-9 items-center gap-2 rounded-md border border-slate-200 px-3 text-sm text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"><Landmark className="h-4 w-4" />Virgin (Mac)</a>
+          <button type="button" onClick={refresh} className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800" title="Refresh actual cash flow" aria-label="Refresh actual cash flow"><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /></button>
+        </div>
       </div>
       {error && <p className="mt-4 text-sm text-rose-700 dark:text-rose-300">{error}</p>}
       {!error && data && (

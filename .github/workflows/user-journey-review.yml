@@ -55,6 +55,9 @@ jobs:
       - name: Prepare isolated database
         run: npx prisma db push --skip-generate
 
+      - name: Verify local bank assistant with synthetic statements
+        run: npm run test:bank-assistant
+
       - name: Run independent user journeys
         run: npm run test:e2e:user-journeys
 
@@ -66,5 +69,7 @@ jobs:
           path: |
             journey-report/
             test-results/
+            output/bank-assistant-tests/
+            output/playwright/virgin-assistant-*.png
           if-no-files-found: warn
           retention-days: 14

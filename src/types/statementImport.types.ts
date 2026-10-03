@@ -27,6 +27,7 @@ export interface StatementParseMetadata {
 }
 
 export interface StatementParseResult {
+  previewToken?: string;
   success: boolean;
   transactions: StatementTransaction[];
   warnings: string[];
