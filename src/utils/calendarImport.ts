@@ -1,4 +1,5 @@
 import type { CalendarEvent, Person } from '@/types/calendar.types';
+import { isAdultSchoolEvent, isChildProfile, schoolEventLocation, schoolEventTitle } from './schoolEventPresentation';
 
 export type CalendarImportStatus = 'ready' | 'duplicate' | 'conflict' | 'needs_review';
 
@@ -217,7 +218,8 @@ const normalizeCalendarTextLabels = (text: string) =>
     .trim();
 
 const isEmailNoiseLine = (line: string) =>
-  /unsubscribe|privacy policy|terms and conditions|view in browser|manage your booking|download app|add to wallet|do not reply/i.test(line);
+  /unsubscribe|privacy policy|terms and conditions|view in browser|manage your booking|download app|add to wallet|do not reply/i.test(line) ||
+  /\.(?:pdf|xlsx?|csv|docx?)(?:\s*\([^)]*\))?\s*$/i.test(line);
 
 const isSchoolLetterHeader = (line: string) =>
   line.length < 120 && /(?:primary|school|academy|college|nursery)/i.test(line);
@@ -312,7 +314,7 @@ const parseDateValue = (value: string, fallbackYear?: number): { date: string; m
     };
   }
 
-  const numeric = text.match(/\b(\d{1,2})[-/](\d{1,2})[-/](20\d{2})\b/);
+  const numeric = text.match(/\b(\d{1,2})[-/.](\d{1,2})[-/.](20\d{2})\b/);
   if (numeric) {
     const date = validDateKey(Number(numeric[3]), Number(numeric[2]), Number(numeric[1]));
     if (!date) return null;
@@ -402,7 +404,7 @@ const parseTimeRange = (line: string) => {
     // as "20-24 July 2026, 9am-3pm" can be read as a 20:00-24:00 time range.
     .replace(new RegExp(`\\b${dayNamePattern}\\s+\\d{1,2}(?:st|nd|rd|th)?\\s+${monthNamePattern}(?:\\s+20\\d{2})?\\s*(?:-|to|until)\\s*${dayNamePattern}\\s+\\d{1,2}(?:st|nd|rd|th)?\\s+${monthNamePattern}(?:\\s+20\\d{2})?\\b`, 'gi'), ' ')
     .replace(new RegExp(`\\b\\d{1,2}(?:st|nd|rd|th)?\\s*(?:-|to|until)\\s*\\d{1,2}(?:st|nd|rd|th)?\\s+${monthNamePattern}(?:\\s+20\\d{2})?\\b`, 'gi'), ' ')
-    .replace(/\b(?:20\d{2}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}[-/]\d{1,2}[-/]20\d{2})\b/g, ' ');
+    .replace(/\b(?:20\d{2}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[-/.]\d{1,2}[-/.]20\d{2})\b/g, ' ');
   const range = normalized.match(/\b(\d{1,2})(?:(?::|\.)(\d{2}))?\s*(am|pm)?\s*(?:-|to)\s*(\d{1,2})(?:(?::|\.)(\d{2}))?\s*(am|pm)?\b/i);
   if (!range) return undefined;
 
@@ -428,7 +430,7 @@ const parseTime = (line: string) => {
   const range = parseTimeRange(line);
   if (range) return range.start;
 
-  const withoutDates = normalizeCalendarTextLabels(line).replace(/\b(?:20\d{2}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}[-/]\d{1,2}[-/]20\d{2})\b/g, ' ');
+  const withoutDates = normalizeCalendarTextLabels(line).replace(/\b(?:20\d{2}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[-/.]\d{1,2}[-/.]20\d{2})\b/g, ' ');
   const match = withoutDates.match(/\b(\d{1,2})(?::|\.)(\d{2})\s*(am|pm)?\b/i) ?? withoutDates.match(/\b(\d{1,2})\s*(am|pm)\b/i);
   if (!match) {
     const lower = withoutDates.toLowerCase();
@@ -638,6 +640,8 @@ const inferTitle = (line: string, dateMatch: string) => {
   const location = extractLocation(line, dateMatch);
   const beforeDate = line.split(dateMatch)[0]?.split(/\s•\s/)[0]?.replace(/[:\-–—]+$/g, '').trim();
   const afterDate = line.split(dateMatch)[1]?.replace(/^[:\-–—]+/g, '').trim();
+  const shortSchoolTitle = schoolEventTitle(beforeDate || line);
+  if (shortSchoolTitle !== (beforeDate || line)) return shortSchoolTitle;
   const semanticTitle = inferSemanticTitle(beforeDate || line, dateMatch, location);
   const genericSubject = /^(?:weekly update(?: email)?|newsletter|school newsletter|school update(?: email)?|parent newsletter|weekly news)$/i
     .test(cleanTitleCandidate(beforeDate || '').toLowerCase());
@@ -669,9 +673,10 @@ const inferTitle = (line: string, dateMatch: string) => {
   return titleCase(canonicalTitle || cleanTitleCandidate(raw || '', dateMatch, removableLocation).slice(0, 90)) || 'Imported event';
 };
 
-const hasExplicitTime = (line: string) =>
-  /\b(\d{1,2})(?::|\.)(\d{2})\s*(am|pm)?\b/i.test(line) ||
-  /\b(\d{1,2})\s*(am|pm)\b/i.test(line);
+const hasExplicitTime = (line: string) => {
+  const withoutDates = line.replace(/\b(?:20\d{2}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[-/.]\d{1,2}[-/.]20\d{2})\b/g, ' ');
+  return /\b(\d{1,2})(?::|\.)(\d{2})\s*(am|pm)?\b/i.test(withoutDates) || /\b(\d{1,2})\s*(am|pm)\b/i.test(withoutDates);
+};
 
 const hasAmbiguousNumericDate = (line: string) =>
   /\b(0?[1-9]|1[0-2])[-/](0?[1-9]|1[0-2])[-/]20\d{2}\b/.test(line);
@@ -739,15 +744,19 @@ const toDraft = (
   );
   const namedPersonId = namedPeople.length === 1 ? namedPeople[0].id : undefined;
   const hasUnmappedCohort = /\b(?:Reception|Year\s+[1-6]|Key\s+Stage\s+[12])\b/i.test(line);
+  const adultEvent = isAdultSchoolEvent(event.title || '');
+  const namedAdult = namedPeople.length === 1 && !isChildProfile(namedPeople[0]) ? namedPersonId : undefined;
+  const attendeeNeedsReview = adultEvent && !namedAdult;
+  const titleNeedsReview = (event.title || '').length >= 80;
   return {
   importId: `import-${sourceLine}-${Math.random().toString(36).slice(2, 8)}`,
   title: event.title || 'Imported event',
-  person: event.person || namedPersonId || (hasUnmappedCohort ? '' : getDefaultPerson(people, defaultPersonId)),
+  person: adultEvent ? namedAdult || '' : event.person || namedPersonId || (hasUnmappedCohort ? '' : getDefaultPerson(people, defaultPersonId)),
   date: event.date || new Date().toISOString().split('T')[0],
   endDate: event.endDate,
   time: event.time || '09:00',
   duration: event.duration || (event.endDate ? 1440 : 60),
-  location: event.location,
+  location: schoolEventLocation(event.location),
   recurring: 'none',
   cost: 0,
   type: event.type || inferType(line),
@@ -759,8 +768,8 @@ const toDraft = (
   confidence: event.confidence ?? 0.78,
   source: line,
   sourceLine,
-  importStatus: 'ready',
-  warnings: event.warnings || [],
+  importStatus: attendeeNeedsReview || titleNeedsReview ? 'needs_review' : 'ready',
+  warnings: [...(event.warnings || []), ...(attendeeNeedsReview ? ['Choose the adult attending. The child concerned is not automatically the attendee.'] : []), ...(titleNeedsReview ? ['The source heading is unclear. Confirm a short event title before importing.'] : [])],
   };
 };
 
@@ -934,6 +943,7 @@ export const parseCalendarImportText = ({
   const lineDrafts = sourceLines
     .map((line, index) => ({ line: line.trim(), index: index + 1 }))
     .filter(({ line }) => line.length >= 8)
+    .filter(({ line }) => !isEmailNoiseLine(line))
     .flatMap(({ line, index }) => {
       const currentLineIndex = index - 1;
       const lineDate = parseDateValue(line, fallbackYear);

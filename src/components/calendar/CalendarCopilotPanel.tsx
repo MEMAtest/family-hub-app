@@ -15,6 +15,7 @@ import type { SchoolDocumentRoutine, SchoolDocumentSummary } from '@/utils/schoo
 import { extractRoutineWeekdays, nextDateForWeekday } from '@/utils/schoolRoutineSchedule';
 import { addDays, expandEvents } from '@/utils/recurrence';
 import { expandTasks } from '@/utils/tasks';
+import { isAdultSchoolEvent, recurringSourceDateWarning, schoolEventTitle } from '@/utils/schoolEventPresentation';
 
 interface CalendarCopilotPanelProps {
   events: CalendarEvent[];
@@ -27,6 +28,7 @@ interface CalendarCopilotPanelProps {
     draft: Omit<CalendarEvent, 'id' | 'createdAt' | 'updatedAt'>
   ) => Promise<{ status: 'conflict' } | { status: 'created'; event: CalendarEvent }>;
   onOpenCalendar: () => void;
+  onInboxChanged?: (pendingReview: number) => void;
 }
 
 interface CalendarInboxItem {
@@ -126,6 +128,7 @@ const CalendarCopilotPanel = ({
   createEvent,
   createTask,
   onOpenCalendar,
+  onInboxChanged,
 }: CalendarCopilotPanelProps) => {
   const familyId = useFamilyStore((state) => state.databaseStatus.familyId);
   const activeFamilyId = familyId || (typeof window !== 'undefined' ? localStorage.getItem('familyId') : null);
@@ -202,7 +205,8 @@ const CalendarCopilotPanel = ({
     // Expand before asking what is on. Filtering `event.date` here meant a
     // weekly club only ever counted as "on" during the week it was created, so
     // "where everyone is today" was blank on every later week.
-    const live = events.filter((event) => event.status !== 'cancelled');
+    const live = events.filter((event) => event.status !== 'cancelled' && !recurringSourceDateWarning(event) &&
+      !(event.source === 'gmail-school-email' && isAdultSchoolEvent(event.title) && people.some((person) => person.id === event.person && isChildProfile(person))));
     expandEvents(live, addDays(dateKey, -31), addDays(dateKey, 1))
       .filter((occ) => occ.date <= dateKey && occ.endDate >= dateKey)
       .map((occ) => ({ ...occ.event, date: occ.date, endDate: occ.endDate, time: occ.time, duration: occ.duration }))
@@ -212,15 +216,15 @@ const CalendarCopilotPanel = ({
         grouped.set(event.person, [...existing, event]);
       });
     return grouped;
-  }, [currentDate, events]);
+  }, [currentDate, events, people]);
   const importantThisWeek = useMemo(() => {
     const start = toDateKey(currentDate);
     const end = addDays(start, 6);
     const priorityRank = { high: 0, medium: 1, low: 2 } as const;
-    const eventItems = expandEvents(events.filter((event) => event.status !== 'cancelled'), start, end)
+    const eventItems = expandEvents(events.filter((event) => event.status !== 'cancelled' && !recurringSourceDateWarning(event)), start, end)
       .map((occurrence) => ({
         id: occurrence.occurrenceId,
-        title: occurrence.event.title,
+        title: occurrence.event.source === 'gmail-school-email' ? schoolEventTitle(occurrence.event.title) : occurrence.event.title,
         date: occurrence.date,
         time: hasUnspecifiedEventTime(occurrence.event) ? '' : occurrence.time,
         location: occurrence.event.location,
@@ -228,7 +232,7 @@ const CalendarCopilotPanel = ({
         priority: occurrence.event.priority,
         kind: 'Event' as const,
       }));
-    const taskItems = expandTasks(tasks.filter((task) => !task.completedAt), start, end)
+    const taskItems = expandTasks(tasks, start, end).filter((occurrence) => !occurrence.completedAt)
       .map((occurrence) => ({
         id: occurrence.occurrenceId,
         title: occurrence.task.title,
@@ -261,12 +265,13 @@ const CalendarCopilotPanel = ({
       setWhatsappDeliveryTrackingConfigured(Boolean(payload.whatsappDeliveryTrackingConfigured));
       setWhatsappConsent(payload.whatsappConsent || 'not_configured');
       setInboxItems(Array.isArray(payload.intakes) ? payload.intakes : []);
+      onInboxChanged?.(payload.pendingReviewCount ?? (payload.intakes || []).reduce((count: number, item: CalendarInboxItem) => count + item.needsReview, 0));
     } catch (error) {
       setInboxError(error instanceof Error ? error.message : 'Calendar inbox could not be loaded.');
     } finally {
       setInboxLoading(false);
     }
-  }, [activeFamilyId]);
+  }, [activeFamilyId, onInboxChanged]);
 
   useEffect(() => {
     void loadInbox();
@@ -330,7 +335,20 @@ const CalendarCopilotPanel = ({
   };
 
   const reviewInboxItem = (item: CalendarInboxItem) => {
-    const drafts = item.parsedDrafts || [];
+    const drafts = (item.parsedDrafts || []).map((draft) => {
+      const title = schoolEventTitle(draft.title);
+      const assignedPerson = people.find((person) => person.id === draft.person);
+      if (isAdultSchoolEvent(title) && (!assignedPerson || isChildProfile(assignedPerson))) {
+        return {
+          ...draft,
+          title,
+          person: '',
+          importStatus: draft.importStatus === 'duplicate' ? 'duplicate' as const : 'needs_review' as const,
+          warnings: ['Choose the adult attending this school meeting.', ...draft.warnings],
+        };
+      }
+      return { ...draft, title };
+    });
     setImportText('');
     setImportDrafts(drafts);
     setDocumentSummary(item.documentSummary ?? null);
@@ -1105,15 +1123,15 @@ const CalendarCopilotPanel = ({
                     {draft.date}{draft.endDate ? ` to ${draft.endDate}` : ''}{draftHasSpecifiedTime(draft) ? ` at ${draft.time}` : ' · Time not specified'}
                   </p>
                   <label className="mt-1 flex items-center gap-2 text-[11px] font-medium text-gray-600 dark:text-slate-300">
-                    For
+                    Attendee
                     <select
                       aria-label={`Assign ${draft.title} to`}
                       value={draft.person || ''}
                       onChange={(event) => assignDraftToPerson(draft.importId, event.target.value)}
                       className="min-w-0 rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
                     >
-                      <option value="">Choose a child</option>
-                      {people.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}
+                      <option value="">Choose attendee</option>
+                      {people.filter((person) => !isAdultSchoolEvent(draft.title) || !isChildProfile(person)).map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}
                     </select>
                   </label>
                   {draft.warnings.length > 0 && (

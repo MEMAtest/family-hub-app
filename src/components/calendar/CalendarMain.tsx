@@ -53,6 +53,7 @@ import { formatConflictGroupTimeRange, getSameDayConflictGroups } from '@/utils/
 import { addDays, expandEvents, getExpansionRange, type Occurrence } from '@/utils/recurrence'
 import { buildTaskEntries, getTaskEntryStyle, isTaskEntry } from '@/utils/taskCalendar'
 import { expandTasks } from '@/utils/tasks'
+import { schoolEventTitle } from '@/utils/schoolEventPresentation'
 import { hasUnspecifiedEventTime } from '@/utils/eventSemantics'
 
 // Set up moment localizer and drag-and-drop calendar
@@ -547,7 +548,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
       // event.id is no longer unique once a series expands; duplicate keys make
       // the grid reuse DOM nodes across different weeks.
       id: occ.occurrenceId,
-      title: occ.event.title,
+      title: occ.event.source === 'gmail-school-email' ? schoolEventTitle(occ.event.title) : occ.event.title,
       start: moment(`${occ.date} ${occ.time}`, 'YYYY-MM-DD HH:mm').toDate(),
       end: getOccurrenceEnd(occ),
       resource: occ.event,
@@ -605,23 +606,26 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
   // Handle slot selection (creating new events)
   const handleSelectSlot = useCallback((slotInfo: { start: Date; end: Date }) => {
     setSelectedAgendaDate(moment(slotInfo.start).format('YYYY-MM-DD'))
+    onDateChange(slotInfo.start)
     onEventCreate(slotInfo)
-  }, [onEventCreate])
+  }, [onEventCreate, onDateChange])
 
   // Handle event selection
   const handleSelectEvent = useCallback((event: any) => {
     if (isTaskEntry(event)) {
       // Tasks have no event record to edit; jump the agenda to the due date.
       setSelectedAgendaDate(event.occurrence.dueDate)
+      onDateChange(moment(event.occurrence.dueDate, 'YYYY-MM-DD').toDate())
       return
     }
     const occurrence = eventForCalendarOccurrence(event)
     setSelectedAgendaDate(occurrence.date)
+    onDateChange(moment(occurrence.date, 'YYYY-MM-DD').toDate())
     keepHoverOpen()
     setHoveredEvent(null)
     setTooltipPosition(null)
     onEventClick(occurrence)
-  }, [keepHoverOpen, onEventClick])
+  }, [keepHoverOpen, onEventClick, onDateChange])
 
   // Handle single event export
   const handleExportEvent = useCallback((event: CalendarEvent) => {
@@ -1934,7 +1938,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                                 />
                                 <span className="min-w-0">
                                   <span className="block truncate text-xs font-semibold text-gray-900 dark:text-slate-100">
-                                    {event.title}
+                                    {event.source === 'gmail-school-email' ? schoolEventTitle(event.title) : event.title}
                                   </span>
                                   <span className="mt-0.5 block text-xs text-gray-600 dark:text-slate-300">
                                     {hasUnspecifiedEventTime(event) ? 'All day' : event.time} · {person?.name || 'Family'}
@@ -1978,7 +1982,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                         />
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-sm font-semibold text-gray-900 dark:text-slate-100">
-                            {event.title}
+                            {event.source === 'gmail-school-email' ? schoolEventTitle(event.title) : event.title}
                           </span>
                           <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-600 dark:text-slate-300">
                             <span>{hasUnspecifiedEventTime(event) ? 'Time not provided' : `${event.time} · ${event.duration} min`}</span>
