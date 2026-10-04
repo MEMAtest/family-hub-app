@@ -1,0 +1,249 @@
+import { expect, test, type Page } from '@playwright/test';
+import { createBathroomSourcingSeed } from '@/lib/sourcing/seed';
+
+const project = {
+  id: 'tile-planner-qa', title: 'Bathroom tile planning QA', category: 'bathroom', status: 'planning', currency: 'GBP',
+  budgetMin: 800, budgetMax: 22000, createdAt: '2026-10-01', updatedAt: '2026-10-01',
+  emails: [], tasks: [], contacts: [], quotes: [], scheduledVisits: [], followUps: [], milestones: [], attachments: [], sourcing: createBathroomSourcingSeed(),
+};
+project.sourcing.products.unshift({
+  id: 'sw-qa-floor', name: 'QA supplier floor tile', category: 'Tiles', supplier: 'QA supplier', requirementIds: ['main-floor-tiles'],
+  url: 'https://example.com/tile', imageUrl: '', price: 42, priceUnit: 'per box', stock: 'UNKNOWN', stockEvidence: 'QA fixture only',
+  dimensions: { widthMm: 600, lengthMm: 600 }, components: [], lastChecked: '2026-10-01',
+});
+async function open(page: Page, width = 390) {
+  await page.setViewportSize({ width, height: 844 });
+  await page.route('**/api/**', (route) => route.fulfill({ status: 503, contentType: 'application/json', body: '{}' }));
+  await page.route('**/api/auth/me', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ user: { id: 'local-tile-qa', email: 'qa@example.com' }, needsOnboarding: false }) }));
+  await page.addInitScript((fixture) => {
+    if (!localStorage.getItem('family-storage')) localStorage.setItem('family-storage', JSON.stringify({ version: 8, state: { currentView: 'property', propertyRole: 'owner', propertyProjects: [fixture], activeProjectId: fixture.id } }));
+  }, project);
+  await page.goto('/?view=property&tab=projects');
+  await page.getByRole('button', { name: 'Main Bathroom', exact: true }).click();
+  await page.getByRole('region', { name: 'Main Bathroom tile plans' }).getByRole('button', { name: /^Floor tiles/ }).click();
+  await expect(page.getByRole('heading', { name: 'Plan floor tiles' })).toBeVisible();
+}
+async function enterTile(page: Page, name = 'QA marble tile') {
+  const planner = page.getByRole('region', { name: 'Tile planner', exact: true });
+  await planner.getByLabel('Tile name or style', { exact: true }).fill(name);
+  await planner.getByLabel('Tile width (mm)', { exact: true }).fill('600');
+  await planner.getByLabel('Tile length (mm)', { exact: true }).fill('600');
+  await planner.getByLabel('Box coverage (m²)', { exact: true }).fill('1.44');
+  await planner.getByLabel('Tile price (£)', { exact: true }).fill('42');
+  await planner.getByRole('checkbox', { name: 'I have checked the tile size, pack coverage and price basis.' }).check();
+  return planner;
+}
+test('phone: measurements, pack rounding and tile choice survive reload without changing quote or other bathroom', async ({ page }) => {
+  await open(page);
+  const planner = await enterTile(page);
+  const choose = planner.getByRole('button', { name: 'Choose for this bathroom' });
+  await expect(choose).toBeDisabled();
+  await planner.getByLabel('Does this area already include waste?').selectOption('excluded');
+  await planner.getByRole('checkbox', { name: 'I have checked these measurements and the waste allowance.' }).check();
+  const summary = planner.getByRole('region', { name: 'Tile calculation' });
+  await expect(summary).toContainText('5.5 m²');
+  await expect(summary).toContainText('5.76 m²');
+  await expect(summary).toContainText('£168.00');
+  await summary.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: 'output/playwright/tile-planner-phone-ready.png' });
+  await choose.click();
+  await expect(planner.getByRole('status')).toContainText('Tile choice saved');
+  await expect(page.getByRole('heading', { name: 'Project basket' }).locator('..').locator('..')).toContainText('£168.00');
+  await page.reload();
+  await page.getByRole('button', { name: 'Main Bathroom', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Main Bathroom tile plans' })).toContainText('QA marble tile');
+  await page.getByRole('region', { name: 'Main Bathroom tile plans' }).getByRole('button', { name: /^Floor tiles/ }).click();
+  await expect(planner.getByLabel('Tiled area (m²)')).toHaveValue('5');
+  await expect(planner.getByLabel('Tile name or style')).toHaveValue('QA marble tile');
+  await planner.getByLabel('Existing tile option').selectOption('tile-plan-main-floor-tiles');
+  await expect(planner.getByLabel('Box coverage (m²)')).toHaveValue('1.44');
+  await planner.getByLabel('Tiled area (m²)').fill('8');
+  await planner.getByRole('checkbox', { name: 'I have checked these measurements and the waste allowance.' }).check();
+  await planner.getByRole('button', { name: 'Save measurements', exact: true }).click();
+  await expect(summary).toContainText('£294.00');
+  await planner.getByRole('button', { name: 'Original & previous measurements' }).click();
+  await expect(planner).toContainText('Original, unconfirmed');
+  const state = await page.evaluate(() => JSON.parse(localStorage.getItem('family-storage')!).state.propertyProjects[0]);
+  expect(state.budgetMax).toBe(22000);
+  expect(state.sourcing.basket).toHaveLength(1);
+  expect(state.sourcing.requirements.find((item: any) => item.id === 'main-floor-tiles').quantity).toBe(5);
+  expect(state.sourcing.requirements.filter((item: any) => item.roomId === 'shower-room').every((item: any) => !item.tilePlan)).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await summary.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: 'output/playwright/tile-planner-phone.png' });
+});
+test('desktop: measured wall sections, units and deductions recalculate and invalidate confirmation', async ({ page }) => {
+  await open(page, 1440);
+  await page.getByRole('combobox', { name: 'Quote item', exact: true }).selectOption('main-wall-tiles');
+  await expect(page.getByRole('heading', { name: 'Plan wall tiles' })).toBeVisible();
+  const planner = await enterTile(page);
+  await planner.getByRole('button', { name: 'Length × width' }).click();
+  await planner.getByLabel('Dimension unit').selectOption('mm');
+  await planner.getByLabel('Section 1 length (mm)').fill('2500');
+  await planner.getByLabel('Section 1 tiled height (mm)').fill('2000');
+  await planner.getByLabel('Openings or untiled area to deduct (m²)').fill('0.5');
+  await planner.getByLabel('Does this area already include waste?').selectOption('included');
+  await planner.getByRole('checkbox', { name: 'I have checked these measurements and the waste allowance.' }).check();
+  await expect(planner.getByRole('region', { name: 'Tile calculation' })).toContainText('4.5 m²');
+  await expect(planner.getByRole('button', { name: 'Choose for this bathroom' })).toBeEnabled();
+  await planner.getByLabel('Section 1 length (mm)').fill('3000');
+  await expect(planner.getByRole('button', { name: 'Choose for this bathroom' })).toBeDisabled();
+  await planner.getByLabel('Openings or untiled area to deduct (m²)').fill('7');
+  await expect(planner.getByRole('region', { name: 'Tile calculation' })).toContainText('deductions must be smaller');
+  await planner.getByLabel('Openings or untiled area to deduct (m²)').fill('0.5');
+  await expect(planner.getByRole('region', { name: 'Tile calculation' })).toContainText('£168.00');
+  await planner.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: 'output/playwright/tile-planner-desktop.png', fullPage: true });
+});
+test('photo extraction requires consent and review; provider failure keeps manual entry available', async ({ page }) => {
+  await open(page, 360);
+  let calls = 0;
+  await page.route('**/api/property/tile-document', async (route) => {
+    calls++;
+    if (calls > 1) return route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'Photo reading is unavailable.' }) });
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ draft: { areaM2: 5, unit: 'm', sections: [], deductionsM2: null, wasteIncluded: 'unknown', evidence: 'Tile 5 m² of floor tiles; not the 4m² removed', warnings: ['Waste not stated'] } }) });
+  });
+  const planner = page.getByRole('region', { name: 'Tile planner', exact: true });
+  const reader = planner.getByTestId('measurement-document-reader');
+  await reader.locator('summary').click();
+  // A synthetic image, not a personal document or an external AI request.
+  await reader.locator('input[type=file]').setInputFiles({ name: 'measurement.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aV1sAAAAASUVORK5CYII=', 'base64') });
+  await expect(reader.getByRole('img')).toBeVisible();
+  const read = reader.getByRole('button', { name: 'Read measurements' });
+  await expect(read).toBeDisabled();
+  await reader.getByRole('checkbox').check();
+  await read.click();
+  await expect(reader).toContainText('Extracted, not saved:');
+  await expect(reader).toContainText('Waste not stated');
+  await expect(planner.getByRole('button', { name: 'Save measurements', exact: true })).toBeDisabled();
+  const state = await page.evaluate(() => JSON.parse(localStorage.getItem('family-storage')!).state.propertyProjects[0].sourcing);
+  expect(state.requirements.find((item: any) => item.id === 'main-floor-tiles').tilePlan).toBeUndefined();
+  await read.click();
+  await expect(reader.getByRole('alert')).toContainText('unavailable');
+  await planner.getByLabel('Does this area already include waste?').selectOption('included');
+  await planner.getByRole('checkbox', { name: 'I have checked these measurements and the waste allowance.' }).check();
+  await planner.getByRole('button', { name: 'Save measurements', exact: true }).click();
+  await expect(planner.getByRole('status')).toContainText('Measurements saved.');
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('family-storage')!).state.propertyProjects[0].sourcing);
+  const source = saved.requirements.find((item: any) => item.id === 'main-floor-tiles').tilePlan.measurement.source;
+  expect(saved.tileDocuments.find((document: any) => document.id === source.imageId).imageDataUrl).toMatch(/^data:image\/jpeg/);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test('supplier tile opens the right planner without adding an unmeasured basket entry', async ({ page }) => {
+  await open(page, 390);
+  await page.getByRole('navigation', { name: 'Project views' }).getByRole('button', { name: 'Products', exact: true }).click();
+  const card = page.locator('article').filter({ has: page.getByRole('heading', { name: 'QA supplier floor tile', exact: true }) });
+  const name = await card.locator('h4').innerText();
+  await card.getByRole('button', { name: 'Plan this tile', exact: true }).click();
+  const planner = page.getByRole('region', { name: 'Tile planner', exact: true });
+  await expect(planner).toBeVisible();
+  await expect(planner.getByLabel('Tile name or style')).toHaveValue(name);
+  await expect(page.getByRole('heading', { name: 'Plan floor tiles' })).toBeVisible();
+  const basket = await page.evaluate(() => JSON.parse(localStorage.getItem('family-storage')!).state.propertyProjects[0].sourcing.basket);
+  expect(basket).toHaveLength(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test('phone: complete quote checklist, related item and website option can be saved and chosen', async ({ page }) => {
+  await open(page, 390);
+  await page.getByRole('button', { name: 'Room overview', exact: true }).click();
+  const checklist = page.getByRole('list', { name: 'Main Bathroom quote checklist' });
+  await expect(checklist.getByRole('listitem')).toHaveCount(14);
+  await expect(checklist).toContainText('Element Five basin tap');
+  await expect(checklist).toContainText('Chrome downlights');
+  await page.getByRole('button', { name: 'Add item', exact: true }).click();
+  const itemDialog = page.getByRole('dialog', { name: 'Add bathroom item' });
+  await itemDialog.getByLabel('Item name', { exact: true }).fill('LED mirror');
+  await itemDialog.getByRole('combobox', { name: 'Category', exact: true }).selectOption('Accessories');
+  await itemDialog.getByRole('combobox', { name: 'Related to (optional)', exact: true }).selectOption('main-vanity');
+  await itemDialog.getByLabel('Size / dimensions').fill('600mm');
+  await itemDialog.getByRole('button', { name: 'Save item', exact: true }).click();
+  await expect(itemDialog).not.toBeVisible();
+  await page.getByRole('button', { name: 'Add supplier option', exact: true }).click();
+  const optionDialog = page.getByRole('dialog', { name: 'Add supplier option' });
+  await optionDialog.getByLabel('Product name').fill('Round LED mirror 600');
+  await optionDialog.getByLabel('Product link', { exact: true }).fill('https://example.com/mirror');
+  await optionDialog.getByLabel('Supplier', { exact: true }).fill('Your supplier');
+  await optionDialog.getByLabel('Price (£)', { exact: true }).fill('149');
+  await optionDialog.getByLabel('Size / dimensions').fill('600mm');
+  await optionDialog.getByRole('button', { name: 'Save option', exact: true }).click();
+  const details = page.getByRole('dialog', { name: 'Round LED mirror 600', exact: true });
+  await expect(details).toContainText('Entered by you');
+  const before = await page.evaluate(() => JSON.parse(localStorage.getItem('family-storage')!).state.propertyProjects[0].sourcing);
+  expect(before.basket).toHaveLength(0);
+  await details.getByRole('button', { name: 'Add to basket', exact: true }).click();
+  await details.getByRole('button', { name: 'Close product details' }).click();
+  await expect(page.getByRole('heading', { name: 'Project basket' }).locator('..').locator('..')).toContainText('£149.00');
+  await page.getByRole('button', { name: 'Add supplier option', exact: true }).click();
+  await optionDialog.getByLabel('Product name').fill('Alternative LED mirror');
+  await optionDialog.getByLabel('Product link', { exact: true }).fill('https://example.com/other-mirror');
+  await page.route('**/api/property/sourcing/import', (route) => route.fulfill({ json: { draft: { name: 'Alternative LED mirror', url: 'https://www.stonewaterbathrooms.com/products/alternative-mirror', selectedVariant: '', description: 'Mirror only. Fixings sold separately.', images: [], variants: [{ id: '11', name: '600mm', sku: 'M600', price: 179, available: true, imageUrl: '' }, { id: '12', name: '800mm', sku: 'M800', price: 199, available: false, imageUrl: '' }] } } }));
+  await optionDialog.getByLabel('Product link', { exact: true }).fill('https://www.stonewaterbathrooms.com/products/alternative-mirror');
+  await optionDialog.getByRole('button', { name: 'Read Stonewater product' }).click();
+  await expect(optionDialog.getByLabel('Stonewater variant')).toBeVisible();
+  await optionDialog.getByLabel('Stonewater variant').selectOption('11');
+  await expect(optionDialog.getByLabel('Price (£)', { exact: true })).toHaveValue('179');
+  await expect(optionDialog.getByLabel('Supplier', { exact: true })).toHaveValue('Stonewater Bathrooms');
+  await expect(optionDialog.getByLabel('Notes', { exact: true })).toHaveValue('Mirror only. Fixings sold separately.');
+  await page.screenshot({ path: 'output/playwright/stonewater-import-phone.png' });
+  await optionDialog.getByRole('button', { name: 'Save option', exact: true }).click();
+  const alternative = page.getByRole('dialog', { name: 'Alternative LED mirror - 600mm', exact: true });
+  page.once('dialog', (dialog) => dialog.accept());
+  await alternative.getByRole('button', { name: 'Add to basket', exact: true }).click();
+  await alternative.getByRole('button', { name: 'Close product details' }).click();
+  await expect(page.getByRole('heading', { name: 'Project basket' }).locator('..').locator('..')).toContainText('£179.00');
+  await page.evaluate(() => { const data = JSON.parse(localStorage.getItem('family-storage')!); data.state.propertyProjects[0].sourcing.version = 3; localStorage.setItem('family-storage', JSON.stringify(data)); });
+  await page.reload();
+  await page.getByRole('button', { name: 'Main Bathroom', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Main Bathroom choices' })).toContainText('LED mirror');
+  await expect(page.getByRole('region', { name: 'Main Bathroom choices' })).toContainText('Related to: Wall-hung vanity unit');
+  const state = await page.evaluate(() => JSON.parse(localStorage.getItem('family-storage')!).state.propertyProjects[0]);
+  expect(state.sourcing.quoteLines).toHaveLength(28);
+  expect(state.sourcing.products.find((item: any) => item.name === 'Round LED mirror 600')).toMatchObject({ stock: 'UNKNOWN', source: 'household' });
+  expect(state.sourcing.basket).toHaveLength(1);
+  expect(state.sourcing.products.find((item: any) => item.id === state.sourcing.basket[0].productId)).toMatchObject({ name: 'Alternative LED mirror - 600mm', sku: 'M600', url: 'https://www.stonewaterbathrooms.com/products/alternative-mirror?variant=11' });
+  expect(state.budgetMax).toBe(22000);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: 'output/playwright/bathroom-add-items-phone.png' });
+});
+
+test('phone: measured item space blocks oversize choices, rechecks changed limits and retains history', async ({ page }) => {
+  await open(page);
+  await page.getByRole('button', { name: 'Room overview', exact: true }).click();
+  await page.getByRole('button', { name: 'B-shaped shower bath', exact: true }).click();
+  const panel = page.getByRole('region', { name: 'Measurement fit check' });
+  await panel.getByRole('button', { name: 'Edit fit measurements' }).click();
+  await panel.getByLabel('Measurement unit', { exact: true }).selectOption('cm');
+  await panel.getByLabel('Available width', { exact: true }).fill('90');
+  await panel.getByLabel('Available length', { exact: true }).fill('175');
+  await panel.getByLabel('Required free space', { exact: true }).fill('5');
+  await panel.getByLabel('Measurement source', { exact: true }).fill('QA measured bath alcove - not real room dimensions');
+  await panel.getByLabel('Confirm measured item space', { exact: true }).check();
+  await panel.getByRole('button', { name: 'Save measured space' }).click();
+  const bath = 'Fairford 1700 x 900mm B Shaped Left Hand Shower Bath';
+  await page.getByRole('button', { name: `View details for ${bath}`, exact: true }).click();
+  const details = page.getByRole('dialog', { name: bath, exact: true });
+  await expect(details).toContainText('Does not fit measured space');
+  await details.getByRole('button', { name: 'Add to basket', exact: true }).click();
+  await expect(details.getByRole('alert')).toContainText('exceeds the measured space');
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('family-storage')!).state.propertyProjects[0].sourcing.basket.length)).toBe(0);
+  const fit = details.getByRole('region', { name: 'Measurement fit check' });
+  await fit.getByRole('button', { name: 'Edit fit measurements' }).click();
+  await fit.getByLabel('Available width', { exact: true }).fill('950');
+  await fit.getByLabel('Confirm measured item space', { exact: true }).check();
+  await fit.getByRole('button', { name: 'Save measured space' }).click();
+  await expect(fit).toContainText('Within measured limits');
+  await details.getByRole('button', { name: 'Add to basket', exact: true }).click();
+  await details.getByRole('button', { name: 'Close product details' }).click();
+  await page.reload();
+  await page.getByRole('button', { name: 'Main Bathroom', exact: true }).click();
+  await page.getByRole('button', { name: 'B-shaped shower bath', exact: true }).click();
+  await expect(page.getByText('Choice history (1)', { exact: true })).toBeVisible();
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('family-storage')!).state.propertyProjects[0]);
+  expect(saved.sourcing.requirements.find((item: any) => item.id === 'main-bath').fitSpace).toMatchObject({ widthMm: 950, lengthMm: 1750, clearanceMm: 50 });
+  expect(saved.sourcing.choiceHistory).toHaveLength(1); expect(saved.budgetMax).toBe(22000);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.getByRole('region', { name: 'Measurement fit check' }).scrollIntoViewIfNeeded();
+  await page.screenshot({ path: 'output/playwright/fixture-fit-phone.png' });
+});

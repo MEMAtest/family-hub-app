@@ -1,4 +1,5 @@
 import type { ProjectSourcing, SourcedProduct, SourcingBasketItem, SourcingRequirement, SourcingRoomId } from '@/types/sourcing.types';
+import { plannedTileCalculation } from '@/lib/sourcing/tilePlanner';
 
 export const bathroomRooms: { id: SourcingRoomId; label: string }[] = [
   { id: 'main-bathroom', label: 'Main Bathroom' },
@@ -22,8 +23,19 @@ export function basketTotal(sourcing: ProjectSourcing, roomId?: SourcingRoomId) 
   return sourcing.basket.reduce((total, item) => {
     const requirement = sourcing.requirements.find((candidate) => candidate.id === item.requirementId);
     const product = sourcing.products.find((candidate) => candidate.id === item.productId);
-    return total + (product && (!roomId || requirement?.roomId === roomId) ? productLineCost(product, item.quantity) : 0);
+    return total + (product && (!roomId || requirement?.roomId === roomId) ? basketLineCost(sourcing, item) : 0);
   }, 0);
+}
+
+export function basketLineCost(sourcing: ProjectSourcing, item: SourcingBasketItem) {
+  const planned = plannedTileCalculation(sourcing, item);
+  const product = sourcing.products.find((candidate) => candidate.id === item.productId);
+  return planned ? planned.totalPence / 100 : product ? productLineCost(product, item.quantity) : 0;
+}
+
+export function excludedBasketPrice(sourcing: ProjectSourcing, item: SourcingBasketItem) {
+  const product = sourcing.products.find((candidate) => candidate.id === item.productId);
+  return Boolean(product && isUncountedPrice(product) && !plannedTileCalculation(sourcing, item));
 }
 
 export function requirementSelection(sourcing: ProjectSourcing, requirement: SourcingRequirement) {
@@ -34,7 +46,7 @@ export function requirementSelection(sourcing: ProjectSourcing, requirement: Sou
   });
   const components = new Set(selected.flatMap(({ product }) => product.components));
   const missing = requirement.requiredComponents.filter((part) => !components.has(part));
-  return { selected, missing, complete: selected.length > 0 && missing.length === 0 };
+  return { selected, missing, complete: selected.length > 0 && missing.length === 0 && (!requirement.tilePlan?.choice || selected.some(({ item }) => Boolean(plannedTileCalculation(sourcing, item)))) };
 }
 
 /** The quote's first component is the fixture; remaining components are supporting parts. */

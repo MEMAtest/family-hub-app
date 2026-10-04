@@ -5,6 +5,50 @@ export type SourcingCategory = 'Tiles' | 'Sanitaryware' | 'Furniture' | 'Showers
 /** IN_STOCK: supplier page says "In stock". TO_ORDER: "Available to order" (not held, longer delivery). */
 export type SourcingStock = 'IN_STOCK' | 'TO_ORDER' | 'LOW_STOCK' | 'OUT_OF_STOCK' | 'UNKNOWN';
 
+export interface FixtureSpace {
+  widthMm?: number;
+  lengthMm?: number;
+  depthMm?: number;
+  heightMm?: number;
+  clearanceMm: number;
+  source: string;
+  confirmedAt: string;
+}
+
+export interface TileMeasurement {
+  method: 'area' | 'dimensions';
+  unit: 'm' | 'cm' | 'mm';
+  areaM2: number;
+  sections: Array<{ label: string; length: number; width: number }>;
+  deductionsM2: number;
+  wasteIncluded: 'unknown' | 'included' | 'excluded';
+  wastePercent: number;
+  source: { kind: 'quote' | 'manual' | 'photo' | 'text'; label: string; text?: string; imageDataUrl?: string; imageId?: string };
+  confirmedAt?: string;
+}
+
+export interface TileChoice {
+  name: string;
+  supplier: string;
+  url: string;
+  widthMm: number;
+  lengthMm: number;
+  coveragePerBoxM2?: number;
+  tilesPerBox?: number;
+  price: number;
+  priceBasis: 'box' | 'm2' | 'tile';
+  sourceImageDataUrl?: string;
+  sourceImageId?: string;
+}
+
+export interface TilePlan {
+  measurement: TileMeasurement;
+  /** The first confirmed measurement is retained when later revisions are saved. */
+  history: TileMeasurement[];
+  choice?: TileChoice;
+  updatedAt: string;
+}
+
 export interface SourcingRequirement {
   id: string;
   roomId: SourcingRoomId;
@@ -22,6 +66,10 @@ export interface SourcingRequirement {
   requiredComponents: string[];
   referenceProduct?: { name: string; supplier: string; url?: string };
   recommendationNote?: string;
+  tilePlan?: TilePlan;
+  relatedToId?: string;
+  source?: 'quote' | 'household';
+  fitSpace?: FixtureSpace;
 }
 
 export interface SourcedProduct {
@@ -62,6 +110,7 @@ export interface SourcedProduct {
   };
   description?: string;
   lastChecked: string;
+  source?: 'supplier' | 'household';
 }
 
 export interface SourcingBasketItem {
@@ -77,6 +126,10 @@ export interface ProjectSourcing {
   version?: number;
   /** Household room names and measurement notes; not a guarantee that a product fits. */
   rooms?: Partial<Record<SourcingRoomId, { name?: string; sizeNotes?: string }>>;
+  /** Source photos are stored once and referenced by measurement revisions. */
+  tileDocuments?: Array<{ id: string; label: string; imageDataUrl: string }>;
+  quoteLines?: Array<{ id: string; roomId: SourcingRoomId; text: string; quantity: number; requirementId: string; components: string[] }>;
+  choiceHistory?: Array<{ id: string; requirementId: string; at: string; selected: { id: string; name: string; price: number }; replaced: Array<{ id: string; name: string; price: number }> }>;
   requirements: SourcingRequirement[];
   products: SourcedProduct[];
   basket: SourcingBasketItem[];
