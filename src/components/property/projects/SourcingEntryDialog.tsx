@@ -25,26 +25,38 @@ export default function SourcingEntryDialog({ mode, sourcing, roomId, requiremen
   const [variantId, setVariantId] = useState('');
   const [reading, setReading] = useState(false);
   const pending = useRef<AbortController | null>(null);
+  const lastRead = useRef('');
   useEffect(() => () => pending.current?.abort(), []);
+  useEffect(() => {
+    if (mode !== 'product' || !url.trim() || lastRead.current === url.trim()) return;
+    try {
+      const link = new URL(url.trim());
+      if (link.protocol !== 'https:' || !['stonewaterbathrooms.com', 'www.stonewaterbathrooms.com'].includes(link.hostname) || !link.pathname.startsWith('/products/')) return;
+    } catch { return; }
+    const timer = setTimeout(() => { if (lastRead.current !== url.trim()) void importProduct(url.trim()); }, 600);
+    return () => clearTimeout(timer);
+  }, [url, mode]);
   function applyVariant(data: StonewaterDraft, id: string) {
     setVariantId(id);
     const option = data.variants.find((item) => item.id === id);
     setName(`${data.name}${option && option.name !== 'Default Title' ? ` - ${option.name}` : ''}`.slice(0, 200));
     setPrice(option ? String(option.price) : ''); setImageUrl(option?.imageUrl ?? data.images[0] ?? '');
-    setUrl(`${data.url}${option ? `?variant=${option.id}` : ''}`);
+    const selectedUrl = `${data.url}${option ? `?variant=${option.id}` : ''}`;
+    lastRead.current = selectedUrl; setUrl(selectedUrl);
     setSize((data.name.match(/\d{3,4}\s*(?:mm)?\s*[x×]\s*\d{3,4}\s*mm/i)?.[0] ?? (option && option.name !== 'Default Title' ? option.name : '')).slice(0, 300));
   }
-  async function importProduct() {
-    if (reading) return;
+  async function importProduct(link = url.trim()) {
+    pending.current?.abort();
+    lastRead.current = link;
     const controller = new AbortController(); pending.current = controller; setReading(true); setError('');
     try {
-      const response = await fetch('/api/property/sourcing/import', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }), signal: controller.signal });
+      const response = await fetch('/api/property/sourcing/import', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: link }), signal: controller.signal });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'The product could not be read.');
       if (controller.signal.aborted) return;
-      const data = result.draft as StonewaterDraft; setDraft(data); setSupplier('Stonewater Bathrooms'); setNotes(data.description); setBasis('each'); setComponents([]); applyVariant(data, data.selectedVariant);
+      const data = result.draft as StonewaterDraft; setDraft(data); setSupplier('Stonewater Bathrooms'); setNotes(data.description); setBasis('each'); setComponents([]); applyVariant(data, data.selectedVariant || (data.variants.length === 1 ? data.variants[0].id : ''));
     } catch (reason) { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : 'Enter this option manually.'); }
-    finally { if (!controller.signal.aborted) setReading(false); }
+    finally { if (!controller.signal.aborted && pending.current === controller) { pending.current = null; setReading(false); } }
   }
   const requirement = sourcing.requirements.find((item) => item.id === target);
   function submit(event: React.FormEvent) {
@@ -67,15 +79,16 @@ export default function SourcingEntryDialog({ mode, sourcing, roomId, requiremen
             <label className="block">Bathroom<select className={field} value={room} onChange={(event) => { setRoom(event.target.value as SourcingRoomId); setTarget(''); setComponents([]); }}>{bathroomRooms.map((item) => <option key={item.id} value={item.id}>{roomName(sourcing, item.id)}</option>)}</select></label>
             <label className="block">{mode === 'item' ? 'Related to (optional)' : 'Option for'}<select required={mode === 'product'} className={field} value={target} onChange={(event) => { setTarget(event.target.value); setComponents([]); }}><option value="">{mode === 'item' ? 'No related item' : 'Choose an item'}</option>{sourcing.requirements.filter((item) => item.roomId === room).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
             {mode === 'product' && <>
-              <label className="block">Product link<input disabled={reading} type="url" maxLength={1500} placeholder="https://www.stonewaterbathrooms.com/products/..." className={field} value={url} onChange={(event) => { setUrl(event.target.value); setDraft(null); setVariantId(''); }} /></label>
-              <button type="button" disabled={reading || !url.trim()} onClick={importProduct} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-emerald-700 px-3 text-sm text-emerald-800 disabled:opacity-50"><Download className="h-4 w-4" />{reading ? 'Reading product...' : 'Read Stonewater product'}</button>
+              <label className="block">Product link<input autoFocus type="url" maxLength={1500} placeholder="https://www.stonewaterbathrooms.com/products/..." className={field} value={url} onChange={(event) => { pending.current?.abort(); pending.current = null; lastRead.current = ''; setReading(false); setUrl(event.target.value); setDraft(null); setVariantId(''); setName(''); setPrice(''); setImageUrl(''); setSupplier(''); setSize(''); setNotes(''); setComponents([]); setError(''); }} /></label>
+              {reading && <p role="status" className="text-emerald-700">Loading product photo and price...</p>}
+              {!draft && <button type="button" disabled={reading || !url.trim()} onClick={() => void importProduct()} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-emerald-700 px-3 text-sm text-emerald-800 disabled:opacity-50"><Download className="h-4 w-4" />{reading ? 'Reading product...' : 'Read Stonewater product'}</button>}
               {draft && <>
                 <label className="block">Stonewater variant<select required className={field} value={variantId} onChange={(event) => applyVariant(draft, event.target.value)}><option value="">Choose a variant</option>{draft.variants.map((item) => <option key={item.id} value={item.id}>{item.name === 'Default Title' ? draft.name : item.name} - £{item.price.toFixed(2)}{item.available ? '' : ' - unavailable'}</option>)}</select></label>
                 {imageUrl && <img src={imageUrl} alt={name} className="h-32 w-full object-contain" />}
                 <p className="text-gray-500">Stonewater catalogue details. Confirm dimensions and included parts; availability is not a stock guarantee.</p>
               </>}
             </>}
-            <label className="block">{mode === 'item' ? 'Item name' : 'Product name'}<input autoFocus required maxLength={200} className={field} value={name} onChange={(event) => setName(event.target.value)} /></label>
+            <label className="block">{mode === 'item' ? 'Item name' : 'Product name'}<input autoFocus={mode === 'item'} required maxLength={200} className={field} value={name} onChange={(event) => setName(event.target.value)} /></label>
             {mode === 'item' ? <>
               <label className="block">Category<select className={field} value={category} onChange={(event) => setCategory(event.target.value as typeof category)}>{sourcingCategories.map((item) => <option key={item}>{item}</option>)}</select></label>
               <div className="grid grid-cols-2 gap-3"><label>Quantity<input required type="number" step="any" min="0.001" max="10000" className={field} value={Number.isFinite(quantity) ? quantity : ''} onChange={(event) => setQuantity(event.target.valueAsNumber)} /></label><label>Unit<input maxLength={30} className={field} value={unit} onChange={(event) => setUnit(event.target.value)} /></label></div>
@@ -89,7 +102,7 @@ export default function SourcingEntryDialog({ mode, sourcing, roomId, requiremen
             <label className="block">Notes<textarea aria-label="Notes" rows={3} maxLength={1000} className={field} value={notes} onChange={(event) => setNotes(event.target.value)} /></label>
             {mode === 'product' && <p className="text-gray-500">Unverified supplier option. Price, included parts, stock and room fit need confirmation. No order placed.</p>}
             {error && <p role="alert" className="text-red-700">{error}</p>}
-            <div className="sticky bottom-0 flex justify-end gap-3 border-t border-gray-200 bg-white pb-[env(safe-area-inset-bottom)] pt-3 dark:border-slate-700 dark:bg-slate-900"><button type="button" onClick={onClose} className="min-h-11 px-3">Cancel</button><button type="submit" className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-emerald-700 px-4 text-sm font-medium text-white"><Plus className="h-4 w-4" />{mode === 'item' ? 'Save item' : 'Save option'}</button></div>
+            <div className="sticky bottom-0 flex justify-end gap-3 border-t border-gray-200 bg-white pb-[env(safe-area-inset-bottom)] pt-3 dark:border-slate-700 dark:bg-slate-900"><button type="button" onClick={onClose} className="min-h-11 px-3">Cancel</button><button disabled={reading} type="submit" className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-emerald-700 px-4 text-sm font-medium text-white disabled:opacity-50"><Plus className="h-4 w-4" />{mode === 'item' ? 'Save item' : 'Save option'}</button></div>
           </div>
         </form>
       </Dialog.Panel>

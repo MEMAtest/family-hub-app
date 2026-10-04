@@ -1,0 +1,70 @@
+'use client';
+
+import { useState } from 'react';
+import { ArrowRight, CheckCircle2, Circle, ImageOff, MinusCircle, Package } from 'lucide-react';
+import type { ProjectSourcing, SourcedProduct, SourcingRequirement, SourcingRoomId } from '@/types/sourcing.types';
+import { quoteLineSelection } from '@/lib/sourcing/quoteInventory';
+import { fixtureFit } from '@/lib/sourcing/fixtureFit';
+import { basketStatuses, productSize, quoteSizeCheck, roomName } from './bathroomProject.helpers';
+
+type Props = { sourcing: ProjectSourcing; roomId: SourcingRoomId; onOpenRequirement: (requirement: SourcingRequirement) => void; onOpenProduct: (product: SourcedProduct, requirement: SourcingRequirement) => void };
+
+export default function QuoteChecklist({ sourcing, roomId, onOpenRequirement, onOpenProduct }: Props) {
+  const [filter, setFilter] = useState<'all' | 'chosen' | 'missing'>('all');
+  const lines = sourcing.quoteLines?.filter((line) => line.roomId === roomId) ?? [];
+  const complete = lines.filter((line) => quoteLineSelection(sourcing, line).complete).length;
+  const chosen = lines.filter((line) => quoteLineSelection(sourcing, line).selections.length > 0).length;
+  const visible = lines.filter((line) => filter === 'all' || (filter === 'chosen' ? quoteLineSelection(sourcing, line).selections.length > 0 : !quoteLineSelection(sourcing, line).complete));
+  return <section aria-label={`${roomName(sourcing, roomId)} digital quote`} className="mt-4 min-w-0 border-y border-gray-200 py-4 dark:border-slate-700">
+    <div className="flex flex-wrap items-baseline justify-between gap-2">
+      <h4 className="text-base font-semibold">Original quote checklist</h4>
+      <span className="text-sm font-medium text-emerald-700 dark:text-emerald-300">{complete} of {lines.length} supply lines selected</span>
+    </div>
+    <p className="mt-1 text-xs text-gray-500">R & R · 18 January 2026 · Supply of goods · Selections are not orders or fitter approval.</p>
+    <progress aria-label="Quote selection progress" value={complete} max={lines.length || 1} className="mt-3 h-2 w-full accent-emerald-600" />
+    <div role="group" aria-label="Quote checklist filter" className="mt-3 flex flex-wrap gap-1 border-b border-gray-100 pb-2 dark:border-slate-800">
+      {([{ value: 'all', label: `All (${lines.length})` }, { value: 'chosen', label: `Chosen (${chosen})` }, { value: 'missing', label: `Still needed (${lines.length - complete})` }] as const).map((option) => <button key={option.value} type="button" aria-pressed={filter === option.value} onClick={() => setFilter(option.value)} className={`min-h-11 rounded-md px-3 text-xs font-medium ${filter === option.value ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200' : 'text-gray-600 dark:text-slate-300'}`}>{option.label}</button>)}
+    </div>
+    <ul aria-label={`${roomName(sourcing, roomId)} quote checklist`} className="mt-3 divide-y divide-gray-200 dark:divide-slate-700">
+      {visible.map((line) => {
+        const requirement = sourcing.requirements.find((item) => item.id === line.requirementId);
+        const selection = quoteLineSelection(sourcing, line);
+        const Icon = selection.complete ? CheckCircle2 : selection.partial ? MinusCircle : Circle;
+        const status = selection.complete ? 'Selected' : selection.partial ? 'Part selected' : 'To choose';
+        return <li key={line.id} aria-label={`${line.text}: ${status}`} className="min-w-0 py-4">
+          <div className="flex items-start gap-2">
+            <Icon aria-hidden="true" className={`mt-0.5 h-5 w-5 shrink-0 ${selection.complete ? 'text-emerald-600' : selection.partial ? 'text-amber-600' : 'text-gray-400'}`} />
+            <div className="min-w-0 flex-1"><span className="text-xs font-medium text-gray-500">QUOTED · {line.quantity} ×</span><h5 className="mt-1 break-words text-sm font-medium">{line.text}</h5></div>
+            <span className={`shrink-0 text-xs font-semibold ${selection.complete ? 'text-emerald-700' : 'text-amber-700'}`}>{status}</span>
+          </div>
+          <div className="mt-3 min-w-0 sm:pl-7">
+            {selection.selections.length ? <div className="space-y-3">{selection.selections.map(({ item, product }) => {
+              const isPrimary = requirement?.requiredComponents[0] && line.components.includes(requirement.requiredComponents[0]) && product.components.includes(requirement.requiredComponents[0]);
+              const sizeCheck = isPrimary ? quoteSizeCheck(requirement, product) : 'Part specification needs checking';
+              return <div key={item.id} className="min-w-0">
+                <button type="button" onClick={() => requirement && onOpenProduct(product, requirement)} disabled={!requirement} aria-label={`Inspect selected ${product.name} for ${line.text}`} className="flex min-h-16 w-full items-start gap-3 text-left">
+                  <QuotePhoto key={`${product.id}-${product.imageUrl}`} product={product} />
+                  <span className="min-w-0 flex-1"><span className="block text-xs text-gray-500">YOUR SELECTION</span><span className="mt-0.5 block break-words text-sm font-medium">{product.name}</span><span className="mt-1 block break-words text-xs text-gray-500">{productSize(product)} · Qty {item.quantity} · {basketStatuses.find((entry) => entry.value === item.status)?.label}</span></span>
+                  <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-emerald-700" />
+                </button>
+                <p className={`mt-2 break-words text-xs ${sizeCheck.startsWith('Different') ? 'text-amber-700' : 'text-gray-600 dark:text-slate-300'}`}>{sizeCheck}</p>
+                {isPrimary && requirement && <p className="mt-1 text-xs text-gray-500">Room fit: {fixtureFit(requirement, product).label}</p>}
+                {product.components.some((part) => !line.components.includes(part)) && <p className="mt-1 text-xs text-gray-500">Bundled product · also covers other parts. Counted once in basket.</p>}
+              </div>;
+            })}</div> : <div className="flex items-center gap-3"><span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-md bg-gray-50 dark:bg-slate-800"><Package aria-hidden="true" className="h-6 w-6 text-gray-400" /></span><span className="text-sm text-gray-500">No product selected</span></div>}
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+              <p className={`min-w-0 break-words text-xs ${selection.complete ? 'text-emerald-700' : 'text-amber-700'}`}>{selection.coverage.map((part) => `${part.component.replace(/-/g, ' ')}: ${part.quantity}/${line.quantity}`).join(' · ')}</p>
+              {requirement && <button type="button" onClick={() => onOpenRequirement(requirement)} aria-label={`${selection.selections.length ? 'Change' : 'Choose'} product for ${line.text}`} className="inline-flex min-h-11 items-center gap-1 text-sm font-medium text-emerald-700 dark:text-emerald-300">{selection.selections.length ? 'Change choice' : 'Choose product'}<ArrowRight className="h-4 w-4" /></button>}
+            </div>
+          </div>
+        </li>;
+      })}
+    </ul>
+    {!visible.length && <p className="py-4 text-sm text-gray-500">{filter === 'chosen' ? 'No products selected yet.' : 'All quoted parts have selections.'}</p>}
+  </section>;
+}
+
+function QuotePhoto({ product }: { product: SourcedProduct }) {
+  const [failed, setFailed] = useState(false);
+  return product.imageUrl && !failed ? <img src={product.imageUrl} alt={product.name} loading="lazy" referrerPolicy="no-referrer" onError={() => setFailed(true)} className="h-16 w-16 shrink-0 rounded-md bg-white object-contain" /> : <span role="img" aria-label={`Photo unavailable for ${product.name}`} className="flex h-16 w-16 shrink-0 items-center justify-center rounded-md bg-gray-50 dark:bg-slate-800"><ImageOff aria-hidden="true" className="h-6 w-6 text-gray-400" /></span>;
+}

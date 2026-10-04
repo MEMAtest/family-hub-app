@@ -11,13 +11,13 @@ project.sourcing.products.unshift({
   url: 'https://example.com/tile', imageUrl: '', price: 42, priceUnit: 'per box', stock: 'UNKNOWN', stockEvidence: 'QA fixture only',
   dimensions: { widthMm: 600, lengthMm: 600 }, components: [], lastChecked: '2026-10-01',
 });
-async function open(page: Page, width = 390) {
+async function open(page: Page, width = 390, fixture = project) {
   await page.setViewportSize({ width, height: 844 });
   await page.route('**/api/**', (route) => route.fulfill({ status: 503, contentType: 'application/json', body: '{}' }));
   await page.route('**/api/auth/me', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ user: { id: 'local-tile-qa', email: 'qa@example.com' }, needsOnboarding: false }) }));
   await page.addInitScript((fixture) => {
     if (!localStorage.getItem('family-storage')) localStorage.setItem('family-storage', JSON.stringify({ version: 8, state: { currentView: 'property', propertyRole: 'owner', propertyProjects: [fixture], activeProjectId: fixture.id } }));
-  }, project);
+  }, fixture);
   await page.goto('/?view=property&tab=projects');
   await page.getByRole('button', { name: 'Main Bathroom', exact: true }).click();
   await page.getByRole('region', { name: 'Main Bathroom tile plans' }).getByRole('button', { name: /^Floor tiles/ }).click();
@@ -33,6 +33,60 @@ async function enterTile(page: Page, name = 'QA marble tile') {
   await planner.getByRole('checkbox', { name: 'I have checked the tile size, pack coverage and price basis.' }).check();
   return planner;
 }
+test('visual quote checklist: selected photos, missing parts, specification differences and phone navigation', async ({ page }) => {
+  const fixture = structuredClone(project);
+  const bath = fixture.sourcing.products.find((p) => p.components.includes('bath') && !p.components.includes('screen'))!;
+  fixture.sourcing.products.push({ id: 'manual-wide-wc', name: 'QA alternative 600mm toilet unit', supplier: 'QA supplier', price: 250, imageUrl: bath.imageUrl, url: '', stock: 'UNKNOWN', stockEvidence: '', lastChecked: '', dimensions: { widthMm: 600 }, components: ['wc-unit'], source: 'household', requirementIds: ['main-wc-unit'], size: '600mm wide' });
+  fixture.sourcing.basket.push({ id: 'bath-selected', productId: bath.id, requirementId: 'main-bath', quantity: 1, status: 'ask_fitter' }, { id: 'wc-selected', productId: 'manual-wide-wc', requirementId: 'main-wc-unit', quantity: 1, status: 'review' });
+  await open(page, 390, fixture);
+  await page.getByRole('button', { name: 'Room overview', exact: true }).click();
+  const quote = page.getByRole('region', { name: 'Main Bathroom digital quote' });
+  await expect(quote).toContainText('2 of 14 supply lines selected');
+  const bathLine = quote.getByRole('listitem', { name: 'B-shaped shower bath: Selected', exact: true });
+  await expect(bathLine.getByRole('img', { name: bath.name })).toBeVisible();
+  await expect(quote.getByRole('listitem', { name: 'Bath pop-up waste: To choose' })).toContainText('No product selected');
+  const unitLine = quote.getByRole('listitem', { name: '500mm toilet unit: Selected', exact: true });
+  await expect(unitLine).toContainText('QA alternative 600mm toilet unit');
+  await expect(unitLine).toContainText('Different from quote');
+  await expect(unitLine).toContainText('Room fit: Needs checking');
+  await bathLine.scrollIntoViewIfNeeded();
+  await expect.poll(() => bathLine.getByRole('img', { name: bath.name, exact: true }).evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: 'output/playwright/visual-quote-phone.png' });
+  await unitLine.getByRole('button', { name: 'Change product for 500mm toilet unit' }).click();
+  await expect(page.getByRole('combobox', { name: 'Quote item', exact: true })).toHaveValue('main-wc-unit');
+  await page.getByRole('button', { name: 'Room overview', exact: true }).click();
+  await page.setViewportSize({ width: 1440, height: 960 });
+  await quote.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: 'output/playwright/visual-quote-desktop.png' });
+  await page.getByRole('button', { name: 'Shower Room', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Shower Room digital quote' })).toContainText('0 of 14 supply lines selected');
+});
+test('phone: paste a product link beside results to automatically import photo and price', async ({ page }) => {
+  await open(page);
+  await page.getByRole('combobox', { name: 'Quote item', exact: true }).selectOption('main-vanity');
+  const photo = project.sourcing.products.find((p) => p.components.includes('vanity'))!.imageUrl;
+  let reads = 0;
+  await page.route('**/api/property/sourcing/import', (route) => { reads++; return route.fulfill({ json: { draft: { name: 'QA alternative vanity', url: 'https://www.stonewaterbathrooms.com/products/qa-vanity', selectedVariant: '20', description: 'Unit only; basin separate.', images: [photo], variants: [{ id: '20', name: 'Default Title', sku: 'V20', price: 299, available: true, imageUrl: photo }] } } }); });
+  await page.getByRole('button', { name: 'Add product link', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Add supplier option', exact: true });
+  await expect(dialog.getByLabel('Option for')).toHaveValue('main-vanity');
+  await dialog.getByLabel('Product link', { exact: true }).fill('https://www.stonewaterbathrooms.com/products/qa-vanity');
+  await expect(dialog.getByLabel('Price (£)', { exact: true })).toHaveValue('299');
+  await expect(dialog.getByLabel('Product name')).toHaveValue('QA alternative vanity');
+  await expect(dialog.getByRole('img', { name: 'QA alternative vanity' })).toBeVisible();
+  await expect.poll(() => dialog.getByRole('img', { name: 'QA alternative vanity' }).evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true);
+  expect(reads).toBe(1);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: 'output/playwright/automatic-product-link-phone.png' });
+  await dialog.getByLabel('vanity', { exact: true }).check();
+  await dialog.getByRole('button', { name: 'Save option', exact: true }).click();
+  const details = page.getByRole('dialog', { name: 'QA alternative vanity', exact: true });
+  await expect(details).toContainText('£299.00');
+  const data = await page.evaluate(() => JSON.parse(localStorage.getItem('family-storage')!).state.propertyProjects[0].sourcing);
+  expect(data.basket).toHaveLength(0);
+  expect(data.products.find((p: any) => p.name === 'QA alternative vanity')).toMatchObject({ sku: 'V20', price: 299, imageUrl: photo, requirementIds: ['main-vanity'] });
+});
 test('phone: measurements, pack rounding and tile choice survive reload without changing quote or other bathroom', async ({ page }) => {
   await open(page);
   const planner = await enterTile(page);
@@ -162,8 +216,8 @@ test('phone: complete quote checklist, related item and website option can be sa
   await expect(itemDialog).not.toBeVisible();
   await page.getByRole('button', { name: 'Add supplier option', exact: true }).click();
   const optionDialog = page.getByRole('dialog', { name: 'Add supplier option' });
-  await optionDialog.getByLabel('Product name').fill('Round LED mirror 600');
   await optionDialog.getByLabel('Product link', { exact: true }).fill('https://example.com/mirror');
+  await optionDialog.getByLabel('Product name').fill('Round LED mirror 600');
   await optionDialog.getByLabel('Supplier', { exact: true }).fill('Your supplier');
   await optionDialog.getByLabel('Price (£)', { exact: true }).fill('149');
   await optionDialog.getByLabel('Size / dimensions').fill('600mm');

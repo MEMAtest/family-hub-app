@@ -5,7 +5,7 @@ import { ArrowRight, Bath, Check, Columns2, Grid2x2, Plus, Ruler, ShowerHead, Tr
 import type { ProjectSourcing, SourcedProduct, SourcingRequirement, SourcingRoomId } from '@/types/sourcing.types';
 import { bathroomRooms, basketTotal, basketLineCost, excludedBasketPrice, leadingRequirementOption, productSize, quoteSizeCheck, requirementSelection, roomName } from './bathroomProject.helpers';
 import { measurementArea, plannedTileCalculation } from '@/lib/sourcing/tilePlanner';
-import { quoteLineSelected } from '@/lib/sourcing/quoteInventory';
+import QuoteChecklist from './QuoteChecklist';
 import { fixtureFit } from '@/lib/sourcing/fixtureFit';
 
 const money = new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' });
@@ -78,15 +78,7 @@ export default function BathroomProjectOverview({ sourcing, roomId, isReadOnly, 
             <button aria-label={`Open ${roomName(sourcing, room.id)}`} onClick={() => onOpenRoom(room.id)} title={`Open ${roomName(sourcing, room.id)}`} className="shrink-0 rounded-lg p-3 text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300"><ArrowRight className="h-5 w-5" /></button>
           </div>}
           <RoomNotes key={`${room.id}-${sourcing.rooms?.[room.id]?.name}-${sourcing.rooms?.[room.id]?.sizeNotes}`} sourcing={sourcing} roomId={room.id} isReadOnly={isReadOnly} onSave={onSaveRoom} />
-          <details className="mt-3 border-y border-gray-200 py-3 dark:border-slate-700" open={!!roomId}>
-            <summary className="min-h-11 cursor-pointer text-sm font-semibold">Original quote checklist · {sourcing.quoteLines?.filter((line) => line.roomId === room.id).length ?? 0} supply lines</summary>
-            <p className="mb-2 text-xs text-gray-500">R & R quotation · 18 January 2026 · Supply of goods. Parts supplied together count once in the basket.</p>
-            <ul aria-label={`${roomName(sourcing, room.id)} quote checklist`} className="divide-y divide-gray-100 dark:divide-slate-800">{sourcing.quoteLines?.filter((line) => line.roomId === room.id).map((line) => {
-              const requirement = sourcing.requirements.find((item) => item.id === line.requirementId);
-              const selected = quoteLineSelected(sourcing, line);
-              return <li key={line.id}><button disabled={!requirement} onClick={() => requirement && onOpenRequirement(requirement)} className="flex min-h-12 w-full items-start gap-2 py-2 text-left text-xs"><span className="w-5 shrink-0 text-gray-500">{line.quantity}×</span><span className="min-w-0 flex-1 break-words">{line.text}</span><span className={`shrink-0 ${selected ? 'text-emerald-700' : 'text-amber-700'}`}>{selected ? 'Selected' : 'Choose'}</span></button></li>;
-            })}</ul>
-          </details>
+          <QuoteChecklist sourcing={sourcing} roomId={room.id} onOpenRequirement={onOpenRequirement} onOpenProduct={onOpenProduct} />
           <section aria-label={`${roomName(sourcing, room.id)} tile plans`} className="mt-4 border-y border-gray-200 py-3 dark:border-slate-700">
             <h4 className="flex items-center gap-2 text-sm font-semibold"><Grid2x2 className="h-4 w-4 text-emerald-700" />Tiles & measurements</h4>
             <div className="divide-y divide-gray-100 dark:divide-slate-800">{items.filter((item) => /^(wall tiles|floor tiles)/i.test(item.name)).map((item) => {

@@ -43,6 +43,15 @@ export function withQuoteInventory(seed: ProjectSourcing): ProjectSourcing {
 }
 
 export function quoteLineSelected(sourcing: ProjectSourcing, line: NonNullable<ProjectSourcing['quoteLines']>[number]) {
-  return line.components.every((component) => sourcing.basket.filter((item) => item.requirementId === line.requirementId)
-    .reduce((quantity, item) => quantity + (sourcing.products.find((product) => product.id === item.productId)?.components.includes(component) ? item.quantity : 0), 0) >= line.quantity);
+  return quoteLineSelection(sourcing, line).complete;
+}
+
+export function quoteLineSelection(sourcing: ProjectSourcing, line: NonNullable<ProjectSourcing['quoteLines']>[number]) {
+  const selections = sourcing.basket.filter((item) => item.requirementId === line.requirementId).flatMap((item) => {
+    const product = sourcing.products.find((candidate) => candidate.id === item.productId);
+    return product && line.components.some((part) => product.components.includes(part)) ? [{ item, product }] : [];
+  });
+  const coverage = line.components.map((component) => ({ component, quantity: selections.reduce((total, { item, product }) => total + (product.components.includes(component) ? item.quantity : 0), 0) }));
+  const complete = coverage.length > 0 && coverage.every((part) => part.quantity >= line.quantity);
+  return { selections, coverage, complete, partial: !complete && selections.length > 0 };
 }

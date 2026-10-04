@@ -399,6 +399,7 @@ export default function ProjectMaterialsView({ project, onUpdateProject, isReadO
       </div>
 
       <div>
+        {!isReadOnly && <div className="mb-3 flex justify-end"><button type="button" onClick={() => startEntry('product')} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-emerald-700 px-3 text-sm font-medium text-emerald-700"><Plus className="h-4 w-4" />Add product link</button></div>}
         <h3 className="mb-3 font-semibold text-gray-900 dark:text-white">{tiles ? 'Supplier tile options' : category === 'All' ? 'Products' : category} <span className="font-normal text-gray-500">({results.length} results)</span>
           {hiddenUnsuitable > 0 && <button onClick={() => setShowUnsuitable((value) => !value)} className="ml-3 text-sm font-normal text-blue-600 hover:underline dark:text-blue-400">{showUnsuitable ? 'Hide' : 'Show'} {hiddenUnsuitable} not suitable</button>}</h3>
         {results.length === 0 ? <EmptyResults requirement={requirement} /> : (
