@@ -1,9 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { ArrowRight, Bath, Check, Columns2, Grid2x2, Ruler, ShowerHead, TriangleAlert } from 'lucide-react';
+import { ArrowRight, Bath, Check, Columns2, Grid2x2, Plus, Ruler, ShowerHead, TriangleAlert } from 'lucide-react';
 import type { ProjectSourcing, SourcedProduct, SourcingRequirement, SourcingRoomId } from '@/types/sourcing.types';
-import { bathroomRooms, basketTotal, isUncountedPrice, leadingRequirementOption, productLineCost, productSize, quoteSizeCheck, requirementSelection, roomName } from './bathroomProject.helpers';
+import { bathroomRooms, basketTotal, basketLineCost, excludedBasketPrice, leadingRequirementOption, productSize, quoteSizeCheck, requirementSelection, roomName } from './bathroomProject.helpers';
+import { measurementArea, plannedTileCalculation } from '@/lib/sourcing/tilePlanner';
+import { quoteLineSelected } from '@/lib/sourcing/quoteInventory';
+import { fixtureFit } from '@/lib/sourcing/fixtureFit';
 
 const money = new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' });
 
@@ -15,9 +18,11 @@ type Props = {
   onOpenRequirement: (requirement: SourcingRequirement) => void;
   onOpenProduct: (product: SourcedProduct, requirement: SourcingRequirement) => void;
   onSaveRoom: (id: SourcingRoomId, metadata: { name: string; sizeNotes: string }) => void;
+  onAddItem: () => void;
+  onAddOption: () => void;
 };
 
-export default function BathroomProjectOverview({ sourcing, roomId, isReadOnly, onOpenRoom, onOpenRequirement, onOpenProduct, onSaveRoom }: Props) {
+export default function BathroomProjectOverview({ sourcing, roomId, isReadOnly, onOpenRoom, onOpenRequirement, onOpenProduct, onSaveRoom, onAddItem, onAddOption }: Props) {
   const [comparing, setComparing] = useState(false);
   const visibleRooms = bathroomRooms.filter((room) => !roomId || room.id === roomId);
   const requirements = sourcing.requirements.filter((item) => !roomId || item.roomId === roomId);
@@ -26,21 +31,22 @@ export default function BathroomProjectOverview({ sourcing, roomId, isReadOnly, 
   const fitterChecks = requirements.filter((item) => item.status === 'fitter_check');
   const excluded = sourcing.basket.filter((item) => {
     const product = sourcing.products.find((candidate) => candidate.id === item.productId);
-    return product && isUncountedPrice(product) && requirements.some((requirement) => requirement.id === item.requirementId);
+    return product && excludedBasketPrice(sourcing, item) && requirements.some((requirement) => requirement.id === item.requirementId);
   }).length;
 
   return <div className="min-w-0 space-y-6">
     <header className="flex items-start justify-between gap-3">
       <div className="min-w-0">
         <h2 className="text-xl font-semibold text-gray-900 dark:text-white">{roomId ? roomName(sourcing, roomId) : 'Project overview'}</h2>
-        <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">{selected.length} of {requirements.length} quote items have selections · {incomplete.length} incomplete · {fitterChecks.length} fitter checks</p>
+        <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">{selected.length} of {requirements.length} items have selections · {incomplete.length} incomplete · {fitterChecks.length} fitter checks</p>
       </div>
       {!roomId && <button onClick={() => setComparing((value) => !value)} aria-label={comparing ? 'Close comparison' : 'Compare rooms'} title={comparing ? 'Close comparison' : 'Compare rooms'} aria-pressed={comparing} className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-lg border border-emerald-600 px-3 text-sm font-medium text-emerald-700 dark:text-emerald-300"><Columns2 className="h-4 w-4" /><span className="hidden sm:inline">{comparing ? 'Close comparison' : 'Compare rooms'}</span></button>}
     </header>
+    {!isReadOnly && <div className="flex flex-wrap gap-3 border-b border-gray-200 pb-3 dark:border-slate-700"><button onClick={onAddItem} className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-emerald-700 px-3 text-sm font-medium text-white"><Plus className="h-4 w-4" />Add item</button><button onClick={onAddOption} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-emerald-700 px-3 text-sm font-medium text-emerald-700 dark:text-emerald-300"><Plus className="h-4 w-4" />Add supplier option</button></div>}
 
     <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1 border-y border-gray-200 py-3 dark:border-slate-700">
       <span className="text-sm text-gray-600 dark:text-slate-300">Selected subtotal <strong className="ml-2 text-lg text-gray-900 dark:text-white">{money.format(basketTotal(sourcing, roomId))}</strong></span>
-      <span className="text-xs text-gray-500">{excluded ? `${excluded} box/tile-priced selections excluded. ` : ''}Before delivery, waste and unselected items.</span>
+      <span className="text-xs text-gray-500">{excluded ? `${excluded} box/tile-priced selections excluded. ` : ''}Tiles with a saved plan include allowance and pack rounding. Delivery and unselected items excluded.</span>
     </div>
 
     {!roomId && <nav aria-label="Bathroom quick view" className="grid min-w-0 grid-cols-2 gap-3">
@@ -72,6 +78,25 @@ export default function BathroomProjectOverview({ sourcing, roomId, isReadOnly, 
             <button aria-label={`Open ${roomName(sourcing, room.id)}`} onClick={() => onOpenRoom(room.id)} title={`Open ${roomName(sourcing, room.id)}`} className="shrink-0 rounded-lg p-3 text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300"><ArrowRight className="h-5 w-5" /></button>
           </div>}
           <RoomNotes key={`${room.id}-${sourcing.rooms?.[room.id]?.name}-${sourcing.rooms?.[room.id]?.sizeNotes}`} sourcing={sourcing} roomId={room.id} isReadOnly={isReadOnly} onSave={onSaveRoom} />
+          <details className="mt-3 border-y border-gray-200 py-3 dark:border-slate-700" open={!!roomId}>
+            <summary className="min-h-11 cursor-pointer text-sm font-semibold">Original quote checklist · {sourcing.quoteLines?.filter((line) => line.roomId === room.id).length ?? 0} supply lines</summary>
+            <p className="mb-2 text-xs text-gray-500">R & R quotation · 18 January 2026 · Supply of goods. Parts supplied together count once in the basket.</p>
+            <ul aria-label={`${roomName(sourcing, room.id)} quote checklist`} className="divide-y divide-gray-100 dark:divide-slate-800">{sourcing.quoteLines?.filter((line) => line.roomId === room.id).map((line) => {
+              const requirement = sourcing.requirements.find((item) => item.id === line.requirementId);
+              const selected = quoteLineSelected(sourcing, line);
+              return <li key={line.id}><button disabled={!requirement} onClick={() => requirement && onOpenRequirement(requirement)} className="flex min-h-12 w-full items-start gap-2 py-2 text-left text-xs"><span className="w-5 shrink-0 text-gray-500">{line.quantity}×</span><span className="min-w-0 flex-1 break-words">{line.text}</span><span className={`shrink-0 ${selected ? 'text-emerald-700' : 'text-amber-700'}`}>{selected ? 'Selected' : 'Choose'}</span></button></li>;
+            })}</ul>
+          </details>
+          <section aria-label={`${roomName(sourcing, room.id)} tile plans`} className="mt-4 border-y border-gray-200 py-3 dark:border-slate-700">
+            <h4 className="flex items-center gap-2 text-sm font-semibold"><Grid2x2 className="h-4 w-4 text-emerald-700" />Tiles & measurements</h4>
+            <div className="divide-y divide-gray-100 dark:divide-slate-800">{items.filter((item) => /^(wall tiles|floor tiles)/i.test(item.name)).map((item) => {
+              let measured: number | undefined;
+              try { if (item.tilePlan) measured = measurementArea(item.tilePlan.measurement); } catch { /* Invalid older drafts remain unconfirmed. */ }
+              return <button key={item.id} type="button" onClick={() => onOpenRequirement(item)} className="flex min-h-14 w-full items-center justify-between gap-3 py-2 text-left">
+                <span className="min-w-0"><span className="block text-sm font-medium">{item.name}</span><span className="block break-words text-xs text-gray-500">{measured !== undefined ? `${measured} m² confirmed` : `${item.quantity} ${item.unit ?? ''} from quote · confirm area`}{item.tilePlan?.choice ? ` · ${item.tilePlan.choice.name}` : ' · choose a tile'}</span></span><ArrowRight className="h-4 w-4 shrink-0 text-emerald-700" />
+              </button>;
+            })}</div>
+          </section>
           <div className={`mt-3 grid min-w-0 gap-3 ${roomId ? 'sm:grid-cols-2 lg:grid-cols-3' : 'sm:grid-cols-2'}`}>
             {items.map((item) => <ChoiceCard key={item.id} sourcing={sourcing} requirement={item} onOpen={() => onOpenRequirement(item)} onOpenProduct={(product) => onOpenProduct(product, item)} />)}
           </div>
@@ -111,7 +136,8 @@ function ChoiceCard({ sourcing, requirement, onOpen, onOpenProduct }: {
     <button onClick={onOpen} className="flex min-h-10 w-full items-start justify-between gap-2 text-left text-sm font-semibold text-gray-900 hover:text-emerald-700 dark:text-white">
       <span className="min-w-0 break-words">{requirement.name}</span><ArrowRight className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
     </button>
-    <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">Quote: {requirement.size || 'Size not stated'} · Qty {requirement.quantity}{requirement.unit ? ` ${requirement.unit}` : ''}</p>
+    <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">{requirement.source === 'household' ? 'Added item' : 'Quote'}: {requirement.size || 'Size not stated'} · Qty {requirement.quantity}{requirement.unit ? ` ${requirement.unit}` : ''}</p>
+    {requirement.relatedToId && <p className="mt-1 text-xs text-gray-500">Related to: {sourcing.requirements.find((item) => item.id === requirement.relatedToId)?.name}</p>}
     {selected.length === 0 ? <div className="mt-3 border-t border-gray-100 pt-3 text-xs text-gray-500 dark:border-slate-800">
       <p>No selection · {candidates.length} products</p>
       {option && <button onClick={() => onOpenProduct(option)} aria-label={`View option for ${requirement.name}: ${option.name}`} className="mt-2 flex w-full items-start gap-2 text-left"><SelectionImage product={option} /><span className="min-w-0"><span className="line-clamp-2 text-xs">Option: {option.name}</span><span className="block text-xs">{productSize(option)}</span></span></button>}
@@ -122,8 +148,9 @@ function ChoiceCard({ sourcing, requirement, onOpen, onOpenProduct }: {
           <SelectionImage product={product} />
           <span className="min-w-0"><span className="line-clamp-2 text-xs font-medium text-gray-800 dark:text-slate-200">{product.name}</span><span className="mt-0.5 block text-xs text-gray-500">{productSize(product)}</span></span>
         </button>
-        <p className="mt-1 text-xs text-gray-600 dark:text-slate-300">{isUncountedPrice(product) ? `${money.format(product.price)} ${product.priceUnit} · excluded` : `${money.format(productLineCost(product, item.quantity))} · Qty ${item.quantity}`} · {item.status.replace(/_/g, ' ')}</p>
-        <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">{quoteSizeCheck(requirement, product)}</p>
+        <p className="mt-1 text-xs text-gray-600 dark:text-slate-300">{excludedBasketPrice(sourcing, item) ? `${money.format(product.price)} ${product.priceUnit} · excluded` : `${money.format(basketLineCost(sourcing, item))} · Qty ${item.quantity}`} · {item.status.replace(/_/g, ' ')}</p>
+        <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">{plannedTileCalculation(sourcing, item) ? `${plannedTileCalculation(sourcing, item)!.purchasedCoverageM2} m² purchased coverage · Confirm with fitter` : quoteSizeCheck(requirement, product)}</p>
+        {requirement.category !== 'Tiles' && <p className={`mt-1 text-xs ${fixtureFit(requirement, product).status === 'no_fit' ? 'text-red-700' : 'text-gray-600'}`}>{fixtureFit(requirement, product).label}</p>}
       </div>)}</div>}
     <p className={`mt-2 flex items-start gap-1 text-xs ${complete ? 'text-emerald-700 dark:text-emerald-300' : 'text-amber-700 dark:text-amber-300'}`}>
       {complete ? <Check className="h-3.5 w-3.5 shrink-0" /> : <TriangleAlert className="h-3.5 w-3.5 shrink-0" />}
@@ -154,7 +181,7 @@ function RoomComparison({ sourcing, onOpenRequirement, onOpenProduct }: Pick<Pro
             <p className="text-xs text-gray-500">Quote: {item.size || 'Size not stated'} · Qty {item.quantity}{item.unit ? ` ${item.unit}` : ''}</p>
             {requirementSelection(sourcing, item).selected.length === 0 && <p className="mt-1 text-xs text-amber-700">No selection</p>}
             {requirementSelection(sourcing, item).selected.map(({ item: entry, product }) => <button key={entry.id} onClick={() => onOpenProduct(product, item)} className="mt-2 flex w-full items-start gap-2 text-left">
-              <SelectionImage product={product} /><span className="min-w-0 break-words text-xs text-gray-700 dark:text-slate-200">{product.name}<span className="block text-gray-500">{productSize(product)} · {entry.status.replace(/_/g, ' ')}</span><span className="block">{isUncountedPrice(product) ? `${money.format(product.price)} ${product.priceUnit} · excluded` : `${money.format(productLineCost(product, entry.quantity))} · Qty ${entry.quantity}`}</span><span className="block text-amber-700 dark:text-amber-300">{quoteSizeCheck(item, product)}</span></span>
+              <SelectionImage product={product} /><span className="min-w-0 break-words text-xs text-gray-700 dark:text-slate-200">{product.name}<span className="block text-gray-500">{productSize(product)} · {entry.status.replace(/_/g, ' ')}</span><span className="block">{excludedBasketPrice(sourcing, entry) ? `${money.format(product.price)} ${product.priceUnit} · excluded` : `${money.format(basketLineCost(sourcing, entry))} · Qty ${entry.quantity}`}</span><span className="block text-amber-700 dark:text-amber-300">{quoteSizeCheck(item, product)}</span></span>
             </button>)}
           </div>)}
         </div>;

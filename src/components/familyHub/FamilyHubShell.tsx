@@ -347,7 +347,7 @@ export const FamilyHubShell = () => {
         <main
           ref={mainRef}
           className={`kinboard-main min-h-0 flex-1 overflow-y-auto overflow-x-hidden lg:pb-0 ${
-            currentView === 'calendar' ? 'pb-40 sm:pb-44' : 'pb-24 sm:pb-28'
+            currentView === 'calendar' ? 'pb-40 sm:pb-44' : currentView === 'property' ? 'mb-[calc(5rem+env(safe-area-inset-bottom))] pb-4 lg:mb-0' : 'pb-24 sm:pb-28'
           }`}
         >
           {currentView !== 'dashboard' && breadcrumbItems.length > 0 && (

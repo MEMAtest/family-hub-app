@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { SharedDocumentSync } from '../sharedDocumentSync';
 import { SHARED_DOCUMENTS } from '@/lib/sharedDocuments';
+import { createBathroomSourcingSeed } from '@/lib/sourcing/seed';
+import { saveTilePlan } from '@/lib/sourcing/tilePlanner';
 
 type Row = { data: unknown; version: number };
 
@@ -100,6 +102,22 @@ describe('SharedDocumentSync between two devices', () => {
 
     expect(b.store.getState().propertyIssues).toEqual([issue('gutters')]);
     expect(b.store.getState().propertyTasks).toEqual([{ id: 'seed-1', title: 'Edited on phone A' }]);
+  });
+
+  test('a saved bathroom tile plan and its source photo reach a second device unchanged', async () => {
+    const server = createServer();
+    const source = 'data:image/jpeg;base64,/9j/2Q==';
+    const sourcing = saveTilePlan(createBathroomSourcingSeed(), 'main-floor-tiles', {
+      method: 'area', unit: 'm', areaM2: 5, sections: [], deductionsM2: 0, wasteIncluded: 'excluded', wastePercent: 10,
+      source: { kind: 'photo', label: 'QA drawing', imageDataUrl: source },
+    }, { name: 'QA tile', supplier: '', url: '', widthMm: 600, lengthMm: 600, coveragePerBoxM2: 1.44, price: 42, priceBasis: 'box' });
+    const project = { id: 'qa-bathroom', updatedAt: new Date().toISOString(), sourcing };
+    const a = device(server, { propertyProjects: [project] });
+    await a.sync.start(); await a.sync.flush();
+    const b = device(server);
+    await b.sync.start(); await b.sync.flush();
+    expect(b.store.getState().propertyProjects).toEqual([project]);
+    expect(b.store.getState().propertyProjects[0].sourcing.tileDocuments[0].imageDataUrl).toBe(source);
   });
 
   test('edits made on both devices at the same time are combined', async () => {

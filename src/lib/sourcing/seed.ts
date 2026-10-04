@@ -1,6 +1,7 @@
 import type { ProjectSourcing } from '@/types/sourcing.types';
+import { withQuoteInventory } from './quoteInventory';
 
-export const SOURCING_SEED_VERSION = 2;
+export const SOURCING_SEED_VERSION = 4;
 
 /**
  * Bathroom quote for 21 Tremaine Road, matched to real supplier products.
@@ -8,7 +9,7 @@ export const SOURCING_SEED_VERSION = 2;
  * use "Check live stock" in the app to refresh a product before ordering.
  */
 export const bathroomSourcingSeed: ProjectSourcing = {
-  "version": 2,
+  "version": 4,
   "requirements": [
     {
       "id": "main-bath",
@@ -103,7 +104,7 @@ export const bathroomSourcingSeed: ProjectSourcing = {
       "name": "Wall tiles",
       "category": "Tiles",
       "specification": "Light marble-effect wall tiles with a blue feature tile",
-      "size": "11m² (plus 10% waste = 12.1m²)",
+      "size": "11m² · waste allowance to confirm",
       "quantity": 11,
       "unit": "m²",
       "status": "confirmed",
@@ -117,7 +118,7 @@ export const bathroomSourcingSeed: ProjectSourcing = {
       "name": "Floor tiles",
       "category": "Tiles",
       "specification": "White / light marble-effect floor tiles",
-      "size": "5m² (plus 10% waste = 5.5m²)",
+      "size": "5m² · waste allowance to confirm",
       "quantity": 5,
       "unit": "m²",
       "status": "confirmed",
@@ -273,7 +274,7 @@ export const bathroomSourcingSeed: ProjectSourcing = {
       "name": "Wall tiles",
       "category": "Tiles",
       "specification": "Dark grey stone-effect wall tiles",
-      "size": "14m² (plus 10% waste = 15.4m²)",
+      "size": "14m² · waste allowance to confirm",
       "quantity": 14,
       "unit": "m²",
       "status": "confirmed",
@@ -286,7 +287,7 @@ export const bathroomSourcingSeed: ProjectSourcing = {
       "name": "Floor tiles · Cemente Basalt 60",
       "category": "Tiles",
       "specification": "Topps Tiles Cemente Basalt dark grey matt porcelain floor tile",
-      "size": "60 × 60cm · 2m² (plus 10% waste = 2.2m²)",
+      "size": "60 × 60cm · 2m² · waste allowance to confirm",
       "quantity": 2,
       "unit": "m²",
       "status": "confirmed",
@@ -1573,5 +1574,5 @@ export const bathroomSourcingSeed: ProjectSourcing = {
 };
 
 export function createBathroomSourcingSeed(): ProjectSourcing {
-  return JSON.parse(JSON.stringify(bathroomSourcingSeed)) as ProjectSourcing;
+  return withQuoteInventory(JSON.parse(JSON.stringify(bathroomSourcingSeed)) as ProjectSourcing);
 }

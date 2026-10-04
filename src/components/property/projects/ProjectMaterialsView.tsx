@@ -10,9 +10,16 @@ import type {
   ProjectSourcing, SourcedProduct, SourcingBasketStatus, SourcingRequirement, SourcingRoomId, SourcingStock,
 } from '@/types/sourcing.types';
 import type { PropertyProject } from '@/types/property.types';
+import { useFamilyStore } from '@/store/familyStore';
 import { SOURCING_SEED_VERSION, createBathroomSourcingSeed } from '@/lib/sourcing/seed';
 import BathroomProjectOverview from './BathroomProjectOverview';
-import { bathroomRooms, basketStatuses, basketTotal as sourcingBasketTotal, isBathroomProject as bathroomProject, isUncountedPrice, productLineCost, productSize, quoteSizeCheck, roomName } from './bathroomProject.helpers';
+import TilePlanner from './TilePlanner';
+import SourcingEntryDialog from './SourcingEntryDialog';
+import FixtureFitPanel from './FixtureFitPanel';
+import { fixtureFit, saveFixtureSpace } from '@/lib/sourcing/fixtureFit';
+import { addHouseholdItem, addHouseholdProduct, chooseSourcingOption, optionConflicts } from '@/lib/sourcing/householdItems';
+import { plannedTileCalculation } from '@/lib/sourcing/tilePlanner';
+import { bathroomRooms, basketStatuses, basketTotal as sourcingBasketTotal, basketLineCost, excludedBasketPrice, isBathroomProject as bathroomProject, isUncountedPrice, productLineCost, productSize, quoteSizeCheck, roomName } from './bathroomProject.helpers';
 
 const money = new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' });
 
@@ -66,7 +73,7 @@ function coverage(requirement: SourcingRequirement, products: SourcedProduct[]) 
 }
 
 // Products found by a live supplier search (Stonewater, the UK tile shops), as opposed to old placeholders.
-const SEARCHED_PRODUCT = /^(sw|capietra|tilesahead|walltiles|bertandmay)-/;
+const SEARCHED_PRODUCT = /^(sw|capietra|tilesahead|walltiles|bertandmay|tile-plan|manual)-/;
 
 /**
  * Refresh a saved workspace to the current verified catalogue, keeping the household's own work:
@@ -82,7 +89,8 @@ export function migrate(saved: ProjectSourcing): ProjectSourcing {
   const savedProducts = new Map(saved.products.map((product) => [product.id, product]));
   const catalogue = seed.products.map((product) => {
     const old = savedProducts.get(product.id);
-    return old && old.lastChecked > product.lastChecked ? { ...product, stock: old.stock, stockEvidence: old.stockEvidence, lastChecked: old.lastChecked } : product;
+    const preserved = old ? { ...product, dimensions: old.dimensions, specs: old.specs ?? product.specs } : product;
+    return old && old.lastChecked > product.lastChecked ? { ...preserved, stock: old.stock, stockEvidence: old.stockEvidence, lastChecked: old.lastChecked } : preserved;
   });
   const catalogueIds = new Set(catalogue.map((product) => product.id));
   const searched = saved.products.filter((product) => !catalogueIds.has(product.id) && SEARCHED_PRODUCT.test(product.id)
@@ -92,7 +100,9 @@ export function migrate(saved: ProjectSourcing): ProjectSourcing {
   return {
     ...seed,
     rooms: saved.rooms,
-    requirements: [...seed.requirements, ...custom],
+    tileDocuments: saved.tileDocuments,
+    choiceHistory: saved.choiceHistory,
+    requirements: [...seed.requirements.map((item) => ({ ...item, tilePlan: saved.requirements.find((old) => old.id === item.id)?.tilePlan, fitSpace: saved.requirements.find((old) => old.id === item.id)?.fitSpace })), ...custom],
     products,
     basket: saved.basket.filter((item) => productIds.has(item.productId) && requirementIds.has(item.requirementId)),
   };
@@ -118,14 +128,22 @@ export default function ProjectMaterialsView({ project, onUpdateProject, isReadO
   const [searching, setSearching] = useState(false);
   const [message, setMessage] = useState('');
   const [adding, setAdding] = useState(false);
-  const [newName, setNewName] = useState('');
-  const [newSize, setNewSize] = useState('');
+  const [entryMode, setEntryMode] = useState<'item' | 'product'>('item');
+  const [selectionError, setSelectionError] = useState('');
+  const [planningProduct, setPlanningProduct] = useState<SourcedProduct>();
+  const pendingPlanningProduct = useRef<SourcedProduct>();
+  const plannerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setRoomId(selectedRoomId ?? null);
     setRequirementId(selectedRequirementId ?? null);
     setCategory('All'); setQuery(''); setMessage(''); setAdding(false); setDetailId(null);
+    setPlanningProduct(pendingPlanningProduct.current); pendingPlanningProduct.current = undefined;
   }, [view, selectedRoomId, selectedRequirementId]);
+
+  useEffect(() => {
+    if (planningProduct) plannerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [planningProduct, requirementId]);
 
   useEffect(() => {
     if (needsSeed && !isReadOnly) onUpdateProject({ sourcing, updatedAt: new Date().toISOString() });
@@ -141,6 +159,13 @@ export default function ProjectMaterialsView({ project, onUpdateProject, isReadO
     if (readOnly.current) return;
     latest.current = next;
     onUpdateProject({ sourcing: next, updatedAt: new Date().toISOString() });
+  }
+  function saveTileSourcing(next: ProjectSourcing) {
+    if (readOnly.current) return;
+    const savedProjects = useFamilyStore.getState().propertyProjects;
+    const projects = savedProjects.some((item) => item.id === project.id) ? savedProjects.map((item) => item.id === project.id ? { ...item, sourcing: next } : item) : [{ ...project, sourcing: next }];
+    if (JSON.stringify(projects).length > 2500000) throw new Error('These projects have too many large photos to sync. Use a cropped photo or enter the measurements manually.');
+    save(next);
   }
 
   const room = rooms.find((item) => item.id === roomId);
@@ -182,10 +207,21 @@ export default function ProjectMaterialsView({ project, onUpdateProject, isReadO
 
   function addToBasket(product: SourcedProduct, status: SourcingBasketStatus = 'review', linked = requirementForProduct(product)) {
     if (!linked || isReadOnly) return;
+    setSelectionError('');
+    if (linked.category === 'Tiles') {
+      setDetailId(null); setRequirementId(linked.id); setRoomId(linked.roomId); setPlanningProduct(product);
+      if (onNavigate && (selectedRoomId !== linked.roomId || selectedRequirementId !== linked.id)) {
+        pendingPlanningProduct.current = product;
+        onNavigate?.(linked.roomId, linked.id);
+      }
+      return;
+    }
     const current = latest.current;
-    const basket = current.basket.filter((item) => !(item.requirementId === linked.id && item.productId === product.id));
-    basket.push({ id: `basket-${linked.id}-${product.id}`, requirementId: linked.id, productId: product.id, quantity: linked.quantity, status });
-    save({ ...current, basket });
+    const conflicts = optionConflicts(current, linked, product);
+    if (conflicts.some((entry) => entry.status === 'ordered')) { setSelectionError('An existing choice is marked ordered. Resolve that order before replacing it.'); return; }
+    if (conflicts.length && !window.confirm(`Replace the current choice for ${linked.name}? Supporting parts will remain. No supplier order is changed.`)) return;
+    try { save(chooseSourcingOption(current, linked.id, product.id, status)); }
+    catch (reason) { setSelectionError(reason instanceof Error ? reason.message : 'Could not select this option.'); }
   }
 
   function updateProduct(id: string, updates: Partial<SourcedProduct>) {
@@ -270,33 +306,35 @@ export default function ProjectMaterialsView({ project, onUpdateProject, isReadO
     void Promise.all([worker(), worker()]);
   }, [roomId, isReadOnly, sourcing.basket.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  function addRequirement() {
-    if (!roomId || !newName.trim() || isReadOnly) return;
-    const item: SourcingRequirement = {
-      id: `req-${Date.now()}`, roomId, name: newName.trim(), category: 'Other', specification: newName.trim(), size: newSize.trim() || 'Size to confirm',
-      quantity: 1, status: 'fitter_check', constraints: {}, requiredComponents: [],
-    };
-    save({ ...latest.current, requirements: [...latest.current.requirements, item] });
-    setRequirementId(item.id);
-    setNewName(''); setNewSize(''); setAdding(false);
-  }
+  const startEntry = (mode: 'item' | 'product') => { setEntryMode(mode); setAdding(true); };
 
   const openRoom = (id: SourcingRoomId) => { setRoomId(id); setRequirementId(null); setCategory('All'); setQuery(''); setMessage(''); onNavigate?.(id); };
   const openRequirement = (item: SourcingRequirement) => { setRoomId(item.roomId); setRequirementId(item.id); setCategory('All'); setQuery(''); setMessage(''); onNavigate?.(item.roomId, item.id); };
-  const openProduct = (product: SourcedProduct, linked?: SourcingRequirement) => { setDetailId(product.id); setDetailRequirementId(linked?.id ?? null); };
+  const openProduct = (product: SourcedProduct, linked?: SourcingRequirement) => {
+    setSelectionError('');
+    if (linked?.category === 'Tiles' && product.id.startsWith('tile-plan-')) { openRequirement(linked); return; }
+    setDetailId(product.id); setDetailRequirementId(linked?.id ?? null);
+  };
   const detailRequirement = sourcing.requirements.find((item) => item.id === detailRequirementId) ?? (detail ? requirementForProduct(detail) : undefined);
-  const detailPanel = detail && <ProductDetail product={detail} requirement={detailRequirement} disabled={isReadOnly}
+  const detailPanel = detail && <ProductDetail product={detail} requirement={detailRequirement} disabled={isReadOnly} selectionError={selectionError}
+    fitPanel={detailRequirement && detailRequirement.category !== 'Tiles' ? <FixtureFitPanel key={`${detailRequirement.id}-${detail.id}`} requirement={detailRequirement} product={detail} disabled={isReadOnly}
+      onSaveSpace={(space) => save(saveFixtureSpace(latest.current, detailRequirement.id, space))}
+      onSaveDimensions={(dimensions) => save({ ...latest.current, products: latest.current.products.map((item) => item.id === detail.id ? { ...item, dimensions: { ...Object.fromEntries(Object.entries(item.dimensions).filter(([key]) => !/^(width|length|depth|height)Mm$/.test(key))), ...dimensions } } : item), basket: latest.current.basket.map((entry) => entry.productId === detail.id && entry.status !== 'ordered' ? { ...entry, status: 'ask_fitter' } : entry) })} /> : undefined}
     inBasket={sourcing.basket.some((item) => item.productId === detail.id && item.requirementId === detailRequirement?.id)}
     onClose={() => setDetailId(null)} onAdd={(status) => addToBasket(detail, status, detailRequirement)} onUpdate={(updates) => updateProduct(detail.id, updates)} />;
   const showOverview = view === 'overview' ? !room : view === 'room' && !requirement;
   const visibleBasket = roomId ? { ...sourcing, basket: sourcing.basket.filter((item) => roomRequirements.some((linked) => linked.id === item.requirementId)) } : sourcing;
   const basket = visibleBasket.basket.length > 0 && <BasketTable sourcing={visibleBasket} total={sourcingBasketTotal(visibleBasket)} isReadOnly={isReadOnly} onOpen={(product, linked) => openProduct(product, linked)}
     onUpdate={(entries) => save({ ...latest.current, basket: roomId ? [...latest.current.basket.filter((item) => !roomRequirements.some((linked) => linked.id === item.requirementId)), ...entries] : entries })} />;
+  const entryPanel = adding && !isReadOnly && <SourcingEntryDialog mode={entryMode} sourcing={sourcing} roomId={roomId ?? undefined} requirementId={requirementId ?? undefined} onClose={() => setAdding(false)}
+    onItem={(input) => { const added = addHouseholdItem(latest.current, input, `req-${crypto.randomUUID()}`); save(added.sourcing); setAdding(false); openRequirement(added.item); }}
+    onProduct={(input) => { const added = addHouseholdProduct(latest.current, input, `manual-${crypto.randomUUID()}`); save(added.sourcing); setAdding(false); openProduct(added.product, added.sourcing.requirements.find((item) => item.id === input.requirementId)); }} />;
 
   if (showOverview) {
     return <div className="min-w-0 space-y-6"><BathroomProjectOverview sourcing={sourcing} roomId={view === 'room' ? roomId ?? undefined : undefined} isReadOnly={isReadOnly}
       onOpenRoom={openRoom} onOpenRequirement={openRequirement} onOpenProduct={openProduct}
-      onSaveRoom={(id, metadata) => save({ ...latest.current, rooms: { ...latest.current.rooms, [id]: { ...latest.current.rooms?.[id], ...metadata } } })} />{basket}{detailPanel}</div>;
+      onAddItem={() => startEntry('item')} onAddOption={() => startEntry('product')}
+      onSaveRoom={(id, metadata) => save({ ...latest.current, rooms: { ...latest.current.rooms, [id]: { ...latest.current.rooms?.[id], ...metadata } } })} />{basket}{detailPanel}{entryPanel}</div>;
   }
 
   const tiles = requirement?.category === 'Tiles';
@@ -312,21 +350,16 @@ export default function ProjectMaterialsView({ project, onUpdateProject, isReadO
               {rooms.map((item) => <option key={item.id} value={item.id}>{roomName(sourcing, item.id)}</option>)}
             </select>
           </div>
-          <p className="text-sm text-gray-500 dark:text-slate-400">Materials & products · {roomRequirements.length} quote items</p>
+          <p className="text-sm text-gray-500 dark:text-slate-400">Materials & products · {roomRequirements.length} items</p>
         </div>
         <BasketPill count={sourcing.basket.length} total={basketTotal} />
       </div>
 
       <section aria-label="Quote items">
         <div className="mb-2 flex items-center justify-between">
-          <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">From your quote</h3>
-          {!isReadOnly && roomId && <button onClick={() => setAdding((value) => !value)} className="inline-flex items-center gap-1 text-sm font-medium text-emerald-700 hover:underline dark:text-emerald-300"><Plus className="h-4 w-4" /> Add item</button>}
+          <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">Project items</h3>
+          {!isReadOnly && <div className="flex flex-wrap gap-3"><button onClick={() => startEntry('item')} className="inline-flex min-h-11 items-center gap-1 text-sm font-medium text-emerald-700"><Plus className="h-4 w-4" />Add item</button><button onClick={() => startEntry('product')} className="inline-flex min-h-11 items-center gap-1 text-sm font-medium text-emerald-700"><Plus className="h-4 w-4" />Add supplier option</button></div>}
         </div>
-        {adding && <div className="mb-3 grid gap-2 rounded-xl border border-blue-200 bg-blue-50/60 p-3 dark:border-blue-900 dark:bg-blue-950/30 sm:grid-cols-[2fr_1fr_auto]">
-          <input value={newName} onChange={(event) => setNewName(event.target.value)} placeholder="What is it? e.g. Mirror cabinet" className="rounded-lg border-gray-300 text-sm dark:border-slate-600 dark:bg-slate-900" />
-          <input value={newSize} onChange={(event) => setNewSize(event.target.value)} placeholder="Size, e.g. 600 × 700mm" className="rounded-lg border-gray-300 text-sm dark:border-slate-600 dark:bg-slate-900" />
-          <button onClick={addRequirement} disabled={!newName.trim()} className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-50">Add</button>
-        </div>}
         <label className="block text-xs font-medium text-gray-600 dark:text-slate-300">Quote item
           <select value={requirement?.id ?? ''} onChange={(event) => { const item = sourcing.requirements.find((candidate) => candidate.id === event.target.value); if (item && onNavigate) openRequirement(item); else { setRequirementId(item?.id ?? null); setCategory('All'); setMessage(''); } }} className="mt-1 min-h-11 w-full min-w-0 rounded-lg border-gray-200 text-sm dark:border-slate-700 dark:bg-slate-800">
             <option value="">All items ({roomRequirements.length})</option>
@@ -338,14 +371,19 @@ export default function ProjectMaterialsView({ project, onUpdateProject, isReadO
       {requirement && <RequirementPanel requirement={requirement} products={productsFor(sourcing, requirement)} basketIds={sourcing.basket.filter((item) => item.requirementId === requirement.id).map((item) => item.productId)}
         searching={searching} tiles={tiles} message={message} onSearch={searchSupplier} isReadOnly={isReadOnly} />}
 
-      <div className="flex flex-wrap gap-1 border-b border-gray-200 dark:border-slate-700" role="tablist" aria-label="Product categories">
+      {requirement && !tiles && <FixtureFitPanel key={requirement.id} requirement={requirement} disabled={isReadOnly} onSaveSpace={(space) => save(saveFixtureSpace(latest.current, requirement.id, space))} />}
+      {requirement && <details className="border-b border-gray-200 pb-3"><summary className="min-h-11 cursor-pointer text-sm font-medium">Choice history ({sourcing.choiceHistory?.filter((item) => item.requirementId === requirement.id).length ?? 0})</summary><ul className="space-y-2 text-xs text-gray-600">{sourcing.choiceHistory?.filter((item) => item.requirementId === requirement.id).slice().reverse().map((item) => <li key={item.id} className="break-words">{new Date(item.at).toLocaleString('en-GB')} · {item.selected.name} · {money.format(item.selected.price)}{item.replaced.length ? ` · Replaced: ${item.replaced.map((old) => old.name).join(', ')}` : ' · Selected'}</li>)}</ul></details>}
+
+      {tiles && requirement && <div ref={plannerRef} className="scroll-mt-24"><TilePlanner key={requirement.id} sourcing={sourcing} requirement={requirement} isReadOnly={isReadOnly} candidate={planningProduct} onSave={saveTileSourcing} /></div>}
+
+      {!tiles && <div className="flex flex-wrap gap-1 border-b border-gray-200 dark:border-slate-700" role="tablist" aria-label="Product categories">
         {categories.map(({ id, label, icon: Icon }) => (
           <button key={id} role="tab" aria-selected={category === id} onClick={() => setCategory(id)} disabled={id !== 'All' && categoryCounts[id] === 0}
             className={`flex min-w-[88px] shrink-0 flex-col items-center gap-1 border-b-2 px-3 pb-2 pt-1 text-xs font-medium disabled:opacity-35 ${category === id ? 'border-blue-600 text-blue-600 dark:text-blue-400' : 'border-transparent text-gray-500 hover:text-gray-800 dark:text-slate-400'}`}>
             <Icon className="h-5 w-5" /><span>{label}</span>
           </button>
         ))}
-      </div>
+      </div>}
 
       <div className="flex flex-wrap items-center gap-2">
         <label className="relative min-w-[220px] flex-1"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
@@ -361,7 +399,7 @@ export default function ProjectMaterialsView({ project, onUpdateProject, isReadO
       </div>
 
       <div>
-        <h3 className="mb-3 font-semibold text-gray-900 dark:text-white">{category === 'All' ? 'Products' : category} <span className="font-normal text-gray-500">({results.length} results)</span>
+        <h3 className="mb-3 font-semibold text-gray-900 dark:text-white">{tiles ? 'Supplier tile options' : category === 'All' ? 'Products' : category} <span className="font-normal text-gray-500">({results.length} results)</span>
           {hiddenUnsuitable > 0 && <button onClick={() => setShowUnsuitable((value) => !value)} className="ml-3 text-sm font-normal text-blue-600 hover:underline dark:text-blue-400">{showUnsuitable ? 'Hide' : 'Show'} {hiddenUnsuitable} not suitable</button>}</h3>
         {results.length === 0 ? <EmptyResults requirement={requirement} /> : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -377,6 +415,8 @@ export default function ProjectMaterialsView({ project, onUpdateProject, isReadO
 
       {basket}
       {detailPanel}
+      {entryPanel}
+      {selectionError && !detail && <p role="alert" className="text-sm text-red-700">{selectionError}</p>}
     </div>
   );
 }
@@ -397,15 +437,13 @@ function StockBadge({ stock, compact = false }: { stock: SourcingStock; compact?
 
 
 function BasketTable({ sourcing, total, isReadOnly, onUpdate, onOpen }: { sourcing: ProjectSourcing; total: number; isReadOnly: boolean; onUpdate: (basket: ProjectSourcing['basket']) => void; onOpen: (product: SourcedProduct, requirement?: SourcingRequirement) => void }) {
-  const perBox = sourcing.basket.filter((item) => {
-    const product = sourcing.products.find((candidate) => candidate.id === item.productId);
-    return product ? isUncountedPrice(product) : false;
-  }).length;
+  const perBox = sourcing.basket.filter((item) => excludedBasketPrice(sourcing, item)).length;
   return <section className="min-w-0 border-y border-gray-200 dark:border-slate-700">
     <div className="flex items-center justify-between bg-white px-4 py-3 dark:bg-slate-900"><div><h3 className="font-semibold text-gray-900 dark:text-white">Project basket</h3><p className="text-xs text-gray-500 dark:text-slate-400">Review before ordering. No orders are placed from here.</p></div><div className="text-right"><span className="font-semibold text-gray-900 dark:text-white">{money.format(total)}</span>{perBox > 0 && <p className="text-xs text-amber-700 dark:text-amber-300">+ {perBox} priced per box or tile (not in total)</p>}</div></div>
     <div className="divide-y divide-gray-100 dark:divide-slate-800">{sourcing.basket.map((item) => {
       const product = sourcing.products.find((candidate) => candidate.id === item.productId);
       const linked = sourcing.requirements.find((candidate) => candidate.id === item.requirementId);
+      const planned = plannedTileCalculation(sourcing, item);
       if (!product) return null;
       // On a phone the details get the whole first line and the controls drop to a second line;
       // squeezed into one row the name shrank to a single letter and the price overlapped it.
@@ -415,10 +453,10 @@ function BasketTable({ sourcing, total, isReadOnly, onUpdate, onOpen }: { sourci
           <div className="text-xs text-gray-500">{linked?.name} · {linked ? roomName(sourcing, linked.roomId) : ''} · {product.supplier} · <StockBadge stock={product.stock} /></div>
           <p className="mt-1 text-xs text-gray-500">{productSize(product)}</p></div>
         <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto sm:gap-3">
-          <span className="mr-auto text-sm font-semibold text-gray-800 sm:mr-0 dark:text-slate-200">{isUncountedPrice(product) ? `${money.format(product.price)} ${product.priceUnit!.replace('per ', '/ ')} · excluded` : money.format(productLineCost(product, item.quantity))}</span>
-          <label className="flex items-center gap-1 text-xs text-gray-500">Qty
+          <span className="mr-auto text-sm font-semibold text-gray-800 sm:mr-0 dark:text-slate-200">{excludedBasketPrice(sourcing, item) ? `${money.format(product.price)} ${product.priceUnit!.replace('per ', '/ ')} · excluded` : money.format(basketLineCost(sourcing, item))}</span>
+          {planned ? <button type="button" onClick={() => onOpen(product, linked)} className="min-h-10 text-xs text-emerald-700 dark:text-emerald-300">{planned.boxesNeeded !== undefined ? `${planned.boxesNeeded} boxes` : `${planned.orderQuantity} ${product.priceUnit === 'per tile' ? 'tiles' : 'm²'}`} · Edit plan</button> : <label className="flex items-center gap-1 text-xs text-gray-500">Qty
             <input type="number" aria-label={`Quantity for ${product.name}`} disabled={isReadOnly} min={product.priceUnit === 'per m²' ? 0.01 : 1} step={product.priceUnit === 'per m²' ? 'any' : 1} value={item.quantity} onChange={(event) => { const quantity = Number(event.target.value); if (Number.isFinite(quantity) && quantity > 0 && (product.priceUnit === 'per m²' || Number.isInteger(quantity))) onUpdate(sourcing.basket.map((entry) => entry.id === item.id ? { ...entry, quantity } : entry)); }} className="min-h-10 w-20 rounded-lg border-gray-200 text-xs dark:border-slate-700 dark:bg-slate-800" />
-          </label>
+          </label>}
           <select aria-label={`Status for ${product.name}`} disabled={isReadOnly} value={item.status} onChange={(event) => onUpdate(sourcing.basket.map((entry) => entry.id === item.id ? { ...entry, status: event.target.value as SourcingBasketStatus } : entry))} className="min-h-10 rounded-lg border-gray-200 py-1.5 text-xs dark:border-slate-700 dark:bg-slate-800">{basketStatuses.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}</select>
           {!isReadOnly && <button aria-label={`Remove ${product.name} from basket`} onClick={() => onUpdate(sourcing.basket.filter((entry) => entry.id !== item.id))} className="rounded-md p-3 text-gray-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/30"><Trash2 className="h-4 w-4" /></button>}
         </div>
@@ -488,22 +526,25 @@ function ProductCard({ product, requirement, showRequirement, inBasket, disabled
       <button onClick={onOpen} className="text-left"><h4 className="line-clamp-2 text-sm font-semibold text-gray-900 hover:text-blue-700 dark:text-white">{product.name}</h4></button>
       <p className="mt-0.5 text-xs text-gray-500 dark:text-slate-400">{productSize(product)}</p>
       <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">{quoteSizeCheck(requirement, product)}</p>
+      {requirement && requirement.category !== 'Tiles' && <p className={`mt-1 text-xs ${fixtureFit(requirement, product).status === 'no_fit' ? 'text-red-700' : 'text-gray-600'}`}>{fixtureFit(requirement, product).label}</p>}
       <div className="mt-2 text-lg font-semibold text-gray-900 dark:text-white">{money.format(product.price)}{product.priceUnit && <span className="text-sm font-normal text-gray-500"> {product.priceUnit.replace('per ', '/ ')}</span>}</div>
       <a href={product.url} target="_blank" rel="noreferrer" className="mt-0.5 inline-flex w-fit items-center gap-1 text-xs text-gray-500 hover:text-blue-700 dark:text-slate-400">{product.supplier} <ExternalLink className="h-3 w-3" /></a>
       {product.aiReview && (!requirement || product.aiReview.requirementId === requirement.id) && <AiBadge review={product.aiReview} />}
       {product.note && <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">{product.note}</p>}
       <div className="mt-auto pt-3">
         <button disabled={disabled || inBasket} onClick={onAdd} className="inline-flex items-center gap-1 rounded-lg border border-blue-600 px-3 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 disabled:border-gray-300 disabled:text-gray-400 disabled:hover:bg-transparent dark:hover:bg-blue-950/40">
-          {inBasket ? <><Check className="h-4 w-4" /> In basket</> : <><Plus className="h-4 w-4" /> Add</>}
+          {inBasket ? <><Check className="h-4 w-4" /> In basket</> : <><Plus className="h-4 w-4" /> {requirement?.category === 'Tiles' ? 'Plan this tile' : 'Add'}</>}
         </button>
       </div>
     </div>
   </article>;
 }
 
-function ProductDetail({ product, requirement, inBasket, disabled, onClose, onAdd, onUpdate }: {
+function ProductDetail({ product, requirement, inBasket, disabled, selectionError, fitPanel, onClose, onAdd, onUpdate }: {
   product: SourcedProduct; requirement?: SourcingRequirement; inBasket: boolean; disabled: boolean; onClose: () => void;
   onAdd: (status: SourcingBasketStatus) => void; onUpdate: (updates: Partial<SourcedProduct>) => void;
+  selectionError?: string;
+  fitPanel?: React.ReactNode;
 }) {
   const gallery = product.gallery?.length ? product.gallery : [product.imageUrl];
   const [image, setImage] = useState(gallery[0]);
@@ -551,7 +592,7 @@ function ProductDetail({ product, requirement, inBasket, disabled, onClose, onAd
       <div className="space-y-5 p-5">
         <div className="grid gap-4 sm:grid-cols-[1fr_1fr]">
           <div>
-            <img src={image} alt={product.name} referrerPolicy="no-referrer" className="aspect-square w-full rounded-xl border border-gray-100 bg-white object-contain dark:border-slate-800" />
+            {image ? <img src={image} alt={product.name} referrerPolicy="no-referrer" className="aspect-square w-full rounded-lg border border-gray-100 bg-white object-contain dark:border-slate-800" /> : <ProductImage product={product} className="aspect-square w-full rounded-lg" />}
             {gallery.length > 1 && <div className="mt-2 grid grid-cols-5 gap-1.5">{gallery.map((src, index) => <button key={src} onClick={() => setImage(src)} aria-label={`Photo ${index + 1}`} className={`overflow-hidden rounded-lg border-2 ${src === image ? 'border-blue-600' : 'border-transparent'}`}><img src={src} alt="" referrerPolicy="no-referrer" className="aspect-square w-full bg-white object-cover" /></button>)}</div>}
           </div>
           <div>
@@ -563,7 +604,7 @@ function ProductDetail({ product, requirement, inBasket, disabled, onClose, onAd
             <div className="mt-3 rounded-lg bg-gray-50 p-2.5 dark:bg-slate-800">
               <StockBadge stock={product.stock} />
               <p className="mt-1 flex items-start gap-1.5 text-xs text-gray-600 dark:text-slate-300"><Truck className="mt-0.5 h-3.5 w-3.5 shrink-0" />{product.stockEvidence}</p>
-              <p className="mt-1 text-[11px] text-gray-400">Checked {new Date(product.lastChecked).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>
+              <p className="mt-1 text-[11px] text-gray-400">{product.source === 'household' ? 'Added' : 'Checked'} {new Date(product.lastChecked).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>
               {canCheck && <button onClick={checkStock} disabled={checking || disabled} className="mt-1 inline-flex items-center gap-1 py-2.5 text-xs font-medium text-blue-600 disabled:opacity-60 dark:text-blue-400"><RefreshCw className={`h-3.5 w-3.5 ${checking ? 'animate-spin' : ''}`} />{checking ? 'Checking…' : 'Check live stock'}</button>}
               {checkError && <p className="mt-1 text-xs text-red-600">{checkError}</p>}
             </div>
@@ -577,11 +618,14 @@ function ProductDetail({ product, requirement, inBasket, disabled, onClose, onAd
           {product.note && <p className="mt-1 text-gray-700 dark:text-slate-200">{product.note}</p>}
         </div>}
 
+        {fitPanel}
+
         <div className="grid grid-cols-2 gap-2">
           <button disabled={disabled || inBasket} onClick={() => onAdd(needsFitter ? 'ask_fitter' : 'review')} className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-medium text-white disabled:bg-gray-300 dark:disabled:bg-slate-700">
-            {inBasket ? <><Check className="h-4 w-4" /> In basket</> : <><Plus className="h-4 w-4" /> Add to basket</>}</button>
-          <button disabled={disabled || inBasket} onClick={() => onAdd('ask_fitter')} className="rounded-xl border border-blue-600 px-4 py-2.5 text-sm font-medium text-blue-600 disabled:border-gray-300 disabled:text-gray-400">Ask fitter</button>
+            {inBasket ? <><Check className="h-4 w-4" /> In basket</> : <><Plus className="h-4 w-4" /> {requirement?.category === 'Tiles' ? 'Plan this tile' : 'Add to basket'}</>}</button>
+          {requirement?.category !== 'Tiles' && <button disabled={disabled || inBasket} onClick={() => onAdd('ask_fitter')} className="rounded-xl border border-blue-600 px-4 py-2.5 text-sm font-medium text-blue-600 disabled:border-gray-300 disabled:text-gray-400">Ask fitter</button>}
         </div>
+        {selectionError && <p role="alert" className="text-sm text-red-700">{selectionError}</p>}
 
         <div>
           <div className="flex gap-4 border-b border-gray-200 text-sm dark:border-slate-700" role="tablist">
