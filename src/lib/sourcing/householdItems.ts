@@ -30,7 +30,7 @@ export function addHouseholdProduct(sourcing: ProjectSourcing, raw: z.input<type
   if (input.components.some((component) => !requirement.requiredComponents.includes(component))) throw new Error('Check which quoted parts this product includes.');
   const product: SourcedProduct = { id, name: input.name, supplier: input.supplier || 'Your supplier', source: 'household', category: requirement.category,
     requirementIds: [requirement.id], url: input.url, imageUrl: input.imageUrl, price: input.price, priceUnit: requirement.category === 'Tiles' && input.priceUnit === 'each' ? 'per tile' : input.priceUnit,
-    size: input.size, sku: input.sku, gallery: input.gallery, components: input.components, description: input.notes, dimensions: {}, stock: 'UNKNOWN', stockEvidence: 'Entered by you; price, stock and fit need confirmation.', lastChecked: new Date().toISOString(),
+    size: input.size, sku: input.sku, gallery: input.gallery ? [...new Set([input.imageUrl, ...input.gallery].filter(Boolean))].slice(0, 8) : undefined, components: input.components, description: input.notes, dimensions: {}, stock: 'UNKNOWN', stockEvidence: 'Entered by you; price, stock and fit need confirmation.', lastChecked: new Date().toISOString(),
   };
   return { product, sourcing: { ...sourcing, products: [...sourcing.products, product] } };
 }

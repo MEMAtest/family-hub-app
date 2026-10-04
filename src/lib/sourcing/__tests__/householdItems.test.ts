@@ -69,3 +69,8 @@ test('a manually entered price per individual tile stays per tile, not per box',
   const added = addHouseholdProduct(seed, { ...product, requirementId: 'main-floor-tiles' }, 'manual-tile');
   expect(added.product.priceUnit).toBe('per tile');
 });
+test('selected variant photo leads the saved gallery rather than the generic product image', () => {
+  const seed = addHouseholdItem(createBathroomSourcingSeed(), item, 'req-mirror').sourcing;
+  const selected = addHouseholdProduct(seed, { ...product, imageUrl: 'https://cdn.shopify.com/selected.jpg', gallery: ['https://cdn.shopify.com/generic.jpg', 'https://cdn.shopify.com/selected.jpg'] }, 'manual-variant');
+  expect(selected.product.gallery).toEqual(['https://cdn.shopify.com/selected.jpg', 'https://cdn.shopify.com/generic.jpg']);
+});
