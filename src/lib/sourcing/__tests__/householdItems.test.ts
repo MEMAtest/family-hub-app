@@ -1,10 +1,26 @@
-import { createBathroomSourcingSeed } from '../seed';
+import { createBathroomSourcingSeed, SOURCING_SEED_VERSION } from '../seed';
 import { addHouseholdItem, addHouseholdProduct, chooseSourcingOption } from '../householdItems';
 import { quoteLineSelected } from '../quoteInventory';
 import { migrate } from '@/components/property/projects/ProjectMaterialsView';
 
 const item = { roomId: 'main-bathroom' as const, name: 'LED mirror', category: 'Accessories' as const, quantity: 1, size: '600mm', specification: 'LED mirror', unit: 'each', relatedToId: 'main-vanity' };
 const product = { requirementId: 'req-mirror', name: 'Round LED mirror', supplier: 'Your shop', url: 'https://example.com/mirror', imageUrl: '', price: 149, priceUnit: 'each' as const, size: '600mm', components: [], notes: '' };
+test('Union WC quote has its stated width and two linked supplier options after migration', () => {
+  const saved = createBathroomSourcingSeed();
+  saved.version = 4;
+  saved.products = saved.products.filter((entry) => !entry.requirementIds?.includes('shower-wc-unit'));
+  saved.basket.push({ id: 'existing', requirementId: 'main-wc-unit', productId: 'sw-614103150', quantity: 1, status: 'ask_fitter' });
+  const refreshed = migrate(saved);
+  expect(refreshed.version).toBe(SOURCING_SEED_VERSION);
+  const requirement = refreshed.requirements.find((entry) => entry.id === 'shower-wc-unit')!;
+  expect(requirement.size).toBe('500mm wide');
+  expect(requirement.constraints.maxWidthMm).toBe(500);
+  const options = refreshed.products.filter((entry) => entry.requirementIds?.includes(requirement.id));
+  expect(options).toHaveLength(2);
+  expect(options.map((entry) => entry.dimensions.depthMm)).toEqual([255, 355]);
+  expect(options.every((entry) => entry.imageUrl.startsWith('https://') && entry.components.length === 1)).toBe(true);
+  expect(refreshed.basket).toEqual(saved.basket);
+});
 test('every supply-of-goods line from both quotations has an accessible requirement', () => {
   const seed = createBathroomSourcingSeed();
   expect(seed.quoteLines).toHaveLength(28);

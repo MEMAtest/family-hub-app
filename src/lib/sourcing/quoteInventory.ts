@@ -1,4 +1,5 @@
 import type { ProjectSourcing, SourcingRoomId } from '@/types/sourcing.types';
+import { unionWcOptions } from './unionCatalogue';
 
 // Supply-of-goods lines transcribed from the two R & R quotations dated 18 January 2026.
 const goods: Array<[SourcingRoomId, string, number, string, string[]]> = [
@@ -37,9 +38,12 @@ export function withQuoteInventory(seed: ProjectSourcing): ProjectSourcing {
   for (const [roomId, text, quantity, id, requiredComponents] of goods) {
     if (requirements.some((item) => item.id === id)) continue;
     const category = /downlight/.test(id) ? 'Lighting' : /extractor/.test(id) ? 'Ventilation' : /worktop|wc-unit/.test(id) ? 'Furniture' : /shower/.test(id.split('-').slice(1).join('-')) ? 'Showers' : 'Fittings';
-    requirements.push({ id, roomId, name: text, category, specification: text, quantity, unit: 'each', status: 'confirmed', source: 'quote', constraints: {}, requiredComponents });
+    const width = id === 'shower-wc-unit' || id === 'shower-worktop' ? 500 : undefined;
+    requirements.push({ id, roomId, name: text, category, specification: text, quantity, unit: 'each', status: 'confirmed', source: 'quote', size: width ? `${width}mm wide` : undefined, constraints: width ? { maxWidthMm: width } : {}, requiredComponents });
   }
-  return { ...seed, requirements, quoteLines: goods.map(([roomId, text, quantity, requirementId, components], index) => ({ id: `quote-goods-${index}`, roomId, text, quantity, requirementId, components })) };
+  const products = [...seed.products];
+  for (const option of unionWcOptions) if (!products.some((product) => product.id === option.id)) products.push({ ...option, requirementIds: [...option.requirementIds!], dimensions: { ...option.dimensions }, specs: { ...option.specs }, components: [...option.components] });
+  return { ...seed, products, requirements, quoteLines: goods.map(([roomId, text, quantity, requirementId, components], index) => ({ id: `quote-goods-${index}`, roomId, text, quantity, requirementId, components })) };
 }
 
 export function quoteLineSelected(sourcing: ProjectSourcing, line: NonNullable<ProjectSourcing['quoteLines']>[number]) {

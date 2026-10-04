@@ -33,6 +33,21 @@ async function enterTile(page: Page, name = 'QA marble tile') {
   await planner.getByRole('checkbox', { name: 'I have checked the tile size, pack coverage and price basis.' }).check();
   return planner;
 }
+test('phone: Union WC quote opens linked options with photos and quoted width', async ({ page }) => {
+  await open(page);
+  await page.getByRole('button', { name: 'Room overview', exact: true }).click();
+  await page.getByRole('button', { name: 'Shower Room', exact: true }).click();
+  await page.getByRole('button', { name: 'Choose product for 500mm Union toilet unit', exact: true }).click();
+  await expect(page.getByRole('combobox', { name: 'Quote item', exact: true })).toHaveValue('shower-wc-unit');
+  await expect(page.getByText('Size: 500mm wide', { exact: false })).toBeVisible();
+  for (const name of ['Fairford Union 500mm Slimline White WC Unit', 'Fairford Union 500mm Full Depth White WC Unit']) {
+    const photo = page.getByRole('img', { name, exact: true });
+    await photo.scrollIntoViewIfNeeded();
+    await expect.poll(() => photo.evaluate((el: HTMLImageElement) => el.complete && el.naturalWidth > 0)).toBe(true);
+  }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: 'output/playwright/union-wc-phone.png' });
+});
 test('visual quote checklist: selected photos, missing parts, specification differences and phone navigation', async ({ page }) => {
   const fixture = structuredClone(project);
   const bath = fixture.sourcing.products.find((p) => p.components.includes('bath') && !p.components.includes('screen'))!;

@@ -1,7 +1,7 @@
 import type { ProjectSourcing } from '@/types/sourcing.types';
 import { withQuoteInventory } from './quoteInventory';
 
-export const SOURCING_SEED_VERSION = 4;
+export const SOURCING_SEED_VERSION = 5;
 
 /**
  * Bathroom quote for 21 Tremaine Road, matched to real supplier products.
@@ -9,7 +9,7 @@ export const SOURCING_SEED_VERSION = 4;
  * use "Check live stock" in the app to refresh a product before ordering.
  */
 export const bathroomSourcingSeed: ProjectSourcing = {
-  "version": 4,
+  "version": SOURCING_SEED_VERSION,
   "requirements": [
     {
       "id": "main-bath",
