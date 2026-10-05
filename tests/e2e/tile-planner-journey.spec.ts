@@ -33,6 +33,38 @@ async function enterTile(page: Page, name = 'QA marble tile') {
   await planner.getByRole('checkbox', { name: 'I have checked the tile size, pack coverage and price basis.' }).check();
   return planner;
 }
+test('phone: refresh a legacy product photo without changing its ordered price or selection', async ({ page }) => {
+  const fixture = structuredClone(project);
+  fixture.sourcing.requirements.push({ id: 'req-legacy-mirror', roomId: 'main-bathroom', name: 'Legacy mirror', specification: 'Mirror', category: 'Accessories', quantity: 1, source: 'household', status: 'fitter_check', constraints: {}, requiredComponents: [] });
+  const photo = fixture.sourcing.products.find((product) => product.imageUrl.startsWith('https:'))!.imageUrl;
+  fixture.sourcing.products.push({ id: 'manual-legacy-mirror', name: 'My saved mirror', supplier: 'Your shop', requirementIds: ['req-legacy-mirror'], price: 140, url: '', imageUrl: '', description: 'https://www.stonewaterbathrooms.com/products/qa-mirror', stock: 'UNKNOWN', stockEvidence: 'Unconfirmed', dimensions: {}, components: [], lastChecked: '' });
+  fixture.sourcing.basket.push({ id: 'ordered-mirror', requirementId: 'req-legacy-mirror', productId: 'manual-legacy-mirror', quantity: 1, status: 'ordered' });
+  await open(page, 390, fixture);
+  await page.route('**/api/property/sourcing/import', (route) => route.fulfill({ json: { draft: { name: 'Supplier mirror', url: 'https://www.stonewaterbathrooms.com/products/qa-mirror', selectedVariant: '25', description: 'Width: 600mm; Height: 800mm', images: [photo], variants: [{ id: '25', name: 'Default Title', sku: 'M25', price: 160, available: true, imageUrl: photo }] } } }));
+  await page.getByRole('button', { name: 'Room overview', exact: true }).click();
+  const quote = page.getByRole('region', { name: 'Main Bathroom digital quote', exact: true });
+  await quote.getByRole('combobox', { name: 'Main Bathroom quote line' }).selectOption({ label: 'Still needed · 500mm toilet unit' });
+  await expect(quote.getByRole('listitem')).toHaveCount(1);
+  await quote.getByRole('button', { name: 'Collapse quote checklist' }).click();
+  await expect(quote.getByRole('list')).toHaveCount(0);
+  await quote.getByRole('button', { name: 'Expand quote checklist' }).click();
+  await page.getByRole('combobox', { name: 'Jump to project item' }).selectOption('req-legacy-mirror');
+  await page.getByRole('article').getByRole('button', { name: 'View details for My saved mirror', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'My saved mirror', exact: true });
+  await dialog.getByRole('button', { name: 'Refresh photo & dimensions' }).click();
+  await expect(dialog.getByText('Supplier price: £160.00 · Saved price stays £140.00.', { exact: true })).toBeVisible();
+  await dialog.getByRole('button', { name: 'Use photo & dimensions' }).click();
+  await expect.poll(() => dialog.getByRole('img', { name: 'My saved mirror', exact: true }).evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true);
+  await page.reload();
+  await page.getByRole('button', { name: 'Main Bathroom', exact: true }).click();
+  await page.getByRole('combobox', { name: 'Jump to project item' }).selectOption('req-legacy-mirror');
+  await expect(page.getByRole('article').getByRole('img', { name: 'My saved mirror', exact: true })).toBeVisible();
+  await expect(page.getByRole('combobox', { name: 'Status for My saved mirror' })).toHaveValue('ordered');
+  const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('family-storage')!).state.propertyProjects[0].sourcing);
+  expect(stored.products.find((product: { id: string }) => product.id === 'manual-legacy-mirror')).toMatchObject({ price: 140, dimensions: { widthMm: 600, heightMm: 800 } });
+  expect(stored.basket).toEqual(fixture.sourcing.basket);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
 test('phone: item search, missing-part navigation, room switch and checklist download', async ({ page }) => {
   await open(page);
   await page.getByRole('button', { name: 'Room overview', exact: true }).click();

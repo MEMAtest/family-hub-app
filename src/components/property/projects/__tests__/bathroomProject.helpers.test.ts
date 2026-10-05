@@ -104,6 +104,9 @@ test('labelled quote dimensions compare automatically even without preloaded con
   expect(quoteSizeCheck({ ...requirement, constraints: {}, size: '500mm wide' }, { ...product, dimensions: { widthMm: 600 } })).toContain('Different from quote');
   expect(quoteSizeCheck({ ...requirement, constraints: {}, size: '500 × 1000mm' }, product)).toBe('No quote dimensions to compare');
 });
+test('supporting parts do not get compared against the main fixture dimensions', () => {
+  expect(quoteSizeCheck(requirement, { ...product, components: ['basin'], dimensions: { widthMm: 650 } })).toBe('Supporting part · compatibility not confirmed');
+});
 
 test('size presentation preserves supplier size or labelled specs and identifies unknowns', () => {
   expect(productSize({ ...product, size: '600W x 445D mm' })).toBe('600W x 445D mm');

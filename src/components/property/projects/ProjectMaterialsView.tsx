@@ -16,6 +16,7 @@ import BathroomProjectOverview from './BathroomProjectOverview';
 import TilePlanner from './TilePlanner';
 import SourcingEntryDialog from './SourcingEntryDialog';
 import FixtureFitPanel from './FixtureFitPanel';
+import ProductRefresh from './ProductRefresh';
 import { fixtureFit, saveFixtureSpace } from '@/lib/sourcing/fixtureFit';
 import { addHouseholdItem, addHouseholdProduct, chooseSourcingOption, optionConflicts } from '@/lib/sourcing/householdItems';
 import { plannedTileCalculation } from '@/lib/sourcing/tilePlanner';
@@ -562,7 +563,7 @@ function ProductDetail({ product, requirement, inBasket, disabled, selectionErro
   const canCheck = canCheckStock(product.url);
   const needsFitter = Boolean(product.note) || requirement?.status === 'fitter_check';
 
-  useEffect(() => { setImage(gallery[0]); setTab('details'); setCheckError(''); }, [product.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setImage(gallery[0]); setTab('details'); setCheckError(''); }, [product.id, product.imageUrl]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const close = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose(); };
     window.addEventListener('keydown', close);
@@ -626,6 +627,7 @@ function ProductDetail({ product, requirement, inBasket, disabled, selectionErro
           {product.note && <p className="mt-1 text-gray-700 dark:text-slate-200">{product.note}</p>}
         </div>}
 
+        <ProductRefresh key={product.id} product={product} disabled={disabled} onUpdate={onUpdate} />
         {fitPanel}
 
         <div className="grid grid-cols-2 gap-2">

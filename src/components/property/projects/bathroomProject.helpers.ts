@@ -72,6 +72,8 @@ export function productSize(product: SourcedProduct) {
 /** Only compare labelled supplier dimensions with structured quote constraints, never infer room fit. */
 export function quoteSizeCheck(requirement: SourcingRequirement | undefined, product: SourcedProduct) {
   if (!requirement) return 'No quote dimensions to compare';
+  const primary = requirement.requiredComponents[0];
+  if (primary && !product.components.includes(primary)) return 'Supporting part · compatibility not confirmed';
   const quoted = { ...requirement.constraints };
   for (const match of (requirement.size ?? '').matchAll(/(\d+(?:\.\d+)?)\s*mm\s*(wide|width|high|height|long|length|deep|depth|thick|thickness)/gi)) {
     const dimension = /wid/i.test(match[2]) ? 'widthMm' : /high|height/i.test(match[2]) ? 'heightMm' : /long|length/i.test(match[2]) ? 'lengthMm' : /deep|depth/i.test(match[2]) ? 'depthMm' : 'thicknessMm';
