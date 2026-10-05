@@ -38,6 +38,7 @@ export interface TileChoice {
   price: number;
   priceBasis: 'box' | 'm2' | 'tile';
   sourceImageDataUrl?: string;
+  imageUrl?: string;
   sourceImageId?: string;
 }
 

@@ -28,7 +28,7 @@ export default function SourcingEntryDialog({ mode, sourcing, roomId, requiremen
   const lastRead = useRef('');
   useEffect(() => () => pending.current?.abort(), []);
   useEffect(() => {
-    if (mode !== 'product' || !url.trim() || lastRead.current === url.trim()) return;
+    if (!url.trim() || lastRead.current === url.trim()) return;
     try {
       const link = new URL(url.trim());
       if (link.protocol !== 'https:' || !['stonewaterbathrooms.com', 'www.stonewaterbathrooms.com'].includes(link.hostname) || !link.pathname.startsWith('/products/')) return;
@@ -62,7 +62,8 @@ export default function SourcingEntryDialog({ mode, sourcing, roomId, requiremen
   function submit(event: React.FormEvent) {
     event.preventDefault(); setError('');
     try {
-      if (mode === 'item') onItem({ roomId: room, name, category, quantity, size, specification: notes || name, unit, relatedToId: target || undefined });
+      if (reading || (draft && !variantId)) throw new Error('Choose the Stonewater variant first.');
+      if (mode === 'item') onItem({ roomId: room, name, category, quantity, size, specification: notes || name, unit, relatedToId: target || undefined, ...(url || imageUrl ? { product: { url, imageUrl, supplier, price: price.trim() ? Number(price) : NaN, sku: draft?.variants.find((item) => item.id === variantId)?.sku, gallery: draft?.images } } : {}) });
       else {
         if (reading || (draft && !variantId)) throw new Error('Choose the Stonewater variant first.');
         onProduct({ requirementId: target, name, supplier, url, imageUrl, price: price.trim() ? Number(price) : NaN, priceUnit: basis, size, components, notes, sku: draft?.variants.find((item) => item.id === variantId)?.sku, gallery: draft?.images });
@@ -78,8 +79,8 @@ export default function SourcingEntryDialog({ mode, sourcing, roomId, requiremen
           <div className="space-y-3 text-xs">
             <label className="block">Bathroom<select className={field} value={room} onChange={(event) => { setRoom(event.target.value as SourcingRoomId); setTarget(''); setComponents([]); }}>{bathroomRooms.map((item) => <option key={item.id} value={item.id}>{roomName(sourcing, item.id)}</option>)}</select></label>
             <label className="block">{mode === 'item' ? 'Related to (optional)' : 'Option for'}<select required={mode === 'product'} className={field} value={target} onChange={(event) => { setTarget(event.target.value); setComponents([]); }}><option value="">{mode === 'item' ? 'No related item' : 'Choose an item'}</option>{sourcing.requirements.filter((item) => item.roomId === room).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-            {mode === 'product' && <>
-              <label className="block">Product link<input autoFocus type="url" maxLength={1500} placeholder="https://www.stonewaterbathrooms.com/products/..." className={field} value={url} onChange={(event) => { pending.current?.abort(); pending.current = null; lastRead.current = ''; setReading(false); setUrl(event.target.value); setDraft(null); setVariantId(''); setName(''); setPrice(''); setImageUrl(''); setSupplier(''); setSize(''); setNotes(''); setComponents([]); setError(''); }} /></label>
+            <>
+              <label className="block">Product link<input autoFocus={mode === 'product'} type="url" maxLength={1500} placeholder="https://www.stonewaterbathrooms.com/products/..." className={field} value={url} onChange={(event) => { pending.current?.abort(); pending.current = null; lastRead.current = ''; setReading(false); setUrl(event.target.value); setDraft(null); setVariantId(''); setName(''); setPrice(''); setImageUrl(''); setSupplier(''); setSize(''); setNotes(''); setComponents([]); setError(''); }} /></label>
               {reading && <p role="status" className="text-emerald-700">Loading product photo and price...</p>}
               {!draft && <button type="button" disabled={reading || !url.trim()} onClick={() => void importProduct()} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-emerald-700 px-3 text-sm text-emerald-800 disabled:opacity-50"><Download className="h-4 w-4" />{reading ? 'Reading product...' : 'Read Stonewater product'}</button>}
               {draft && <>
@@ -87,11 +88,14 @@ export default function SourcingEntryDialog({ mode, sourcing, roomId, requiremen
                 {imageUrl && <img src={imageUrl} alt={name} className="h-32 w-full object-contain" />}
                 <p className="text-gray-500">Stonewater catalogue details. Confirm dimensions and included parts; availability is not a stock guarantee.</p>
               </>}
-            </>}
+            </>
             <label className="block">{mode === 'item' ? 'Item name' : 'Product name'}<input autoFocus={mode === 'item'} required maxLength={200} className={field} value={name} onChange={(event) => setName(event.target.value)} /></label>
             {mode === 'item' ? <>
               <label className="block">Category<select className={field} value={category} onChange={(event) => setCategory(event.target.value as typeof category)}>{sourcingCategories.map((item) => <option key={item}>{item}</option>)}</select></label>
               <div className="grid grid-cols-2 gap-3"><label>Quantity<input required type="number" step="any" min="0.001" max="10000" className={field} value={Number.isFinite(quantity) ? quantity : ''} onChange={(event) => setQuantity(event.target.valueAsNumber)} /></label><label>Unit<input maxLength={30} className={field} value={unit} onChange={(event) => setUnit(event.target.value)} /></label></div>
+              <label className="block">Supplier<input maxLength={100} className={field} value={supplier} onChange={(event) => setSupplier(event.target.value)} /></label>
+              <label className="block">Price (£)<input required={!!url || !!imageUrl} type="number" step="0.01" min="0" max="100000" className={field} value={price} onChange={(event) => setPrice(event.target.value)} /></label>
+              <label className="block">Photo link (optional)<input type="url" maxLength={1500} placeholder="https://" className={field} value={imageUrl} onChange={(event) => setImageUrl(event.target.value)} /></label>
             </> : <>
               <label className="block">Supplier<input maxLength={100} className={field} value={supplier} onChange={(event) => setSupplier(event.target.value)} /></label>
               <div className="grid grid-cols-2 gap-3"><label>Price (£)<input required type="number" step="0.01" min="0" max="100000" className={field} value={price} onChange={(event) => setPrice(event.target.value)} /></label><label>Price is per<select className={field} value={basis} onChange={(event) => setBasis(event.target.value as typeof basis)}><option value="each">Item</option><option value="per box">Box</option><option value="per m²">m²</option><option value="per tile">Tile</option></select></label></div>
@@ -99,6 +103,7 @@ export default function SourcingEntryDialog({ mode, sourcing, roomId, requiremen
               {requirement && requirement.requiredComponents.length > 0 && <fieldset className="border-y border-gray-200 py-3 dark:border-slate-700"><legend className="font-medium">Included parts</legend>{requirement.requiredComponents.map((part) => <label key={part} className="flex min-h-10 items-center gap-2"><input type="checkbox" checked={components.includes(part)} onChange={(event) => setComponents((old) => event.target.checked ? [...old, part] : old.filter((item) => item !== part))} className="rounded" />{part.replace(/-/g, ' ')}</label>)}</fieldset>}
             </>}
             <label className="block">Size / dimensions<input maxLength={300} className={field} value={size} onChange={(event) => setSize(event.target.value)} /></label>
+            {!draft && imageUrl && <img src={imageUrl} alt={name || 'Product preview'} className="h-32 w-full object-contain" />}
             <label className="block">Notes<textarea aria-label="Notes" rows={3} maxLength={1000} className={field} value={notes} onChange={(event) => setNotes(event.target.value)} /></label>
             {mode === 'product' && <p className="text-gray-500">Unverified supplier option. Price, included parts, stock and room fit need confirmation. No order placed.</p>}
             {error && <p role="alert" className="text-red-700">{error}</p>}

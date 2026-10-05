@@ -6,6 +6,14 @@ const draft = { name: 'Imported bath', url: 'https://www.stonewaterbathrooms.com
 beforeEach(() => { jest.useFakeTimers(); global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ draft }) }); });
 afterEach(() => { jest.useRealTimers(); jest.restoreAllMocks(); });
 function open() { return render(<SourcingEntryDialog mode="product" sourcing={createBathroomSourcingSeed()} roomId="main-bathroom" requirementId="main-bath" onClose={jest.fn()} onItem={jest.fn()} onProduct={jest.fn()} />); }
+test('Add item imports the photo and price from a pasted Stonewater link', async () => {
+  render(<SourcingEntryDialog mode="item" sourcing={createBathroomSourcingSeed()} roomId="main-bathroom" onClose={jest.fn()} onItem={jest.fn()} onProduct={jest.fn()} />);
+  fireEvent.change(screen.getByLabelText('Product link'), { target: { value: draft.url } });
+  await act(async () => { jest.advanceTimersByTime(600); });
+  await waitFor(() => expect(screen.getByLabelText('Price (£)')).toHaveValue(536));
+  expect(screen.getByLabelText('Item name')).toHaveValue(draft.name);
+  expect(screen.getByRole('img', { name: draft.name })).toHaveAttribute('src', draft.images[0]);
+});
 
 test('paste alone imports name, picture, price and SKU variant without a second canonical-url request', async () => {
   open();

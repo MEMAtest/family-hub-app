@@ -5,6 +5,11 @@ import { migrate } from '@/components/property/projects/ProjectMaterialsView';
 
 const item = { roomId: 'main-bathroom' as const, name: 'LED mirror', category: 'Accessories' as const, quantity: 1, size: '600mm', specification: 'LED mirror', unit: 'each', relatedToId: 'main-vanity' };
 const product = { requirementId: 'req-mirror', name: 'Round LED mirror', supplier: 'Your shop', url: 'https://example.com/mirror', imageUrl: '', price: 149, priceUnit: 'each' as const, size: '600mm', components: [], notes: '' };
+test('adding an item with a URL and photo creates a linked option without selecting or ordering', () => {
+  const added = addHouseholdItem(createBathroomSourcingSeed(), { ...item, product: { url: product.url, imageUrl: 'https://example.com/mirror.jpg', price: 149, supplier: 'Mirror shop' } }, 'req-photo-mirror');
+  expect(added.sourcing.products.find((entry) => entry.id === 'manual-req-photo-mirror')).toMatchObject({ imageUrl: 'https://example.com/mirror.jpg', price: 149, requirementIds: ['req-photo-mirror'] });
+  expect(added.sourcing.basket).toHaveLength(0);
+});
 test('Union WC quote has its stated width and two linked supplier options after migration', () => {
   const saved = createBathroomSourcingSeed();
   saved.version = 4;

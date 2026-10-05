@@ -71,10 +71,15 @@ export function productSize(product: SourcedProduct) {
 
 /** Only compare labelled supplier dimensions with structured quote constraints, never infer room fit. */
 export function quoteSizeCheck(requirement: SourcingRequirement | undefined, product: SourcedProduct) {
-  if (!requirement) return 'Check measurements';
-  const constraints = Object.entries(requirement.constraints).filter(([key, value]) =>
+  if (!requirement) return 'No quote dimensions to compare';
+  const quoted = { ...requirement.constraints };
+  for (const match of (requirement.size ?? '').matchAll(/(\d+(?:\.\d+)?)\s*mm\s*(wide|width|high|height|long|length|deep|depth|thick|thickness)/gi)) {
+    const dimension = /wid/i.test(match[2]) ? 'widthMm' : /high|height/i.test(match[2]) ? 'heightMm' : /long|length/i.test(match[2]) ? 'lengthMm' : /deep|depth/i.test(match[2]) ? 'depthMm' : 'thicknessMm';
+    if (quoted[dimension] === undefined && quoted[`max${dimension[0].toUpperCase()}${dimension.slice(1)}`] === undefined && quoted[`min${dimension[0].toUpperCase()}${dimension.slice(1)}`] === undefined) quoted[dimension] = Number(match[1]);
+  }
+  const constraints = Object.entries(quoted).filter(([key, value]) =>
     /^(max|min)?(width|length|depth|height|projection|thickness)Mm$/i.test(key) && typeof value === 'number');
-  if (!constraints.length) return 'Check measurements';
+  if (!constraints.length) return 'No quote dimensions to compare';
   let unknown = false;
   for (const [key, expected] of constraints) {
     const dimension = key.replace(/^(max|min)/, '');
@@ -88,5 +93,5 @@ export function quoteSizeCheck(requirement: SourcingRequirement | undefined, pro
     const differs = key.startsWith('max') ? actual > target : key.startsWith('min') ? actual < target : Math.abs(actual - target) > tolerance;
     if (differs) return 'Different from quote · Check measurements';
   }
-  return unknown ? 'Check measurements' : 'Within checked quote sizes · Confirm room measurements';
+  return unknown ? 'Supplier dimensions missing · quote comparison incomplete' : 'Within checked quote sizes · Confirm room measurements';
 }

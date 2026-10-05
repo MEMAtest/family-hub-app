@@ -24,7 +24,7 @@ export const tileChoiceSchema = z.object({
   widthMm: dimension.max(3000), lengthMm: dimension.max(3000),
   coveragePerBoxM2: z.number().finite().positive().max(100).optional(),
   tilesPerBox: z.number().int().positive().max(1000).optional(),
-  price: z.number().finite().min(0).max(100000), priceBasis: z.enum(['box', 'm2', 'tile']), sourceImageDataUrl: image.optional(), sourceImageId: z.string().max(100).optional(),
+  price: z.number().finite().min(0).max(100000), priceBasis: z.enum(['box', 'm2', 'tile']), sourceImageDataUrl: image.optional(), sourceImageId: z.string().max(100).optional(), imageUrl: z.string().url().refine((value) => new URL(value).protocol === 'https:').optional(),
 });
 
 export type TileCalculation = {
@@ -111,7 +111,7 @@ export function saveTilePlan(sourcing: ProjectSourcing, requirementId: string, r
   const id = tilePlanProductId(requirementId);
   const product: SourcedProduct = {
     id, name: choice.name, category: 'Tiles', supplier: choice.supplier || 'Your tile choice', requirementIds: [requirementId], url: choice.url,
-    imageUrl: '', price: choice.price, priceUnit: { box: 'per box', m2: 'per m²', tile: 'per tile' }[choice.priceBasis],
+    imageUrl: choice.imageUrl || '', price: choice.price, priceUnit: { box: 'per box', m2: 'per m²', tile: 'per tile' }[choice.priceBasis],
     size: `${choice.widthMm} x ${choice.lengthMm}mm`, stock: 'UNKNOWN', stockEvidence: 'Confirm price and stock with supplier',
     dimensions: { widthMm: choice.widthMm, lengthMm: choice.lengthMm }, components: [], lastChecked: now,
   };

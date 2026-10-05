@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { ProjectSourcing, SourcedProduct, SourcingRequirement } from '@/types/sourcing.types';
 import { fixtureFit } from './fixtureFit';
+import { labelledDimensions } from './dimensions';
 
 export const sourcingCategories = ['Tiles', 'Sanitaryware', 'Furniture', 'Showers', 'Heating', 'Fittings', 'Lighting', 'Ventilation', 'Accessories', 'Other'] as const;
 const room = z.enum(['main-bathroom', 'shower-room']);
@@ -8,6 +9,7 @@ const https = z.string().max(1500).refine((value) => { if (!value) return true; 
 export const householdItemSchema = z.object({
   roomId: room, name: z.string().trim().min(1).max(200), category: z.enum(sourcingCategories), quantity: z.number().finite().positive().max(10000),
   size: z.string().max(300), specification: z.string().max(1000), unit: z.string().max(30), relatedToId: z.string().max(100).optional(),
+  product: z.object({ url: https, imageUrl: https, supplier: z.string().max(100), price: z.number().finite().min(0).max(100000), sku: z.string().max(100).optional(), gallery: z.array(https).max(8).optional() }).optional(),
 });
 export const householdProductSchema = z.object({
   requirementId: z.string().min(1).max(100), name: z.string().trim().min(1).max(200), supplier: z.string().max(100), url: https, imageUrl: https,
@@ -19,8 +21,10 @@ export function addHouseholdItem(sourcing: ProjectSourcing, raw: z.input<typeof 
   const input = householdItemSchema.parse(raw);
   if (!id.startsWith('req-') || sourcing.requirements.some((item) => item.id === id)) throw new Error('This item already exists.');
   if (input.relatedToId && !sourcing.requirements.some((item) => item.id === input.relatedToId && item.roomId === input.roomId)) throw new Error('Choose a related item in the same bathroom.');
-  const item: SourcingRequirement = { ...input, id, source: 'household', status: 'fitter_check', constraints: {}, requiredComponents: [] };
-  return { item, sourcing: { ...sourcing, requirements: [...sourcing.requirements, item] } };
+  const { product, ...metadata } = input;
+  const item: SourcingRequirement = { ...metadata, id, source: 'household', status: 'fitter_check', constraints: {}, requiredComponents: [] };
+  const next = { ...sourcing, requirements: [...sourcing.requirements, item] };
+  return { item, sourcing: product ? addHouseholdProduct(next, { requirementId: id, name: input.name, ...product, priceUnit: 'each', size: input.size, components: [], notes: input.specification }, `manual-${id}`).sourcing : next };
 }
 export function addHouseholdProduct(sourcing: ProjectSourcing, raw: z.input<typeof householdProductSchema>, id: string): { sourcing: ProjectSourcing; product: SourcedProduct } {
   const input = householdProductSchema.parse(raw);
@@ -30,7 +34,7 @@ export function addHouseholdProduct(sourcing: ProjectSourcing, raw: z.input<type
   if (input.components.some((component) => !requirement.requiredComponents.includes(component))) throw new Error('Check which quoted parts this product includes.');
   const product: SourcedProduct = { id, name: input.name, supplier: input.supplier || 'Your supplier', source: 'household', category: requirement.category,
     requirementIds: [requirement.id], url: input.url, imageUrl: input.imageUrl, price: input.price, priceUnit: requirement.category === 'Tiles' && input.priceUnit === 'each' ? 'per tile' : input.priceUnit,
-    size: input.size, sku: input.sku, gallery: input.gallery ? [...new Set([input.imageUrl, ...input.gallery].filter(Boolean))].slice(0, 8) : undefined, components: input.components, description: input.notes, dimensions: {}, stock: 'UNKNOWN', stockEvidence: 'Entered by you; price, stock and fit need confirmation.', lastChecked: new Date().toISOString(),
+    size: input.size, sku: input.sku, gallery: input.gallery ? [...new Set([input.imageUrl, ...input.gallery].filter(Boolean))].slice(0, 8) : undefined, components: input.components, description: input.notes, dimensions: labelledDimensions(`${input.size} ${input.notes}`), stock: 'UNKNOWN', stockEvidence: 'Entered by you; price, stock and fit need confirmation.', lastChecked: new Date().toISOString(),
   };
   return { product, sourcing: { ...sourcing, products: [...sourcing.products, product] } };
 }

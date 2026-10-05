@@ -29,6 +29,7 @@ import { CONTRACTOR_SPECIALTIES, type ContractorSpecialty } from '@/types/contra
 import { formatDate } from '@/utils/formatDate';
 import { exportQuotesToCSV, exportQuotesToExcel, exportQuotesToJSON, exportQuotesToHTML } from '@/utils/quoteExporters';
 import ProjectMaterialsView from './ProjectMaterialsView';
+import ProjectDocuments from './ProjectDocuments';
 import { isBathroomProject, roomName } from './bathroomProject.helpers';
 import type { SourcingRoomId } from '@/types/sourcing.types';
 
@@ -47,7 +48,7 @@ const currencyFormatter = new Intl.NumberFormat('en-GB', {
   maximumFractionDigits: 0,
 });
 
-type TabId = 'overview' | SourcingRoomId | 'emails' | 'contacts' | 'quotes' | 'materials' | 'visits' | 'followups' | 'tasks' | 'contractors';
+type TabId = 'overview' | SourcingRoomId | 'documents' | 'emails' | 'contacts' | 'quotes' | 'materials' | 'visits' | 'followups' | 'tasks' | 'contractors';
 
 interface ProjectDetailViewProps {
   project: PropertyProject;
@@ -101,6 +102,7 @@ export const ProjectDetailView = ({
   const bathroom = isBathroomProject(project);
   const [activeTab, setActiveTab] = useState<TabId>(() => bathroom ? 'overview' : 'emails');
   const [sourcingRequirementId, setSourcingRequirementId] = useState<string | undefined>();
+  const [sourcingPart, setSourcingPart] = useState<string | undefined>();
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [showAddVisitForm, setShowAddVisitForm] = useState(false);
   const [newVisit, setNewVisit] = useState({ contractorName: '', date: '', time: '', purpose: '' });
@@ -361,12 +363,13 @@ export const ProjectDetailView = ({
     { id: 'contacts', label: 'Contacts', icon: Users, count: project.contacts?.length || 0 },
     { id: 'quotes', label: 'Quotes', icon: FileText, count: project.quotes?.length || 0 },
     { id: 'materials', label: bathroom ? 'Products' : 'Materials', icon: ShoppingBasket, count: project.sourcing?.basket.length || 0 },
+    { id: 'documents', label: 'Downloads', icon: Download, count: project.attachments?.length || 0 },
     { id: 'visits', label: 'Visits', icon: Calendar, count: project.scheduledVisits?.length || 0 },
     { id: 'followups', label: 'Follow-ups', icon: Bell, count: project.followUps?.length || 0 },
     { id: 'tasks', label: 'Tasks', icon: CheckSquare, count: project.tasks?.length || 0 },
     { id: 'contractors', label: 'Contractors', icon: Building2, count: contractors.length },
   ];
-  const primaryTabs = tabs.filter((tab) => bathroom ? ['overview', 'main-bathroom', 'shower-room', 'materials'].includes(tab.id) : ['emails', 'quotes', 'materials'].includes(tab.id));
+  const primaryTabs = tabs.filter((tab) => bathroom ? ['overview', 'main-bathroom', 'shower-room', 'materials', 'documents'].includes(tab.id) : ['emails', 'quotes', 'materials'].includes(tab.id));
   const secondaryTabs = tabs.filter((tab) => !primaryTabs.includes(tab));
   const sourcingTab = ['overview', 'main-bathroom', 'shower-room', 'materials'].includes(activeTab);
 
@@ -663,6 +666,11 @@ export const ProjectDetailView = ({
       </div>
 
       {/* Tabs */}
+      {bathroom && <label className={`flex min-w-0 flex-wrap items-center gap-3 border-l-4 py-2 pl-3 text-sm font-medium ${activeTab === 'shower-room' ? 'border-sky-500 text-sky-800' : 'border-emerald-500 text-emerald-800'}`}>Bathroom
+        <select aria-label="Switch bathroom" value={activeTab === 'main-bathroom' || activeTab === 'shower-room' ? activeTab : ''} onChange={(event) => { setActiveTab(event.target.value ? event.target.value as SourcingRoomId : 'overview'); setSourcingRequirementId(undefined); setSourcingPart(undefined); }} className="min-h-11 min-w-0 max-w-full rounded-md border-gray-200 text-sm dark:bg-slate-800 dark:text-white">
+          <option value="">Both bathrooms</option><option value="main-bathroom">{roomName(project.sourcing, 'main-bathroom')} · bath</option><option value="shower-room">{roomName(project.sourcing, 'shower-room')} · shower</option>
+        </select>
+      </label>}
       <div className="border-b border-gray-200 dark:border-slate-700">
         <nav className="flex flex-wrap items-center gap-1" aria-label="Project views">
           {primaryTabs.map((tab) => {
@@ -670,11 +678,11 @@ export const ProjectDetailView = ({
             return (
               <button
                 key={tab.id}
-                onClick={() => { setActiveTab(tab.id); setSourcingRequirementId(undefined); }}
+                onClick={() => { setActiveTab(tab.id); setSourcingRequirementId(undefined); setSourcingPart(undefined); }}
                 aria-current={activeTab === tab.id ? 'page' : undefined}
                 className={`flex min-h-11 min-w-0 max-w-full items-center gap-2 border-b-2 px-3 py-3 text-sm font-medium transition-colors ${
                   activeTab === tab.id
-                    ? 'border-emerald-600 text-emerald-700 dark:text-emerald-300'
+                    ? tab.id === 'shower-room' ? 'border-sky-600 text-sky-700 dark:text-sky-300' : 'border-emerald-600 text-emerald-700 dark:text-emerald-300'
                     : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-200'
                 }`}
               >
@@ -1388,6 +1396,7 @@ export const ProjectDetailView = ({
           </div>
         )}
 
+        {activeTab === 'documents' && <ProjectDocuments project={project} />}
         {sourcingTab && (
           <ProjectMaterialsView
             project={project}
@@ -1396,7 +1405,8 @@ export const ProjectDetailView = ({
             view={activeTab === 'overview' ? 'overview' : activeTab === 'materials' ? 'products' : 'room'}
             selectedRoomId={activeTab === 'main-bathroom' || activeTab === 'shower-room' ? activeTab : undefined}
             selectedRequirementId={sourcingRequirementId}
-            onNavigate={(roomId, requirementId) => { setActiveTab(roomId ?? (bathroom ? 'overview' : 'materials')); setSourcingRequirementId(requirementId); }}
+            selectedPart={sourcingPart}
+            onNavigate={(roomId, requirementId, part) => { setActiveTab(roomId ?? (bathroom ? 'overview' : 'materials')); setSourcingRequirementId(requirementId); setSourcingPart(part); }}
           />
         )}
 

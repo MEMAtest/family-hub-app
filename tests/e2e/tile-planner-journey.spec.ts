@@ -33,6 +33,46 @@ async function enterTile(page: Page, name = 'QA marble tile') {
   await planner.getByRole('checkbox', { name: 'I have checked the tile size, pack coverage and price basis.' }).check();
   return planner;
 }
+test('phone: item search, missing-part navigation, room switch and checklist download', async ({ page }) => {
+  await open(page);
+  await page.getByRole('button', { name: 'Room overview', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Search project items' }).fill('towel');
+  const choices = page.getByRole('region', { name: 'Main Bathroom choices', exact: true });
+  await choices.getByRole('article').getByRole('button', { name: 'Find valves', exact: true }).click();
+  await expect(page.getByText('Missing part: valves', { exact: true })).toBeVisible();
+  await expect(page.getByRole('combobox', { name: 'Quote item', exact: true })).toHaveValue('main-rail');
+  await page.getByRole('combobox', { name: 'Switch bathroom' }).selectOption('shower-room');
+  await expect(page.getByRole('heading', { name: 'Shower Room', exact: true })).toBeVisible();
+  await page.getByRole('combobox', { name: 'Jump to project item' }).selectOption('shower-wall-tiles');
+  await expect(page.getByText('Quote: 14 m². With a provisional 10% allowance: 15.4 m².', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Use quote area + 10% estimate' }).click();
+  await expect(page.getByLabel('Tiled area (m²)', { exact: true })).toHaveValue('14');
+  await page.getByRole('button', { name: /^Downloads/ }).click();
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download quote checklist (CSV)' }).click();
+  expect((await download).suggestedFilename()).toBe('bathroom-quote-checklist.csv');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: 'output/playwright/bathroom-downloads-phone.png' });
+});
+test('phone: Add item link imports a photo and persists a mirror option after reload', async ({ page }) => {
+  await open(page);
+  await page.getByRole('button', { name: 'Room overview', exact: true }).click();
+  const photo = project.sourcing.products.find((product) => product.imageUrl.startsWith('https:'))!.imageUrl;
+  await page.route('**/api/property/sourcing/import', (route) => route.fulfill({ json: { draft: { name: 'QA LED mirror', url: 'https://www.stonewaterbathrooms.com/products/qa-mirror', selectedVariant: '25', description: 'Width: 600mm', images: [photo], variants: [{ id: '25', name: 'Default Title', sku: 'M25', price: 149, available: true, imageUrl: photo }] } } }));
+  await page.getByRole('button', { name: 'Add item', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Add bathroom item', exact: true });
+  await dialog.getByLabel('Product link', { exact: true }).fill('https://www.stonewaterbathrooms.com/products/qa-mirror');
+  await expect(dialog.getByLabel('Price (£)', { exact: true })).toHaveValue('149');
+  await expect.poll(() => dialog.getByRole('img', { name: 'QA LED mirror' }).evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true);
+  await dialog.getByRole('button', { name: 'Save item', exact: true }).click();
+  await expect(page.getByRole('img', { name: 'QA LED mirror', exact: true })).toBeVisible();
+  await page.reload();
+  await page.getByRole('button', { name: 'Main Bathroom', exact: true }).click();
+  await page.getByRole('combobox', { name: 'Jump to project item' }).selectOption({ label: 'QA LED mirror' });
+  await expect(page.getByRole('img', { name: 'QA LED mirror', exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: 'output/playwright/add-item-mirror-phone.png' });
+});
 test('phone: Union WC quote opens linked options with photos and quoted width', async ({ page }) => {
   await open(page);
   await page.getByRole('button', { name: 'Room overview', exact: true }).click();

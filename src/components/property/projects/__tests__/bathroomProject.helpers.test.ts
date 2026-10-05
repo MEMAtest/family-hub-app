@@ -79,25 +79,30 @@ test('a tile requirement without components still requires a real selection', ()
 });
 
 test('quote-size checks never infer a room fit from supplier marketing or room names', () => {
-  expect(quoteSizeCheck(requirement, { ...product, size: 'Compact, ideal for a small room' })).toBe('Check measurements');
-  expect(quoteSizeCheck({ ...requirement, constraints: {} }, product)).toBe('Check measurements');
-  expect(quoteSizeCheck(undefined, product)).toBe('Check measurements');
+  expect(quoteSizeCheck(requirement, { ...product, size: 'Compact, ideal for a small room' })).toBe('Supplier dimensions missing · quote comparison incomplete');
+  expect(quoteSizeCheck({ ...requirement, constraints: {} }, product)).toBe('Supplier dimensions missing · quote comparison incomplete');
+  expect(quoteSizeCheck(undefined, product)).toBe('No quote dimensions to compare');
 });
 
 test('known supplier specs compare against quote limits and retain measurement caution', () => {
   expect(quoteSizeCheck(requirement, { ...product, specs: { Width: '600mm' } })).toBe('Within checked quote sizes · Confirm room measurements');
   expect(quoteSizeCheck(requirement, { ...product, dimensions: { widthMm: 650 } })).toBe('Different from quote · Check measurements');
-  expect(quoteSizeCheck(requirement, { ...product, specs: { Width: '60cm' } })).toBe('Check measurements');
+  expect(quoteSizeCheck(requirement, { ...product, specs: { Width: '60cm' } })).toBe('Supplier dimensions missing · quote comparison incomplete');
 });
 
 test('unknown dimensions remain unknown even when one constraint is met', () => {
-  expect(quoteSizeCheck({ ...requirement, constraints: { maxWidthMm: 600, depthMm: 400 } }, { ...product, dimensions: { widthMm: 600 } })).toBe('Check measurements');
+  expect(quoteSizeCheck({ ...requirement, constraints: { maxWidthMm: 600, depthMm: 400 } }, { ...product, dimensions: { widthMm: 600 } })).toBe('Supplier dimensions missing · quote comparison incomplete');
 });
 
 test('exact sizes and explicit tile tolerance are respected', () => {
   const tile = { ...requirement, constraints: { widthMm: 596, lengthMm: 596, tileToleranceMm: 1 } };
   expect(quoteSizeCheck(tile, { ...product, dimensions: { widthMm: 595, lengthMm: 595 } })).toBe('Within checked quote sizes · Confirm room measurements');
   expect(quoteSizeCheck(tile, { ...product, dimensions: { widthMm: 600, lengthMm: 600 } })).toBe('Different from quote · Check measurements');
+});
+test('labelled quote dimensions compare automatically even without preloaded constraints', () => {
+  expect(quoteSizeCheck({ ...requirement, constraints: {}, size: '500mm wide' }, { ...product, dimensions: { widthMm: 500 } })).toContain('Within checked quote sizes');
+  expect(quoteSizeCheck({ ...requirement, constraints: {}, size: '500mm wide' }, { ...product, dimensions: { widthMm: 600 } })).toContain('Different from quote');
+  expect(quoteSizeCheck({ ...requirement, constraints: {}, size: '500 × 1000mm' }, product)).toBe('No quote dimensions to compare');
 });
 
 test('size presentation preserves supplier size or labelled specs and identifies unknowns', () => {

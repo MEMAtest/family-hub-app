@@ -38,9 +38,12 @@ function candidateChoice(product: SourcedProduct, sourcing: ProjectSourcing): Ti
   const saved = sourcing.requirements.find((item) => tilePlanProductId(item.id) === product.id)?.tilePlan?.choice;
   if (saved) return { ...saved };
   const numeric = (key: string) => typeof product.dimensions[key] === 'number' ? product.dimensions[key] as number : 0;
+  const tileSize = (product.specs?.Size || product.size || '').match(/(\d+(?:\.\d+)?)\s*(?:x|×)\s*(\d+(?:\.\d+)?)\s*(mm|cm)\b/i);
+  const multiplier = tileSize?.[3].toLowerCase() === 'cm' ? 10 : 1;
   return {
     ...emptyChoice(), name: product.name, supplier: product.supplier, url: product.url,
-    widthMm: numeric('widthMm'), lengthMm: numeric('lengthMm'), price: product.price,
+    imageUrl: product.imageUrl?.startsWith('https:') ? product.imageUrl : undefined,
+    widthMm: numeric('widthMm') || (tileSize ? Number(tileSize[1]) * multiplier : 0), lengthMm: numeric('lengthMm') || (tileSize ? Number(tileSize[2]) * multiplier : 0), price: product.price,
     priceBasis: product.priceUnit === 'per m²' ? 'm2' : product.priceUnit === 'per tile' ? 'tile' : 'box',
   };
 }
@@ -60,7 +63,7 @@ export default function TilePlanner({ sourcing, requirement, isReadOnly, candida
   const latest = useRef(sourcing); latest.current = sourcing;
   const plan = requirement.tilePlan;
   const measurementPhoto = tileSourceImage(sourcing, measurement.source.imageId, measurement.source.imageDataUrl);
-  const tilePhoto = tileSourceImage(sourcing, choice.sourceImageId, choice.sourceImageDataUrl);
+  const tilePhoto = tileSourceImage(sourcing, choice.sourceImageId, choice.sourceImageDataUrl) || choice.imageUrl;
   const surface = /floor/i.test(requirement.name) ? 'floor' : 'walls';
   const editMeasurement = (update: Partial<TileMeasurement>) => {
     setMeasurement((current) => ({ ...current, source: current.source.kind === 'quote' ? { ...current.source, kind: 'manual', label: 'Edited quote measurements' } : current.source, ...update, confirmedAt: undefined }));
@@ -110,6 +113,7 @@ export default function TilePlanner({ sourcing, requirement, isReadOnly, candida
             <button type="button" disabled={measurement.sections.length >= 20} onClick={() => editMeasurement({ sections: [...measurement.sections, { label: `Section ${measurement.sections.length + 1}`, length: 0, width: 0 }] })} className="inline-flex min-h-11 items-center gap-1 text-emerald-700 dark:text-emerald-300"><Plus className="h-4 w-4" />Add section</button>
           </>}
           <NumberField label="Openings or untiled area to deduct (m²)" value={measurement.deductionsM2} min={0} onChange={(deductionsM2) => editMeasurement({ deductionsM2 })} />
+          {requirement.unit === 'm²' && requirement.quantity > 0 && <div className="border-l-4 border-sky-500 bg-sky-50 p-3 text-sm text-sky-900"><p>Quote: {area(requirement.quantity)}. With a provisional 10% allowance: {area(requirement.quantity * 1.1)}.</p>{choice.widthMm > 0 && choice.lengthMm > 0 && <p className="mt-1 font-medium">At {choice.widthMm} × {choice.lengthMm} mm: {Math.ceil(requirement.quantity * 1.1 / (choice.widthMm * choice.lengthMm / 1000000))} tiles minimum, before box rounding.</p>}<button type="button" onClick={() => editMeasurement({ method: 'area', areaM2: requirement.quantity, deductionsM2: 0, wasteIncluded: 'excluded', wastePercent: 10, source: { kind: 'quote', label: 'Quote area with provisional 10% allowance' } })} className="mt-1 min-h-11 font-medium underline">Use quote area + 10% estimate</button><p className="text-xs">Allowance is an estimate, not fitter-approved.</p></div>}
           <label className="block text-xs">Does this area already include waste?<select className={field} value={measurement.wasteIncluded} onChange={(event) => editMeasurement({ wasteIncluded: event.target.value as TileMeasurement['wasteIncluded'] })}><option value="unknown">Not confirmed</option><option value="excluded">No — add an allowance</option><option value="included">Yes — do not add it again</option></select></label>
           {measurement.wasteIncluded === 'excluded' && <NumberField label="Waste allowance (%)" value={measurement.wastePercent} min={0} max={50} onChange={(wastePercent) => editMeasurement({ wastePercent })} />}
           {netArea !== undefined && <p className="text-sm font-medium">Area after deductions: {area(netArea)}</p>}

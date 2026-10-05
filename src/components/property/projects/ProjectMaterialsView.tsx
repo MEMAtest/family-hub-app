@@ -50,7 +50,8 @@ type Props = {
   view?: 'overview' | 'room' | 'products';
   selectedRoomId?: SourcingRoomId;
   selectedRequirementId?: string;
-  onNavigate?: (roomId: SourcingRoomId | null, requirementId?: string) => void;
+  selectedPart?: string;
+  onNavigate?: (roomId: SourcingRoomId | null, requirementId?: string, part?: string) => void;
 };
 type SortOrder = 'recommended' | 'price' | 'stock';
 
@@ -108,7 +109,7 @@ export function migrate(saved: ProjectSourcing): ProjectSourcing {
   };
 }
 
-export default function ProjectMaterialsView({ project, onUpdateProject, isReadOnly = false, view = 'overview', selectedRoomId, selectedRequirementId, onNavigate }: Props) {
+export default function ProjectMaterialsView({ project, onUpdateProject, isReadOnly = false, view = 'overview', selectedRoomId, selectedRequirementId, selectedPart, onNavigate }: Props) {
   const isBathroomProject = bathroomProject(project);
   const needsSeed = isBathroomProject && (!project.sourcing || (project.sourcing.version ?? 1) < SOURCING_SEED_VERSION);
   const sourcing = useMemo<ProjectSourcing>(() => {
@@ -118,6 +119,7 @@ export default function ProjectMaterialsView({ project, onUpdateProject, isReadO
 
   const [roomId, setRoomId] = useState<SourcingRoomId | null>(selectedRoomId ?? null);
   const [requirementId, setRequirementId] = useState<string | null>(selectedRequirementId ?? null);
+  const [partFilter, setPartFilter] = useState(selectedPart ?? '');
   const [detailRequirementId, setDetailRequirementId] = useState<string | null>(null);
   const [category, setCategory] = useState('All');
   const [query, setQuery] = useState('');
@@ -137,9 +139,10 @@ export default function ProjectMaterialsView({ project, onUpdateProject, isReadO
   useEffect(() => {
     setRoomId(selectedRoomId ?? null);
     setRequirementId(selectedRequirementId ?? null);
+    setPartFilter(selectedPart ?? '');
     setCategory('All'); setQuery(''); setMessage(''); setAdding(false); setDetailId(null);
     setPlanningProduct(pendingPlanningProduct.current); pendingPlanningProduct.current = undefined;
-  }, [view, selectedRoomId, selectedRequirementId]);
+  }, [view, selectedRoomId, selectedRequirementId, selectedPart]);
 
   useEffect(() => {
     if (planningProduct) plannerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -186,6 +189,7 @@ export default function ProjectMaterialsView({ project, onUpdateProject, isReadO
     const text = query.trim().toLowerCase();
     const rank: Record<SourcingStock, number> = { IN_STOCK: 0, LOW_STOCK: 1, TO_ORDER: 2, UNKNOWN: 3, OUT_OF_STOCK: 4 };
     return roomProducts
+      .filter((product) => !partFilter || product.components.includes(partFilter))
       .filter((product) => category === 'All' || product.category === category)
       .filter((product) => !inStockOnly || product.stock === 'IN_STOCK')
       .filter((product) => showUnsuitable || !isRejected(product))
@@ -193,7 +197,7 @@ export default function ProjectMaterialsView({ project, onUpdateProject, isReadO
       .sort((a, b) => sort === 'price' ? a.price - b.price
         : sort === 'stock' ? rank[a.stock] - rank[b.stock] || a.price - b.price
           : Number(!!b.topPick) - Number(!!a.topPick) || rank[a.stock] - rank[b.stock] || a.price - b.price);
-  }, [roomProducts, category, inStockOnly, query, sort, showUnsuitable]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [roomProducts, category, inStockOnly, query, sort, showUnsuitable, partFilter]); // eslint-disable-line react-hooks/exhaustive-deps
   const hiddenUnsuitable = roomProducts.filter((product) => isRejected(product)).length;
 
   const categoryCounts = useMemo(() => Object.fromEntries(categories.map((item) => [item.id,
@@ -237,7 +241,7 @@ export default function ProjectMaterialsView({ project, onUpdateProject, isReadO
     try {
       const response = await fetch('/api/property/sourcing/search', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ supplierId: tiles ? 'uk-tiles' : 'stonewater', requirement: { id: requirement.id, name: requirement.name, size: requirement.size, specification: requirement.specification, requiredComponents: requirement.requiredComponents, constraints: requirement.constraints } }),
+        body: JSON.stringify({ supplierId: tiles ? 'uk-tiles' : 'stonewater', requirement: { id: requirement.id, name: partFilter ? `${requirement.name} ${partFilter.replace(/-/g, ' ')}` : requirement.name, size: partFilter ? '' : requirement.size, specification: partFilter ? `Supporting ${partFilter.replace(/-/g, ' ')} for ${requirement.name}. ${requirement.specification}` : requirement.specification, requiredComponents: partFilter ? [partFilter] : requirement.requiredComponents, constraints: partFilter ? {} : requirement.constraints } }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Supplier search failed.');
@@ -309,7 +313,7 @@ export default function ProjectMaterialsView({ project, onUpdateProject, isReadO
   const startEntry = (mode: 'item' | 'product') => { setEntryMode(mode); setAdding(true); };
 
   const openRoom = (id: SourcingRoomId) => { setRoomId(id); setRequirementId(null); setCategory('All'); setQuery(''); setMessage(''); onNavigate?.(id); };
-  const openRequirement = (item: SourcingRequirement) => { setRoomId(item.roomId); setRequirementId(item.id); setCategory('All'); setQuery(''); setMessage(''); onNavigate?.(item.roomId, item.id); };
+  const openRequirement = (item: SourcingRequirement, part?: string) => { setRoomId(item.roomId); setRequirementId(item.id); setPartFilter(part ?? ''); setCategory('All'); setQuery(''); setMessage(''); onNavigate?.(item.roomId, item.id, part); };
   const openProduct = (product: SourcedProduct, linked?: SourcingRequirement) => {
     setSelectionError('');
     if (linked?.category === 'Tiles' && product.id.startsWith('tile-plan-')) { openRequirement(linked); return; }
@@ -367,6 +371,8 @@ export default function ProjectMaterialsView({ project, onUpdateProject, isReadO
           </select>
         </label>
       </section>
+
+      {partFilter && requirement && <div className="flex flex-wrap items-center justify-between gap-2 border-l-4 border-amber-500 bg-amber-50 px-3 py-2 text-sm text-amber-900"><span>Missing part: {partFilter.replace(/-/g, ' ')}</span><button className="min-h-11 font-medium" onClick={() => openRequirement(requirement)}>Show all options</button></div>}
 
       {requirement && <RequirementPanel requirement={requirement} products={productsFor(sourcing, requirement)} basketIds={sourcing.basket.filter((item) => item.requirementId === requirement.id).map((item) => item.productId)}
         searching={searching} tiles={tiles} message={message} onSearch={searchSupplier} isReadOnly={isReadOnly} />}
@@ -523,6 +529,7 @@ function ProductCard({ product, requirement, showRequirement, inBasket, disabled
       <span className="absolute right-2 top-2"><StockBadge stock={product.stock} compact /></span>
     </button>
     <div className="flex flex-1 flex-col p-3">
+      {requirement && <span className={`mb-1 border-l-2 pl-2 text-xs font-medium ${requirement.roomId === 'main-bathroom' ? 'border-emerald-500 text-emerald-700' : 'border-sky-500 text-sky-700'}`}>{requirement.roomId === 'main-bathroom' ? 'Main Bathroom' : 'Shower Room'} · quote-linked option</span>}
       {showRequirement && requirement && <span className="text-[11px] font-medium uppercase tracking-wide text-blue-600 dark:text-blue-400">For: {requirement.name}</span>}
       <button onClick={onOpen} className="text-left"><h4 className="line-clamp-2 text-sm font-semibold text-gray-900 hover:text-blue-700 dark:text-white">{product.name}</h4></button>
       <p className="mt-0.5 text-xs text-gray-500 dark:text-slate-400">{productSize(product)}</p>
