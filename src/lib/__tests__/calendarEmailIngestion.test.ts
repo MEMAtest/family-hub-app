@@ -2,7 +2,7 @@ jest.mock('@/lib/prisma', () => ({
   __esModule: true,
   default: {
     family: { findUnique: jest.fn() },
-    calendarEmailIntake: { findFirst: jest.fn(), update: jest.fn() },
+    calendarEmailIntake: { findFirst: jest.fn(), create: jest.fn(), update: jest.fn() },
     calendarEvent: { findMany: jest.fn(), create: jest.fn(), findUnique: jest.fn(), update: jest.fn() },
     googleCalendarConnection: { findUnique: jest.fn(), update: jest.fn() },
     notification: { create: jest.fn() },
@@ -81,6 +81,38 @@ describe('school email import retry recovery', () => {
   });
 
   afterEach(() => jest.useRealTimers());
+
+  it('does not default an unnamed school event to the only child matching a narrow age-group label', async () => {
+    (prisma.family.findUnique as jest.Mock).mockResolvedValue({
+      id: 'family-1',
+      members: [
+        { id: 'amari', name: 'Amari', role: 'Child', ageGroup: 'Year 4' },
+        { id: 'askia', name: 'Askia', role: 'Child', ageGroup: 'Primary' },
+      ],
+    });
+    (prisma.calendarEmailIntake.findFirst as jest.Mock).mockResolvedValue(null);
+    (prisma.calendarEmailIntake.create as jest.Mock).mockResolvedValue({ id: 'photo-day-intake' });
+    (prisma.calendarEvent.findMany as jest.Mock).mockResolvedValue([]);
+    (prisma.calendarEmailIntake.update as jest.Mock).mockResolvedValue({});
+    (prisma.notification.create as jest.Mock).mockResolvedValue({ id: 'photo-day-notification' });
+
+    const result = await ingestCalendarEmailPayload({
+      data: {
+        messageId: '<photo-day@school.example>',
+        subject: 'School photo day',
+        from: 'admin@stewartfleming.bromley.sch.uk',
+        text: 'School photo day Friday 9 October 2026.',
+      },
+    }, { familyId: 'family-1', eventSource: 'gmail-school-email', authenticatedSchoolSender: true });
+
+    expect(result).toMatchObject({ statusCode: 200, body: { autoCreated: 0, needsReview: 1 } });
+    expect(prisma.calendarEmailIntake.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        parsedDrafts: [expect.objectContaining({ title: 'School Photo Day', person: '' })],
+      }),
+    }));
+    expect(prisma.calendarEvent.create).not.toHaveBeenCalled();
+  });
 
   it('reuses saved events and creates only the missing high-confidence event on retry', async () => {
     const intakeId = 'mail_school-message';

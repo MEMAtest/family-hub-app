@@ -737,10 +737,11 @@ const toDraft = (
   line: string,
   sourceLine: number,
   people: Person[],
-  defaultPersonId?: string
+  defaultPersonId?: string,
+  personEvidence = line
 ): CalendarImportDraft => {
   const namedPeople = people.filter((person) =>
-    person.name && new RegExp(`\\b${escapeRegExp(person.name)}\\b`, 'i').test(line)
+    person.name && new RegExp(`\\b${escapeRegExp(person.name)}\\b`, 'i').test(personEvidence)
   );
   const namedPersonId = namedPeople.length === 1 ? namedPeople[0].id : undefined;
   const hasUnmappedCohort = /\b(?:Reception|Year\s+[1-6]|Key\s+Stage\s+[12])\b/i.test(line);
@@ -1013,7 +1014,7 @@ export const parseCalendarImportText = ({
         type: inferType(candidate),
         confidence: confidenceForLine(candidate),
         warnings: warningsForLine(candidate),
-      }, candidate, index, people, defaultPersonId);
+      }, candidate, index, people, defaultPersonId, [...previousLines, line].join(' '));
     });
 
   const drafts = structured.length > 0 ? structured : dedupeImportDrafts(lineDrafts);

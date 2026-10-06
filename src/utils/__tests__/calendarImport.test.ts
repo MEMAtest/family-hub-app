@@ -26,6 +26,32 @@ describe('calendar import parser', () => {
     expect(draft.warnings.join(' ')).toContain('adult attending');
   });
 
+  it('does not borrow a child name from later newsletter context', () => {
+    const drafts = parseCalendarImportText({
+      text: 'Amari photo day\nFriday 9 October 2026\nAskia will be in Year 3 next week.',
+      people: [
+        { id: 'amari', name: 'Amari', color: '#147c72', icon: '👦', role: 'Child', ageGroup: 'Year 4' },
+        { id: 'askia', name: 'Askia', color: '#123456', icon: '👦', role: 'Child', ageGroup: 'Year 3' },
+      ],
+      defaultPersonId: '',
+      today: new Date('2026-10-03T09:00:00Z'),
+    });
+
+    expect(drafts).toHaveLength(1);
+    expect(drafts[0].person).toBe('amari');
+  });
+
+  it('leaves a school event unassigned when its source does not identify a child', () => {
+    const [draft] = parseCalendarImportText({
+      text: 'School photo day Friday 9 October 2026.',
+      people: [...people, { id: 'askia', name: 'Askia', color: '#123456', icon: '👦', role: 'Child', ageGroup: 'Year 3' }],
+      defaultPersonId: '',
+      today: new Date('2026-10-03T09:00:00Z'),
+    });
+
+    expect(draft.person).toBe('');
+  });
+
   it('accepts an explicitly named adult without inferring one from a pupil', () => {
     const [draft] = parseCalendarImportText({ text: 'Ade: PTA AGM Wednesday 7 October 2026 at 5pm', people: [...people, { id: 'adult', name: 'Ade', role: 'Parent', icon: '', color: '#123456' }], today: new Date('2026-10-03T09:00:00Z') });
     expect(draft).toMatchObject({ title: 'PTA AGM', person: 'adult', importStatus: 'ready' });

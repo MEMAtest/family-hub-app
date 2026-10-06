@@ -31,6 +31,7 @@ export const CalendarView = () => {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [pendingReview, setPendingReview] = useState<number | null>(null);
+  const [pendingReviewEmails, setPendingReviewEmails] = useState<number | null>(null);
   const familyId = useFamilyStore((state) => state.databaseStatus.familyId);
   const importRef = useRef<HTMLElement>(null);
   const people = useMemo(() => members.map(({ id, name, icon, color, role, ageGroup }) => ({ id, name, icon, color, role, ageGroup })), [members]);
@@ -45,7 +46,8 @@ export const CalendarView = () => {
       if (!response.ok) throw new Error('Inbox unavailable');
       const payload = await response.json();
       setPendingReview(payload.pendingReviewCount ?? (payload.intakes || []).reduce((count: number, item: { needsReview?: number }) => count + (item.needsReview || 0), 0));
-    } catch { setPendingReview(null); }
+      setPendingReviewEmails(payload.pendingReviewEmailCount ?? null);
+    } catch { setPendingReview(null); setPendingReviewEmails(null); }
   }, [familyId]);
   useEffect(() => { void loadReviewCount(); }, [loadReviewCount]);
   const openImport = () => { setShowImport((value) => !value); if (!showImport) requestAnimationFrame(() => importRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })); };
@@ -74,7 +76,7 @@ export const CalendarView = () => {
     <header className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 bg-white px-4 py-4 dark:border-slate-800 dark:bg-slate-900 sm:px-6">
       <h2 className="text-xl font-semibold sm:text-2xl">Family Calendar</h2>
       <div className="flex items-center gap-2">
-        <button type="button" onClick={openImport} aria-label="School inbox & quick plan" aria-describedby={pendingReview ? 'school-review-count' : undefined} aria-expanded={showImport} className="inline-flex min-h-10 items-center gap-2 rounded-md border border-gray-200 px-3 text-sm font-medium dark:border-slate-700"><Import className="h-4 w-4" />School inbox &amp; quick plan {pendingReview !== null && pendingReview > 0 && <span id="school-review-count" className="rounded bg-amber-100 px-1.5 text-xs text-amber-900">{pendingReview} to review</span>}{showImport ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}</button>
+        <button type="button" onClick={openImport} aria-label="School inbox & quick plan" aria-describedby={pendingReview ? 'school-review-count' : undefined} aria-expanded={showImport} className="inline-flex min-h-10 items-center gap-2 rounded-md border border-gray-200 px-3 text-sm font-medium dark:border-slate-700"><Import className="h-4 w-4" />School inbox &amp; quick plan {pendingReview !== null && pendingReview > 0 && <span id="school-review-count" title={`${pendingReview} event suggestions across ${pendingReviewEmails ?? 'active'} school email${pendingReviewEmails === 1 ? '' : 's'} need review`} className="rounded bg-amber-100 px-1.5 text-xs text-amber-900">{pendingReview} events</span>}{showImport ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}</button>
         <button type="button" onClick={openTemplateManager} title="Event templates" aria-label="Event templates" className="min-h-10 rounded-md border border-gray-200 p-2.5 dark:border-slate-700"><LayoutGrid className="h-4 w-4" /></button>
         <button type="button" onClick={openConflictSettings} title="Conflict rules" aria-label="Conflict rules" className="min-h-10 rounded-md border border-gray-200 p-2.5 dark:border-slate-700"><Settings className="h-4 w-4" /></button>
       </div>
@@ -123,7 +125,7 @@ export const CalendarView = () => {
       </aside>
     </div>
     {showImport && <section ref={importRef} className="scroll-mt-4 border-t border-gray-200 dark:border-slate-800" aria-label="School inbox and import">
-      <CalendarCopilotPanel events={events} tasks={tasks} people={people} currentDate={currentDate} createEvent={createEvent} createTask={createTask} onOpenCalendar={() => setCurrentDate(currentDate)} onInboxChanged={setPendingReview} />
+      <CalendarCopilotPanel events={events} tasks={tasks} people={people} currentDate={currentDate} createEvent={createEvent} createTask={createTask} onOpenCalendar={() => setCurrentDate(currentDate)} onInboxChanged={(count, emails) => { setPendingReview(count); setPendingReviewEmails(emails); }} />
     </section>}
   </div>;
 };

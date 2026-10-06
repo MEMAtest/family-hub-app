@@ -28,7 +28,7 @@ interface CalendarCopilotPanelProps {
     draft: Omit<CalendarEvent, 'id' | 'createdAt' | 'updatedAt'>
   ) => Promise<{ status: 'conflict' } | { status: 'created'; event: CalendarEvent }>;
   onOpenCalendar: () => void;
-  onInboxChanged?: (pendingReview: number) => void;
+  onInboxChanged?: (pendingReview: number, pendingEmails: number) => void;
 }
 
 interface CalendarInboxItem {
@@ -265,7 +265,10 @@ const CalendarCopilotPanel = ({
       setWhatsappDeliveryTrackingConfigured(Boolean(payload.whatsappDeliveryTrackingConfigured));
       setWhatsappConsent(payload.whatsappConsent || 'not_configured');
       setInboxItems(Array.isArray(payload.intakes) ? payload.intakes : []);
-      onInboxChanged?.(payload.pendingReviewCount ?? (payload.intakes || []).reduce((count: number, item: CalendarInboxItem) => count + item.needsReview, 0));
+      onInboxChanged?.(
+        payload.pendingReviewCount ?? (payload.intakes || []).reduce((count: number, item: CalendarInboxItem) => count + item.needsReview, 0),
+        payload.pendingReviewEmailCount ?? 0,
+      );
     } catch (error) {
       setInboxError(error instanceof Error ? error.message : 'Calendar inbox could not be loaded.');
     } finally {

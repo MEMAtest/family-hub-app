@@ -45,9 +45,16 @@ test('phone navigation, room notes and basket quantities survive reload', async 
   await page.setViewportSize({ width: 375, height: 812 });
   await openProject(page);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.screenshot({ path: 'output/playwright/bathroom-overview-mobile-final.png' });
+  await page.screenshot({ path: 'output/playwright/bathroom-overview-mobile-final.png', fullPage: true });
   await page.getByRole('button', { name: 'Main Bathroom', exact: true }).click();
   await expect(page.getByRole('region', { name: 'Shower Room choices' })).not.toBeVisible();
+  const healthCheck = page.getByRole('region', { name: 'Bathroom health check' });
+  await expect(healthCheck).toBeVisible();
+  await expect(healthCheck).toContainText('Tiles');
+  const visualMap = page.getByRole('region', { name: 'Main Bathroom visual progress' });
+  await visualMap.scrollIntoViewIfNeeded();
+  await expect(visualMap).toContainText('WC & cistern');
+  await page.screenshot({ path: 'output/playwright/bathroom-progress-phone.png' });
   await page.getByRole('button', { name: /Edit room/ }).click();
   await page.getByLabel('Size & layout notes').fill('QA: confirm door clearance before ordering');
   await page.getByRole('button', { name: 'Save room', exact: true }).click();
@@ -61,6 +68,6 @@ test('phone navigation, room notes and basket quantities survive reload', async 
   await expect(basket).toContainText('£478.00');
   await page.getByRole('button', { name: 'Main Bathroom', exact: true }).click();
   await expect(page.getByText('QA: confirm door clearance before ordering')).toBeVisible();
-  await page.screenshot({ path: 'output/playwright/bathroom-room-mobile-final.png' });
+  await page.screenshot({ path: 'output/playwright/bathroom-room-mobile-final.png', fullPage: true });
   await page.context().storageState({ path: 'output/playwright/bathroom-local-state.json' });
 });

@@ -127,13 +127,6 @@ export const isHighConfidenceAutoCreate = (
   return verifiedSchoolEvent && draft.type === 'education' && draft.confidence >= 0.85;
 };
 
-const schoolDefaultPersonId = (members: Array<{ id: string; role?: string | null; ageGroup?: string | null }>) => {
-  const primaryPupils = members.filter((member) =>
-    /student|child/i.test(member.role || '') && /child|primary/i.test(member.ageGroup || '')
-  );
-  return primaryPupils.length === 1 ? primaryPupils[0].id : undefined;
-};
-
 const hasExplicitTime = (draft: CalendarImportDraft) =>
   /\b\d{1,2}(?::|\.)(\d{2})\s*(?:am|pm)?\b|\b\d{1,2}\s*(?:am|pm)\b/i.test(draft.source);
 
@@ -449,7 +442,7 @@ export const ingestCalendarEmailPayload = async (
     people,
     existingEvents: existingEvents.map(toCalendarEventResponse),
     defaultPersonId: isAuthenticatedSchoolEmail
-      ? schoolDefaultPersonId(family.members) ?? ''
+      ? ''
       : people[0]?.id,
     today: new Date(),
   }) as CalendarImportDraft[];

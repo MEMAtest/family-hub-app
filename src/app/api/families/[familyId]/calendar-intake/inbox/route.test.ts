@@ -27,11 +27,12 @@ describe('calendar email intake review status', () => {
     (prisma.family.findUnique as jest.Mock).mockResolvedValue({ id: 'family-id', familyCode: 'code' });
     (prisma.gmailConnection.findUnique as jest.Mock).mockResolvedValue(null);
     (prisma.calendarEmailIntake.findMany as jest.Mock).mockResolvedValue([]);
-    (prisma.calendarEmailIntake.aggregate as jest.Mock).mockResolvedValue({ _sum: { needsReview: 18 } });
+    (prisma.calendarEmailIntake.aggregate as jest.Mock).mockResolvedValue({ _sum: { needsReview: 18 }, _count: { id: 7 } });
     const result = await (GET as any)({}, makeContext());
     expect(result.status).toBe(200);
     expect(result.body.pendingReviewCount).toBe(18);
-    expect(prisma.calendarEmailIntake.aggregate).toHaveBeenCalledWith({ where: { familyId: 'family-id', status: { in: ['review_required', 'partial_review'] } }, _sum: { needsReview: true } });
+    expect(result.body.pendingReviewEmailCount).toBe(7);
+    expect(prisma.calendarEmailIntake.aggregate).toHaveBeenCalledWith({ where: { familyId: 'family-id', status: { in: ['review_required', 'partial_review'] } }, _sum: { needsReview: true }, _count: { id: true } });
   });
 
   it('keeps an intake pending when some imported events still need review', async () => {

@@ -57,10 +57,12 @@ export const GET = requireFamilyAccess(async (_request: NextRequest, context) =>
     const pending = await prisma.calendarEmailIntake.aggregate({
       where: { familyId, status: { in: ['review_required', 'partial_review'] } },
       _sum: { needsReview: true },
+      _count: { id: true },
     });
 
     return NextResponse.json({
       pendingReviewCount: pending._sum.needsReview ?? 0,
+      pendingReviewEmailCount: pending._count.id ?? 0,
       forwardingAddress,
       gmail: {
         connected: Boolean(gmailConnection?.enabled),
