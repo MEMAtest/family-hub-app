@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth-utils';
 import { readStonewaterProduct, stonewaterLink } from '@/lib/sourcing/stonewaterImport';
+import { assertPublicProductUrl, readPublicProduct } from '@/lib/sourcing/publicProductImport';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 const windows = new Map<string, { count: number; until: number }>();
@@ -14,13 +15,15 @@ export const POST = requireAuth(async (request: NextRequest, _context, user) => 
       if (bytes > 2000) throw new Error('Product link is too long.'); chunks.push(result.value); } } finally { await reader.cancel(); }
     const text = Buffer.concat(chunks).toString('utf8');
     const body = JSON.parse(text);
-    if (typeof body.url !== 'string') throw new Error('Paste a Stonewater product link.');
-    stonewaterLink(body.url);
+    if (typeof body.url !== 'string' || body.url.length > 1500) throw new Error('Paste a product page link.');
     const now = Date.now();
     for (const [id, window] of windows) if (window.until < now) windows.delete(id);
     const window = windows.get(user.dbUser.id) ?? { count: 0, until: now + 60000 };
     if (window.count >= 10) return NextResponse.json({ error: 'Wait a minute before reading more products.' }, { status: 429 });
     windows.set(user.dbUser.id, { ...window, count: window.count + 1 });
-    return NextResponse.json({ draft: await readStonewaterProduct(body.url) }, { headers: { 'Cache-Control': 'private, no-store' } });
-  } catch { return NextResponse.json({ error: 'Could not read that Stonewater product. Check the link or enter the option manually.' }, { status: 400 }); }
+    const url = assertPublicProductUrl(body.url);
+    const isStonewater = ['stonewaterbathrooms.com', 'www.stonewaterbathrooms.com'].includes(url.hostname);
+    const draft = isStonewater ? (stonewaterLink(body.url), await readStonewaterProduct(body.url)) : await readPublicProduct(body.url);
+    return NextResponse.json({ draft }, { headers: { 'Cache-Control': 'private, no-store' } });
+  } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : 'Could not read that product page. Enter the option manually.' }, { status: 400 }); }
 });

@@ -6,6 +6,7 @@ import type { StonewaterDraft } from '@/lib/sourcing/stonewaterImport';
 import type { z } from 'zod';
 import type { ProjectSourcing, SourcingRoomId } from '@/types/sourcing.types';
 import { householdItemSchema, householdProductSchema, sourcingCategories } from '@/lib/sourcing/householdItems';
+import { inferIncludedComponents } from '@/lib/sourcing/productMatching';
 import { bathroomRooms, roomName } from './bathroomProject.helpers';
 
 type Props = { mode: 'item' | 'product'; sourcing: ProjectSourcing; roomId?: SourcingRoomId; requirementId?: string; onClose: () => void;
@@ -31,7 +32,7 @@ export default function SourcingEntryDialog({ mode, sourcing, roomId, requiremen
     if (!url.trim() || lastRead.current === url.trim()) return;
     try {
       const link = new URL(url.trim());
-      if (link.protocol !== 'https:' || !['stonewaterbathrooms.com', 'www.stonewaterbathrooms.com'].includes(link.hostname) || !link.pathname.startsWith('/products/')) return;
+      if (link.protocol !== 'https:') return;
     } catch { return; }
     const timer = setTimeout(() => { if (lastRead.current !== url.trim()) void importProduct(url.trim()); }, 600);
     return () => clearTimeout(timer);
@@ -39,11 +40,11 @@ export default function SourcingEntryDialog({ mode, sourcing, roomId, requiremen
   function applyVariant(data: StonewaterDraft, id: string) {
     setVariantId(id);
     const option = data.variants.find((item) => item.id === id);
-    setName(`${data.name}${option && option.name !== 'Default Title' ? ` - ${option.name}` : ''}`.slice(0, 200));
-    setPrice(option ? String(option.price) : ''); setImageUrl(option?.imageUrl ?? data.images[0] ?? '');
+    setName(`${data.name}${option && !['Default Title', 'Listed product'].includes(option.name) ? ` - ${option.name}` : ''}`.slice(0, 200));
+    setPrice(option && option.price > 0 ? String(option.price) : ''); setImageUrl(option?.imageUrl ?? data.images[0] ?? '');
     const selectedUrl = `${data.url}${option ? `?variant=${option.id}` : ''}`;
     lastRead.current = selectedUrl; setUrl(selectedUrl);
-    setSize((data.name.match(/\d{3,4}\s*(?:mm)?\s*[x×]\s*\d{3,4}\s*mm/i)?.[0] ?? (option && option.name !== 'Default Title' ? option.name : '')).slice(0, 300));
+    setSize((data.name.match(/\d{3,4}\s*(?:mm)?\s*[x×]\s*\d{3,4}\s*mm/i)?.[0] ?? (option && !['Default Title', 'Listed product'].includes(option.name) ? option.name : '')).slice(0, 300));
   }
   async function importProduct(link = url.trim()) {
     pending.current?.abort();
@@ -54,7 +55,11 @@ export default function SourcingEntryDialog({ mode, sourcing, roomId, requiremen
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'The product could not be read.');
       if (controller.signal.aborted) return;
-      const data = result.draft as StonewaterDraft; setDraft(data); setSupplier('Stonewater Bathrooms'); setNotes(data.description); setBasis('each'); setComponents([]); applyVariant(data, data.selectedVariant || (data.variants.length === 1 ? data.variants[0].id : ''));
+      const data = result.draft as StonewaterDraft; setDraft(data); setSupplier(new URL(data.url).hostname.replace(/^www\./, '')); setNotes(data.description); setBasis('each');
+      const nextVariant = data.selectedVariant || (data.variants.length === 1 ? data.variants[0].id : '');
+      const matchedVariant = data.variants.find((item) => item.id === nextVariant);
+      setComponents(inferIncludedComponents(`${data.name} ${matchedVariant?.name ?? ''} ${data.description}`, requirement?.requiredComponents ?? []));
+      applyVariant(data, nextVariant);
     } catch (reason) { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : 'Enter this option manually.'); }
     finally { if (!controller.signal.aborted && pending.current === controller) { pending.current = null; setReading(false); } }
   }
@@ -62,10 +67,11 @@ export default function SourcingEntryDialog({ mode, sourcing, roomId, requiremen
   function submit(event: React.FormEvent) {
     event.preventDefault(); setError('');
     try {
-      if (reading || (draft && !variantId)) throw new Error('Choose the Stonewater variant first.');
+      if (reading || (draft && !variantId)) throw new Error('Choose the product option first.');
       if (mode === 'item') onItem({ roomId: room, name, category, quantity, size, specification: notes || name, unit, relatedToId: target || undefined, ...(url || imageUrl ? { product: { url, imageUrl, supplier, price: price.trim() ? Number(price) : NaN, sku: draft?.variants.find((item) => item.id === variantId)?.sku, gallery: draft?.images } } : {}) });
       else {
-        if (reading || (draft && !variantId)) throw new Error('Choose the Stonewater variant first.');
+        if (reading || (draft && !variantId)) throw new Error('Choose the product option first.');
+        if (draft && !price.trim()) throw new Error('Enter the UK price; this supplier page did not show it clearly.');
         onProduct({ requirementId: target, name, supplier, url, imageUrl, price: price.trim() ? Number(price) : NaN, priceUnit: basis, size, components, notes, sku: draft?.variants.find((item) => item.id === variantId)?.sku, gallery: draft?.images });
       }
     } catch (reason) { setError(reason instanceof Error && !('issues' in reason) ? reason.message : 'Check the name, quantity, price and links.'); }
@@ -78,15 +84,15 @@ export default function SourcingEntryDialog({ mode, sourcing, roomId, requiremen
         <form onSubmit={submit} className="min-h-0 overflow-y-auto p-4">
           <div className="space-y-3 text-xs">
             <label className="block">Bathroom<select className={field} value={room} onChange={(event) => { setRoom(event.target.value as SourcingRoomId); setTarget(''); setComponents([]); }}>{bathroomRooms.map((item) => <option key={item.id} value={item.id}>{roomName(sourcing, item.id)}</option>)}</select></label>
-            <label className="block">{mode === 'item' ? 'Related to (optional)' : 'Option for'}<select required={mode === 'product'} className={field} value={target} onChange={(event) => { setTarget(event.target.value); setComponents([]); }}><option value="">{mode === 'item' ? 'No related item' : 'Choose an item'}</option>{sourcing.requirements.filter((item) => item.roomId === room).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+            <label className="block">{mode === 'item' ? 'Related to (optional)' : 'Option for'}<select required={mode === 'product'} className={field} value={target} onChange={(event) => { const nextTarget = event.target.value; setTarget(nextTarget); const linked = sourcing.requirements.find((item) => item.id === nextTarget); const option = draft?.variants.find((item) => item.id === variantId); setComponents(draft && linked ? inferIncludedComponents(`${draft.name} ${option?.name ?? ''} ${draft.description}`, linked.requiredComponents) : []); }}><option value="">{mode === 'item' ? 'No related item' : 'Choose an item'}</option>{sourcing.requirements.filter((item) => item.roomId === room).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
             <>
-              <label className="block">Product link<input autoFocus={mode === 'product'} type="url" maxLength={1500} placeholder="https://www.stonewaterbathrooms.com/products/..." className={field} value={url} onChange={(event) => { pending.current?.abort(); pending.current = null; lastRead.current = ''; setReading(false); setUrl(event.target.value); setDraft(null); setVariantId(''); setName(''); setPrice(''); setImageUrl(''); setSupplier(''); setSize(''); setNotes(''); setComponents([]); setError(''); }} /></label>
+              <label className="block">Product link<input autoFocus={mode === 'product'} type="url" maxLength={1500} placeholder="Paste a public product page URL" className={field} value={url} onChange={(event) => { pending.current?.abort(); pending.current = null; lastRead.current = ''; setReading(false); setUrl(event.target.value); setDraft(null); setVariantId(''); setName(''); setPrice(''); setImageUrl(''); setSupplier(''); setSize(''); setNotes(''); setComponents([]); setError(''); }} /></label>
               {reading && <p role="status" className="text-emerald-700">Loading product photo and price...</p>}
-              {!draft && <button type="button" disabled={reading || !url.trim()} onClick={() => void importProduct()} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-emerald-700 px-3 text-sm text-emerald-800 disabled:opacity-50"><Download className="h-4 w-4" />{reading ? 'Reading product...' : 'Read Stonewater product'}</button>}
+              {!draft && <button type="button" disabled={reading || !url.trim()} onClick={() => void importProduct()} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-emerald-700 px-3 text-sm text-emerald-800 disabled:opacity-50"><Download className="h-4 w-4" />{reading ? 'Reading product...' : 'Read product page'}</button>}
               {draft && <>
-                <label className="block">Stonewater variant<select required className={field} value={variantId} onChange={(event) => applyVariant(draft, event.target.value)}><option value="">Choose a variant</option>{draft.variants.map((item) => <option key={item.id} value={item.id}>{item.name === 'Default Title' ? draft.name : item.name} - £{item.price.toFixed(2)}{item.available ? '' : ' - unavailable'}</option>)}</select></label>
+                <label className="block">Product option<select required className={field} value={variantId} onChange={(event) => { const next = draft.variants.find((item) => item.id === event.target.value); applyVariant(draft, event.target.value); setComponents(inferIncludedComponents(`${draft.name} ${next?.name ?? ''} ${draft.description}`, requirement?.requiredComponents ?? [])); }}><option value="">Choose an option</option>{draft.variants.map((item) => <option key={item.id} value={item.id}>{item.name === 'Default Title' || item.name === 'Listed product' ? draft.name : item.name} - {item.price > 0 ? `£${item.price.toFixed(2)}` : 'price not found'}{item.available ? '' : ' - unavailable'}</option>)}</select></label>
                 {imageUrl && <img src={imageUrl} alt={name} className="h-32 w-full object-contain" />}
-                <p className="text-gray-500">Stonewater catalogue details. Confirm dimensions and included parts; availability is not a stock guarantee.</p>
+                <p className="text-gray-500">Supplier page details. Check the price, dimensions and included parts before saving.</p>
               </>}
             </>
             <label className="block">{mode === 'item' ? 'Item name' : 'Product name'}<input autoFocus={mode === 'item'} required maxLength={200} className={field} value={name} onChange={(event) => setName(event.target.value)} /></label>
@@ -100,7 +106,7 @@ export default function SourcingEntryDialog({ mode, sourcing, roomId, requiremen
               <label className="block">Supplier<input maxLength={100} className={field} value={supplier} onChange={(event) => setSupplier(event.target.value)} /></label>
               <div className="grid grid-cols-2 gap-3"><label>Price (£)<input required type="number" step="0.01" min="0" max="100000" className={field} value={price} onChange={(event) => setPrice(event.target.value)} /></label><label>Price is per<select className={field} value={basis} onChange={(event) => setBasis(event.target.value as typeof basis)}><option value="each">Item</option><option value="per box">Box</option><option value="per m²">m²</option><option value="per tile">Tile</option></select></label></div>
               <label className="block">Photo link (optional)<input type="url" maxLength={1500} placeholder="https://" className={field} value={imageUrl} onChange={(event) => setImageUrl(event.target.value)} /></label>
-              {requirement && requirement.requiredComponents.length > 0 && <fieldset className="border-y border-gray-200 py-3 dark:border-slate-700"><legend className="font-medium">Included parts</legend>{requirement.requiredComponents.map((part) => <label key={part} className="flex min-h-10 items-center gap-2"><input type="checkbox" checked={components.includes(part)} onChange={(event) => setComponents((old) => event.target.checked ? [...old, part] : old.filter((item) => item !== part))} className="rounded" />{part.replace(/-/g, ' ')}</label>)}</fieldset>}
+              {requirement && requirement.requiredComponents.length > 0 && <fieldset className="border-y border-gray-200 py-3 dark:border-slate-700"><legend className="font-medium">Included parts</legend><p className="text-xs text-gray-500">Check the supplier listing, then tick every part included. These ticks update the quote checklist.</p>{requirement.requiredComponents.map((part) => <label key={part} className="flex min-h-10 items-center gap-2"><input type="checkbox" checked={components.includes(part)} onChange={(event) => setComponents((old) => event.target.checked ? [...old, part] : old.filter((item) => item !== part))} className="rounded" />{part.replace(/-/g, ' ')}</label>)}</fieldset>}
             </>}
             <label className="block">Size / dimensions<input maxLength={300} className={field} value={size} onChange={(event) => setSize(event.target.value)} /></label>
             {!draft && imageUrl && <img src={imageUrl} alt={name || 'Product preview'} className="h-32 w-full object-contain" />}

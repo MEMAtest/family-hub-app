@@ -7,6 +7,8 @@ import { bathroomRooms, basketTotal, basketLineCost, excludedBasketPrice, leadin
 import { measurementArea, plannedTileCalculation } from '@/lib/sourcing/tilePlanner';
 import QuoteChecklist from './QuoteChecklist';
 import { fixtureFit } from '@/lib/sourcing/fixtureFit';
+import BathroomHealthCheck from './BathroomHealthCheck';
+import BathroomRoomMap from './BathroomRoomMap';
 
 const money = new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' });
 
@@ -38,6 +40,7 @@ export default function BathroomProjectOverview({ sourcing, roomId, isReadOnly, 
   return <div className="min-w-0 space-y-6">
     <header className="flex items-start justify-between gap-3">
       <div className="min-w-0">
+        <p className={`text-[11px] font-semibold uppercase tracking-wide ${roomId === 'shower-room' ? 'text-sky-700' : 'text-emerald-700'}`}>{roomId ? (roomId === 'shower-room' ? 'Shower fit-out' : 'Bath fit-out') : 'Bathroom project'}</p>
         <h2 className="text-xl font-semibold text-gray-900 dark:text-white">{roomId ? roomName(sourcing, roomId) : 'Project overview'}</h2>
         <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">{selected.length} of {requirements.length} items have selections · {incomplete.length} incomplete · {fitterChecks.length} fitter checks</p>
       </div>
@@ -54,6 +57,8 @@ export default function BathroomProjectOverview({ sourcing, roomId, isReadOnly, 
       <span className="text-xs text-gray-500">{excluded ? `${excluded} box/tile-priced selections excluded. ` : ''}Tiles with a saved plan include allowance and pack rounding. Delivery and unselected items excluded.</span>
     </div>
 
+    <BathroomHealthCheck sourcing={sourcing} roomId={roomId} onOpenRequirement={onOpenRequirement} />
+
     {!roomId && <nav aria-label="Bathroom quick view" className="grid min-w-0 grid-cols-2 gap-3">
       {bathroomRooms.map((room, index) => {
         const items = sourcing.requirements.filter((item) => item.roomId === room.id);
@@ -66,6 +71,10 @@ export default function BathroomProjectOverview({ sourcing, roomId, isReadOnly, 
         </button>;
       })}
     </nav>}
+
+    <div className={`grid min-w-0 gap-3 ${roomId ? '' : 'sm:grid-cols-2'}`}>
+      {visibleRooms.map((room) => <BathroomRoomMap key={room.id} sourcing={sourcing} roomId={room.id} onOpenRequirement={onOpenRequirement} />)}
+    </div>
 
     {comparing && !roomId && <RoomComparison sourcing={sourcing} onOpenRequirement={onOpenRequirement} onOpenProduct={onOpenProduct} />}
 

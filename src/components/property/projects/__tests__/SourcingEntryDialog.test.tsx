@@ -26,18 +26,32 @@ test('paste alone imports name, picture, price and SKU variant without a second 
   expect(global.fetch).toHaveBeenCalledTimes(1);
 });
 
-test('unsupported URLs do not auto-fetch and editing link clears old product details', async () => {
-  open();
-  fireEvent.change(screen.getByLabelText('Product link'), { target: { value: 'https://example.com/other' } });
-  await act(async () => { jest.advanceTimersByTime(1000); });
-  expect(global.fetch).not.toHaveBeenCalled();
-  fireEvent.change(screen.getByLabelText('Product link'), { target: { value: draft.url } });
+test('a supplier listing for a cistern marks that included part on the linked quote option', async () => {
+  const publicDraft = { ...draft, name: 'Fluid Master concealed cistern', url: 'https://shop.example.com/fluid-master-cistern', description: 'Concealed cistern with flush button', selectedVariant: 'public-page', variants: [{ ...draft.variants[0], id: 'public-page', name: 'Listed product', sku: 'FM1', price: 120 }] };
+  (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ draft: publicDraft }) });
+  const onProduct = jest.fn();
+  render(<SourcingEntryDialog mode="product" sourcing={createBathroomSourcingSeed()} roomId="main-bathroom" requirementId="main-wc-unit" onClose={jest.fn()} onItem={jest.fn()} onProduct={onProduct} />);
+  fireEvent.change(screen.getByLabelText('Product link'), { target: { value: publicDraft.url } });
   await act(async () => { jest.advanceTimersByTime(600); });
-  await waitFor(() => expect(screen.getByLabelText('Price (£)')).toHaveValue(536));
+  await waitFor(() => expect(screen.getByLabelText('Price (£)')).toHaveValue(120));
+  expect(screen.getByLabelText('cistern')).toBeChecked();
+  expect(screen.getByLabelText('wc unit')).not.toBeChecked();
+  fireEvent.click(screen.getByRole('button', { name: 'Save option' }));
+  expect(onProduct).toHaveBeenCalledWith(expect.objectContaining({ requirementId: 'main-wc-unit', name: publicDraft.name, components: ['cistern'], sku: 'FM1' }));
+});
+
+test('public supplier URLs auto-read product details and changing the link clears stale details', async () => {
+  open();
+  const publicDraft = { ...draft, name: 'Quiet Extractor Fan', url: 'https://shop.example.com/quiet-extractor-fan', description: 'Quiet bathroom extractor fan with timer', variants: [{ ...draft.variants[0], name: 'Listed product', id: 'public-page', price: 69.99, sku: 'FAN-69' }], selectedVariant: 'public-page' };
+  (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ draft: publicDraft }) });
+  fireEvent.change(screen.getByLabelText('Product link'), { target: { value: publicDraft.url } });
+  await act(async () => { jest.advanceTimersByTime(600); });
+  await waitFor(() => expect(screen.getByLabelText('Price (£)')).toHaveValue(69.99));
+  expect(screen.getByLabelText('Supplier')).toHaveValue('shop.example.com');
   fireEvent.change(screen.getByLabelText('Product link'), { target: { value: '' } });
   expect(screen.getByLabelText('Product name')).toHaveValue('');
   expect(screen.getByLabelText('Price (£)')).toHaveValue(null);
-  expect(screen.queryByRole('img', { name: 'Imported bath' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('img', { name: 'Quiet Extractor Fan' })).not.toBeInTheDocument();
 });
 
 test('older in-flight import cannot overwrite a changed link', async () => {
@@ -60,5 +74,5 @@ test('import failure is visible and manual fields remain available', async () =>
   await act(async () => { jest.advanceTimersByTime(600); });
   expect(screen.getByRole('alert')).toHaveTextContent('Supplier unavailable');
   expect(screen.getByLabelText('Product name')).toBeEnabled();
-  expect(screen.getByRole('button', { name: 'Read Stonewater product' })).toBeEnabled();
+  expect(screen.getByRole('button', { name: 'Read product page' })).toBeEnabled();
 });

@@ -321,11 +321,10 @@ test('phone: complete quote checklist, related item and website option can be sa
   await optionDialog.getByLabel('Product link', { exact: true }).fill('https://example.com/other-mirror');
   await page.route('**/api/property/sourcing/import', (route) => route.fulfill({ json: { draft: { name: 'Alternative LED mirror', url: 'https://www.stonewaterbathrooms.com/products/alternative-mirror', selectedVariant: '', description: 'Mirror only. Fixings sold separately.', images: [], variants: [{ id: '11', name: '600mm', sku: 'M600', price: 179, available: true, imageUrl: '' }, { id: '12', name: '800mm', sku: 'M800', price: 199, available: false, imageUrl: '' }] } } }));
   await optionDialog.getByLabel('Product link', { exact: true }).fill('https://www.stonewaterbathrooms.com/products/alternative-mirror');
-  await optionDialog.getByRole('button', { name: 'Read Stonewater product' }).click();
-  await expect(optionDialog.getByLabel('Stonewater variant')).toBeVisible();
-  await optionDialog.getByLabel('Stonewater variant').selectOption('11');
+  await expect(optionDialog.getByLabel('Product option')).toBeVisible();
+  await optionDialog.getByLabel('Product option').selectOption('11');
   await expect(optionDialog.getByLabel('Price (£)', { exact: true })).toHaveValue('179');
-  await expect(optionDialog.getByLabel('Supplier', { exact: true })).toHaveValue('Stonewater Bathrooms');
+  await expect(optionDialog.getByLabel('Supplier', { exact: true })).toHaveValue('stonewaterbathrooms.com');
   await expect(optionDialog.getByLabel('Notes', { exact: true })).toHaveValue('Mirror only. Fixings sold separately.');
   await page.screenshot({ path: 'output/playwright/stonewater-import-phone.png' });
   await optionDialog.getByRole('button', { name: 'Save option', exact: true }).click();
@@ -352,7 +351,7 @@ test('phone: complete quote checklist, related item and website option can be sa
 test('phone: measured item space blocks oversize choices, rechecks changed limits and retains history', async ({ page }) => {
   await open(page);
   await page.getByRole('button', { name: 'Room overview', exact: true }).click();
-  await page.getByRole('button', { name: 'B-shaped shower bath', exact: true }).click();
+  await page.getByRole('region', { name: 'Main Bathroom choices' }).getByRole('button', { name: 'B-shaped shower bath', exact: true }).click();
   const panel = page.getByRole('region', { name: 'Measurement fit check' });
   await panel.getByRole('button', { name: 'Edit fit measurements' }).click();
   await panel.getByLabel('Measurement unit', { exact: true }).selectOption('cm');
@@ -379,7 +378,7 @@ test('phone: measured item space blocks oversize choices, rechecks changed limit
   await details.getByRole('button', { name: 'Close product details' }).click();
   await page.reload();
   await page.getByRole('button', { name: 'Main Bathroom', exact: true }).click();
-  await page.getByRole('button', { name: 'B-shaped shower bath', exact: true }).click();
+  await page.getByRole('region', { name: 'Main Bathroom choices' }).getByRole('button', { name: 'B-shaped shower bath', exact: true }).click();
   await expect(page.getByText('Choice history (1)', { exact: true })).toBeVisible();
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('family-storage')!).state.propertyProjects[0]);
   expect(saved.sourcing.requirements.find((item: any) => item.id === 'main-bath').fitSpace).toMatchObject({ widthMm: 950, lengthMm: 1750, clearanceMm: 50 });
