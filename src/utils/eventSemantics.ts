@@ -59,5 +59,9 @@ export const getEventNotificationMetadata = (
   eventTime: event.time,
   eventLocation: event.location,
 });
-export const hasUnspecifiedEventTime = (event: { notes?: string }) =>
-  /(?:school email did not specify a time|time not provided by source|time not specified)/i.test(event.notes || '');
+export const hasUnspecifiedEventTime = (event: { notes?: string; metadata?: Record<string, unknown> }) => {
+  const timing = event.metadata?.calendarTiming as { status?: string } | undefined;
+  if (timing?.status === 'known') return false;
+  if (timing?.status === 'unknown') return true;
+  return /(?:school email did not specify a time|time not provided by source|time not specified)/i.test(event.notes || '');
+};

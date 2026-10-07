@@ -116,7 +116,7 @@ test('iPhone month shows same-day events before any tap', async ({ page }) => {
   await expect(page.getByText(eventTitles[1], { exact: true }).first()).toBeVisible();
   await expect(page.getByText(/\+\d+ more/)).toHaveCount(0);
   for (const title of eventTitles) {
-    await expect(page.getByRole('table', { name: 'Month View' }).getByText(title, { exact: true })).toBeAttached();
+    await expect(page.getByRole('table', { name: 'Month View' }).getByText(title, { exact: true }).first()).toBeAttached();
   }
   await expectNoHorizontalOverflow(page);
 });

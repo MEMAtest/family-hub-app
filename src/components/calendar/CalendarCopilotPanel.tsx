@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { CalendarPlus, CheckCircle2, Clock, ExternalLink, FileUp, Loader2, Mail, MapPin, RefreshCw, Sparkles, XCircle } from 'lucide-react';
+import { Dialog, DialogPanel, DialogTitle } from '@headlessui/react';
+import { CalendarPlus, CheckCircle2, Clock, ExternalLink, FileUp, Loader2, Mail, MapPin, RefreshCw, Settings2, Sparkles, X, XCircle } from 'lucide-react';
 import type { CalendarEvent, Person } from '@/types/calendar.types';
 import type { CalendarTask } from '@/types/calendar.types';
 import { useFamilyStore } from '@/store/familyStore';
@@ -29,6 +30,7 @@ interface CalendarCopilotPanelProps {
     draft: Omit<CalendarEvent, 'id' | 'createdAt' | 'updatedAt'>
   ) => Promise<{ status: 'conflict' } | { status: 'created'; event: CalendarEvent }>;
   onOpenCalendar: () => void;
+  onEventsImported?: () => Promise<void>;
   onInboxChanged?: (pendingReview: number, pendingEmails: number) => void;
 }
 
@@ -46,6 +48,9 @@ interface CalendarInboxItem {
   duplicateCount: number;
   conflictCount: number;
   parsedDrafts: SchoolDraft[];
+  outstandingDrafts?: SchoolDraft[];
+  actionRequired?: boolean;
+  autoProcessEligibleCount?: number;
   documentSummary?: SchoolDocumentSummary | null;
   attachments?: CalendarAttachment[];
 }
@@ -102,6 +107,9 @@ const hasUnspecifiedEventTime = (event: Pick<CalendarEvent, 'notes'>) =>
 const draftHasSpecifiedTime = (draft: CalendarImportDraft) =>
   draft.timeSpecified ?? /\b\d{1,2}(?::|\.)(\d{2})\s*(?:am|pm)?\b|\b\d{1,2}\s*(?:am|pm)\b/i.test(draft.source);
 
+const draftIsImportable = (draft: SchoolDraft) =>
+  (draft as SchoolDraft & { importable?: boolean }).importable !== false;
+
 const isChildProfile = (person: Person) =>
   /child|kid|son|daughter|student/i.test(person.role) ||
   /toddler|preschool|child|teen/i.test(person.ageGroup || '');
@@ -132,6 +140,7 @@ const CalendarCopilotPanel = ({
   createEvent,
   createTask,
   onOpenCalendar,
+  onEventsImported,
   onInboxChanged,
 }: CalendarCopilotPanelProps) => {
   const familyId = useFamilyStore((state) => state.databaseStatus.familyId);
@@ -149,6 +158,7 @@ const CalendarCopilotPanel = ({
   const [importError, setImportError] = useState<string | null>(null);
   const [importSuccess, setImportSuccess] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
+  const [intakeOpen, setIntakeOpen] = useState(false);
   const [forwardingAddress, setForwardingAddress] = useState<string | null>(null);
   const [inboxItems, setInboxItems] = useState<CalendarInboxItem[]>([]);
   const [inboxLoading, setInboxLoading] = useState(false);
@@ -182,21 +192,21 @@ const CalendarCopilotPanel = ({
   const [importSourceName, setImportSourceName] = useState<string | null>(null);
 
   const selectedDrafts = useMemo(
-    () => importDrafts.filter((draft) => draft.person && selectedDraftIds.has(draft.importId)),
+    () => importDrafts.filter((draft) => draft.person && draftIsImportable(draft) && selectedDraftIds.has(draft.importId)),
     [importDrafts, selectedDraftIds]
   );
   const assistantDrafts = assistantResult?.drafts ?? (assistantResult?.draft ? [assistantResult.draft] : []);
   const pendingInboxItems = useMemo(
-    () => inboxItems.filter((item) =>
+    () => inboxItems.filter((item) => item.actionRequired ?? (item.status !== 'no_events' && (
       item.needsReview > 0 ||
       item.conflictCount > 0 ||
       item.status === 'needs_ocr' ||
       item.status === 'content_required' ||
-      item.status === 'no_events' ||
       (item.status === 'review_required' && item.autoCreated === 0)
-    ),
+    ))),
     [inboxItems]
   );
+  const referenceInboxItems = inboxItems.filter((item) => !pendingInboxItems.includes(item));
   const personNameById = useMemo(
     () => new Map(people.map((person) => [person.id, person.name])),
     [people]
@@ -343,6 +353,7 @@ const CalendarCopilotPanel = ({
       const payload = await response.json();
       if (!response.ok || payload.errors?.length) throw new Error(payload.error || payload.errors?.[0] || 'Gmail could not be synced.');
       await loadInbox();
+      await onEventsImported?.();
       setImportSuccess(
         payload.processed > 0
           ? `Synced ${payload.processed} email${payload.processed === 1 ? '' : 's'} from Gmail; ${payload.autoCreated} added to the calendar and ${payload.needsReview} left for review.`
@@ -355,8 +366,11 @@ const CalendarCopilotPanel = ({
     }
   };
 
-  const reviewInboxItem = (item: CalendarInboxItem) => {
-    const drafts = (item.parsedDrafts || []).map((draft) => {
+  const showInboxItem = (item: CalendarInboxItem) => {
+    setIntakeOpen(true);
+    const drafts = (item.outstandingDrafts || item.parsedDrafts || []).filter((draft) =>
+      !['imported', 'dismissed', 'non_event', 'duplicate'].includes((draft as SchoolDraft & { disposition?: string }).disposition || '')
+    ).map((draft) => {
       const title = schoolEventTitle(draft.title);
       const assignedPerson = people.find((person) => person.id === draft.person);
       if (isAdultSchoolEvent(title) && (!assignedPerson || isChildProfile(assignedPerson))) {
@@ -374,10 +388,29 @@ const CalendarCopilotPanel = ({
     setImportDrafts(drafts);
     setDocumentSummary(item.documentSummary ?? null);
     setDocumentAttachments(item.attachments ?? []);
-    setSelectedDraftIds(new Set(drafts.filter((draft) => draft.importStatus !== 'duplicate' && draft.person).map((draft) => draft.importId)));
+    setSelectedDraftIds(new Set(drafts.filter((draft) => draft.importStatus === 'ready' && draft.person && draftIsImportable(draft)).map((draft) => draft.importId)));
     setActiveInboxItemId(item.id);
     setImportError(null);
-    setImportSuccess(`Loaded ${drafts.length} event${drafts.length === 1 ? '' : 's'} from "${item.subject || item.sender || 'forwarded email'}".`);
+    setImportSuccess(item.autoCreated > 0 ? `${item.autoCreated} already added to your calendar.` : null);
+  };
+
+  const reviewInboxItem = async (item: CalendarInboxItem) => {
+    showInboxItem(item);
+    if (!activeFamilyId || !item.autoProcessEligibleCount) return;
+    setImportLoading(true);
+    try {
+      const response = await fetch(`/api/families/${activeFamilyId}/calendar-intake/inbox`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'auto-process', intakeId: item.id }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || 'Confirmed dates could not be added. Try again.');
+      showInboxItem({ ...item, ...payload });
+      await loadInbox();
+      await onEventsImported?.();
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : 'Automatic import failed.');
+    } finally { setImportLoading(false); }
   };
 
   const markInboxItemReviewed = async () => {
@@ -393,6 +426,7 @@ const CalendarCopilotPanel = ({
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || 'Inbox review status could not be saved.');
       setActiveInboxItemId(null);
+      setIntakeOpen(false);
       setImportSuccess('Marked this email as reviewed.');
       void loadInbox();
     } catch (error) {
@@ -750,7 +784,7 @@ const CalendarCopilotPanel = ({
         if (!response.ok) throw new Error(payload.error || 'Attendee choice could not be saved.');
         setImportDrafts(payload.parsedDrafts);
         setInboxItems((current) => current.map((item) => item.id === activeInboxItemId
-          ? { ...item, parsedDrafts: payload.parsedDrafts } : item));
+          ? { ...item, ...payload } : item));
       } catch (error) {
         setImportError(error instanceof Error ? error.message : 'Attendee choice could not be saved.');
         return;
@@ -883,8 +917,8 @@ const CalendarCopilotPanel = ({
   // quick-create input and its Run button clean off a 390px screen, with no way
   // to reach them because the page itself does not scroll sideways.
   return (
-    <section className="grid min-w-0 gap-3 border-b border-gray-200 bg-[#f7fbf8] p-3 dark:border-slate-800 dark:bg-slate-950 md:grid-cols-2">
-      <div className="min-w-0 rounded-lg border border-[#dde5e0] bg-white p-3 dark:border-slate-800 dark:bg-slate-900 md:col-span-2">
+    <section className="grid min-w-0 items-start gap-4 border-b border-gray-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-950 md:grid-cols-2">
+      <div className="min-w-0 border-b border-gray-200 pb-3 dark:border-slate-800 md:col-span-2">
         <div className="mb-2 flex items-center justify-between gap-3">
           <div>
             <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-100">Important this week</h3>
@@ -911,12 +945,13 @@ const CalendarCopilotPanel = ({
           <p className="rounded-md bg-[#f7fbf8] px-3 py-3 text-xs text-gray-600 dark:bg-slate-950 dark:text-slate-300">Nothing scheduled in the next 7 days.</p>
         )}
       </div>
-      <div className="min-w-0 rounded-lg border border-[#dde5e0] bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
-        <div className="mb-2 flex items-center gap-2">
-          <FileUp className="h-4 w-4 text-purple-600" />
-          <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-100">Add school dates</h3>
+      <div className="min-w-0 text-gray-900 dark:text-slate-100">
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <h3 className="flex items-center gap-2 text-sm font-semibold"><Mail className="h-4 w-4 text-purple-600" /> School & nursery inbox</h3>
+          <button type="button" onClick={() => { setActiveInboxItemId(null); setImportDrafts([]); setImportText(''); setDocumentSummary(null); setDocumentAttachments([]); setImportError(null); setImportSuccess(null); setSelectedDraftIds(new Set()); setIntakeOpen(true); }}
+            className="inline-flex min-h-10 items-center gap-1.5 rounded-md border border-gray-200 px-2.5 text-xs font-medium dark:border-slate-700"><FileUp className="h-4 w-4" /> Add document</button>
         </div>
-        <div className="mb-3 rounded-md border border-purple-100 bg-purple-50 p-3 text-xs text-purple-900 dark:border-purple-500/30 dark:bg-purple-500/10 dark:text-purple-100">
+        <div className="mb-3 border-b border-gray-200 pb-3 text-xs dark:border-slate-800">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="flex items-center gap-1.5 font-semibold">
@@ -927,9 +962,6 @@ const CalendarCopilotPanel = ({
                 <>
                   <p className="mt-1">Connected to {gmailEmail}</p>
                   <p className="mt-1">School and nursery mail is checked at 08:00 and 20:00 London time{gmailLastSyncAt ? ` · Last successful check ${new Date(gmailLastSyncAt).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/London' })}` : ''}.</p>
-                  {forwardingAddress && (
-                    <p className="mt-1 break-all font-mono text-[11px]">Forward other school emails to {forwardingAddress}</p>
-                  )}
                 </>
               ) : (
                 <p className="mt-1">Connect Gmail to automatically import Stewart Fleming emails and forward other school emails to a private Family Hub address.</p>
@@ -956,7 +988,10 @@ const CalendarCopilotPanel = ({
               </button>
             </div>
           </div>
-          {inboxError && <p className="mt-2 text-amber-700 dark:text-amber-200">{inboxError}</p>}
+          {inboxError && <p role="alert" className="mt-2 text-amber-700 dark:text-amber-200">{inboxError}</p>}
+          <details className="mt-2 text-gray-500 dark:text-slate-400">
+          <summary className="flex min-h-9 cursor-pointer items-center gap-1.5 text-xs font-medium"><Settings2 className="h-3.5 w-3.5" /> Connection & assignment settings</summary>
+          {forwardingAddress && <p className="mt-1 break-all text-[11px]">Forward other school emails to {forwardingAddress}</p>}
           <button type="button" onClick={() => void previewAssignmentRepair()} disabled={repairLoading || inboxLoading || !activeFamilyId}
             className="mt-2 inline-flex min-h-9 items-center gap-1.5 rounded-md border border-purple-200 px-2 py-1 font-semibold">
             {repairLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />} Review school assignments
@@ -990,19 +1025,21 @@ const CalendarCopilotPanel = ({
                     ? 'WhatsApp reminders and delivery-status tracking are active. Send STOP to pause.'
                     : 'WhatsApp reminders are opted in, but delivery-status tracking still needs setup.'}
           </p>
+          </details>
+          <p className="mt-2 font-medium text-emerald-700 dark:text-emerald-300">Confirmed dates are added automatically. Only unresolved details need review.</p>
           {pendingInboxItems.length > 0 && (
             <div className="mt-3 space-y-2">
-              {pendingInboxItems.slice(0, 3).map((item) => (
+              <p className="font-semibold">Needs your decision · {pendingInboxItems.length} update{pendingInboxItems.length === 1 ? '' : 's'}</p>
+              {pendingInboxItems.map((item) => (
                 <button
                   key={item.id}
                   type="button"
-                  onClick={() => reviewInboxItem(item)}
-                  className="flex w-full items-center justify-between gap-3 rounded-md border border-purple-200 bg-white px-3 py-2 text-left hover:border-purple-400 dark:border-purple-500/30 dark:bg-slate-950 dark:hover:border-purple-300"
+                  onClick={() => void reviewInboxItem(item)}
+                  className="flex min-h-12 w-full items-center justify-between gap-3 border-b border-gray-100 py-2 text-left hover:text-purple-700 dark:border-slate-800 dark:hover:text-purple-300"
                 >
                   <span className="min-w-0">
                     <span className="block truncate font-semibold">{item.subject || item.sender || 'Forwarded email'}</span>
-                    <span className="block break-words text-[11px]">{item.schoolSource?.institutionName || 'Source institution to confirm'} · {item.sender || 'Sender unknown'}</span>
-                    <span className="block text-[11px]">Received {new Date(item.receivedAt).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/London' })}</span>
+                    <span className="block break-words text-[11px] text-gray-500 dark:text-slate-400">{item.schoolSource?.institutionName || 'Source institution to confirm'}</span>
                     <span className="block text-[11px] opacity-75">
                       {inboxItemSummary(item)}
                     </span>
@@ -1012,7 +1049,25 @@ const CalendarCopilotPanel = ({
               ))}
             </div>
           )}
+          {!inboxLoading && !inboxError && pendingInboxItems.length === 0 && <p className="mt-3 flex items-center gap-2 text-gray-600 dark:text-slate-300"><CheckCircle2 className="h-4 w-4 text-emerald-600" /> No decisions waiting.</p>}
+          {referenceInboxItems.length > 0 && <details className="mt-3">
+            <summary className="min-h-9 cursor-pointer py-2 font-medium">Added & reference updates · {referenceInboxItems.length}</summary>
+            {referenceInboxItems.map((item) => <button key={item.id} type="button" onClick={() => void reviewInboxItem(item)} className="flex min-h-12 w-full items-center justify-between gap-3 border-b border-gray-100 py-2 text-left dark:border-slate-800">
+              <span className="min-w-0"><span className="block font-medium">{item.subject || 'School update'}</span><span className="block text-[11px] text-gray-500 dark:text-slate-400">{item.status === 'no_events' ? 'Saved for reference · no calendar action' : inboxItemSummary(item)}</span></span><span className="text-purple-700 dark:text-purple-300">Open</span>
+            </button>)}
+          </details>}
         </div>
+        {importSuccess && !intakeOpen && <p role="status" className="mt-2 text-xs text-emerald-700 dark:text-emerald-300">{importSuccess}</p>}
+        <Dialog open={intakeOpen} onClose={() => { if (!importing && !assignmentSaving && !importLoading) setIntakeOpen(false); }} className="relative z-[110]">
+        <div className="fixed inset-0 bg-black/40" aria-hidden="true" />
+        <div className="fixed inset-0 flex items-end justify-center sm:items-center sm:p-4">
+        <DialogPanel className="flex max-h-[92dvh] w-full flex-col rounded-t-lg bg-white text-gray-900 shadow-xl dark:bg-slate-900 dark:text-slate-100 sm:max-w-2xl sm:rounded-lg">
+          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-gray-200 px-4 py-3 dark:border-slate-700">
+            <div className="min-w-0"><DialogTitle className="text-base font-semibold">{activeInboxItemId ? inboxItems.find((item) => item.id === activeInboxItemId)?.subject || 'School update' : 'Add school dates'}</DialogTitle><p className="mt-1 text-xs text-gray-500 dark:text-slate-400">{activeInboxItemId ? 'Decisions & original documents' : 'Document or forwarded email'}</p></div>
+            <button type="button" autoFocus aria-label="Close school update" title="Close school update" disabled={importing || assignmentSaving || importLoading} onClick={() => setIntakeOpen(false)} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md hover:bg-gray-100 dark:hover:bg-slate-800"><X className="h-5 w-5" /></button>
+          </div>
+          <div className="min-h-0 overflow-y-auto p-4">
+        {importLoading && activeInboxItemId && <p role="status" className="mb-3 flex items-center gap-2 text-sm"><Loader2 className="h-4 w-4 animate-spin" /> Adding confirmed dates...</p>}
         {activeInboxItemId && (() => {
           const item = inboxItems.find((value) => value.id === activeInboxItemId);
           return item ? <div className="mb-3 border-l-2 border-teal-500 pl-3 text-xs text-gray-600 dark:text-slate-300">
@@ -1026,6 +1081,7 @@ const CalendarCopilotPanel = ({
             </p>}
           </div> : null;
         })()}
+        {(!activeInboxItemId || ['content_required', 'needs_ocr'].includes(inboxItems.find((item) => item.id === activeInboxItemId)?.status || '')) && <>
         <textarea
           value={importText}
           onChange={(event) => setImportText(event.target.value)}
@@ -1063,18 +1119,8 @@ const CalendarCopilotPanel = ({
             {importLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarPlus className="h-4 w-4" />}
             Review events
           </button>
-          {selectedDrafts.length > 0 && (
-            <button
-              type="button"
-              onClick={() => void importSelectedDrafts()}
-              disabled={importing || assignmentSaving}
-              className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-md bg-[#147c72] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
-            >
-              {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-              Import {selectedDrafts.length}
-            </button>
-          )}
         </div>
+        </>}
         {importError && <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">{importError}</p>}
         {importSuccess && (
           <div className="mt-2 flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200">
@@ -1208,7 +1254,7 @@ const CalendarCopilotPanel = ({
         )}
 
         {importDrafts.length > 0 && (
-          <div className="mt-3 max-h-56 space-y-2 overflow-y-auto">
+          <div className="mt-3 space-y-2">
             {importDrafts.map((draft) => (
               <div
                 key={draft.importId}
@@ -1219,7 +1265,7 @@ const CalendarCopilotPanel = ({
                   aria-label={`Select ${draft.title}`}
                   checked={selectedDraftIds.has(draft.importId)}
                   onChange={() => toggleDraft(draft.importId)}
-                  disabled={!draft.person || draft.importStatus === 'duplicate'}
+                  disabled={!draft.person || !draftIsImportable(draft) || draft.importStatus === 'duplicate' || importLoading || importing}
                   className="mt-1 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
                 />
                 <div className="min-w-0 flex-1">
@@ -1243,7 +1289,7 @@ const CalendarCopilotPanel = ({
                     <select
                       aria-label={`Assign ${draft.title} to`}
                       value={draft.person || ''}
-                      disabled={assignmentSaving || importing}
+                      disabled={assignmentSaving || importing || importLoading}
                       onChange={(event) => void assignDraftToPerson(draft.importId, event.target.value)}
                       className="min-w-0 rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
                     >
@@ -1268,9 +1314,17 @@ const CalendarCopilotPanel = ({
             ))}
           </div>
         )}
+          </div>
+          <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-gray-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-900">
+            <p className="text-xs text-gray-500 dark:text-slate-400">{selectedDrafts.length > 0 ? `${selectedDrafts.length} selected` : 'Nothing selected for import'}</p>
+            {importDrafts.length > 0 ? <button type="button" onClick={() => void importSelectedDrafts()} disabled={selectedDrafts.length === 0 || importing || assignmentSaving || importLoading} className="inline-flex min-h-11 items-center gap-2 rounded-md bg-[#147c72] px-4 text-sm font-semibold text-white disabled:opacity-50">{importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />} Import {selectedDrafts.length}</button> : <button type="button" onClick={() => setIntakeOpen(false)} disabled={importLoading || importing} className="min-h-11 rounded-md bg-[#147c72] px-4 text-sm font-semibold text-white disabled:opacity-50">Done</button>}
+          </div>
+        </DialogPanel>
+        </div>
+        </Dialog>
       </div>
 
-      <div className="min-w-0 rounded-lg border border-[#dde5e0] bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
+      <div className="min-w-0 border-t border-gray-200 pt-3 dark:border-slate-800 md:border-l md:border-t-0 md:pl-4 md:pt-0">
         <div className="mb-2 flex items-center gap-2">
           <Sparkles className="h-4 w-4 text-[#147c72]" />
           <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-100">Quick plan</h3>
@@ -1299,10 +1353,10 @@ const CalendarCopilotPanel = ({
                     </div>
                     {nextEvent ? (
                       <div className="mt-1 space-y-0.5 text-[11px] text-gray-600 dark:text-slate-300">
-                        <p className="truncate font-medium text-gray-800 dark:text-slate-200">{nextEvent.title}</p>
+                        <p className="break-words font-medium text-gray-800 dark:text-slate-200">{schoolEventTitle(nextEvent.title)}</p>
                         <p className="flex items-center gap-1 truncate">
                           <Clock className="h-3 w-3 shrink-0" />
-                        {hasUnspecifiedEventTime(nextEvent) ? 'All day' : nextEvent.time}
+                        {hasUnspecifiedEventTime(nextEvent) ? 'Time to confirm' : nextEvent.time}
                           {nextEvent.location ? (
                             <>
                               <MapPin className="ml-1 h-3 w-3 shrink-0" />
@@ -1322,18 +1376,18 @@ const CalendarCopilotPanel = ({
             </div>
           </div>
         )}
-        <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
+        <details className="mb-3 text-xs text-gray-500 dark:text-slate-400"><summary className="min-h-9 cursor-pointer py-2">Routine suggestions</summary><div className="flex flex-col gap-1">
           {quickSchedulePrompts.map((prompt) => (
             <button
               key={prompt}
               type="button"
               onClick={() => runQuickPrompt(prompt)}
-              className="shrink-0 rounded-full border border-[#dde5e0] bg-[#f7fbf8] px-3 py-1.5 text-xs font-medium text-[#38534d] hover:border-[#147c72] hover:bg-[#eef7f3] dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300 dark:hover:border-[#56c6b8]"
+              className="min-h-10 text-left text-xs font-medium text-[#38534d] hover:text-[#147c72] dark:text-slate-300 dark:hover:text-[#56c6b8]"
             >
               {prompt.replace(/^Add /, '')}
             </button>
           ))}
-        </div>
+        </div></details>
         <div className="flex min-w-0 gap-2">
           <input
             aria-label="Quick plan"
@@ -1342,7 +1396,7 @@ const CalendarCopilotPanel = ({
             onKeyDown={(event) => {
               if (event.key === 'Enter') void runAssistant();
             }}
-            placeholder="Find summer holidays, or create swimming lesson next Tuesday at 5pm"
+            placeholder="Askia brings toys on Tuesdays and Fridays"
             className="min-w-0 flex-1 rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-[#147c72] focus:outline-none focus:ring-2 focus:ring-[#147c72]/15 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
           />
           <button

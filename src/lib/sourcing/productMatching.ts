@@ -19,10 +19,10 @@ const PART_HINTS: Record<string, RegExp> = {
   riser: /\b(?:fixed )?riser\b|\briser rail\b/i,
   'bath-filler': /\bbath filler\b|\bbath taps?\b/i,
   bath: /\bbath\b(?![ -]*(?:filler|mixer|taps?|screens?|panels?|waste))/i,
-  'shower-tray': /\bshower tray\b/i,
+  'shower-tray': /\bshower tray\b(?![ -]*(?:waste|trap|legs?|riser|seal))/i,
   waste: /\bwaste\b|\btrap\b/i,
   'shower-door': /\bshower doors?\b|\bsliding doors?\b/i,
-  'towel-rail': /\btowel rails?\b|\btowel radiators?\b/i,
+  'towel-rail': /\btowel rails?\b(?![ -]*(?:valves?|brackets?|elements?))|\btowel radiators?\b(?![ -]*valves?)/i,
   screen: /\b(?:bath|shower) screens?\b/i,
   'front-panel': /\b(?:bath|front) panel\b/i,
   'end-panel': /\bend panel\b/i,
@@ -45,6 +45,8 @@ export function inferComponentEvidence(text: string, required = sourcingComponen
       if (!match) return [];
       const before = clause.slice(Math.max(0, match.index - 45), match.index);
       const after = clause.slice(match.index + match[0].length);
+      // Compatibility copy names other fixtures without supplying them.
+      if (/\b(?:compatible with|suitable for|designed for use with|fits|for use with)\s+[^.;]*$/i.test(before)) return [];
       const negativeList = before.match(/(?:without|excludes?|excluding|does not include|not supplied with|not included:|sold separately:|no)\s+([^.;]*)$/i);
       const excluded = !!negativeList && !/\b(?:with|includes?|supplied|included)\b/i.test(negativeList[1])
         || /^\s*(?:(?:and|&|,)\s+(?!with\b|includes?\b)[a-z -]{1,40}\s+)?(?:is |are )?[:(-]?\s*(?:not included|not supplied|excluded|sold separately|optional|available separately)/i.test(after);

@@ -50,3 +50,50 @@ describe('legacy adult school event form attendance', () => {
     await waitFor(() => expect(screen.getByRole('combobox', { name: 'Assigned to' })).toHaveValue('askia'));
   });
 });
+
+describe('imported canonical editor fields', () => {
+  const photo = { ...event, title: 'Individual And Sibling Photographs. All Children Should Wear Their Full School Uniform Today',
+    person: 'amari', location: 'school. Come along to discuss fundraising and our community.',
+    notes: 'School email did not specify a time. Please wear full uniform.', metadata: { institution: 'Stewart Fleming', assignmentOverride: { personId: 'amari' } } };
+  it('shows short source fields and blank unknown time without changing the source on open', async () => {
+    const actions = props();
+    const { container } = render(<EventForm {...actions} event={photo} />);
+    await waitFor(() => expect(screen.getByDisplayValue('Individual and sibling photographs')).toBeVisible());
+    expect(screen.getByDisplayValue('School')).toBeVisible();
+    expect(container.querySelector('input[type="time"]')).toHaveValue('');
+    expect(container.querySelector('input[type="time"]')).toBeDisabled();
+    expect(screen.getByText('Duration not provided by source')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Update Event' }));
+    await waitFor(() => expect(actions.onUpdate).toHaveBeenCalledTimes(1));
+    expect(actions.onUpdate.mock.calls[0][1]).toMatchObject({ time: '00:00', duration: 1439,
+      notes: photo.notes, person: 'amari', sourceId: photo.sourceId,
+      metadata: { assignmentOverride: photo.metadata.assignmentOverride, calendarTiming: { status: 'unknown' },
+        originalImportedFields: { title: photo.title, location: photo.location } } });
+    expect(photo.title).toContain('All Children');
+  });
+  it('requires a deliberate confirmed time and keeps the original source text', async () => {
+    const actions = props();
+    const { container } = render(<EventForm {...actions} event={photo} />);
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Time not confirmed' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Update Event' }));
+    expect(screen.getByText('Time is required')).toBeVisible();
+    expect(actions.onUpdate).not.toHaveBeenCalled();
+    fireEvent.change(container.querySelector('input[type="time"]')!, { target: { value: '10:15' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Update Event' }));
+    await waitFor(() => expect(actions.onUpdate).toHaveBeenCalledTimes(1));
+    expect(actions.onUpdate.mock.calls[0][1]).toMatchObject({ time: '10:15', duration: 60,
+      notes: photo.notes, metadata: { calendarTiming: { status: 'known' } } });
+  });
+  it('preserves a short manually worded school title', async () => {
+    render(<EventForm {...props()} event={{ ...photo, title: 'PTA AGM at the community room', person: 'parent' }} />);
+    await waitFor(() => expect(screen.getByDisplayValue('PTA AGM at the community room')).toBeVisible());
+  });
+  it('clears unknown-time mode when reused for a new event without a slot', async () => {
+    const actions = props();
+    const { container, rerender } = render(<EventForm {...actions} event={photo} />);
+    expect(container.querySelector('input[type="time"]')).toBeDisabled();
+    rerender(<EventForm {...actions} />);
+    await waitFor(() => expect(container.querySelector('input[type="time"]')).not.toBeDisabled());
+    expect(screen.queryByText('Duration not provided by source')).not.toBeInTheDocument();
+  });
+});

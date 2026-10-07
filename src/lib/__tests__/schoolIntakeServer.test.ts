@@ -48,6 +48,16 @@ describe('school intake server trust and source persistence', () => {
     intake.sender = 'office@stewartfleming.bromley.sch.uk.attacker.example';
     expect(await getSchoolEventImportMetadata('family', 'intake', event())).toBeNull();
   });
+  it('does not validate legacy generic non-events or date-as-time artefacts for linked manual imports', async () => {
+    const saved = intake.parsedDrafts[0];
+    saved.title = 'Imported event';
+    expect(await getSchoolEventImportMetadata('family', 'intake', event({ title: 'Imported event' }))).toBeNull();
+    saved.title = 'Individual and sibling photographs';
+    saved.time = '02:10';
+    saved.timeSpecified = true;
+    saved.source = 'All children photographs attachment 02.10.2026';
+    expect(await getSchoolEventImportMetadata('family', 'intake', event({ time: '02:10', durationMinutes: 60 }))).toBeNull();
+  });
   it('validates a generic linked intake without upgrading an unauthenticated forward to trusted mail', async () => {
     intake.metadata.schoolSenderVerified = false;
     intake.sender = 'parent@example.test';

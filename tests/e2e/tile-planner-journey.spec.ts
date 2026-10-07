@@ -43,7 +43,8 @@ test('phone: refresh a legacy product photo without changing its ordered price o
   await page.route('**/api/property/sourcing/import', (route) => route.fulfill({ json: { draft: { name: 'Supplier mirror', url: 'https://www.stonewaterbathrooms.com/products/qa-mirror', selectedVariant: '25', description: 'Width: 600mm; Height: 800mm', images: [photo], variants: [{ id: '25', name: 'Default Title', sku: 'M25', price: 160, available: true, imageUrl: photo }] } } }));
   await page.getByRole('button', { name: 'Room overview', exact: true }).click();
   const quote = page.getByRole('region', { name: 'Main Bathroom digital quote', exact: true });
-  await quote.getByRole('combobox', { name: 'Main Bathroom quote line' }).selectOption({ label: 'Still needed · 500mm toilet unit' });
+  const toiletQuoteLine = fixture.sourcing.quoteLines!.find((line) => line.requirementId === 'main-wc-unit' && line.components.includes('wc-unit'))!;
+  await quote.getByRole('combobox', { name: 'Main Bathroom quote line' }).selectOption(toiletQuoteLine.id);
   await expect(quote.getByRole('listitem')).toHaveCount(1);
   await quote.getByRole('button', { name: 'Collapse quote checklist' }).click();
   await expect(quote.getByRole('list')).toHaveCount(0);
@@ -51,6 +52,7 @@ test('phone: refresh a legacy product photo without changing its ordered price o
   await page.getByRole('combobox', { name: 'Jump to project item' }).selectOption('req-legacy-mirror');
   await page.getByRole('article').getByRole('button', { name: 'View details for My saved mirror', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'My saved mirror', exact: true });
+  await dialog.getByText('Photo, dimensions & room fit', { exact: true }).click();
   await dialog.getByRole('button', { name: 'Refresh photo & dimensions' }).click();
   await expect(dialog.getByText('Supplier price: £160.00 · Saved price stays £140.00.', { exact: true })).toBeVisible();
   await dialog.getByRole('button', { name: 'Use photo & dimensions' }).click();
@@ -69,8 +71,8 @@ test('phone: item search, missing-part navigation, room switch and checklist dow
   await open(page);
   await page.getByRole('button', { name: 'Room overview', exact: true }).click();
   await page.getByRole('textbox', { name: 'Search project items' }).fill('towel');
-  const choices = page.getByRole('region', { name: 'Main Bathroom choices', exact: true });
-  await choices.getByRole('article').getByRole('button', { name: 'Find valves', exact: true }).click();
+  const checklist = page.getByRole('region', { name: 'Main Bathroom digital quote', exact: true });
+  await checklist.getByRole('button', { name: 'Find valves', exact: true }).click();
   await expect(page.getByText('Missing part: valves', { exact: true })).toBeVisible();
   await expect(page.getByRole('combobox', { name: 'Quote item', exact: true })).toHaveValue('main-rail');
   await page.getByRole('combobox', { name: 'Switch bathroom' }).selectOption('shower-room');
@@ -111,6 +113,7 @@ test('phone: Union WC quote opens linked options with photos and quoted width', 
   await page.getByRole('button', { name: 'Shower Room', exact: true }).click();
   await page.getByRole('button', { name: 'Choose product for 500mm Union toilet unit', exact: true }).click();
   await expect(page.getByRole('combobox', { name: 'Quote item', exact: true })).toHaveValue('shower-wc-unit');
+  await page.getByText('Quote specification & coverage', { exact: true }).click();
   await expect(page.getByText('Size: 500mm wide', { exact: false })).toBeVisible();
   for (const name of ['Fairford Union 500mm Slimline White WC Unit', 'Fairford Union 500mm Full Depth White WC Unit']) {
     const photo = page.getByRole('img', { name, exact: true });
@@ -352,6 +355,7 @@ test('phone: measured item space blocks oversize choices, rechecks changed limit
   await open(page);
   await page.getByRole('button', { name: 'Room overview', exact: true }).click();
   await page.getByRole('region', { name: 'Main Bathroom choices' }).getByRole('button', { name: 'B-shaped shower bath', exact: true }).click();
+  await page.getByText('Measurements & room fit', { exact: true }).click();
   const panel = page.getByRole('region', { name: 'Measurement fit check' });
   await panel.getByRole('button', { name: 'Edit fit measurements' }).click();
   await panel.getByLabel('Measurement unit', { exact: true }).selectOption('cm');
@@ -369,6 +373,7 @@ test('phone: measured item space blocks oversize choices, rechecks changed limit
   await expect(details.getByRole('alert')).toContainText('exceeds the measured space');
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('family-storage')!).state.propertyProjects[0].sourcing.basket.length)).toBe(0);
   const fit = details.getByRole('region', { name: 'Measurement fit check' });
+  await details.getByText('Photo, dimensions & room fit', { exact: true }).click();
   await fit.getByRole('button', { name: 'Edit fit measurements' }).click();
   await fit.getByLabel('Available width', { exact: true }).fill('950');
   await fit.getByLabel('Confirm measured item space', { exact: true }).check();
@@ -384,6 +389,7 @@ test('phone: measured item space blocks oversize choices, rechecks changed limit
   expect(saved.sourcing.requirements.find((item: any) => item.id === 'main-bath').fitSpace).toMatchObject({ widthMm: 950, lengthMm: 1750, clearanceMm: 50 });
   expect(saved.sourcing.choiceHistory).toHaveLength(1); expect(saved.budgetMax).toBe(22000);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.getByText('Measurements & room fit', { exact: true }).click();
   await page.getByRole('region', { name: 'Measurement fit check' }).scrollIntoViewIfNeeded();
   await page.screenshot({ path: 'output/playwright/fixture-fit-phone.png' });
 });

@@ -3,18 +3,17 @@ import prisma from '@/lib/prisma';
 import { requireFamilyAccess } from '@/lib/auth-utils';
 import { gmailForwardingAddress } from '@/lib/gmailCalendarServer';
 import { getWhatsAppConsentState, getWhatsAppConfig } from '@/lib/whatsappCalendarReminders';
-import type { CalendarImportDraft } from '@/utils/calendarImport';
 import type { SchoolDocumentSummary } from '@/utils/schoolDocumentSummary';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { assignSchoolDrafts, schoolMetadata, type SchoolDraft } from '@/utils/schoolSources';
 import { isAdultSchoolEvent, isChildProfile } from '@/utils/schoolEventPresentation';
 import { loadSchoolRules, resolveStoredSchoolDrafts, schoolDraftKey } from '@/lib/schoolIntakeServer';
+import { calendarIntakeState } from '@/lib/calendarIntakeState';
+import { autoProcessSavedCalendarIntake, isHighConfidenceAutoCreate, SavedIntakeProcessingError } from '@/lib/calendarEmailIngestion';
+import { isStewartFlemingSender } from '@/utils/schoolEmail';
 
-const reviewStatuses = ['review_required', 'partial_review', 'no_events', 'needs_ocr', 'content_required'];
-
-const parsedDraftsFromJson = (value: unknown): CalendarImportDraft[] =>
-  Array.isArray(value) ? (value as CalendarImportDraft[]) : [];
+const reviewStatuses = ['processing', 'review_required', 'partial_review', 'no_events', 'needs_ocr', 'content_required'];
 
 const summaryFromMetadata = (value: unknown): SchoolDocumentSummary | null => {
   if (!value || typeof value !== 'object') return null;
@@ -59,17 +58,32 @@ export const GET = requireFamilyAccess(async (_request: NextRequest, context) =>
         },
       },
     });
-    const pending = await prisma.calendarEmailIntake.aggregate({
-      where: { familyId, status: { in: ['review_required', 'partial_review', 'needs_ocr', 'content_required'] } },
-      _sum: { needsReview: true },
-      _count: { id: true },
+    const pending = await prisma.calendarEmailIntake.findMany({
+      where: { familyId, status: { in: ['processing', 'review_required', 'partial_review', 'needs_ocr', 'content_required', 'auto_created', 'no_events'] } },
+      select: { id: true, familyId: true, status: true, parsedDrafts: true, metadata: true,
+        sender: true, subject: true, text: true, html: true, normalizedText: true },
     });
     const members = await prisma.familyMember.findMany({ where: { familyId } });
     const { rules } = await loadSchoolRules(familyId, members);
+    const intakeIds = Array.from(new Set([...intakes, ...pending].map((intake) => intake.id)));
+    const savedEvents = intakeIds.length ? await prisma.calendarEvent.findMany({
+      where: { familyId, sourceId: { in: intakeIds } },
+    }) : [];
+    const stateFor = (intake: typeof pending[number]) => {
+      const resolved = resolveStoredSchoolDrafts(intake, rules, members);
+      const trusted = schoolMetadata(intake.metadata).schoolSenderVerified === true && isStewartFlemingSender(intake.sender || '');
+      const drafts = resolved.drafts;
+      const state = calendarIntakeState(intake, drafts, savedEvents, (draft) => trusted &&
+        !resolved.source.contentRequired && members.some((member) => member.id === draft.person) &&
+        isHighConfidenceAutoCreate(resolved.drafts.find((value) => value.importId === draft.importId) || draft,
+          { eventSource: 'gmail-school-email', authenticatedSchoolSender: true }));
+      return { state, resolved };
+    };
+    const pendingStates = pending.map((intake) => stateFor(intake).state).filter((state) => state.actionRequired);
 
     return NextResponse.json({
-      pendingReviewCount: pending._sum.needsReview ?? 0,
-      pendingReviewEmailCount: pending._count.id ?? 0,
+      pendingReviewCount: pendingStates.reduce((sum, state) => sum + state.needsReview, 0),
+      pendingReviewEmailCount: pendingStates.length,
       forwardingAddress,
       gmail: {
         connected: Boolean(gmailConnection?.enabled),
@@ -82,7 +96,7 @@ export const GET = requireFamilyAccess(async (_request: NextRequest, context) =>
         process.env.WHATSAPP_APP_SECRET && process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN,
       ),
       intakes: intakes.map((intake) => {
-        const resolved = resolveStoredSchoolDrafts(intake, rules, members);
+        const { state, resolved } = stateFor(intake);
         return ({
         id: intake.id,
         sender: intake.sender,
@@ -90,19 +104,15 @@ export const GET = requireFamilyAccess(async (_request: NextRequest, context) =>
         sourceDate: schoolMetadata(intake.metadata).sourceDate || null,
         subject: intake.subject,
         recipient: intake.recipient,
-        status: intake.status,
+        ...state,
+        parsedDrafts: state.outstandingDrafts,
+        storedStatus: intake.status,
         receivedAt: intake.receivedAt,
-        autoCreated: intake.autoCreated,
-        needsReview: intake.needsReview,
+        autoCreated: state.createdEventIds.length,
         authenticatedSchoolSender: Boolean(
           intake.metadata && typeof intake.metadata === 'object' && !Array.isArray(intake.metadata) &&
           (intake.metadata as Record<string, unknown>).schoolSenderVerified === true
         ),
-        duplicateCount: intake.duplicateCount,
-        conflictCount: intake.conflictCount,
-        createdEventIds: intake.createdEventIds,
-        parsedDrafts: parsedDraftsFromJson(intake.parsedDrafts).map((draft) => isAdultSchoolEvent(draft.title)
-          ? resolved.drafts.find((value) => value.importId === draft.importId) || draft : draft),
         documentSummary: summaryFromMetadata(intake.metadata),
         attachments: intake.attachments.map((attachment) => ({
           ...attachment,
@@ -113,6 +123,24 @@ export const GET = requireFamilyAccess(async (_request: NextRequest, context) =>
   } catch (error) {
     console.error('Calendar intake inbox error:', error);
     return NextResponse.json({ error: 'Failed to load calendar inbox' }, { status: 500 });
+  }
+});
+
+const autoProcessSchema = z.object({ action: z.literal('auto-process'), intakeId: z.string().min(1) }).strict();
+
+export const POST = requireFamilyAccess(async (request: NextRequest, context) => {
+  try {
+    const { familyId } = await context.params;
+    const body = autoProcessSchema.parse(await request.json());
+    return NextResponse.json(await autoProcessSavedCalendarIntake(familyId, body.intakeId));
+  } catch (error) {
+    if (error instanceof z.ZodError || error instanceof SyntaxError) return NextResponse.json({ error: 'Invalid automatic processing request' }, { status: 400 });
+    if (error instanceof SavedIntakeProcessingError) return NextResponse.json({ error: error.message }, { status: error.statusCode });
+    if (['P2034', 'P2002'].includes((error as { code?: string }).code || '')) {
+      return NextResponse.json({ error: 'This intake changed. Reload before processing.' }, { status: 409 });
+    }
+    console.error('Saved calendar intake processing failed:', error);
+    return NextResponse.json({ error: 'Failed to process saved calendar intake' }, { status: 500 });
   }
 });
 
@@ -180,19 +208,32 @@ export const PATCH = requireFamilyAccess(async (request: NextRequest, context, a
     const status = body.assignments.length && body.needsReview === undefined && !body.dismissed ? intake.status :
       intake.status === 'content_required' && !body.dismissed ? 'content_required' : needsReview > 0 ? 'partial_review' :
         allCreatedIds.length > 0 ? 'reviewed_imported' : 'reviewed';
+    const updatedMetadata = { ...metadata, schoolOverrides: overrides, schoolEventAssignments: eventAssignments,
+      ...(body.assignments.length ? { schoolOriginalParsedDrafts: metadata.schoolOriginalParsedDrafts || originalDrafts } : {}),
+      ...(body.dismissed ? { schoolDismissed: { actorId: authUser.familyMemberId, at: new Date().toISOString() } } : {}),
+    };
     const updated = await prisma.calendarEmailIntake.updateMany({
       where: { id: intake.id, familyId, updatedAt: intake.updatedAt },
       data: { status, createdEventIds: allCreatedIds, needsReview,
         parsedDrafts: drafts as unknown as Prisma.InputJsonValue,
-        metadata: { ...metadata, schoolOverrides: overrides, schoolEventAssignments: eventAssignments,
-          ...(body.assignments.length ? { schoolOriginalParsedDrafts: metadata.schoolOriginalParsedDrafts || originalDrafts } : {}),
-          ...(body.dismissed ? { schoolDismissed: { actorId: authUser.familyMemberId, at: new Date().toISOString() } } : {}),
-        } as unknown as Prisma.InputJsonValue },
+        metadata: updatedMetadata as unknown as Prisma.InputJsonValue },
     });
     if (updated.count !== 1) return NextResponse.json({ error: 'This intake changed. Reload before reviewing.' }, { status: 409 });
 
+    const [savedEvents, members] = await Promise.all([
+      prisma.calendarEvent.findMany({ where: { familyId, sourceId: intake.id } }),
+      prisma.familyMember.findMany({ where: { familyId } }),
+    ]);
+    const { rules } = await loadSchoolRules(familyId, members);
+    const updatedIntake = { ...intake, status, parsedDrafts: drafts, metadata: updatedMetadata };
+    const resolved = resolveStoredSchoolDrafts(updatedIntake, rules, members);
+    const trusted = metadata.schoolSenderVerified === true && isStewartFlemingSender(intake.sender || '');
+    const state = calendarIntakeState(updatedIntake, resolved.drafts, savedEvents, (draft) => trusted &&
+      !resolved.source.contentRequired && members.some((member) => member.id === draft.person) &&
+      isHighConfidenceAutoCreate(draft, { eventSource: 'gmail-school-email', authenticatedSchoolSender: true }));
     return NextResponse.json({
-      id: intake.id, status, createdEventIds: allCreatedIds, parsedDrafts: drafts,
+      id: intake.id, ...state, storedStatus: status, autoCreated: state.importedEventCount,
+      parsedDrafts: state.outstandingDrafts,
     });
   } catch (error) {
     if (error instanceof z.ZodError || error instanceof SyntaxError) return NextResponse.json({ error: 'Invalid intake review request' }, { status: 400 });

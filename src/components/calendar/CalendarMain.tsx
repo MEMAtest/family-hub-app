@@ -1823,14 +1823,14 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
       <div className={`flex-1 min-w-0 ${isMobile ? 'p-3 pb-6' : 'p-4'}`}>
         {reminderLink.loading && <p role="status" className="mb-3 text-sm text-gray-600 dark:text-slate-300">Loading current event details...</p>}
         {reminderLink.error && <div role="alert" className="mb-3 flex flex-wrap items-center gap-3 text-sm text-amber-800 dark:text-amber-200"><span>{reminderLink.error}</span><button type="button" onClick={reminderLink.retry} className="min-h-11 font-medium underline">Retry</button></div>}
-        <div className="mb-4 flex flex-wrap gap-2" aria-label="Family calendar filters">
+        <div className={`mb-3 flex gap-2 ${isMobile ? 'overflow-x-auto whitespace-nowrap [&>button]:shrink-0' : 'flex-wrap'}`} aria-label="Family calendar filters">
           <button type="button" aria-pressed={people.every((person) => selectedPeople.includes(person.id))} onClick={() => setSelectedPeople([...people.map((person) => person.id), 'member-4'])} className="min-h-10 rounded-md bg-[#147c72] px-3 text-sm font-semibold text-white">All family</button>
           {people.map((person) => <button type="button" key={person.id} aria-pressed={selectedPeople.includes(person.id)} onClick={() => togglePersonFilter(person.id)} className={`inline-flex min-h-10 items-center gap-2 rounded-md border px-3 text-sm ${selectedPeople.includes(person.id) ? 'border-gray-300 bg-white dark:border-slate-600 dark:bg-slate-800' : 'border-transparent text-gray-400'}`}><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: person.color }} />{person.name}</button>)}
         </div>
         {isMobile && view === Views.DAY && <div className="mb-4 grid grid-cols-7 gap-1" aria-label="Choose day">
           {Array.from({ length: 7 }, (_, index) => moment(currentDate).startOf('isoWeek').add(index, 'days')).map((day) => <button key={day.format('YYYY-MM-DD')} type="button" aria-label={day.format('dddd D MMMM')} aria-pressed={day.format('YYYY-MM-DD') === selectedAgendaDate} onClick={() => handleNavigate(day.toDate())} className={`min-h-[62px] rounded-md py-2 text-center ${day.format('YYYY-MM-DD') === selectedAgendaDate ? 'bg-[#147c72] text-white' : 'bg-gray-50 text-gray-600 dark:bg-slate-800 dark:text-slate-300'}`}><span className="block text-[11px]">{day.format('ddd')}</span><span className="mt-1 block text-lg font-semibold">{day.format('D')}</span></button>)}
         </div>}
-        <div className="relative min-w-0">
+        <div className={`relative min-w-0 ${isMobile ? 'flex flex-col' : ''}`}>
           {view === 'YEAR' ? (
             <YearView
               events={events}
@@ -1896,7 +1896,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
               ref={dayAgendaRef}
               data-testid="selected-day-agenda"
               tabIndex={-1}
-              className="mt-4 scroll-mt-4 border-t border-gray-200 bg-white pt-4 outline-none focus-visible:ring-2 focus-visible:ring-[#147c72] dark:border-slate-800 dark:bg-slate-900"
+              className={`${isMobile ? 'order-first mb-4' : 'mt-4'} scroll-mt-4 border-t border-gray-200 bg-white pt-4 outline-none focus-visible:ring-2 focus-visible:ring-[#147c72] dark:border-slate-800 dark:bg-slate-900`}
             >
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <div>

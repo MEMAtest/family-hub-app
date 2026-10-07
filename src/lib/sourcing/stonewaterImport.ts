@@ -23,7 +23,10 @@ export function parseStonewaterProduct(raw: unknown, link: string) {
     images: data.images.slice(0, 8), description: data.description.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim().slice(0, 1000),
     variants: data.variants.map((item) => ({ id: String(item.id), name: item.title, sku: item.sku ?? '', price: item.price / 100, available: item.available, imageUrl: item.featured_image?.src ?? data.images[0] ?? '' })) };
 }
-export type StonewaterDraft = ReturnType<typeof parseStonewaterProduct>;
+export type ProductPriceEvidence = { basis: 'inc-vat' | 'ex-vat' | 'unknown'; netPrice?: number; grossPrice?: number; taxRate?: number; source: 'page-label' | 'supplier-tax-rule' | 'unlabelled' };
+export type StonewaterDraft = Omit<ReturnType<typeof parseStonewaterProduct>, 'variants'> & {
+  variants: Array<ReturnType<typeof parseStonewaterProduct>['variants'][number] & { priceEvidence?: ProductPriceEvidence }>;
+};
 export async function readStonewaterProduct(link: string) {
   const location = stonewaterLink(link);
   const response = await fetch(`${location.url}.js`, { redirect: 'error', cache: 'no-store', signal: AbortSignal.timeout(10000) });

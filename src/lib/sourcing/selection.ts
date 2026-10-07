@@ -24,7 +24,7 @@ export function evaluateSelection(sourcing: ProjectSourcing, requirement: Sourci
     return linked && linked.roomId === demand.roomId && demandFor(sourcing, linked).id === demand.id;
   }).flatMap((item) => {
     const product = sourcing.products.find((candidate) => candidate.id === item.productId);
-    return product ? [{ item, product, evidence: productComponentEvidence(product, demand.requiredComponents) }] : [];
+    return product ? [{ item, product, evidence: productComponentEvidence(product, [...new Set([...demand.requiredComponents, ...required])]) }] : [];
   });
   const coverage = required.map((component) => {
     const amount = selected.reduce((sum, { item, evidence }) => {

@@ -41,3 +41,13 @@ it('preserves known transport, recurrence, cost and disabled reminder preference
     isRecurring: true, recurring: 'weekly', priority: 'high', travel: { transportation: 'train' },
     reminderPreferences: { enabled: false, push: false } });
 });
+it('uses an accessible themed dialog and non-cramped mobile date rows', () => {
+  const { container } = render(<WorkStatusManager event={event} people={people} events={[]} onClose={jest.fn()} onAddWorkEvent={jest.fn()} />);
+  expect(screen.getByRole('dialog', { name: 'Travel details' })).toHaveClass('travel-dialog');
+  expect(screen.getByRole('button', { name: 'Close travel details' })).toBeVisible();
+  const dates = container.querySelectorAll('input[type="date"]');
+  expect(dates[0].parentElement?.parentElement).toHaveClass('grid-cols-1', 'sm:grid-cols-3');
+  expect(dates[1].parentElement?.parentElement).toHaveClass('grid-cols-1', 'sm:grid-cols-2');
+  expect(container.querySelector('input[type="time"]')).toHaveValue('06:00');
+  expect(dates[2]).toHaveValue('');
+});

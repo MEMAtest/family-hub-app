@@ -37,7 +37,7 @@ test('a supplier listing for a cistern marks that included part on the linked qu
   expect(screen.getByLabelText('cistern')).toBeChecked();
   expect(screen.getByLabelText('wc unit')).not.toBeChecked();
   fireEvent.click(screen.getByRole('button', { name: 'Save option' }));
-  expect(onProduct).toHaveBeenCalledWith(expect.objectContaining({ requirementId: 'main-wc-unit', name: publicDraft.name, components: ['cistern'], sku: 'FM1' }));
+  expect(onProduct).toHaveBeenCalledWith(expect.objectContaining({ requirementId: 'main-wc-unit', name: publicDraft.name, components: ['cistern'], sku: 'FM1', url: publicDraft.url }));
 });
 
 test('public supplier URLs auto-read product details and changing the link clears stale details', async () => {
@@ -103,4 +103,50 @@ test('in-flight import uses the latest linked demand after a target switch', asy
   expect(screen.getByLabelText('basin')).toBeChecked();
   fireEvent.click(screen.getByRole('button', { name: 'Save option' }));
   expect(onProduct).toHaveBeenCalledWith(expect.objectContaining({ requirementId: 'main-vanity', components: ['vanity', 'basin'] }));
+});
+
+test('imported gross price is labelled and saved with VAT evidence, not the net price', async () => {
+  const fanDraft = { ...draft, name: 'Tornado extractor fan', variants: [{ ...draft.variants[0], price: 104.88, priceEvidence: { basis: 'inc-vat', grossPrice: 104.88, netPrice: 87.4, taxRate: 20, source: 'supplier-tax-rule' } }] };
+  (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ draft: fanDraft }) });
+  const onProduct = jest.fn();
+  render(<SourcingEntryDialog mode="product" sourcing={createBathroomSourcingSeed()} roomId="main-bathroom" requirementId="main-extractor" onClose={jest.fn()} onItem={jest.fn()} onProduct={onProduct} />);
+  fireEvent.change(screen.getByLabelText('Product link'), { target: { value: draft.url } });
+  await act(async () => { jest.advanceTimersByTime(600); });
+  expect(screen.getByLabelText('Price (£)')).toHaveValue(104.88);
+  expect(screen.getByRole('status')).toHaveTextContent('includes VAT (£87.40 excluding VAT)');
+  fireEvent.click(screen.getByRole('button', { name: 'Save option' }));
+  expect(onProduct).toHaveBeenCalledWith(expect.objectContaining({ price: 104.88, notes: expect.stringContaining('includes VAT') }));
+});
+
+test.each(['ex-vat', 'unknown'])('an imported %s amount cannot silently populate the consumer price', async (basis) => {
+  const publicDraft = { ...draft, variants: [{ ...draft.variants[0], price: 87.4, priceEvidence: { basis, netPrice: 87.4, source: 'page-label' } }] };
+  (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ draft: publicDraft }) });
+  open();
+  fireEvent.change(screen.getByLabelText('Product link'), { target: { value: draft.url } });
+  await act(async () => { jest.advanceTimersByTime(600); });
+  expect(screen.getByLabelText('Price (£)')).toHaveValue(null);
+  expect(screen.getByRole('status')).toHaveTextContent('VAT-inclusive price needs confirmation');
+  expect(screen.getByRole('img')).toBeInTheDocument();
+});
+
+test('an unverified import requires a confirmed gross total and cannot save its known net amount', async () => {
+  const publicDraft = { ...draft, variants: [{ ...draft.variants[0], price: 0, priceEvidence: { basis: 'ex-vat', netPrice: 87.4, source: 'page-label' } }] };
+  (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: true, json: async () => ({ draft: publicDraft }) });
+  const onProduct = jest.fn();
+  render(<SourcingEntryDialog mode="product" sourcing={createBathroomSourcingSeed()} roomId="main-bathroom" requirementId="main-bath" onClose={jest.fn()} onItem={jest.fn()} onProduct={onProduct} />);
+  fireEvent.change(screen.getByLabelText('Product link'), { target: { value: draft.url } });
+  await act(async () => { jest.advanceTimersByTime(600); });
+  fireEvent.change(screen.getByLabelText('Price (£)'), { target: { value: '104.88' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save option' }));
+  expect(onProduct).not.toHaveBeenCalled();
+  expect(screen.getByRole('alert')).toHaveTextContent('confirm the VAT-inclusive');
+  fireEvent.click(screen.getByLabelText('I confirmed this price is the VAT-inclusive consumer total'));
+  fireEvent.change(screen.getByLabelText('Price (£)'), { target: { value: '87.4' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save option' }));
+  expect(onProduct).not.toHaveBeenCalled();
+  expect(screen.getByRole('alert')).toHaveTextContent('listed net price');
+  fireEvent.change(screen.getByLabelText('Price (£)'), { target: { value: '104.88' } });
+  fireEvent.click(screen.getByLabelText('I confirmed this price is the VAT-inclusive consumer total'));
+  fireEvent.click(screen.getByRole('button', { name: 'Save option' }));
+  expect(onProduct).toHaveBeenCalledWith(expect.objectContaining({ price: 104.88 }));
 });

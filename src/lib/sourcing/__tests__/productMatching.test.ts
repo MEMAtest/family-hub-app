@@ -56,3 +56,28 @@ test('explicit household evidence still overrides newly recognised supplier copy
   const product = { ...createBathroomSourcingSeed().products[0], name: 'Fairford Basin Mixer with Push Button Waste', components: [], componentEvidence: { 'basin-waste': { state: 'excluded' as const, quantity: 0, source: 'user' as const } } };
   expect(productComponentEvidence(product, basinParts)['basin-waste']).toMatchObject({ state: 'excluded', quantity: 0, source: 'user' });
 });
+
+test.each([
+  ['Fairford Designer Straight Towel Rail Valves Pair - Chrome', 'towel-rail', 'valves'],
+  ['Fairford Designer Angled Towel Rail Valves Pair - Chrome', 'towel-rail', 'valves'],
+  ['Fairford 90mm Fast Flow Shower Tray Waste, Chrome', 'shower-tray', 'waste'],
+])('supporting product is not a complete fixture: %s', (name, fixture, part) => {
+  expect(inferIncludedComponents(name, [fixture, part])).toEqual([part]);
+});
+
+test('compatibility mentions do not supply another fixture', () => {
+  expect(inferIncludedComponents('Chrome valves; Suitable for heated towel rails', ['valves', 'towel-rail'])).toEqual(['valves']);
+});
+
+test('quote line can recognise cistern even when linked WC demand only asks for furniture', () => {
+  const sourcing = createBathroomSourcingSeed();
+  const demand = sourcing.requirements.find((item) => item.id === 'shower-wc-unit')!;
+  demand.requiredComponents = ['wc-unit'];
+  const product = { ...sourcing.products[0], id: 'manual-cistern', name: 'Fairford Filo Concealed Cistern with Chrome Flush Button', description: '', size: '', specs: {}, components: [], requirementIds: [demand.id] };
+  sourcing.products.push(product);
+  sourcing.basket.push({ id: 'cistern-choice', productId: product.id, requirementId: demand.id, quantity: 1, status: 'review' });
+  const result = quoteSelection(sourcing, { id: 'cistern-line', requirementId: demand.id, roomId: demand.roomId, text: 'Fluid Master concealed cistern', quantity: 1, components: ['cistern'] });
+  expect(result).toMatchObject({ complete: true, coverage: [{ component: 'cistern', quantity: 1, required: 1 }] });
+  expect(result.selections.map((entry) => entry.product.id)).toEqual([product.id]);
+  expect(evaluateSelection(sourcing, demand).complete).toBe(false);
+});

@@ -3,6 +3,7 @@ import { ArrowLeft, ArrowRight } from 'lucide-react';
 import type { ProjectSourcing, SourcedProduct, SourcingRequirement } from '@/types/sourcing.types';
 import { evaluateSelection, isPrimaryOption } from '@/lib/sourcing/selection';
 import { basketCostPence } from '@/lib/sourcing/spend';
+import { quoteMountingAssessment } from '@/lib/sourcing/quoteSize';
 
 const money = new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' });
 export default function SelectedChoiceSummary({ sourcing, requirement, onOpen, onBack }: { sourcing: ProjectSourcing; requirement: SourcingRequirement; onOpen: (product: SourcedProduct, requirement: SourcingRequirement) => void; onBack: () => void }) {
@@ -20,6 +21,10 @@ export default function SelectedChoiceSummary({ sourcing, requirement, onOpen, o
     {choices.length > 2 && <p className="text-xs text-gray-500 dark:text-slate-300">+ {choices.length - 2} selected supporting parts in basket</p>}
     <p className={`mt-1 text-xs ${check.complete ? 'text-teal-700 dark:text-teal-300' : 'text-gray-600 dark:text-slate-300'}`}>{check.complete ? 'Required quantity covered' : choices.length ? check.unknown ? 'Selected - contents need confirmation' : 'Selected - quantity or parts still needed' : 'To choose'}</p>
     {check.deviation && <p className="text-xs text-blue-700">Replacement - quote deviation needs review</p>}
+    {choices.map(({ item, product }) => {
+      const mounting = quoteMountingAssessment(check.demand, product);
+      return mounting?.status === 'different' ? <p key={item.id} className="mt-1 text-xs text-amber-700 dark:text-amber-300">{mounting.label}</p> : null;
+    })}
     {check.warnings.map((warning) => <p key={warning} role="status" className="mt-1 text-xs text-amber-800">{warning}</p>)}
   </section>;
 }

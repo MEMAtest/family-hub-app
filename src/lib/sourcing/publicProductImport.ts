@@ -1,5 +1,6 @@
 import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
+import type { ProductPriceEvidence } from './stonewaterImport';
 
 const strip = (value: string) => value.replace(/<[^>]*>/g, ' ').replace(/&nbsp;|&#160;/gi, ' ').replace(/&amp;/gi, '&').replace(/&quot;|&#34;/gi, '"').replace(/&#39;|&apos;/gi, "'").replace(/&#x([\da-f]+);/gi, (_m, n: string) => String.fromCodePoint(parseInt(n, 16))).replace(/&#(\d+);/g, (_m, n: string) => String.fromCodePoint(Number(n))).replace(/\s+/g, ' ').trim();
 
@@ -55,7 +56,23 @@ function firstText(value: unknown): string {
   return '';
 }
 
-export function parsePublicProduct(html: string, pageUrl: string) {
+function labelledVatPrices(html: string) {
+  const text = strip(html.replace(/<(script|style|s|del)\b[^>]*>[\s\S]*?<\/\1>/gi, ' '));
+  const prices = { gross: new Set<number>(), net: new Set<number>() };
+  const amount = '(?:£|GBP)\\s*([\\d,]+(?:\\.\\d{1,2})?)';
+  const label = '(inc(?:l(?:uding|usive)?)?\\.?|ex(?:cl(?:uding|usive)?)?\\.?)\\s*(?:of\\s+)?VAT';
+  for (const pattern of [new RegExp(`${amount}\\s*(?:GBP\\s*)?\\(?${label}\\)?`, 'gi'), new RegExp(`${label}\\s*[:(]?\\s*${amount}`, 'gi')]) {
+    for (const match of text.matchAll(pattern)) {
+      const amountFirst = pattern.source.startsWith('(?:£');
+      if (!amountFirst && /(?:£|GBP)\s*[\d,.]+\s*(?:GBP\s*)?$/i.test(text.slice(0, match.index))) continue;
+      const value = Number(match[amountFirst ? 1 : 2].replace(/,/g, ''));
+      if (Number.isFinite(value) && value >= 0 && value <= 100000) prices[/^inc/i.test(match[amountFirst ? 2 : 1]) ? 'gross' : 'net'].add(value);
+    }
+  }
+  return prices;
+}
+
+export function parsePublicProduct(html: string, pageUrl: string, supplierTaxRule?: unknown) {
   const scripts = Array.from(html.matchAll(/<script\b[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi), (match) => {
     try { return JSON.parse(match[1].replace(/<!--[\s\S]*?-->/g, '')); } catch { return null; }
   });
@@ -73,8 +90,38 @@ export function parsePublicProduct(html: string, pageUrl: string) {
   let price = typeof rawPrice === 'number' ? rawPrice : typeof rawPrice === 'string' ? Number(rawPrice.replace(/[^\d.]/g, '')) : NaN;
   if (currency && currency !== 'GBP' || !currency && !/£/.test(`${rawPrice ?? ''} ${metaValue(html, 'product:price:amount')}`)) price = NaN;
   if (!Number.isFinite(price) || price < 0 || price > 100000) price = 0;
+  let priceEvidence: ProductPriceEvidence = { basis: 'unknown', source: 'unlabelled' };
+  const labelled = labelledVatPrices(html);
+  if ((!currency || currency === 'GBP') && labelled.gross.size === 1) {
+    price = [...labelled.gross][0];
+    priceEvidence = { basis: 'inc-vat', grossPrice: price, ...(labelled.net.size === 1 ? { netPrice: [...labelled.net][0] } : {}), source: 'page-label' };
+  } else if (labelled.net.size === 1 && labelled.gross.size === 0) {
+    priceEvidence = { basis: 'ex-vat', netPrice: [...labelled.net][0], source: 'page-label' };
+    price = 0;
+  }
+  // This supplier's public widget calculates the displayed gross price from a tax rule.
+  // Only accept a single active, unrestricted rule; never guess a tax rate.
+  if (isExtractorDualPricePage(html, pageUrl) && priceEvidence.basis !== 'inc-vat') {
+    const data = supplierTaxRule as { settings?: Record<string, unknown>; rules?: Array<Record<string, unknown>> } | undefined;
+    const active = Array.isArray(data?.rules) ? data.rules.filter((rule) => String(rule.status) === '1') : [];
+    const rule = active.length === 1 ? active[0] : undefined;
+    const rate = Number(rule?.tax_price);
+    const net = priceEvidence.netPrice ?? price;
+    const unrestricted = rule && ['allproducts', 'allusers', 'allcountries'].every((key) => String(rule[key]) === '1') && ['products', 'collections', 'usertags', 'countries', 'product_tags', 'vendors'].every((key) => !rule[key]);
+    if (String(data?.settings?.status) === '1' && data?.settings?.shop_name === 'extractor-fan-world.myshopify.com' && rule?.shop_name === 'extractor-fan-world.myshopify.com' && unrestricted && String(rule.base_price_type) === '0' && rule.tax_price_type === 'percentage' && /^inc\s+VAT$/i.test(String(rule.text_after_taxIncluded_price)) && /^ex\s+VAT$/i.test(String(rule.text_after_taxExcluded_price)) && Number.isFinite(rate) && rate >= 0 && rate <= 100 && net > 0 && labelled.gross.size === 0) {
+      const gross = Math.round(net * (1 + rate / 100) * 100) / 100;
+      if (gross <= 100000) { price = gross; priceEvidence = { basis: 'inc-vat', netPrice: net, grossPrice: gross, taxRate: rate, source: 'supplier-tax-rule' }; }
+    } else {
+      priceEvidence = { basis: 'unknown', ...(net > 0 ? { netPrice: net } : {}), source: 'unlabelled' };
+      price = 0;
+    }
+  }
   const sku = firstText(product?.sku).slice(0, 100);
-  return { name: title.slice(0, 200), url: pageUrl, selectedVariant: 'public-page', images: image ? [image] : [], description: description.slice(0, 1000), variants: [{ id: 'public-page', name: 'Listed product', sku, price, available: true, imageUrl: image }] };
+  return { name: title.slice(0, 200), url: pageUrl, selectedVariant: 'public-page', images: image ? [image] : [], description: description.slice(0, 1000), variants: [{ id: 'public-page', name: 'Listed product', sku, price, priceEvidence, available: true, imageUrl: image }] };
+}
+
+function isExtractorDualPricePage(html: string, pageUrl: string) {
+  return ['www.extractorfanworld.co.uk', 'extractorfanworld.co.uk'].includes(new URL(pageUrl).hostname) && /<script\b[^>]*src=["']https:\/\/cdn\.shopify\.com\/extensions\/[^"']+\/new-dual-price-script\.js["']/i.test(html);
 }
 
 export async function readPublicProduct(rawUrl: string, fetchImpl: typeof fetch = fetch) {
@@ -91,7 +138,18 @@ export async function readPublicProduct(rawUrl: string, fetchImpl: typeof fetch 
     if (!response.ok || !response.body || !response.headers.get('content-type')?.toLowerCase().includes('text/html')) throw new Error('This supplier page could not be read. Add the product photo and details manually.');
     const reader = response.body.getReader(); const chunks: Uint8Array[] = []; let size = 0;
     try { while (true) { const part = await reader.read(); if (part.done) break; size += part.value.byteLength; if (size > 1_000_000) throw new Error('This supplier page is too large to read.'); chunks.push(part.value); } } finally { await reader.cancel(); }
-    return parsePublicProduct(Buffer.concat(chunks).toString('utf8'), url.toString());
+    const html = Buffer.concat(chunks).toString('utf8');
+    let taxRule: unknown;
+    if (isExtractorDualPricePage(html, url.toString())) {
+      try {
+        const config = await fetchImpl('https://dual-pricing.enhancemerchants.com/api/emdpr-fetch-rules?shopName=extractor-fan-world.myshopify.com&lang=en', { redirect: 'error', signal: AbortSignal.timeout(5000), cache: 'no-store' });
+        if (config.ok) {
+          const text = await config.text();
+          if (text.length <= 50000) taxRule = JSON.parse(text);
+        }
+      } catch { /* Keep the price unverified when supplier tax evidence is unavailable. */ }
+    }
+    return parsePublicProduct(html, url.toString(), taxRule);
   }
   throw new Error('This supplier page could not be read.');
 }

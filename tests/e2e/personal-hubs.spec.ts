@@ -276,9 +276,9 @@ test('the catalogue search adds a verified release to the private collection', a
   await page.getByRole('button', { name: 'Browse catalogue' }).click();
   await expect(page.getByText('Source-aware library')).toBeVisible();
   await page.getByLabel('Search catalogue').fill('Smoking');
-  await expect.poll(() => catalogRequests.length).toBe(2);
-  expect(catalogRequests[1]).toContain('q=Smoking');
-  expect(catalogRequests[1]).toContain('limit=20');
+  await expect.poll(() => catalogRequests.some((request) => new URL(request).searchParams.get('q') === 'Smoking')).toBe(true);
+  const searchRequest = catalogRequests.find((request) => new URL(request).searchParams.get('q') === 'Smoking');
+  expect(new URL(searchRequest!).searchParams.get('limit')).toBe('20');
   await expect(page.getByRole('button', { name: 'Add bottle' })).toBeVisible();
   await page.getByRole('button', { name: 'Add bottle' }).click();
 

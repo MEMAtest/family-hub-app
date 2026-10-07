@@ -21,6 +21,7 @@ export default function SourcingEntryDialog({ mode, sourcing, roomId, requiremen
   const [category, setCategory] = useState<(typeof sourcingCategories)[number]>('Other');
   const [quantity, setQuantity] = useState(1); const [unit, setUnit] = useState('each');
   const [price, setPrice] = useState(''); const [basis, setBasis] = useState<'each' | 'per box' | 'per m²' | 'per tile'>('each');
+  const [grossPriceConfirmed, setGrossPriceConfirmed] = useState(false);
   const [error, setError] = useState('');
   const [draft, setDraft] = useState<StonewaterDraft | null>(null);
   const [variantId, setVariantId] = useState('');
@@ -40,11 +41,12 @@ export default function SourcingEntryDialog({ mode, sourcing, roomId, requiremen
     return () => clearTimeout(timer);
   }, [url, mode]);
   function applyVariant(data: StonewaterDraft, id: string) {
+    setGrossPriceConfirmed(false);
     setVariantId(id);
     const option = data.variants.find((item) => item.id === id);
     setName(`${data.name}${option && !['Default Title', 'Listed product'].includes(option.name) ? ` - ${option.name}` : ''}`.slice(0, 200));
-    setPrice(option && option.price > 0 ? String(option.price) : ''); setImageUrl(option?.imageUrl ?? data.images[0] ?? '');
-    const selectedUrl = `${data.url}${option ? `?variant=${option.id}` : ''}`;
+    setPrice(option && option.price > 0 && (!option.priceEvidence || option.priceEvidence.basis === 'inc-vat') ? String(option.price) : ''); setImageUrl(option?.imageUrl ?? data.images[0] ?? '');
+    const selectedUrl = option && option.id !== 'public-page' ? `${data.url}?variant=${encodeURIComponent(option.id)}` : data.url;
     lastRead.current = selectedUrl; setUrl(selectedUrl);
     setSize((data.name.match(/\d{3,4}\s*(?:mm)?\s*[x×]\s*\d{3,4}\s*mm/i)?.[0] ?? (option && !['Default Title', 'Listed product'].includes(option.name) ? option.name : '')).slice(0, 300));
   }
@@ -65,18 +67,28 @@ export default function SourcingEntryDialog({ mode, sourcing, roomId, requiremen
     finally { if (!controller.signal.aborted && pending.current === controller) { pending.current = null; setReading(false); } }
   }
   const requirement = sourcing.requirements.find((item) => item.id === target);
+  const importedPrice = draft?.variants.find((item) => item.id === variantId)?.priceEvidence;
+  const usesVerifiedGross = importedPrice?.basis === 'inc-vat' && Number(price) === importedPrice.grossPrice;
+  const priceNote = usesVerifiedGross
+    ? `Supplier price includes VAT${importedPrice.netPrice !== undefined ? ` (£${importedPrice.netPrice.toFixed(2)} excluding VAT)` : ''}.`
+    : importedPrice ? 'VAT-inclusive price needs confirmation. Enter the consumer total from the supplier.' : '';
   const partEvidence = { ...inferComponentEvidence(`${name}; ${notes}`, requirement?.requiredComponents ?? []), ...confirmedParts };
   function submit(event: React.FormEvent) {
     event.preventDefault(); setError('');
     try {
       if (reading || (draft && !variantId)) throw new Error('Choose the product option first.');
-      if (mode === 'item') onItem({ roomId: room, name, category, quantity, size, specification: notes || name, unit, relatedToId: target || undefined, replacement: !!target && replacement, ...(url || imageUrl ? { product: { url, imageUrl, supplier, price: price.trim() ? Number(price) : NaN, sku: draft?.variants.find((item) => item.id === variantId)?.sku, gallery: draft?.images } } : {}) });
+      if (importedPrice && !usesVerifiedGross) {
+        if (importedPrice.netPrice !== undefined && Number(price) === importedPrice.netPrice && importedPrice.netPrice !== importedPrice.grossPrice) throw new Error('This is the listed net price, not a verified VAT-inclusive total. Enter the consumer total.');
+        if (!price.trim() || Number(price) <= 0 || !grossPriceConfirmed) throw new Error('Enter and confirm the VAT-inclusive consumer price before saving.');
+      }
+      const savedNotes = usesVerifiedGross ? `${priceNote}\n${notes}`.slice(0, 1000) : importedPrice && grossPriceConfirmed ? `VAT-inclusive consumer price confirmed by user.\n${notes}`.slice(0, 1000) : notes;
+      if (mode === 'item') onItem({ roomId: room, name, category, quantity, size, specification: savedNotes || name, unit, relatedToId: target || undefined, replacement: !!target && replacement, ...(url || imageUrl ? { product: { url, imageUrl, supplier, price: price.trim() ? Number(price) : NaN, sku: draft?.variants.find((item) => item.id === variantId)?.sku, gallery: draft?.images } } : {}) });
       else {
         if (reading || (draft && !variantId)) throw new Error('Choose the product option first.');
         if (draft && !price.trim()) throw new Error('Enter the UK price; this supplier page did not show it clearly.');
         const evidence = partEvidence;
         const included = Object.keys(evidence).filter((part) => evidence[part].state === 'included');
-        onProduct({ requirementId: target, name, supplier, url, imageUrl, price: price.trim() ? Number(price) : NaN, priceUnit: basis, size, components: included, componentEvidence: evidence, notes, sku: draft?.variants.find((item) => item.id === variantId)?.sku, gallery: draft?.images });
+        onProduct({ requirementId: target, name, supplier, url, imageUrl, price: price.trim() ? Number(price) : NaN, priceUnit: basis, size, components: included, componentEvidence: evidence, notes: savedNotes, sku: draft?.variants.find((item) => item.id === variantId)?.sku, gallery: draft?.images });
       }
     } catch (reason) { setError(reason instanceof Error && !('issues' in reason) ? reason.message : 'Check the name, quantity, price and links.'); }
   }
@@ -95,9 +107,11 @@ export default function SourcingEntryDialog({ mode, sourcing, roomId, requiremen
               {reading && <p role="status" className="text-teal-700">Loading product photo and price...</p>}
               {!draft && <button type="button" disabled={reading || !url.trim()} onClick={() => void importProduct()} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-teal-700 px-3 text-sm text-teal-800 disabled:opacity-50"><Download className="h-4 w-4" />{reading ? 'Reading product...' : 'Read product page'}</button>}
               {draft && <>
-                <label className="block">Product option<select required className={field} value={variantId} onChange={(event) => { setConfirmedParts({}); applyVariant(draft, event.target.value); }}><option value="">Choose an option</option>{draft.variants.map((item) => <option key={item.id} value={item.id}>{item.name === 'Default Title' || item.name === 'Listed product' ? draft.name : item.name} - {item.price > 0 ? `£${item.price.toFixed(2)}` : 'price not found'}{item.available ? '' : ' - unavailable'}</option>)}</select></label>
+                <label className="block">Product option<select required className={field} value={variantId} onChange={(event) => { setConfirmedParts({}); applyVariant(draft, event.target.value); }}><option value="">Choose an option</option>{draft.variants.map((item) => <option key={item.id} value={item.id}>{item.name === 'Default Title' || item.name === 'Listed product' ? draft.name : item.name} - {item.price > 0 ? `£${item.price.toFixed(2)}${item.priceEvidence?.basis === 'inc-vat' ? ' inc VAT' : item.priceEvidence ? ' - VAT unconfirmed' : ''}` : 'consumer price needs confirmation'}{item.available ? '' : ' - unavailable'}</option>)}</select></label>
                 {imageUrl && <img src={imageUrl} alt={name} className="h-32 w-full object-contain" />}
                 <p className="text-gray-500">Supplier page details. Check the price, dimensions and included parts before saving.</p>
+                {priceNote && <p role="status" className="text-gray-700 dark:text-gray-200">{priceNote}{importedPrice?.basis === 'ex-vat' && importedPrice.netPrice !== undefined ? ` Listed net price: £${importedPrice.netPrice.toFixed(2)} excluding VAT.` : ''}</p>}
+                {importedPrice && !usesVerifiedGross && <label className="flex min-h-11 items-center gap-2"><input type="checkbox" checked={grossPriceConfirmed} onChange={(event) => setGrossPriceConfirmed(event.target.checked)} className="rounded" />I confirmed this price is the VAT-inclusive consumer total</label>}
               </>}
             </>
             <label className="block">{mode === 'item' ? 'Item name' : 'Product name'}<input autoFocus={mode === 'item'} required maxLength={200} className={field} value={name} onChange={(event) => { setName(event.target.value); }} /></label>
@@ -105,11 +119,11 @@ export default function SourcingEntryDialog({ mode, sourcing, roomId, requiremen
               <label className="block">Category<select className={field} value={category} onChange={(event) => setCategory(event.target.value as typeof category)}>{sourcingCategories.map((item) => <option key={item}>{item}</option>)}</select></label>
               <div className="grid grid-cols-2 gap-3"><label>Quantity<input required type="number" step="any" min="0.001" max="10000" className={field} value={Number.isFinite(quantity) ? quantity : ''} onChange={(event) => setQuantity(event.target.valueAsNumber)} /></label><label>Unit<input maxLength={30} className={field} value={unit} onChange={(event) => setUnit(event.target.value)} /></label></div>
               <label className="block">Supplier<input maxLength={100} className={field} value={supplier} onChange={(event) => setSupplier(event.target.value)} /></label>
-              <label className="block">Price (£)<input required={!!url || !!imageUrl} type="number" step="0.01" min="0" max="100000" className={field} value={price} onChange={(event) => setPrice(event.target.value)} /></label>
+              <label className="block">Price (£)<input required={!!url || !!imageUrl} type="number" step="0.01" min="0" max="100000" className={field} value={price} onChange={(event) => { setPrice(event.target.value); setGrossPriceConfirmed(false); }} /></label>
               <label className="block">Photo link (optional)<input type="url" maxLength={1500} placeholder="https://" className={field} value={imageUrl} onChange={(event) => setImageUrl(event.target.value)} /></label>
             </> : <>
               <label className="block">Supplier<input maxLength={100} className={field} value={supplier} onChange={(event) => setSupplier(event.target.value)} /></label>
-              <div className="grid grid-cols-2 gap-3"><label>Price (£)<input required type="number" step="0.01" min="0" max="100000" className={field} value={price} onChange={(event) => setPrice(event.target.value)} /></label><label>Price is per<select className={field} value={basis} onChange={(event) => setBasis(event.target.value as typeof basis)}><option value="each">Item</option><option value="per box">Box</option><option value="per m²">m²</option><option value="per tile">Tile</option></select></label></div>
+              <div className="grid grid-cols-2 gap-3"><label>Price (£)<input required type="number" step="0.01" min="0" max="100000" className={field} value={price} onChange={(event) => { setPrice(event.target.value); setGrossPriceConfirmed(false); }} /></label><label>Price is per<select className={field} value={basis} onChange={(event) => setBasis(event.target.value as typeof basis)}><option value="each">Item</option><option value="per box">Box</option><option value="per m²">m²</option><option value="per tile">Tile</option></select></label></div>
               <label className="block">Photo link (optional)<input type="url" maxLength={1500} placeholder="https://" className={field} value={imageUrl} onChange={(event) => setImageUrl(event.target.value)} /></label>
               {requirement && requirement.requiredComponents.length > 0 && <fieldset className="border-y border-gray-200 py-3 dark:border-slate-700"><legend className="font-medium">Included parts</legend>{requirement.requiredComponents.map((part) => {
                 const evidence = partEvidence[part];

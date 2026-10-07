@@ -51,6 +51,23 @@ export function optionConflicts(sourcing: ProjectSourcing, requirement: Sourcing
     (sourcing.products.find((candidate) => candidate.id === entry.productId) && isPrimaryOption(sourcing.products.find((candidate) => candidate.id === entry.productId)!, requirement)));
 }
 
+/** Explicit household decision: relate an existing purchase to the original quote demand. */
+export function linkRelatedItemAsReplacement(sourcing: ProjectSourcing, requirementId: string): ProjectSourcing {
+  const replacement = sourcing.requirements.find((entry) => entry.id === requirementId);
+  const original = sourcing.requirements.find((entry) => entry.id === replacement?.relatedToId);
+  if (!replacement || replacement.source !== 'household' || replacement.replacesRequirementId || !original || original.roomId !== replacement.roomId || original.replacesRequirementId) throw new Error('Choose an added item related to an original item in this bathroom.');
+  const purchases = sourcing.basket.filter((entry) => entry.requirementId === replacement.id);
+  if (!purchases.length) throw new Error('Select a product for this item first.');
+  if (purchases.some((entry) => entry.status === 'ordered')) throw new Error('Resolve the existing order before changing its quote link.');
+  const ids = new Set(purchases.map((entry) => entry.productId));
+  return {
+    ...sourcing,
+    requirements: sourcing.requirements.map((entry) => entry.id === replacement.id ? { ...entry, purpose: 'replacement', replacesRequirementId: original.id, requiredComponents: [...original.requiredComponents], primaryComponent: original.primaryComponent } : entry),
+    products: sourcing.products.map((entry) => ids.has(entry.id) ? { ...entry, requirementIds: [...new Set([...(entry.requirementIds ?? []), original.id, replacement.id])] } : entry),
+    basket: sourcing.basket.map((entry) => entry.requirementId === replacement.id ? { ...entry, requirementId: original.id, optionRequirementId: replacement.id } : entry),
+  };
+}
+
 export function chooseSourcingOption(sourcing: ProjectSourcing, requirementId: string, productId: string, status: ProjectSourcing['basket'][number]['status']): ProjectSourcing {
   const linked = sourcing.requirements.find((item) => item.id === requirementId);
   const product = sourcing.products.find((item) => item.id === productId && item.requirementIds?.includes(requirementId));

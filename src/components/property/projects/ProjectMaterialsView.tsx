@@ -25,7 +25,7 @@ import { migrate } from '@/lib/sourcing/migrate';
 import { demandFor, evaluateSelection } from '@/lib/sourcing/selection';
 import { productComponentEvidence } from '@/lib/sourcing/productMatching';
 import { fixtureFit, saveFixtureSpace } from '@/lib/sourcing/fixtureFit';
-import { addHouseholdItem, addHouseholdProduct, chooseSourcingOption, optionConflicts } from '@/lib/sourcing/householdItems';
+import { addHouseholdItem, addHouseholdProduct, chooseSourcingOption, optionConflicts, linkRelatedItemAsReplacement } from '@/lib/sourcing/householdItems';
 import { plannedTileCalculation } from '@/lib/sourcing/tilePlanner';
 import { bathroomRooms, basketStatuses, basketTotal as sourcingBasketTotal, basketLineCost, excludedBasketPrice, isBathroomProject as bathroomProject, isUncountedPrice, productLineCost, productSize, roomName } from './bathroomProject.helpers';
 
@@ -109,6 +109,8 @@ export default function ProjectMaterialsView({ project, onUpdateProject, isReadO
   const [selectionError, setSelectionError] = useState('');
   const [planningProduct, setPlanningProduct] = useState<SourcedProduct>();
   const pendingPlanningProduct = useRef<SourcedProduct>();
+  const [plannerOpen, setPlannerOpen] = useState(false);
+  const pendingPlannerOpen = useRef(false);
   const plannerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -117,11 +119,25 @@ export default function ProjectMaterialsView({ project, onUpdateProject, isReadO
     setPartFilter(selectedPart ?? '');
     setCategory('All'); setQuery(''); setMessage(''); setAdding(false); setDetailId(null);
     setPlanningProduct(pendingPlanningProduct.current); pendingPlanningProduct.current = undefined;
+    setPlannerOpen(pendingPlannerOpen.current); pendingPlannerOpen.current = false;
   }, [view, selectedRoomId, selectedRequirementId, selectedPart]);
 
   useEffect(() => {
-    if (planningProduct) plannerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, [planningProduct, requirementId]);
+    if (!plannerOpen && !planningProduct) return;
+    let scrollFrame = 0;
+    // The parent restores item-entry scroll on the first frame. Open the planner after that.
+    const frame = requestAnimationFrame(() => {
+      scrollFrame = requestAnimationFrame(() => {
+        const planner = plannerRef.current;
+        const main = planner?.closest('main');
+        if (!planner || !main) return;
+        const roomBar = main.querySelector<HTMLElement>('[data-bathroom-room-bar]');
+        const selection = main.querySelector<HTMLElement>('[aria-label="Current selected choice"]');
+        main.scrollTo({ top: main.scrollTop + planner.getBoundingClientRect().top - main.getBoundingClientRect().top - (roomBar?.offsetHeight ?? 0) - (selection?.offsetHeight ?? 0) - 12, behavior: 'auto' });
+      });
+    });
+    return () => { cancelAnimationFrame(frame); cancelAnimationFrame(scrollFrame); };
+  }, [plannerOpen, planningProduct, requirementId]);
 
   useEffect(() => {
     if (needsSeed && !isReadOnly) onUpdateProject({ sourcing, updatedAt: new Date().toISOString() });
@@ -288,10 +304,21 @@ export default function ProjectMaterialsView({ project, onUpdateProject, isReadO
   const startEntry = (mode: 'item' | 'product') => { setEntryMode(mode); setAdding(true); };
 
   const openRoom = (id: SourcingRoomId) => { setRoomId(id); setRequirementId(null); setCategory('All'); setQuery(''); setMessage(''); onNavigate?.(id); };
-  const openRequirement = (item: SourcingRequirement, part?: string) => { setRoomId(item.roomId); setRequirementId(item.id); setPartFilter(part ?? ''); setCategory('All'); setQuery(''); setMessage(''); onNavigate?.(item.roomId, item.id, part); };
+  const openRequirement = (item: SourcingRequirement, part?: string) => {
+    const openPlan = item.category === 'Tiles' && !part;
+    pendingPlannerOpen.current = openPlan;
+    setPlannerOpen(openPlan);
+    setRoomId(item.roomId); setRequirementId(item.id); setPartFilter(part ?? ''); setCategory('All'); setQuery(''); setMessage(''); onNavigate?.(item.roomId, item.id, part);
+  };
+  const editTilePlan = (linked: SourcingRequirement) => {
+    if (requirementId !== linked.id || roomId !== linked.roomId) pendingPlannerOpen.current = true;
+    openRequirement(linked); setPlannerOpen(true);
+  };
   const openProduct = (product: SourcedProduct, linked?: SourcingRequirement) => {
     setSelectionError('');
-    if (linked?.category === 'Tiles' && product.id.startsWith('tile-plan-')) { openRequirement(linked); return; }
+    if (linked?.category === 'Tiles' && product.id.startsWith('tile-plan-')) {
+      editTilePlan(linked); return;
+    }
     setDetailId(product.id); setDetailRequirementId(linked?.id ?? null);
   };
   const detailRequirement = sourcing.requirements.find((item) => item.id === detailRequirementId) ?? (detail ? requirementForProduct(detail) : undefined);
@@ -303,7 +330,7 @@ export default function ProjectMaterialsView({ project, onUpdateProject, isReadO
     onClose={() => setDetailId(null)} onAdd={(status) => addToBasket(detail, status, detailRequirement)} onUpdate={(updates) => updateProduct(detail.id, updates)} />;
   const showOverview = view === 'overview' ? !room : view === 'room' && !requirement;
   const visibleBasket = roomId ? { ...sourcing, basket: sourcing.basket.filter((item) => roomRequirements.some((linked) => linked.id === item.requirementId)) } : sourcing;
-  const basket = visibleBasket.basket.length > 0 && <BasketTable sourcing={visibleBasket} total={sourcingBasketTotal(visibleBasket)} isReadOnly={isReadOnly} onOpen={(product, linked) => openProduct(product, linked)}
+  const basket = visibleBasket.basket.length > 0 && <BasketTable sourcing={visibleBasket} total={sourcingBasketTotal(visibleBasket)} isReadOnly={isReadOnly} onOpen={(product, linked) => openProduct(product, linked)} onEditPlan={editTilePlan}
     onUpdate={(entries) => save({ ...latest.current, basket: roomId ? [...latest.current.basket.filter((item) => !roomRequirements.some((linked) => linked.id === item.requirementId)), ...entries] : entries })} />;
   const entryPanel = adding && !isReadOnly && <SourcingEntryDialog mode={entryMode} sourcing={sourcing} roomId={roomId ?? undefined} requirementId={requirementId ?? undefined} onClose={() => setAdding(false)}
     onItem={(input) => { const added = addHouseholdItem(latest.current, input, `req-${crypto.randomUUID()}`); save(added.sourcing); setAdding(false); openRequirement(added.item); }}
@@ -353,6 +380,15 @@ export default function ProjectMaterialsView({ project, onUpdateProject, isReadO
       {requirement && <RequirementPanel sourcing={sourcing} requirement={requirement}
         searching={searching} tiles={tiles} message={message} onSearch={searchSupplier} isReadOnly={isReadOnly} />}
 
+      {requirement?.source === 'household' && requirement.relatedToId && !requirement.replacesRequirementId && evaluateSelection(sourcing, requirement).selected.length > 0 && !isReadOnly && <div className="border-l-4 border-blue-500 py-2 pl-3 text-sm">
+        <p className="text-gray-600 dark:text-slate-300">Related to {sourcing.requirements.find((entry) => entry.id === requirement.relatedToId)?.name}; not yet linked as its replacement.</p>
+        <button type="button" className="mt-1 inline-flex min-h-11 items-center gap-2 font-medium text-blue-700 dark:text-blue-300" onClick={() => {
+          if (!window.confirm('Use this selected item as the replacement for the related quote item? Existing purchases remain; quote differences still need review.')) return;
+          try { save(linkRelatedItemAsReplacement(latest.current, requirement.id)); setSelectionError(''); }
+          catch (reason) { setSelectionError(reason instanceof Error ? reason.message : 'Could not link replacement.'); }
+        }}><Check className="h-4 w-4" />Use as replacement</button>
+      </div>}
+
 
       {!tiles && !requirement && <div className="flex flex-wrap gap-1 border-b border-gray-200 dark:border-slate-700" role="tablist" aria-label="Product categories">
         {categories.map(({ id, label, icon: Icon }) => (
@@ -395,7 +431,7 @@ export default function ProjectMaterialsView({ project, onUpdateProject, isReadO
       {requirement && !tiles && <details className="border-b border-gray-200"><summary className="min-h-11 cursor-pointer text-sm text-gray-600">Measurements & room fit</summary><FixtureFitPanel key={requirement.id} requirement={requirement} disabled={isReadOnly} onSaveSpace={(space) => save(saveFixtureSpace(latest.current, requirement.id, space))} /></details>}
       {requirement && <details className="border-b border-gray-200 pb-3"><summary className="min-h-11 cursor-pointer text-sm font-medium">Choice history ({sourcing.choiceHistory?.filter((item) => item.requirementId === requirement.id).length ?? 0})</summary><ul className="space-y-2 text-xs text-gray-600">{sourcing.choiceHistory?.filter((item) => item.requirementId === requirement.id).slice().reverse().map((item) => <li key={item.id} className="break-words">{new Date(item.at).toLocaleString('en-GB')} · {item.selected.name} · {money.format(item.selected.price)}{item.replaced.length ? ` · Replaced: ${item.replaced.map((old) => old.name).join(', ')}` : ' · Selected'}</li>)}</ul></details>}
 
-      {tiles && requirement && <details open={!!planningProduct} className="scroll-mt-24"><summary className="min-h-11 cursor-pointer text-sm text-gray-600">Tile measurements & plan</summary><div ref={plannerRef}><TilePlanner key={requirement.id} sourcing={sourcing} requirement={requirement} isReadOnly={isReadOnly} candidate={planningProduct} onSave={saveTileSourcing} /></div></details>}
+      {tiles && requirement && <details open={plannerOpen || !!planningProduct} onToggle={(event) => setPlannerOpen(event.currentTarget.open)} className="scroll-mt-24"><summary className="min-h-11 cursor-pointer text-sm text-gray-600">Tile measurements & plan</summary><div ref={plannerRef} className="scroll-mt-24"><TilePlanner key={requirement.id} sourcing={sourcing} requirement={requirement} isReadOnly={isReadOnly} candidate={planningProduct} onSave={saveTileSourcing} /></div></details>}
 
       {basket}
       {detailPanel}
@@ -420,7 +456,7 @@ function StockBadge({ stock, compact = false }: { stock: SourcingStock; compact?
 }
 
 
-function BasketTable({ sourcing, total, isReadOnly, onUpdate, onOpen }: { sourcing: ProjectSourcing; total: number; isReadOnly: boolean; onUpdate: (basket: ProjectSourcing['basket']) => void; onOpen: (product: SourcedProduct, requirement?: SourcingRequirement) => void }) {
+function BasketTable({ sourcing, total, isReadOnly, onUpdate, onOpen, onEditPlan }: { sourcing: ProjectSourcing; total: number; isReadOnly: boolean; onUpdate: (basket: ProjectSourcing['basket']) => void; onOpen: (product: SourcedProduct, requirement?: SourcingRequirement) => void; onEditPlan: (requirement: SourcingRequirement) => void }) {
   const perBox = sourcing.basket.filter((item) => excludedBasketPrice(sourcing, item)).length;
   return <section className="min-w-0 border-y border-gray-200 dark:border-slate-700">
     <div className="flex items-center justify-between bg-white px-4 py-3 dark:bg-slate-900"><div><h3 className="font-semibold text-gray-900 dark:text-white">Project basket</h3><p className="text-xs text-gray-500 dark:text-slate-400">Review before ordering. No orders are placed from here.</p></div><div className="text-right"><span className="font-semibold text-gray-900 dark:text-white">{money.format(total)}</span>{perBox > 0 && <p className="text-xs text-amber-700 dark:text-amber-300">+ {perBox} costs unconfirmed (not in total)</p>}</div></div>
@@ -438,7 +474,7 @@ function BasketTable({ sourcing, total, isReadOnly, onUpdate, onOpen }: { sourci
           <p className="mt-1 text-xs text-gray-500">{productSize(product)}</p></div>
         <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto sm:gap-3">
           <span className="mr-auto text-sm font-semibold text-gray-800 sm:mr-0 dark:text-slate-200">{excludedBasketPrice(sourcing, item) ? `${money.format(product.price)} ${(product.priceUnit ?? '').replace('per ', '/ ')} · excluded` : money.format(basketLineCost(sourcing, item))}</span>
-          {planned ? <button type="button" onClick={() => onOpen(product, linked)} className="min-h-10 text-xs text-teal-700 dark:text-teal-300">{planned.boxesNeeded !== undefined ? `${planned.boxesNeeded} boxes` : `${planned.orderQuantity} ${product.priceUnit === 'per tile' ? 'tiles' : 'm²'}`} · Edit plan</button> : <label className="flex items-center gap-1 text-xs text-gray-500">Qty
+          {planned && linked ? <button type="button" onClick={() => onEditPlan(linked)} className="min-h-10 text-xs text-teal-700 dark:text-teal-300">{planned.boxesNeeded !== undefined ? `${planned.boxesNeeded} boxes` : `${planned.orderQuantity} ${product.priceUnit === 'per tile' ? 'tiles' : 'm²'}`} · Edit plan</button> : <label className="flex items-center gap-1 text-xs text-gray-500">Qty
             <input type="number" aria-label={`Quantity for ${product.name}`} disabled={isReadOnly} min={product.priceUnit === 'per m²' ? 0.01 : 1} step={product.priceUnit === 'per m²' ? 'any' : 1} value={item.quantity} onChange={(event) => { const quantity = Number(event.target.value); if (Number.isFinite(quantity) && quantity > 0 && (product.priceUnit === 'per m²' || Number.isInteger(quantity))) onUpdate(sourcing.basket.map((entry) => entry.id === item.id ? { ...entry, quantity } : entry)); }} className="min-h-10 w-20 rounded-lg border-gray-200 text-xs dark:border-slate-700 dark:bg-slate-800" />
           </label>}
           <select aria-label={`Status for ${product.name}`} disabled={isReadOnly} value={item.status} onChange={(event) => onUpdate(sourcing.basket.map((entry) => entry.id === item.id ? { ...entry, status: event.target.value as SourcingBasketStatus } : entry))} className="min-h-10 rounded-lg border-gray-200 py-1.5 text-xs dark:border-slate-700 dark:bg-slate-800">{basketStatuses.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}</select>

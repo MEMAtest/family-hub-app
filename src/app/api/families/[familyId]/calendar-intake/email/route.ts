@@ -104,7 +104,7 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context) =>
         normalizedText,
         parsedDrafts: drafts as unknown as Prisma.InputJsonValue,
         status: prepared.status,
-        needsReview: prepared.source.contentRequired ? 1 : drafts.length,
+        needsReview: prepared.source.contentRequired ? 1 : drafts.filter((draft) => draft.importStatus !== 'duplicate').length,
         duplicateCount: drafts.filter((draft) => draft.importStatus === 'duplicate').length,
         conflictCount: drafts.filter((draft) => draft.importStatus === 'conflict').length,
         metadata: {

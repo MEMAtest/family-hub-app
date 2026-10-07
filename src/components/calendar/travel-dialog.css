@@ -1,0 +1,63 @@
+.travel-dialog {
+  color: #111827;
+  color-scheme: light;
+}
+.travel-dialog input:not([type='checkbox']),
+.travel-dialog select,
+.travel-dialog textarea {
+  min-width: 0;
+  max-width: 100%;
+  min-height: 44px;
+  background: #fff;
+  color: #111827;
+}
+.travel-dialog button:not([type='submit']) {
+  color: #374151;
+}
+.travel-dialog button {
+  min-height: 44px;
+}
+.dark .travel-dialog {
+  color-scheme: dark;
+  background: #18181b;
+  color: #f4f4f5;
+}
+.dark .travel-dialog input:not([type='checkbox']),
+.dark .travel-dialog select,
+.dark .travel-dialog textarea {
+  background: #27272a;
+  border-color: #71717a;
+  color: #f4f4f5;
+}
+.dark .travel-dialog .text-gray-900,
+.dark .travel-dialog .text-gray-700,
+.dark .travel-dialog .text-gray-600,
+.dark .travel-dialog .text-gray-500,
+.dark .travel-dialog button:not([type='submit']) {
+  color: #f4f4f5;
+}
+.dark .travel-dialog button:not([type='submit']):hover {
+  background: #3f3f46;
+}
+.dark .travel-dialog .bg-blue-50,
+.dark .travel-dialog .bg-blue-100 {
+  background: #123b46;
+  border-color: #347b86;
+}
+.dark .travel-dialog .text-blue-700,
+.dark .travel-dialog .text-blue-900 {
+  color: #b7f3ef;
+}
+.dark .travel-dialog .bg-yellow-50 {
+  background: #3d3219;
+  border-color: #806a36;
+}
+.dark .travel-dialog .text-yellow-700,
+.dark .travel-dialog .text-yellow-600,
+.dark .travel-dialog .text-yellow-800,
+.dark .travel-dialog .text-yellow-900 {
+  color: #f7df9a;
+}
+.travel-dialog form {
+  padding-bottom: env(safe-area-inset-bottom);
+}

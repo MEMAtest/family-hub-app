@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ProjectsList } from '../projects/ProjectsList';
 import { ProjectDetailView } from '../projects/ProjectDetailView';
 import { CreateProjectModal } from '../projects/CreateProjectModal';
@@ -13,6 +13,8 @@ interface PropertyProjectsTabProps {
 
 export const PropertyProjectsTab = ({ isReadOnly = false }: PropertyProjectsTabProps) => {
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [urlProjectId, setUrlProjectId] = useState<string | null>(() =>
+    typeof window === 'undefined' ? null : new URL(window.location.href).searchParams.get('bathroomProject'));
 
   // Get projects and actions from store
   const propertyProjects = useFamilyStore((state) => state.propertyProjects);
@@ -45,21 +47,46 @@ export const PropertyProjectsTab = ({ isReadOnly = false }: PropertyProjectsTabP
   const updateProjectFollowUp = useFamilyStore((state) => state.updateProjectFollowUp);
   const removeProjectFollowUp = useFamilyStore((state) => state.removeProjectFollowUp);
 
-  const activeProject = activeProjectId
-    ? propertyProjects.find((p) => p.id === activeProjectId)
+  // Resolve only within loaded household projects; a URL can arrive before hydration.
+  const selectedProjectId = urlProjectId ?? activeProjectId;
+  const activeProject = selectedProjectId
+    ? propertyProjects.find((p) => p.id === selectedProjectId)
     : null;
 
+  useEffect(() => {
+    const restore = () => {
+      const id = new URL(window.location.href).searchParams.get('bathroomProject');
+      setUrlProjectId(id);
+      setActiveProject(id);
+    };
+    window.addEventListener('popstate', restore);
+    return () => window.removeEventListener('popstate', restore);
+  }, [setActiveProject]);
+
+  useEffect(() => {
+    if (urlProjectId && activeProject && activeProjectId !== urlProjectId) setActiveProject(urlProjectId);
+  }, [urlProjectId, activeProject, activeProjectId, setActiveProject]);
+
   const handleSelectProject = (project: PropertyProject) => {
+    const url = new URL(window.location.href);
+    url.searchParams.set('bathroomProject', project.id);
+    ['bathroomView', 'bathroomItem', 'bathroomPart'].forEach((key) => url.searchParams.delete(key));
+    window.history.pushState({ ...window.history.state, bathroomNavigation: undefined }, '', url);
+    setUrlProjectId(project.id);
     setActiveProject(project.id);
   };
 
   const handleBack = () => {
+    const url = new URL(window.location.href);
+    ['bathroomProject', 'bathroomView', 'bathroomItem', 'bathroomPart'].forEach((key) => url.searchParams.delete(key));
+    window.history.replaceState({ ...window.history.state, bathroomNavigation: undefined }, '', url);
+    setUrlProjectId(null);
     setActiveProject(null);
   };
 
   const handleCreateProject = (project: PropertyProject) => {
     addPropertyProject(project);
-    setActiveProject(project.id);
+    handleSelectProject(project);
   };
 
   // If viewing a specific project

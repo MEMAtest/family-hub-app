@@ -1,5 +1,6 @@
 import { createBathroomSourcingSeed, SOURCING_SEED_VERSION } from '../seed';
-import { addHouseholdItem, addHouseholdProduct, chooseSourcingOption } from '../householdItems';
+import { addHouseholdItem, addHouseholdProduct, chooseSourcingOption, linkRelatedItemAsReplacement } from '../householdItems';
+import { evaluateSelection, requiredDemands } from '../selection';
 import { quoteLineSelected } from '../quoteInventory';
 import { migrate } from '@/components/property/projects/ProjectMaterialsView';
 
@@ -94,4 +95,28 @@ test('selected variant photo leads the saved gallery rather than the generic pro
   const seed = addHouseholdItem(createBathroomSourcingSeed(), item, 'req-mirror').sourcing;
   const selected = addHouseholdProduct(seed, { ...product, imageUrl: 'https://cdn.shopify.com/selected.jpg', gallery: ['https://cdn.shopify.com/generic.jpg', 'https://cdn.shopify.com/selected.jpg'] }, 'manual-variant');
   expect(selected.product.gallery).toEqual(['https://cdn.shopify.com/selected.jpg', 'https://cdn.shopify.com/generic.jpg']);
+});
+
+test('explicitly linking a selected related bath preserves purchase, quantity and price', () => {
+  let saved = addHouseholdItem(createBathroomSourcingSeed(), { ...item, name: 'Straight bath', category: 'Sanitaryware', relatedToId: 'main-bath' }, 'req-straight').sourcing;
+  saved = addHouseholdProduct(saved, { ...product, requirementId: 'req-straight', name: 'Straight shower bath', price: 496 }, 'manual-straight').sourcing;
+  saved = chooseSourcingOption(saved, 'req-straight', 'manual-straight', 'review');
+  const next = linkRelatedItemAsReplacement(saved, 'req-straight');
+  expect(next.basket).toEqual([{ ...saved.basket[0], requirementId: 'main-bath', optionRequirementId: 'req-straight' }]);
+  expect(next.products.find((entry) => entry.id === 'manual-straight')).toMatchObject({ price: 496, requirementIds: ['req-straight', 'main-bath'] });
+  expect(requiredDemands(next).some((entry) => entry.id === 'req-straight')).toBe(false);
+  const selection = evaluateSelection(next, next.requirements.find((entry) => entry.id === 'main-bath')!);
+  expect(selection).toMatchObject({ deviation: true, complete: false });
+  expect(selection.selected).toHaveLength(1);
+  expect(saved.requirements.find((entry) => entry.id === 'req-straight')?.replacesRequirementId).toBeUndefined();
+});
+
+test('replacement linking rejects cross-room links and ordered purchase changes', () => {
+  let saved = addHouseholdItem(createBathroomSourcingSeed(), { ...item, relatedToId: 'main-bath' }, 'req-related').sourcing;
+  saved = addHouseholdProduct(saved, { ...product, requirementId: 'req-related' }, 'manual-related').sourcing;
+  saved = chooseSourcingOption(saved, 'req-related', 'manual-related', 'ordered');
+  expect(() => linkRelatedItemAsReplacement(saved, 'req-related')).toThrow('order');
+  saved.basket[0].status = 'review';
+  saved.requirements.find((entry) => entry.id === 'req-related')!.relatedToId = 'shower-tray';
+  expect(() => linkRelatedItemAsReplacement(saved, 'req-related')).toThrow('bathroom');
 });

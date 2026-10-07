@@ -570,7 +570,7 @@ test('calendar assistant imports a timed holiday club range as daily sessions', 
   await page.getByRole('button', { name: /School inbox & quick plan/ }).click();
   await expect(page.getByRole('region', { name: 'School inbox and import' })).toBeVisible();
 
-  const commandInput = page.getByPlaceholder('Find summer holidays, or create swimming lesson next Tuesday at 5pm');
+  const commandInput = page.getByRole('textbox', { name: 'Quick plan', exact: true });
   await expect(commandInput).toBeVisible({ timeout: 20_000 });
   await commandInput.fill(source);
   await page.getByRole('button', { name: /^Preview$/ }).click();
@@ -884,7 +884,8 @@ test('family timeline milestone creation persists', async ({ page }) => {
       await clickVisibleButton(page.getByRole('button', { name: /^Add Milestone$/ }), 'family add milestone');
     }
 
-    const openedAfterFirstAttempt = await milestoneTitleInput.isVisible({ timeout: 3_000 }).catch(() => false);
+    const openedAfterFirstAttempt = await expect(milestoneTitleInput).toBeVisible({ timeout: 3_000 })
+      .then(() => true).catch(() => false);
     if (openedAfterFirstAttempt) {
       return;
     }

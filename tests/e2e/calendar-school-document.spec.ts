@@ -52,6 +52,7 @@ const stubFamilyApis = async (
     assistantRequests?: unknown[];
     failEventTitles?: string[];
     inboxPatches?: Record<string, unknown>[];
+    autoProcessRequests?: Record<string, unknown>[];
   },
   options: { gmailConnected?: boolean; inboxItems?: unknown[]; calendarEvents?: unknown[] } = {},
 ) => {
@@ -227,7 +228,17 @@ const stubFamilyApis = async (
         }),
       } : item);
       const saved: any = inboxItems.find((item: any) => item.id === patch.intakeId);
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ status: saved?.status || 'reviewed', parsedDrafts: saved?.parsedDrafts || [] }) });
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ status: saved?.status || 'reviewed', parsedDrafts: saved?.parsedDrafts || [], outstandingDrafts: saved?.parsedDrafts || [] }) });
+      return;
+    }
+    if (route.request().method() === 'POST') {
+      const body = route.request().postDataJSON();
+      state.autoProcessRequests?.push(body);
+      const item: any = inboxItems.find((item: any) => item.id === body.intakeId);
+      const next = { ...item, parsedDrafts: [], outstandingDrafts: [], pendingAutoCreate: 0, autoProcessEligibleCount: 0,
+        autoCreated: 1, newlyCreatedCount: 1, needsReview: 0, conflictCount: 0, status: 'auto_created', actionRequired: false };
+      inboxItems = inboxItems.map((item: any) => item.id === body.intakeId ? next : item);
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(next) });
       return;
     }
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ status: 'reviewed' }) });
@@ -281,6 +292,82 @@ const stubFamilyApis = async (
 };
 
 test.describe('school document calendar intake', () => {
+  test('ordinary upcoming click fetches travel metadata absent from the hydrated personal event', async ({ page }) => {
+    await page.clock.setFixedTime(new Date('2026-09-30T10:00:00Z'));
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.addInitScript(() => {
+      localStorage.setItem('familyHub_setupComplete', 'skipped');
+      localStorage.setItem('omosanya_theme', 'dark');
+      document.documentElement.classList.add('dark');
+    });
+    const state = { documentRequestBody: '', eventPosts: [] as unknown[], gmailSyncs: 0 };
+    const row = { id: 'authoritative-trip', title: 'Family visit', personId: member.id,
+      eventDate: '2026-10-01T06:00:00Z', eventTime: '2026-10-01T06:00:00Z', durationMinutes: 60,
+      recurringPattern: 'none', isRecurring: false, eventType: 'personal', cost: 0,
+      createdAt: '2026-09-30T07:00:00Z', updatedAt: '2026-09-30T07:00:00Z', metadata: {} as Record<string, unknown> };
+    await stubFamilyApis(page, state, { calendarEvents: [row] });
+    await page.goto('/?view=calendar');
+    await expect(page.locator('html')).toHaveClass(/dark/);
+    const upcoming = page.getByRole('region', { name: 'Upcoming this week' });
+    await expect(upcoming.getByRole('button', { name: /Family visit/ })).toBeVisible();
+    // Change only the server response after hydration: a title/category heuristic cannot pass this.
+    row.metadata = { travel: { destination: 'Dusseldorf', departureDate: '2026-10-01',
+      preparation: [{ id: 'prep', title: 'Check documents', status: 'unknown' }],
+      coverage: [{ id: 'cover', title: 'Confirm pickup cover', status: 'unknown' }] } };
+    await upcoming.getByRole('button', { name: /Family visit/ }).click();
+    const dialog = page.getByRole('dialog', { name: 'Travel details' });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByLabel('Preparation')).toHaveValue('Check documents');
+    await expect(dialog.getByLabel('Household cover')).toHaveValue('Confirm pickup cover');
+    await expect(dialog.getByLabel('Departure date')).toHaveValue('2026-10-01');
+    await expect(dialog.getByLabel('Return date')).toHaveValue('');
+    await expect(dialog.locator('input[type="time"]').nth(1)).toHaveValue('');
+    const dateWidth = await dialog.getByLabel('Departure date').evaluate((node) => node.getBoundingClientRect().width);
+    expect(dateWidth).toBeGreaterThan(150);
+    const office = dialog.getByRole('button', { name: 'Office', exact: true });
+    const colors = await office.evaluate((node) => ({ text: getComputedStyle(node).color,
+      background: getComputedStyle(node.closest('.travel-dialog')!).backgroundColor }));
+    const luminance = (color: string) => {
+      const channels = color.match(/\d+/g)!.slice(0, 3).map((value) => Number(value) / 255).map((value) => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
+      return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+    };
+    const textLight = luminance(colors.text), backgroundLight = luminance(colors.background);
+    expect((Math.max(textLight, backgroundLight) + 0.05) / (Math.min(textLight, backgroundLight) + 0.05)).toBeGreaterThanOrEqual(4.5);
+    await expect(dialog.getByRole('button', { name: 'Close travel details' })).toBeVisible();
+    await page.screenshot({ path: test.info().outputPath('travel-phone-dark.png'), fullPage: true });
+    const save = dialog.getByRole('button', { name: 'Save travel details' });
+    await save.scrollIntoViewIfNeeded();
+    await expect(save).toBeVisible();
+    const saveBounds = await save.boundingBox();
+    expect(saveBounds!.y + saveBounds!.height).toBeLessThanOrEqual(812);
+    await page.screenshot({ path: test.info().outputPath('travel-phone-footer.png'), fullPage: true });
+    await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+    expect(state.eventPosts).toEqual([]);
+  });
+
+  test('school photo edit has canonical fields, explicit unknown time and source-preserving draft', async ({ page }) => {
+    await page.clock.setFixedTime(new Date('2026-09-30T10:00:00Z'));
+    const state = { documentRequestBody: '', eventPosts: [] as unknown[], gmailSyncs: 0 };
+    const row = { id: 'photo-editor-source', title: 'Individual And Sibling Photographs. All Children Should Wear Their Full School Uniform Today',
+      personId: member.id, eventDate: '2026-09-30T00:00:00Z', eventTime: '2026-09-30T00:00:00Z',
+      durationMinutes: 1439, recurringPattern: 'none', isRecurring: false, eventType: 'education', cost: 0,
+      location: 'school. Come along to discuss our community.', source: 'gmail-school-email',
+      notes: 'School email did not specify a time. Please wear full uniform.',
+      createdAt: '2026-09-29T07:00:00Z', updatedAt: '2026-09-29T07:00:00Z' };
+    await page.addInitScript(skipSetupWizard);
+    await stubFamilyApis(page, state, { calendarEvents: [row] });
+    await page.goto('/?view=calendar');
+    await page.getByRole('region', { name: 'Upcoming this week' }).getByRole('button', { name: /Individual and sibling photographs/ }).click();
+    const dialog = page.getByRole('dialog', { name: 'Edit Event' });
+    await expect(dialog.getByPlaceholder('Enter event title')).toHaveValue('Individual and sibling photographs');
+    await expect(dialog.locator('#calendar-event-location')).toHaveValue('School');
+    await expect(dialog.locator('input[type="time"]')).toHaveValue('');
+    await expect(dialog.locator('input[type="time"]')).toBeDisabled();
+    await expect(dialog.getByText('Duration not provided by source')).toBeVisible();
+    await dialog.getByRole('button', { name: 'Close event form' }).click();
+    expect(state.eventPosts).toEqual([]);
+    expect(row.title).toContain('All Children');
+  });
   test.beforeEach(async ({ page }) => {
     await page.clock.setFixedTime(new Date('2026-09-30T10:00:00Z'));
   });
@@ -296,7 +383,7 @@ test.describe('school document calendar intake', () => {
     await expect(page.getByRole('region', { name: 'School inbox and import' })).not.toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await action.click();
-    await expect(page.getByRole('heading', { name: 'Add school dates' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'School & nursery inbox' })).toBeVisible();
   });
 
   test('conflicting Phonics series is flagged at calendar entry without modifying the saved source', async ({ page }) => {
@@ -304,6 +391,8 @@ test.describe('school document calendar intake', () => {
     await stubFamilyApis(page, state, { calendarEvents: [{ id: 'phonics-source-conflict', title: 'Phonics', personId: member.id, eventDate: '2026-09-18T00:00:00Z', eventTime: '2026-09-18T15:30:00Z', durationMinutes: 60, recurringPattern: 'weekly', isRecurring: true, eventType: 'education', notes: 'Screening check June –Friday 18', cost: 0 }] });
     await page.goto('/?view=calendar');
     const warning = page.getByRole('region', { name: 'School dates to confirm' });
+    await expect(warning.locator('details')).not.toHaveAttribute('open', '');
+    await warning.locator('summary').click();
     await expect(warning).toContainText('Source says June');
     await expect(warning).toContainText('Held from the calendar until confirmed.');
     await expect(page.locator('.rbc-event').filter({ hasText: 'Phonics' })).toHaveCount(0);
@@ -328,6 +417,7 @@ test.describe('school document calendar intake', () => {
     await stubFamilyApis(page, state);
 
     await openSchoolInbox(page);
+    await page.getByRole('button', { name: 'Add document', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Add school dates' })).toBeVisible({ timeout: 60_000 });
 
     const fileInput = page.locator('input[type="file"]').first();
@@ -367,6 +457,8 @@ test.describe('school document calendar intake', () => {
     await expect(page.getByText('Gmail school inbox', { exact: true })).toBeVisible({ timeout: 60_000 });
     await expect(page.getByText(/School and nursery mail is checked at 08:00 and 20:00 London time/)).toBeVisible();
     await expect(page.getByText('Connected to ademolaomosanya@gmail.com', { exact: true })).toBeVisible();
+    await expect(page.getByText('WhatsApp reminders and delivery-status tracking are active. Send STOP to pause.')).not.toBeVisible();
+    await page.getByText('Connection & assignment settings', { exact: true }).click();
     await expect(page.getByText('WhatsApp reminders and delivery-status tracking are active. Send STOP to pause.')).toBeVisible();
     await expect(page.getByText('Forward other school emails to ademolaomosanya+familyhub@gmail.com')).toBeVisible();
     await page.getByRole('button', { name: 'Sync Gmail' }).click();
@@ -407,6 +499,8 @@ test.describe('school document calendar intake', () => {
     await expect(page.getByText('1 parsed · 1 conflict to check')).toBeVisible();
     await page.getByRole('button', { name: /School meeting overlap/ }).click();
     await expect(page.getByText('Overlaps another event for the same family member.')).toBeVisible();
+    await page.getByRole('button', { name: 'Close school update' }).click();
+    await page.getByText('Added & reference updates · 2', { exact: true }).click();
     await page.getByRole('button', { name: /School newsletter without dated events/ }).click();
     await expect(page.getByRole('button', { name: 'Mark reviewed' })).toBeVisible();
     await page.getByRole('button', { name: 'Mark reviewed' }).click();
@@ -439,6 +533,59 @@ test.describe('school document calendar intake', () => {
     });
   });
 
+  test('phone inbox separates reference mail from decisions and keeps import controls reachable', async ({ page }) => {
+    const state = { documentRequestBody: '', eventPosts: [] as unknown[], gmailSyncs: 0 };
+    await page.setViewportSize({ width: 390, height: 844 });
+    await stubFamilyApis(page, state, { inboxItems: [{
+      id: 'reference-notice', subject: 'Threadworm', status: 'no_events', receivedAt: '2026-09-30T08:00:00Z',
+      autoCreated: 0, needsReview: 0, conflictCount: 0, duplicateCount: 0, parsedDrafts: [],
+    }, {
+      id: 'weekly-pending', subject: 'Weekly update email', status: 'partial_review', receivedAt: '2026-09-30T08:00:00Z',
+      autoCreated: 9, needsReview: 1, conflictCount: 0, duplicateCount: 0,
+      parsedDrafts: [{ importId: 'attendee-pending', title: 'PTA AGM', person: '', date: '2026-10-07', time: '17:00', duration: 60,
+        recurring: 'none', cost: 0, type: 'education', isRecurring: false, priority: 'high', status: 'planned', confidence: 0.9,
+        source: 'Parents welcome to PTA AGM on 7 October at 5pm', sourceLine: 1, importStatus: 'needs_review', warnings: ['Choose the adult attending this school meeting.'] }],
+    }] });
+    await openSchoolInbox(page);
+    await expect(page.getByRole('heading', { name: 'School & nursery inbox' })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Threadworm/ })).not.toBeVisible();
+    await expect(page.getByPlaceholder('Paste term dates, forwarded ticket emails, school events, CSV rows, or copied PDF text...')).toHaveCount(0);
+    await page.getByRole('button', { name: /Weekly update email.*Review/ }).click();
+    const dialog = page.getByRole('dialog', { name: 'Weekly update email' });
+    await expect(dialog.getByText('9 already added to your calendar.')).toBeVisible();
+    await expect(dialog.getByLabel('Assign PTA AGM to')).toHaveValue('');
+    await expect(dialog.getByRole('button', { name: 'Import 0' })).toBeDisabled();
+    const footer = await dialog.getByRole('button', { name: 'Import 0' }).boundingBox();
+    expect(footer!.y + footer!.height).toBeLessThanOrEqual(844);
+    await page.screenshot({ path: 'output/playwright/school-intake-decisions-phone.png' });
+    await page.keyboard.press('Escape');
+    await expect(dialog).not.toBeVisible();
+    await page.getByText('Added & reference updates · 1', { exact: true }).click();
+    await expect(page.getByRole('button', { name: /Threadworm.*Open/ })).toBeVisible();
+    expect(state.eventPosts).toEqual([]);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: 'output/playwright/school-intake-inbox-phone.png' });
+  });
+
+  test('opening a trusted ready update processes it once without a second import click', async ({ page }) => {
+    const state = { documentRequestBody: '', eventPosts: [] as unknown[], gmailSyncs: 0, autoProcessRequests: [] as Record<string, unknown>[] };
+    await stubFamilyApis(page, state, { inboxItems: [{ id: 'trusted-ready', subject: 'School assembly', status: 'review_required',
+      receivedAt: '2026-09-30T08:00:00Z', autoCreated: 0, needsReview: 1, conflictCount: 0, duplicateCount: 0,
+      actionRequired: true, autoProcessEligibleCount: 1, parsedDrafts: [] }] });
+    await openSchoolInbox(page);
+    await page.getByRole('button', { name: /School assembly.*Review/ }).click();
+    const dialog = page.getByRole('dialog', { name: 'School assembly' });
+    await expect(dialog.getByText('1 already added to your calendar.')).toBeVisible();
+    await expect(dialog.getByRole('button', { name: /^Import/ })).toHaveCount(0);
+    await dialog.getByRole('button', { name: 'Done', exact: true }).click();
+    await expect(page.getByText('No decisions waiting.')).toBeVisible();
+    await page.getByText('Added & reference updates · 1', { exact: true }).click();
+    await page.getByRole('button', { name: /School assembly.*Open/ }).click();
+    await expect(dialog.getByText('1 already added to your calendar.')).toBeVisible();
+    expect(state.autoProcessRequests).toEqual([{ action: 'auto-process', intakeId: 'trusted-ready' }]);
+    expect(state.eventPosts).toEqual([]);
+  });
+
   test('quick gym suggestion needs one tap to preview and one to add', async ({ page }) => {
     test.setTimeout(120_000);
     const state = { documentRequestBody: '', eventPosts: [] as unknown[], gmailSyncs: 0, assistantRequests: [] as unknown[] };
@@ -447,6 +594,7 @@ test.describe('school document calendar intake', () => {
     await openSchoolInbox(page);
 
     await expect(page.getByRole('heading', { name: 'Quick plan' })).toBeVisible({ timeout: 60_000 });
+    await page.getByText('Routine suggestions', { exact: true }).click();
     await page.getByRole('button', { name: /gyming tomorrow at 6:30am/ }).click();
     await expect.poll(() => state.assistantRequests).toHaveLength(1);
     expect(state.assistantRequests).toEqual(['Add gyming tomorrow at 6:30am for Test']);
@@ -584,6 +732,7 @@ test.describe('school document calendar intake', () => {
       createdEventIds: ['school-document-event-1'],
     });
     await expect(page.getByText('Book Fair', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Close school update' }).click();
     await expect(page.getByRole('button', { name: /1 to review/ })).toBeVisible();
   });
 
@@ -634,7 +783,7 @@ test.describe('school document calendar intake', () => {
     };
 
     await page.addInitScript(skipSetupWizard);
-    await stubFamilyApis(page, state, { inboxItems: [intake] });
+    await stubFamilyApis(page, state, { inboxItems: [{ ...intake, outstandingDrafts: intake.parsedDrafts }] });
     await openSchoolInbox(page);
 
     await page.getByRole('button', { name: /Reading mornings.*Review/ }).click();
@@ -644,6 +793,10 @@ test.describe('school document calendar intake', () => {
     await expect.poll(() => state.inboxPatches.length).toBe(1);
     expect(state.inboxPatches[0]).toEqual({ intakeId: intake.id, assignments: [{ draftId: 'reading-morning-draft', personId: member.id }] });
     expect(state.eventPosts).toHaveLength(0);
+    await expect(page.getByRole('button', { name: 'Import 1' })).toBeEnabled();
+    await page.getByRole('button', { name: 'Close school update' }).click();
+    await page.getByRole('button', { name: /Reading mornings.*Review/ }).click();
+    await expect(page.getByLabel('Assign Reading Morning (Key Stage 2) to')).toHaveValue(member.id);
     await expect(page.getByRole('button', { name: 'Import 1' })).toBeEnabled();
     await page.getByRole('button', { name: 'Import 1' }).click();
 

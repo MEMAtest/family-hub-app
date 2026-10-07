@@ -8,6 +8,7 @@ import { assignSchoolDrafts, initialSchoolRules, resolveSchoolSource, schoolMeta
 import { importDraftToCalendarEventDraft } from '@/utils/calendarImport';
 import { isStewartFlemingSender } from '@/utils/schoolEmail';
 import { isAdultSchoolEvent, schoolEventTitle } from '@/utils/schoolEventPresentation';
+import { schoolDraftNonEventReason, schoolDraftTimeNeedsReview } from '@/lib/schoolIntakeDraftSafety';
 
 /** Main's events POST uses this for both trusted school mail and ordinary linked intake imports. */
 export type SchoolEventImportInput = {
@@ -28,6 +29,7 @@ export const getSchoolEventImportMetadata = async (familyId: string, intakeId: s
   const resolved = resolveStoredSchoolDrafts(intake, rules, members);
   if (resolved.source.contentRequired) return null;
   const matched = resolved.drafts.find((draft) => {
+    if (schoolDraftNonEventReason(draft) || schoolDraftTimeNeedsReview(draft)) return false;
     if (isAdultSchoolEvent(draft.title) && draft.schoolAssignment?.attendeeStatus !== 'confirmed') return false;
     const candidate = importDraftToCalendarEventDraft(draft);
     return candidate.person === event.personId && schoolEventTitle(candidate.title) === schoolEventTitle(event.title || '') && candidate.date === event.date &&
@@ -40,7 +42,7 @@ export const getSchoolEventImportMetadata = async (familyId: string, intakeId: s
 export const validateSchoolEventImport = async (familyId: string, intakeId: string | undefined,
   event: SchoolEventImportInput) => Boolean(await getSchoolEventImportMetadata(familyId, intakeId, event));
 
-export const loadSchoolRules = async (familyId: string, members: SchoolMember[], persist = false, db = prisma) => {
+export const loadSchoolRules = async (familyId: string, members: SchoolMember[], persist = false, db: Prisma.TransactionClient = prisma) => {
   let row = await db.familyDocument.findUnique({ where: { familyId_key: { familyId, key: SCHOOL_RULES_KEY } } });
   if (!row && persist) {
     try {
@@ -61,6 +63,11 @@ export const schoolDraftKey = (draft: CalendarImportDraft) => createHash('sha256
 
 export const schoolImportedEventId = (familyId: string, intakeId: string, sourceEventKey: string, personId: string) =>
   `mail_event_${createHash('sha256').update(JSON.stringify([familyId, intakeId, sourceEventKey, personId])).digest('hex')}`;
+
+/** Match the actual saved timing without replacing the source draft's original time. */
+export const annotateSchoolIntakeDrafts = (drafts: SchoolDraft[], existingEvents: any[]): SchoolDraft[] =>
+  annotateCalendarImportDrafts(drafts.map((draft) => ({ ...draft, time: importDraftToCalendarEventDraft(draft).time })),
+    existingEvents).map((draft, index) => ({ ...draft, time: drafts[index].time }));
 
 export const schoolEventMetadata = (draft: SchoolDraft, intake: {
   id: string; sender?: string | null; receivedAt?: Date | string; metadata?: unknown;
@@ -175,7 +182,7 @@ export const prepareSchoolIntake = async (input: {
     existingEvents: [], today: input.today,
     defaultPersonId: source.isSchool ? '' : input.defaultPersonId });
   const assigned = assignSchoolDrafts(parsed.map((draft) => ({ ...draft, sourceEventKey: schoolDraftKey(draft) })), source, rules, input.members);
-  const drafts = annotateCalendarImportDrafts(assigned, input.existingEvents || []) as SchoolDraft[];
+  const drafts = annotateSchoolIntakeDrafts(assigned.filter((draft) => !schoolDraftNonEventReason(draft)), input.existingEvents || []);
   return { drafts, source, metadata: { schoolSource: source, schoolRulesVersion: version,
     schoolParserVersion: 1, documentSummary: summarizeSchoolDocument(input.rawText ?? input.text) },
     status: source.contentRequired ? 'content_required' : drafts.length ? 'review_required' : 'no_events' };

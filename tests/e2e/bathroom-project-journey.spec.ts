@@ -1,7 +1,8 @@
 import { test, expect, type Page } from '@playwright/test';
 import { createBathroomSourcingSeed } from '@/lib/sourcing/seed';
-import { addHouseholdItem, addHouseholdProduct } from '@/lib/sourcing/householdItems';
+import { addHouseholdItem, addHouseholdProduct, chooseSourcingOption } from '@/lib/sourcing/householdItems';
 import { requiredDemands } from '@/lib/sourcing/selection';
+import { saveTilePlan } from '@/lib/sourcing/tilePlanner';
 import type { ProjectSourcing } from '@/types/sourcing.types';
 
 const seed = createBathroomSourcingSeed();
@@ -23,6 +24,27 @@ const openProject = async (page: Page, sourcing?: ProjectSourcing) => {
   await page.goto('/?view=property&tab=projects');
   await expect(page.getByRole('heading', { name: 'Bathroom UX check' })).toBeVisible();
 };
+
+test('selected related bath can explicitly replace the original quote demand and persist on phone', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  let sourcing = addHouseholdItem(createBathroomSourcingSeed(), { roomId: 'main-bathroom', name: 'Straight shower bath', category: 'Sanitaryware', quantity: 1, unit: 'each', size: '1700mm long', specification: 'Straight bath', relatedToId: 'main-bath' }, 'req-straight').sourcing;
+  sourcing = addHouseholdProduct(sourcing, { requirementId: 'req-straight', name: 'Selected straight shower bath', supplier: 'QA', url: '', imageUrl: '', price: 496, priceUnit: 'each', size: '1700mm long', components: [], notes: '' }, 'manual-straight').sourcing;
+  sourcing = chooseSourcingOption(sourcing, 'req-straight', 'manual-straight', 'review');
+  await openProject(page, sourcing);
+  await page.getByRole('button', { name: 'Main Bathroom', exact: true }).click();
+  await page.getByLabel('Jump to project item').selectOption('req-straight');
+  const current = page.getByRole('region', { name: 'Current selected choice' });
+  await expect(current).toContainText('Selected straight shower bath');
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.getByRole('button', { name: 'Use as replacement', exact: true }).click();
+  await expect(current).toContainText('Replacement - quote deviation needs review');
+  await page.reload();
+  await expect(current).toContainText('Selected straight shower bath');
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('family-storage')!).state.propertyProjects[0].sourcing);
+  expect(saved.basket).toHaveLength(1);
+  expect(saved.basket[0]).toMatchObject({ requirementId: 'main-bath', optionRequirementId: 'req-straight', quantity: 1, status: 'review' });
+  expect(saved.products.find((entry: any) => entry.id === 'manual-straight').price).toBe(496);
+});
 
 test('two-room overview preserves the existing selection and offers direct next actions', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
@@ -53,9 +75,57 @@ test('Projects opened from property overview survives item reload', async ({ pag
   await expect(page.getByRole('heading', { name: 'Bathroom UX check' })).toBeVisible();
   await page.getByRole('button', { name: 'Main Bathroom', exact: true }).click();
   await page.getByLabel('Jump to project item').selectOption('main-wc-unit');
+  // A fresh device/server bootstrap has projects but no persisted active UI selection.
+  await page.evaluate(() => {
+    const saved = JSON.parse(localStorage.getItem('family-storage')!);
+    saved.state.activeProjectId = null;
+    localStorage.setItem('family-storage', JSON.stringify(saved));
+  });
   await page.reload();
   await expect(page.getByRole('region', { name: 'Current selected choice' })).toContainText('£239.00');
   await expect(page.getByRole('combobox', { name: 'Quote item', exact: true })).toHaveValue('main-wc-unit');
+  await page.getByRole('button', { name: 'Back to Projects', exact: true }).click();
+  await expect(page).not.toHaveURL(/bathroom(Project|Item|View|Part)=/);
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Bathroom UX check', exact: true })).not.toBeVisible();
+});
+
+test('phone search places filtered quote results directly below the search, ahead of health and maps', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await openProject(page);
+  await page.getByRole('button', { name: 'Main Bathroom', exact: true }).click();
+  const search = page.getByLabel('Search project items');
+  await search.fill('cistern');
+  const results = page.getByRole('region', { name: 'Project search results' });
+  await expect(results).toContainText('cistern');
+  const positions = await page.evaluate(() => {
+    const input = document.querySelector('[aria-label="Search project items"]')!;
+    const results = document.querySelector('[aria-label="Project search results"]')!;
+    const health = document.querySelector('[aria-label="Bathroom health check"]')!;
+    return { resultsAfterSearch: !!(input.compareDocumentPosition(results) & Node.DOCUMENT_POSITION_FOLLOWING), healthAfterResults: !!(results.compareDocumentPosition(health) & Node.DOCUMENT_POSITION_FOLLOWING) };
+  });
+  expect(positions).toEqual({ resultsAfterSearch: true, healthAfterResults: true });
+  await search.fill('');
+  await expect(results).not.toBeVisible();
+  await expect(page.getByRole('region', { name: 'Main Bathroom choices' })).toBeVisible();
+});
+
+test('basket Edit plan opens and scrolls the saved calculator without manually expanding it', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  const sourcing = saveTilePlan(createBathroomSourcingSeed(), 'main-wall-tiles', {
+    method: 'area', unit: 'm', areaM2: 11, sections: [], deductionsM2: 0,
+    wasteIncluded: 'excluded', wastePercent: 10, source: { kind: 'manual', label: 'QA wall measurements' },
+  }, { name: 'QA wall tile', supplier: 'QA supplier', url: '', widthMm: 595, lengthMm: 595, price: 60, priceBasis: 'm2' });
+  await openProject(page, sourcing);
+  await page.getByRole('button', { name: /^Products/ }).click();
+  await page.getByRole('button', { name: /Edit plan/ }).click();
+  const calculator = page.locator('details').filter({ has: page.getByText('Tile measurements & plan', { exact: true }) });
+  await expect(calculator).toHaveAttribute('open');
+  await expect(page.getByLabel('Tiled area (m²)')).toHaveValue('11');
+  await expect.poll(async () => {
+    const bounds = await page.getByRole('heading', { name: 'Plan wall tiles', exact: true }).boundingBox();
+    return !!bounds && bounds.y >= 0 && bounds.y < 740;
+  }).toBe(true);
 });
 
 test('phone navigation, room notes and basket quantities survive reload', async ({ page }) => {

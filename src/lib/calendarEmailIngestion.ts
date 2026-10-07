@@ -12,8 +12,13 @@ import {
   normalizeCalendarEmailText,
 } from '@/utils/calendarImport';
 import { parseDateKey } from '@/utils/recurrence';
-import { prepareSchoolIntake, schoolDraftKey, schoolEventMetadata, schoolImportedEventId } from '@/lib/schoolIntakeServer';
-import type { SchoolDraft } from '@/utils/schoolSources';
+import { annotateSchoolIntakeDrafts, loadSchoolRules, prepareSchoolIntake, resolveStoredSchoolDrafts,
+  schoolDraftKey, schoolEventMetadata, schoolImportedEventId } from '@/lib/schoolIntakeServer';
+import { schoolMetadata, type SchoolDraft } from '@/utils/schoolSources';
+import { calendarIntakeState, findImportedDraftEvent } from '@/lib/calendarIntakeState';
+import { isAdultSchoolEvent } from '@/utils/schoolEventPresentation';
+import { isStewartFlemingSender } from '@/utils/schoolEmail';
+import { schoolDraftHasUnconfirmedOffer, schoolDraftNonEventReason, schoolDraftTimeNeedsReview } from '@/lib/schoolIntakeDraftSafety';
 
 const emailFromValue = (value: any): string => {
   if (!value) return '';
@@ -107,19 +112,16 @@ export const isHighConfidenceAutoCreate = (
   options: { eventSource?: string; authenticatedSchoolSender?: boolean },
   now = new Date(),
 ) => {
-  const genericTitle = /^(?:imported event|weekly update(?: email)?|newsletter|school update(?: email)?)$/i
-    .test(draft.title.trim());
+  const genericTitle = Boolean(schoolDraftNonEventReason(draft));
   const today = new Intl.DateTimeFormat('en-GB', {
     timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit',
   }).formatToParts(now);
   const todayKey = `${today.find((part) => part.type === 'year')?.value}-${today.find((part) => part.type === 'month')?.value}-${today.find((part) => part.type === 'day')?.value}`;
   const hasExplicitTime = /\b\d{1,2}(?::|\.)(\d{2})\s*(?:am|pm)?\b|\b\d{1,2}\s*(?:am|pm)\b/i.test(draft.source);
   const verifiedSchoolEvent = options.eventSource === 'gmail-school-email' && options.authenticatedSchoolSender === true;
-  const offerCue = /\b(?:limited (?:places?|spaces?)|(?:places?|spaces?) (?:are|is) limited|first[- ]come,? first[- ]served|book now|register now|how to book|booking required|places? available)\b/i
-    .test(draft.source);
-  const bookingConfirmed = /\b(?:your booking is confirmed|booking confirmed|your place is confirmed|place confirmed|registration confirmed|you are booked|your place is reserved)\b/i
-    .test(draft.source);
-  const unconfirmedOffer = offerCue && !bookingConfirmed;
+  const unconfirmedOffer = schoolDraftHasUnconfirmedOffer(draft);
+  if (schoolDraftTimeNeedsReview(draft)) return false;
+  if (isAdultSchoolEvent(draft.title) && (draft as SchoolDraft).schoolAssignment?.attendeeStatus !== 'confirmed') return false;
 
   if (!parseDateKey(draft.date) || (draft.endDate && !parseDateKey(draft.endDate)) ||
       draft.importStatus !== 'ready' || !draft.person || genericTitle || unconfirmedOffer || draft.date < todayKey) return false;
@@ -130,32 +132,18 @@ export const isHighConfidenceAutoCreate = (
 const hasExplicitTime = (draft: CalendarImportDraft) =>
   /\b\d{1,2}(?::|\.)(\d{2})\s*(?:am|pm)?\b|\b\d{1,2}\s*(?:am|pm)\b/i.test(draft.source);
 
-const importedEventId = (intakeId: string, draftIndex: number) =>
-  `mail_event_${createHash('sha256').update(`${intakeId}\0${draftIndex}`).digest('hex')}`;
-
-const sameImportedEvent = (event: any, data: ReturnType<typeof calendarEventDraftToDbData>) => {
-  const allDay = /time not provided by source|school email did not specify a time/i.test(data.notes || '');
-  const sameDate = allDay
-    ? new Date(event.eventDate).toISOString().slice(0, 10) === data.eventDate.toISOString().slice(0, 10)
-    : new Date(event.eventDate).getTime() === data.eventDate.getTime();
-  return event.title === data.title &&
-    event.personId === data.personId &&
-    sameDate &&
-    (allDay || new Date(event.eventTime).getTime() === data.eventTime.getTime()) &&
-    event.eventType === data.eventType;
-};
-
 const persistHighConfidenceEvents = async (
   familyId: string,
   intakeId: string,
   drafts: CalendarImportDraft[],
   options: { eventSource?: string; authenticatedSchoolSender?: boolean },
+  db: Prisma.TransactionClient = prisma,
 ) => {
   const schoolVerified = options.authenticatedSchoolSender && options.eventSource === 'gmail-school-email';
   const source = schoolVerified ? 'gmail-school-email' :
     options.eventSource === 'gmail-calendar-email' ? options.eventSource : 'calendar-email';
-  const persisted = await prisma.calendarEvent.findMany({ where: { familyId, sourceId: intakeId } });
-  const intake = await prisma.calendarEmailIntake.findFirst({ where: { id: intakeId, familyId } });
+  const persisted = await db.calendarEvent.findMany({ where: { familyId, sourceId: intakeId } });
+  const intake = await db.calendarEmailIntake.findFirst({ where: { id: intakeId, familyId } });
   const result: any[] = [];
 
   for (const [draftIndex, draft] of drafts.entries()) {
@@ -170,9 +158,7 @@ const persistHighConfidenceEvents = async (
         : {}),
     };
     const data = calendarEventDraftToDbData(familyId, eventDraft);
-    const existing = persisted.find((event) =>
-      event.id === eventId || event.id === importedEventId(intakeId, draftIndex) || sameImportedEvent(event, data)
-    );
+    const existing = findImportedDraftEvent(familyId, intakeId, draft, draftIndex, persisted);
     if (existing) {
       if (!result.some((event) => event.id === existing.id)) result.push(existing);
       continue;
@@ -183,12 +169,12 @@ const persistHighConfidenceEvents = async (
 
     let created;
     try {
-      created = await prisma.calendarEvent.create({
+      created = await db.calendarEvent.create({
         data: { id: eventId, ...data },
       });
     } catch (error) {
       if ((error as { code?: string })?.code !== 'P2002') throw error;
-      created = await prisma.calendarEvent.findUnique({ where: { id: eventId } });
+      created = await db.calendarEvent.findUnique({ where: { id: eventId } });
       if (!created) throw error;
     }
     persisted.push(created);
@@ -242,14 +228,16 @@ const createCalendarIntakeNotification = async (input: {
   needsReview: number;
   duplicateCount: number;
   conflictCount: number;
-  draftCount: number;
+  contentRequired?: boolean;
   googleExportErrors?: string[];
 }) => {
   const notificationId = `calendar-email-${input.intakeId}`;
-  const title = input.createdEvents.length > 0 ? 'Calendar email processed' : 'Calendar email needs review';
+  const actionRequired = input.needsReview > 0 || input.conflictCount > 0 || Boolean(input.contentRequired);
+  const title = input.createdEvents.length > 0 || !actionRequired ? 'Calendar email processed' : 'Calendar email needs review';
   const message = input.createdEvents.length > 0
     ? `${input.createdEvents.length} event${input.createdEvents.length === 1 ? '' : 's'} added from "${input.subject || input.sender || 'email'}".`
-    : `Review "${input.subject || input.sender || 'email'}" before adding calendar events.`;
+    : actionRequired ? `Review "${input.subject || input.sender || 'email'}" before adding calendar events.`
+      : `No outstanding calendar events in "${input.subject || input.sender || 'email'}".`;
 
   try {
     const notification = await prisma.notification.create({
@@ -262,7 +250,7 @@ const createCalendarIntakeNotification = async (input: {
         priority: input.needsReview > 0 || input.conflictCount > 0 ? 'high' : 'medium',
         category: 'event',
         read: false,
-        actionRequired: input.needsReview > 0 || input.conflictCount > 0 || input.draftCount === 0,
+        actionRequired,
         relatedEventId: input.createdEvents[0]?.id,
         metadata: {
           source: input.eventSource || 'calendar-email',
@@ -347,7 +335,7 @@ export const ingestCalendarEmailPayload = async (
           where: { id: existingIntake.id },
           data: {
             status,
-            needsReview: drafts.length || 1,
+            needsReview: drafts.filter((draft) => draft.importStatus !== 'duplicate').length,
           },
         });
       }
@@ -363,17 +351,8 @@ export const ingestCalendarEmailPayload = async (
             body: { error: `Google Calendar export failed: ${googleExportErrors.join('; ')}` },
           };
         }
-        const readyButNotCreated = drafts.filter((draft) => draft.importStatus === 'ready').length - createdEvents.length;
-        const needsReview = readyButNotCreated + drafts.filter((draft) => draft.importStatus === 'needs_review').length;
-        const duplicateCount = drafts.filter((draft) => draft.importStatus === 'duplicate').length;
-        const conflictCount = drafts.filter((draft) => draft.importStatus === 'conflict').length;
-        const resumedStatus = createdEvents.length > 0 && needsReview === 0 && conflictCount === 0
-          ? 'auto_created'
-          : drafts.length === 0
-            ? 'no_events'
-            : createdEvents.length > 0
-              ? 'partial_review'
-              : 'review_required';
+        const state = calendarIntakeState({ ...existingIntake, familyId: family.id }, drafts, createdEvents);
+        const { needsReview, duplicateCount, conflictCount, status: resumedStatus } = state;
         await prisma.calendarEmailIntake.update({
           where: { id: existingIntake.id },
           data: {
@@ -395,7 +374,6 @@ export const ingestCalendarEmailPayload = async (
           needsReview,
           duplicateCount,
           conflictCount,
-          draftCount: drafts.length,
         }).catch((error) => {
           console.warn('Calendar email notification failed:', error);
         });
@@ -403,6 +381,7 @@ export const ingestCalendarEmailPayload = async (
           statusCode: 200,
           body: {
             intakeId: existingIntake.id,
+            ...state,
             status: resumedStatus,
             duplicate: true,
             createdEventIds: createdEvents.map((event) => event.id),
@@ -411,13 +390,14 @@ export const ingestCalendarEmailPayload = async (
           },
         };
       }
+      const savedEvents = await prisma.calendarEvent.findMany({ where: { familyId: family.id, sourceId: existingIntake.id } });
+      const state = calendarIntakeState({ ...existingIntake, familyId: family.id, status }, drafts, savedEvents);
       return {
         statusCode: 200,
         body: {
           intakeId: existingIntake.id,
-          status,
+          ...state,
           duplicate: true,
-          createdEventIds: existingIntake.createdEventIds,
         },
       };
     }
@@ -523,17 +503,10 @@ export const ingestCalendarEmailPayload = async (
   const createdEvents = reviewOnly ? [] : await persistHighConfidenceEvents(family.id, intake.id, drafts, options);
   const googleExportErrors = await exportCalendarEvents(family.id, createdEvents);
 
-  const readyButNotCreated = drafts.filter((draft) => draft.importStatus === 'ready').length - createdEvents.length;
-  const needsReview = prepared.source.contentRequired ? 1 : readyButNotCreated + drafts.filter((draft) => draft.importStatus === 'needs_review').length;
-  const duplicateCount = drafts.filter((draft) => draft.importStatus === 'duplicate').length;
-  const conflictCount = drafts.filter((draft) => draft.importStatus === 'conflict').length;
-  const status = prepared.source.contentRequired ? 'content_required' : createdEvents.length > 0 && needsReview === 0 && conflictCount === 0
-    ? 'auto_created'
-    : drafts.length === 0
-      ? 'no_events'
-      : createdEvents.length > 0
-        ? 'partial_review'
-        : 'review_required';
+  const state = calendarIntakeState({ id: intake.id, familyId: family.id,
+    status: prepared.source.contentRequired ? 'content_required' : 'processing' }, drafts, createdEvents,
+    (draft) => !reviewOnly && isHighConfidenceAutoCreate(draft, options));
+  const { needsReview, duplicateCount, conflictCount, status } = state;
 
   const updatedIntake = await prisma.calendarEmailIntake.update({
     where: { id: intake.id },
@@ -557,7 +530,7 @@ export const ingestCalendarEmailPayload = async (
     needsReview,
     duplicateCount,
     conflictCount,
-    draftCount: drafts.length,
+    contentRequired: prepared.source.contentRequired,
     googleExportErrors,
   }).catch((error) => {
     console.warn('Calendar email notification failed:', error);
@@ -567,6 +540,7 @@ export const ingestCalendarEmailPayload = async (
     statusCode: 200,
     body: {
       intakeId: updatedIntake.id,
+      ...state,
       status: updatedIntake.status,
       parsed: drafts.length,
       autoCreated: createdEvents.length,
@@ -577,4 +551,85 @@ export const ingestCalendarEmailPayload = async (
       createdEventIds: createdEvents.map((event) => event.id),
     },
   };
+};
+
+export class SavedIntakeProcessingError extends Error {
+  constructor(message: string, public statusCode: number) { super(message); }
+}
+
+/** Explicit single-intake processing. No caller-supplied drafts, sender trust, or event IDs. */
+export const autoProcessSavedCalendarIntake = async (familyId: string, intakeId: string) => {
+  const options = { eventSource: 'gmail-school-email', authenticatedSchoolSender: true };
+  const result = await prisma.$transaction(async (db) => {
+    const intake = await db.calendarEmailIntake.findFirst({ where: { familyId, id: intakeId } });
+    if (!intake) throw new SavedIntakeProcessingError('Calendar inbox item was not found', 404);
+    if (schoolMetadata(intake.metadata).schoolSenderVerified !== true ||
+        !isStewartFlemingSender(intake.sender || '') ||
+        !['processing', 'review_required', 'partial_review', 'auto_created', 'no_events'].includes(intake.status) ||
+        schoolMetadata(intake.metadata).schoolDismissed) {
+      throw new SavedIntakeProcessingError('This intake is not eligible for automatic processing', 409);
+    }
+    if (!Array.isArray(intake.parsedDrafts) || intake.parsedDrafts.length > 200) {
+      throw new SavedIntakeProcessingError('This intake requires manual review', 409);
+    }
+    const members = await db.familyMember.findMany({ where: { familyId } });
+    const { rules } = await loadSchoolRules(familyId, members, false, db);
+    const resolved = resolveStoredSchoolDrafts(intake, rules, members);
+    if (resolved.source.contentRequired) throw new SavedIntakeProcessingError('Source content is required', 409);
+    const existing = await db.calendarEvent.findMany({ where: { familyId } });
+    const drafts = annotateSchoolIntakeDrafts(resolved.drafts.map((draft) => members.some((member) => member.id === draft.person)
+      ? draft : { ...draft, importStatus: 'needs_review' as const }),
+      existing.filter((event) => event.sourceId !== intakeId).map(toCalendarEventResponse));
+    const before = calendarIntakeState(intake, drafts, existing);
+    // Recheck eligibility and current conflicts; own persisted events are matched separately.
+    const events = await persistHighConfidenceEvents(familyId, intakeId, drafts, options, db);
+    const state = calendarIntakeState(intake, drafts, [...existing, ...events], (draft) =>
+      members.some((member) => member.id === draft.person) && isHighConfidenceAutoCreate(draft, options));
+    const updated = await db.calendarEmailIntake.updateMany({
+      where: { id: intakeId, familyId, updatedAt: intake.updatedAt },
+      data: { status: state.status, createdEventIds: state.createdEventIds,
+        autoCreated: state.importedEventCount, needsReview: state.needsReview,
+        duplicateCount: state.duplicateCount, conflictCount: state.conflictCount,
+        parsedDrafts: drafts as unknown as Prisma.InputJsonValue },
+    });
+    if (updated.count !== 1) throw new SavedIntakeProcessingError('This intake changed. Reload before processing.', 409);
+    await db.notification.updateMany({ where: { familyId, id: `calendar-email-${intakeId}` },
+      data: { actionRequired: state.actionRequired } });
+    return { ...state, events, newlyCreatedCount: state.createdEventIds.filter((id) => !before.createdEventIds.includes(id)).length };
+  }, { isolationLevel: 'Serializable' });
+  const { events, ...state } = result;
+  const googleExportErrors = await exportCalendarEvents(familyId, events);
+  return { intakeId, ...state, parsedDrafts: state.outstandingDrafts, autoCreated: state.importedEventCount, googleExportErrors };
+};
+
+/** Round-robin bounded scan, independent of Gmail's message date/cursor. */
+export const sweepSavedCalendarIntakes = async (familyId: string, afterId?: string) => {
+  const batchLimit = 10;
+  const candidates = await prisma.calendarEmailIntake.findMany({
+    where: { familyId, status: { in: ['processing', 'review_required', 'partial_review', 'auto_created'] },
+      metadata: { path: ['schoolSenderVerified'], equals: true },
+      ...(afterId ? { id: { gt: afterId } } : {}) },
+    orderBy: { id: 'asc' }, take: batchLimit + 1, select: { id: true },
+  });
+  const page = candidates.slice(0, batchLimit);
+  let autoCreated = 0;
+  let processed = 0;
+  let needsReview = 0;
+  let skipped = 0;
+  const errors: string[] = [];
+  for (const intake of page) {
+    try {
+      const result = await autoProcessSavedCalendarIntake(familyId, intake.id);
+      autoCreated += result.newlyCreatedCount;
+      needsReview += result.needsReview;
+      processed += 1;
+      errors.push(...result.googleExportErrors.map((error) => `${intake.id}: ${error}`));
+    } catch (error) {
+      if (error instanceof SavedIntakeProcessingError && [404, 409].includes(error.statusCode)) skipped += 1;
+      else errors.push(`${intake.id}: ${error instanceof Error ? error.message : 'Saved intake processing failed'}`);
+    }
+  }
+  const hasMore = candidates.length > batchLimit;
+  return { checked: page.length, processed, skipped, autoCreated, needsReview, batchLimit, hasMore,
+    nextAfterId: hasMore ? page[page.length - 1].id : null, errors };
 };

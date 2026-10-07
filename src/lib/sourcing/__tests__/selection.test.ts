@@ -88,6 +88,20 @@ test('bundle counted once, room isolated and duplicate waste warning never remov
   expect(evaluateSelection(sourcing, shower).selected).toEqual([]);
 });
 
+test.each([
+  ['main-rail', 'towel-rail', 'Heated towel rail', 'Towel rail valves pair', 'valves'],
+  ['shower-tray', 'shower-tray', 'Rectangular shower tray with waste', 'Fast flow shower tray waste', 'waste'],
+])('accessories do not create false multiple fixtures for %s', (id, primary, fixtureName, accessoryName, accessory) => {
+  const sourcing = createBathroomSourcingSeed();
+  add(sourcing, option('fixture', id, fixtureName), id);
+  add(sourcing, option('accessory', id, accessoryName), id);
+  if (accessory === 'valves') add(sourcing, option('second-accessory', id, accessoryName), id);
+  const result = evaluateSelection(sourcing, sourcing.requirements.find((entry) => entry.id === id)!);
+  expect(result.coverage.find((entry) => entry.component === primary)?.quantity).toBe(1);
+  expect(result.warnings).toEqual([expect.stringContaining(`Duplicate ${accessory}`)]);
+  expect(sourcing.basket).toHaveLength(accessory === 'valves' ? 3 : 2);
+});
+
 test('related replacement stays under original demand and is not another required item', () => {
   let sourcing = createBathroomSourcingSeed();
   sourcing = addHouseholdItem(sourcing, { roomId: 'main-bathroom', name: 'Different vanity', category: 'Furniture', quantity: 1, size: '550mm wide', specification: 'Vanity with basin', unit: 'each', relatedToId: 'main-vanity', replacement: true }, 'req-replacement').sourcing;

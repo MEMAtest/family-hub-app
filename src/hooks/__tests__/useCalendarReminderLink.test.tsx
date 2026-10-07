@@ -60,6 +60,24 @@ it('waits for the authenticated family scope rather than using local-storage ide
   rerender({ familyId: 'family' });
   await waitFor(() => expect(openTravel).toHaveBeenCalledTimes(1));
 });
+it('gives a visible connection action when a server event is clicked without household scope', () => {
+  const { result } = renderHook(() => useCalendarReminderLink([], jest.fn(), jest.fn(), null, false));
+  act(() => result.current.open(stale));
+  expect(result.current.error).toContain('Connect to your household');
+  expect(global.fetch).not.toHaveBeenCalled();
+});
+it('local editing clears a prior failed server click', async () => {
+  (global.fetch as jest.Mock).mockResolvedValue({ ok: false });
+  const openEvent = jest.fn();
+  const { result } = renderHook(() => useCalendarReminderLink([], jest.fn(), openEvent, 'family', false));
+  act(() => result.current.open(stale));
+  await waitFor(() => expect(result.current.error).toBeTruthy());
+  const local = { ...stale, id: 'event-local-only' };
+  act(() => result.current.open(local));
+  expect(openEvent).toHaveBeenCalledWith(local);
+  expect(result.current.error).toBeNull();
+  expect(result.current.loading).toBe(false);
+});
 it('retains the link on failed fetch and supports an explicit retry without cached fallback', async () => {
   (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: false }).mockResolvedValueOnce(respond());
   const openTravel = jest.fn(), openEvent = jest.fn();
@@ -99,4 +117,44 @@ it('ignores an obsolete household response after family scope changes', async ()
   await act(async () => resolve(respond()));
   await waitFor(() => expect(result.current.error).toBe('This event is no longer available.'));
   expect(openTravel).not.toHaveBeenCalled(); expect(openEvent).not.toHaveBeenCalled();
+});
+
+it('routes an ordinary click using fetched metadata even when the cached category is personal', async () => {
+  window.history.replaceState({}, '', '/?view=calendar');
+  const openTravel = jest.fn(), openEvent = jest.fn();
+  const { result } = renderHook(() => useCalendarReminderLink([stale], openTravel, openEvent, 'family', false));
+  act(() => result.current.open(stale));
+  await waitFor(() => expect(openTravel).toHaveBeenCalledTimes(1));
+  expect(openEvent).not.toHaveBeenCalled();
+  expect(openTravel.mock.calls[0][0].travel.departureTime).toBeUndefined();
+  act(() => result.current.open(stale));
+  await waitFor(() => expect(openTravel).toHaveBeenCalledTimes(2));
+});
+it('preserves clicked recurring occurrence context without using stale event metadata', async () => {
+  window.history.replaceState({}, '', '/?view=calendar');
+  (global.fetch as jest.Mock).mockResolvedValue(respond([{ ...dbEvent, metadata: {}, isRecurring: true }]));
+  const openEvent = jest.fn();
+  const { result } = renderHook(() => useCalendarReminderLink([], jest.fn(), openEvent, 'family', false));
+  act(() => result.current.open({ ...stale, date: '2026-10-15', occurrenceDate: '2026-10-15' }));
+  await waitFor(() => expect(openEvent).toHaveBeenCalledTimes(1));
+  expect(openEvent.mock.calls[0][0]).toMatchObject({ date: '2026-10-15', occurrenceDate: '2026-10-15', seriesStartDate: '2026-10-08', metadata: {} });
+});
+it('keeps local-only event editing available without a server request', () => {
+  window.history.replaceState({}, '', '/?view=calendar');
+  const openEvent = jest.fn();
+  const { result } = renderHook(() => useCalendarReminderLink([], jest.fn(), openEvent, null, false));
+  act(() => result.current.open({ ...stale, id: 'event-local-draft' }));
+  expect(openEvent).toHaveBeenCalledTimes(1);
+  expect(global.fetch).not.toHaveBeenCalled();
+});
+it('shows a retryable ordinary-click failure without guessing an editor from cached metadata', async () => {
+  window.history.replaceState({}, '', '/?view=calendar');
+  (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: false }).mockResolvedValueOnce(respond());
+  const openTravel = jest.fn(), openEvent = jest.fn();
+  const { result } = renderHook(() => useCalendarReminderLink([], openTravel, openEvent, 'family', false));
+  act(() => result.current.open(stale));
+  await waitFor(() => expect(result.current.error).toBe('Could not load current event details.'));
+  expect(openEvent).not.toHaveBeenCalled();
+  act(() => result.current.retry());
+  await waitFor(() => expect(openTravel).toHaveBeenCalledTimes(1));
 });

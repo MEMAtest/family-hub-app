@@ -2,7 +2,7 @@ import { google, gmail_v1 } from 'googleapis';
 import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { createOAuthClient } from '@/lib/googleCalendarServer';
-import { ingestCalendarEmailPayload } from '@/lib/calendarEmailIngestion';
+import { ingestCalendarEmailPayload, sweepSavedCalendarIntakes } from '@/lib/calendarEmailIngestion';
 import {
   hasAuthenticatedStewartFlemingSender,
   isExpectedGmailAccount,
@@ -235,6 +235,7 @@ type SchoolGmailSyncState = {
   pageToken?: string | null;
   backfillComplete?: boolean;
   failedMessageIds?: string[];
+  savedIntakeSweepAfterId?: string | null;
 };
 
 const storeSchoolGmailSyncState = async (familyId: string, state: SchoolGmailSyncState, kind = 'school') => {
@@ -258,6 +259,10 @@ const storeSchoolGmailSyncState = async (familyId: string, state: SchoolGmailSyn
     if (state.failedMessageIds !== undefined) {
       if (state.failedMessageIds.length > 0) metadata.schoolGmailFailedMessageIds = state.failedMessageIds;
       else delete metadata.schoolGmailFailedMessageIds;
+    }
+    if (state.savedIntakeSweepAfterId !== undefined) {
+      if (state.savedIntakeSweepAfterId) metadata.savedIntakeSweepAfterId = state.savedIntakeSweepAfterId;
+      else delete metadata.savedIntakeSweepAfterId;
     }
     const nextMetadata = metadata as Prisma.InputJsonObject;
     if (current) {
@@ -444,6 +449,11 @@ export const syncStewartFlemingGmail = async (familyId: string) => {
     }
   }
 
+  const savedIntakeSweep = await sweepSavedCalendarIntakes(familyId,
+    typeof storedMetadata.savedIntakeSweepAfterId === 'string' ? storedMetadata.savedIntakeSweepAfterId : undefined);
+  autoCreated += savedIntakeSweep.autoCreated;
+  errors.push(...savedIntakeSweep.errors);
+
   await storeSchoolGmailSyncState(familyId, {
     queryVersion: 2,
     activeQuery: nextPageToken ? query : null,
@@ -451,6 +461,7 @@ export const syncStewartFlemingGmail = async (familyId: string) => {
     cursorMs: nextCursorMs,
     backfillComplete: nextPageToken ? backfillComplete : true,
     failedMessageIds: [...failedMessageIds],
+    savedIntakeSweepAfterId: savedIntakeSweep.nextAfterId,
   });
   if (errors.length === 0 && !nextPageToken && failedMessageIds.size === 0) {
     await prisma.gmailConnection.update({ where: { familyId }, data: { lastSyncAt: new Date() } });
@@ -466,7 +477,8 @@ export const syncStewartFlemingGmail = async (familyId: string) => {
     ignored,
     unauthenticated,
     batchLimit: 20,
-    hasMore: Boolean(nextPageToken || failedMessageIds.size),
+    hasMore: Boolean(nextPageToken || failedMessageIds.size || savedIntakeSweep.hasMore),
+    savedIntakeSweep,
     errors,
   };
 };

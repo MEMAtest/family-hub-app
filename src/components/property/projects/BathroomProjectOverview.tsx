@@ -29,6 +29,7 @@ type Props = {
 export default function BathroomProjectOverview({ sourcing, roomId, isReadOnly, onOpenRoom, onOpenRequirement, onOpenProduct, onSaveRoom, onAddItem, onAddOption }: Props) {
   const [comparing, setComparing] = useState(false);
   const [search, setSearch] = useState('');
+  const searching = !!search.trim();
   const visibleRooms = bathroomRooms.filter((room) => !roomId || room.id === roomId);
   const requirements = requiredDemands(sourcing, roomId);
   const selected = requirements.filter((item) => requirementSelection(sourcing, item).selected.length > 0);
@@ -53,6 +54,14 @@ export default function BathroomProjectOverview({ sourcing, roomId, isReadOnly, 
       <label className="min-w-0 text-xs font-medium">Find an item<input aria-label="Search project items" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Tiles, mirror, valves..." className="mt-1 min-h-11 w-full rounded-md border-gray-200 text-sm dark:bg-slate-800" /></label>
       <label className="min-w-0 text-xs font-medium">Jump to item<select aria-label="Jump to project item" value="" onChange={(event) => { const item = requirements.find((entry) => entry.id === event.target.value); if (item) onOpenRequirement(item); }} className="mt-1 min-h-11 w-full rounded-md border-gray-200 text-sm dark:bg-slate-800"><option value="">Choose an item</option>{requirements.map((item) => <option key={item.id} value={item.id}>{!roomId ? `${roomName(sourcing, item.roomId)} · ` : ''}{item.name}</option>)}</select></label>
     </div>
+
+    {searching && <section aria-label="Project search results" className="min-w-0 space-y-4">
+      {visibleRooms.map((room) => <div key={room.id} className="min-w-0">
+        <h3 className={`mb-2 text-sm font-semibold ${room.id === 'shower-room' ? 'text-blue-700' : 'text-teal-700'}`}>{roomName(sourcing, room.id)}</h3>
+        <QuoteChecklist sourcing={sourcing} roomId={room.id} search={search} onOpenRequirement={onOpenRequirement} onOpenProduct={onOpenProduct} />
+        <div className="grid min-w-0 gap-3 sm:grid-cols-2">{requirements.filter((item) => item.roomId === room.id && !sourcing.quoteLines?.some((line) => line.requirementId === item.id) && `${item.name} ${item.specification} ${requirementSelection(sourcing, item).selected.map(({ product }) => product.name).join(' ')}`.toLowerCase().includes(search.trim().toLowerCase())).map((item) => <ChoiceCard key={item.id} sourcing={sourcing} requirement={item} onOpen={(part) => onOpenRequirement(item, part)} onOpenProduct={(product) => onOpenProduct(product, item)} />)}</div>
+      </div>)}
+    </section>}
 
     <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1 border-y border-gray-200 py-3 dark:border-slate-700">
       <span className="text-sm text-gray-600 dark:text-slate-300">Selected subtotal <strong className="ml-2 text-lg text-gray-900 dark:text-white">{money.format(basketTotal(sourcing, roomId))}</strong></span>
@@ -80,7 +89,7 @@ export default function BathroomProjectOverview({ sourcing, roomId, isReadOnly, 
 
     {comparing && !roomId && <RoomComparison sourcing={sourcing} onOpenRequirement={onOpenRequirement} onOpenProduct={onOpenProduct} />}
 
-    <div className={`grid min-w-0 gap-6 ${!roomId ? 'xl:grid-cols-2' : ''}`}>
+    {!searching && <div className={`grid min-w-0 gap-6 ${!roomId ? 'xl:grid-cols-2' : ''}`}>
       {visibleRooms.map((room, index) => {
         const items = requiredDemands(sourcing, room.id);
         const completed = items.filter((item) => requirementSelection(sourcing, item).complete).length;
@@ -111,7 +120,7 @@ export default function BathroomProjectOverview({ sourcing, roomId, isReadOnly, 
           {items.length === 0 && <p className="py-4 text-sm text-gray-500">No quote items in this room.</p>}
         </section>;
       })}
-    </div>
+    </div>}
   </div>;
 }
 

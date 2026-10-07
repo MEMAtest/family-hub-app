@@ -21,7 +21,8 @@ import {
 import { CalendarEvent, Reminder, RecurringPattern, EventTemplate, Person } from '@/types/calendar.types'
 import AIEnhancedField from '@/components/common/AIEnhancedField'
 import { addDays, parseDateKey } from '@/utils/recurrence'
-import { isAdultSchoolEvent, isChildProfile, recurringSourceDateWarning } from '@/utils/schoolEventPresentation'
+import { displayEventTitle, hasSchoolSource, schoolEventLocation, isAdultSchoolEvent, isChildProfile, recurringSourceDateWarning } from '@/utils/schoolEventPresentation'
+import { hasUnspecifiedEventTime } from '@/utils/eventSemantics'
 import { schoolSavedEventAttendance } from '@/utils/schoolSources'
 import { useFamilyStore } from '@/store/familyStore'
 import EventSourceDetails from './EventSourceDetails'
@@ -216,6 +217,7 @@ const EventForm: React.FC<EventFormProps> = ({
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [showRecurring, setShowRecurring] = useState(false)
   const [isMultiDay, setIsMultiDay] = useState(false)
+  const [timeUnknown, setTimeUnknown] = useState(false)
   const [selectedTemplate, setSelectedTemplate] = useState<string>('')
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [enhancingTitle, setEnhancingTitle] = useState(false)
@@ -255,6 +257,9 @@ const EventForm: React.FC<EventFormProps> = ({
       setFormData({
         ...buildEmptyFormData(defaultPersonId),
         ...event,
+        title: event.title.length > 80 || /\b(?:all children|everyone is welcome)\b/i.test(event.title)
+          ? displayEventTitle(event) : event.title,
+        location: hasSchoolSource(event) ? schoolEventLocation(event.location) : event.location,
         person: requiresAdultAttendee && schoolSavedEventAttendance(event, people).attendeeStatus === 'needs_confirmation'
           ? '' : event.person,
         date: event.isRecurring ? seriesDate : event.date,
@@ -263,7 +268,9 @@ const EventForm: React.FC<EventFormProps> = ({
       })
       setShowRecurring(event.isRecurring)
       setIsMultiDay(multiDay)
+      setTimeUnknown(hasUnspecifiedEventTime(event))
     } else if (defaultSlot) {
+      setTimeUnknown(false)
       // New event from slot selection
       const startDate = new Date(defaultSlot.start)
       const duration = Math.round((defaultSlot.end.getTime() - defaultSlot.start.getTime()) / (1000 * 60))
@@ -279,6 +286,7 @@ const EventForm: React.FC<EventFormProps> = ({
       setIsMultiDay(false)
     } else {
       // New event
+      setTimeUnknown(false)
       const now = new Date()
       setFormData({
         ...buildEmptyFormData(defaultPersonId),
@@ -394,7 +402,7 @@ const EventForm: React.FC<EventFormProps> = ({
       newErrors.endDate = 'End date must be on or after the start date'
     }
 
-    if (!formData.time) {
+    if (!timeUnknown && !formData.time) {
       newErrors.time = 'Time is required'
     }
 
@@ -416,7 +424,7 @@ const EventForm: React.FC<EventFormProps> = ({
   const handleSave = async () => {
     if (!validateForm()) return
 
-    const duration = isMultiDay
+    const duration = timeUnknown ? (event?.duration || 1439) : isMultiDay
       ? calculateMultiDayDuration(formData.date, formData.time, formData.endDate, formData.duration || 60)
       : formData.duration || 60
 
@@ -425,6 +433,12 @@ const EventForm: React.FC<EventFormProps> = ({
     delete safeFormData.seriesStartDate
     const eventData = {
       ...safeFormData,
+      time: timeUnknown ? (event?.time || '00:00') : formData.time,
+      metadata: { ...formData.metadata, ...(event && (hasUnspecifiedEventTime(event) || timeUnknown) ? {
+        calendarTiming: { status: timeUnknown ? 'unknown' : 'known' },
+      } : {}), ...(event && hasSchoolSource(event) && (formData.title !== event.title || formData.location !== event.location) ? {
+        originalImportedFields: event.metadata?.originalImportedFields ?? { title: event.title, location: event.location, time: event.time, duration: event.duration },
+      } : {}) },
       endDate: isMultiDay ? (formData.endDate || formData.date) : undefined,
       duration,
       isRecurring: showRecurring && (Boolean(formData.recurringPattern) || formData.recurring !== 'none'),
@@ -678,11 +692,12 @@ const EventForm: React.FC<EventFormProps> = ({
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-slate-300">
-                    Time *
+                    {timeUnknown ? 'Time not provided by source' : 'Time *'}
                   </label>
                   <input
                     type="time"
-                    value={formData.time || ''}
+                    value={timeUnknown ? '' : formData.time || ''}
+                    disabled={timeUnknown}
                     onChange={(e) => setFormData(prev => ({ ...prev, time: e.target.value }))}
                     className={fieldClass(Boolean(errors.time))}
                   />
@@ -692,6 +707,12 @@ const EventForm: React.FC<EventFormProps> = ({
                 </div>
               </div>
 
+              {event && hasUnspecifiedEventTime(event) && <label className="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-slate-300">
+                <input type="checkbox" checked={timeUnknown} onChange={(e) => {
+                  setTimeUnknown(e.target.checked);
+                  if (!e.target.checked) setFormData((previous) => ({ ...previous, time: '', duration: 60 }));
+                }} />Time not confirmed
+              </label>}
               <label className="inline-flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-slate-300">
                 <input
                   type="checkbox"
@@ -729,7 +750,7 @@ const EventForm: React.FC<EventFormProps> = ({
 
               {/* Duration and Type */}
               <div className="grid grid-cols-2 gap-4">
-                {!isMultiDay ? (
+                {timeUnknown ? <div className="text-sm text-gray-500 dark:text-slate-400">Duration not provided by source</div> : !isMultiDay ? (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-slate-300">
                       Duration (minutes)

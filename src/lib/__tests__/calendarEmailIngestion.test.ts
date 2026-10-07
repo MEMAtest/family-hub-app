@@ -3,10 +3,12 @@ jest.mock('@/lib/prisma', () => ({
   default: {
     family: { findUnique: jest.fn() },
     familyDocument: { findUnique: jest.fn(), create: jest.fn() },
-    calendarEmailIntake: { findFirst: jest.fn(), create: jest.fn(), update: jest.fn() },
+    familyMember: { findMany: jest.fn() },
+    $transaction: jest.fn(),
+    calendarEmailIntake: { findFirst: jest.fn(), findMany: jest.fn(), create: jest.fn(), update: jest.fn(), updateMany: jest.fn() },
     calendarEvent: { findMany: jest.fn(), create: jest.fn(), findUnique: jest.fn(), update: jest.fn() },
     googleCalendarConnection: { findUnique: jest.fn(), update: jest.fn() },
-    notification: { create: jest.fn() },
+    notification: { create: jest.fn(), updateMany: jest.fn() },
   },
 }));
 jest.mock('@/lib/webPush', () => ({ sendFamilyPushNotification: jest.fn().mockResolvedValue(undefined) }));
@@ -18,7 +20,7 @@ jest.mock('@/lib/googleCalendarServer', () => ({
 import prisma from '@/lib/prisma';
 import { sendFamilyPushNotification } from '@/lib/webPush';
 import { getAuthedCalendarClient } from '@/lib/googleCalendarServer';
-import { ingestCalendarEmailPayload, isHighConfidenceAutoCreate } from '@/lib/calendarEmailIngestion';
+import { autoProcessSavedCalendarIntake, ingestCalendarEmailPayload, isHighConfidenceAutoCreate, sweepSavedCalendarIntakes } from '@/lib/calendarEmailIngestion';
 import type { CalendarImportDraft } from '@/utils/calendarImport';
 
 const importDraft = (overrides: Partial<CalendarImportDraft> = {}): CalendarImportDraft => ({
@@ -65,6 +67,14 @@ describe('school email auto-import rules', () => {
 
   it('never auto-creates impossible calendar dates', () => {
     expect(isHighConfidenceAutoCreate(importDraft({ date: '2026-11-31' }), schoolSource, now)).toBe(false);
+  });
+  it('rejects invite-only offers and unconfirmed adult attendance, even with high confidence and a time', () => {
+    expect(isHighConfidenceAutoCreate(importDraft({ source: 'Invite-only club on 10 November at 9am', confidence: 0.99 }), schoolSource, now)).toBe(false);
+    expect(isHighConfidenceAutoCreate(importDraft({ title: 'PTA AGM', source: 'PTA AGM on 10 November at 9am', confidence: 0.99 }), schoolSource, now)).toBe(false);
+    expect(isHighConfidenceAutoCreate(importDraft({ importStatus: 'conflict', confidence: 0.99 }), schoolSource, now)).toBe(false);
+    expect(isHighConfidenceAutoCreate(importDraft({ title: 'Reading Morning (By Invite Only)', source: 'Reading morning 10 November at 9am', confidence: 0.99 }), schoolSource, now)).toBe(false);
+    expect(isHighConfidenceAutoCreate(importDraft({ time: '02:10', timeSpecified: true,
+      source: 'Attachment dated 02.10.2026', confidence: 0.99 }), schoolSource, now)).toBe(false);
   });
 });
 
@@ -118,6 +128,20 @@ describe('school email import retry recovery', () => {
     expect(prisma.calendarEvent.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ personId: 'amari' }) }));
   });
 
+  it('does not send an action-required notification for an email with no events', async () => {
+    (prisma.familyDocument.findUnique as jest.Mock).mockResolvedValue(null);
+    (prisma.familyDocument.create as jest.Mock).mockImplementation(async ({ data }) => ({ ...data, version: 1 }));
+    (prisma.family.findUnique as jest.Mock).mockResolvedValue({ id: 'family-1', members: [] });
+    (prisma.calendarEmailIntake.findFirst as jest.Mock).mockResolvedValue(null);
+    (prisma.calendarEmailIntake.create as jest.Mock).mockResolvedValue({ id: 'empty-intake' });
+    (prisma.calendarEmailIntake.update as jest.Mock).mockImplementation(async ({ data }) => ({ id: 'empty-intake', ...data }));
+    (prisma.calendarEvent.findMany as jest.Mock).mockResolvedValue([]);
+    (prisma.notification.create as jest.Mock).mockResolvedValue({ id: 'empty-notification' });
+    const result = await ingestCalendarEmailPayload({ data: { subject: 'Thank you', text: 'Thanks for your support.' } }, { familyId: 'family-1' });
+    expect(result.body).toMatchObject({ status: 'no_events', needsReview: 0, outstandingDraftCount: 0, actionRequired: false });
+    expect(prisma.notification.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ actionRequired: false, title: 'Calendar email processed' }) }));
+  });
+
   it('reuses saved events and creates only the missing high-confidence event on retry', async () => {
     const intakeId = 'mail_school-message';
     const drafts = [
@@ -129,7 +153,7 @@ describe('school email import retry recovery', () => {
       {
         importId: 'second', title: 'Reading book due', person: 'child-1', date: '2026-10-03', time: '08:30',
         duration: 60, recurring: 'none', cost: 0, type: 'education', isRecurring: false, priority: 'medium',
-        status: 'planned', confidence: 0.96, source: 'school-email', sourceLine: 2, importStatus: 'ready', warnings: [],
+        status: 'planned', confidence: 0.96, source: 'Reading book due 3 October at 8:30am', sourceLine: 2, importStatus: 'ready', warnings: [],
       },
       {
         importId: 'review', title: 'School event date to confirm', person: 'child-1', date: '2026-10-04', time: '09:00',
@@ -288,5 +312,111 @@ describe('school email import retry recovery', () => {
       where: { id: 'mail-gmail-only' }, data: expect.objectContaining({ status: 'auto_created' }),
     }));
     expect(result).toMatchObject({ statusCode: 200, body: { status: 'auto_created' } });
+  });
+});
+
+describe('explicit saved school intake processing', () => {
+  let intake: any;
+  let events: any[];
+  beforeEach(() => {
+    jest.resetAllMocks();
+    jest.useFakeTimers().setSystemTime(new Date('2026-10-07T09:00:00Z'));
+    intake = { id: 'saved-intake', familyId: 'family-1', status: 'review_required',
+      sender: 'admin@stewartfleming.bromley.sch.uk', metadata: { schoolSenderVerified: true },
+      text: 'Stewart Fleming Primary School', updatedAt: new Date('2026-10-06'),
+      parsedDrafts: [importDraft()] };
+    events = [];
+    (prisma.$transaction as jest.Mock).mockImplementation(async (callback) => callback(prisma));
+    (prisma.calendarEmailIntake.findFirst as jest.Mock).mockImplementation(async () => intake);
+    (prisma.familyMember.findMany as jest.Mock).mockResolvedValue([{ id: 'child-1', name: 'Amari', role: 'Child' }]);
+    (prisma.familyDocument.findUnique as jest.Mock).mockResolvedValue(null);
+    (prisma.calendarEvent.findMany as jest.Mock).mockImplementation(async ({ where }) => events.filter((event) =>
+      !where.sourceId || event.sourceId === where.sourceId));
+    (prisma.calendarEvent.create as jest.Mock).mockImplementation(async ({ data }) => {
+      events.push({ ...data });
+      return events[events.length - 1];
+    });
+    (prisma.calendarEmailIntake.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
+    (prisma.notification.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
+    (prisma.googleCalendarConnection.findUnique as jest.Mock).mockResolvedValue(null);
+  });
+  afterEach(() => jest.useRealTimers());
+
+  it('imports only eligible drafts, leaves offers/adult attendance/review outstanding, and safely retries', async () => {
+    intake.parsedDrafts.push(importDraft({ importId: 'offer', title: 'Holiday Camp', confidence: 0.99,
+      source: 'Limited places available. Book now for 10 November at 9am' }),
+    importDraft({ importId: 'adult', title: 'PTA AGM', confidence: 0.99, source: 'PTA AGM on 10 November at 9am' }),
+    importDraft({ importId: 'uncertain', title: 'Trip to confirm', confidence: 0.6, importStatus: 'needs_review' }));
+    const result = await autoProcessSavedCalendarIntake('family-1', intake.id);
+    expect(result).toMatchObject({ newlyCreatedCount: 1, importedDraftCount: 1, outstandingDraftCount: 3,
+      needsReview: 3, status: 'partial_review', actionRequired: true, autoProcessEligibleCount: 0 });
+    expect(prisma.$transaction).toHaveBeenCalledWith(expect.any(Function), { isolationLevel: 'Serializable' });
+    expect(events[0].eventTime.toISOString()).toBe('2026-11-10T00:00:00.000Z');
+    expect(prisma.calendarEmailIntake.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: intake.id, familyId: 'family-1', updatedAt: intake.updatedAt },
+      data: expect.objectContaining({ needsReview: 3, autoCreated: 1 }),
+    }));
+    const retry = await autoProcessSavedCalendarIntake('family-1', intake.id);
+    expect(retry.newlyCreatedCount).toBe(0);
+    expect(prisma.calendarEvent.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('rechecks current cross-intake duplicates and conflicts instead of trusting stored ready labels', async () => {
+    intake.parsedDrafts = [importDraft({ source: 'Vaccination on 10 November at 9am', confidence: 0.99, timeSpecified: true })];
+    events.push({ id: 'other-event', familyId: 'family-1', sourceId: 'other-intake', title: 'Swimming', personId: 'child-1',
+      eventDate: new Date('2026-11-10T09:00:00Z'), eventTime: new Date('2026-11-10T09:00:00Z'), durationMinutes: 60, eventType: 'education' });
+    expect(await autoProcessSavedCalendarIntake('family-1', intake.id)).toMatchObject({ newlyCreatedCount: 0, conflictCount: 1, outstandingDraftCount: 1 });
+    events[0].title = 'Flu Vaccination Session';
+    expect(await autoProcessSavedCalendarIntake('family-1', intake.id)).toMatchObject({ newlyCreatedCount: 0, duplicateCount: 1, outstandingDraftCount: 0, actionRequired: false });
+    expect(prisma.calendarEvent.create).not.toHaveBeenCalled();
+  });
+
+  it('deduplicates an untimed school event already saved at midnight by another intake', async () => {
+    events.push({ id: 'other-event', familyId: 'family-1', sourceId: 'other-intake', title: 'Flu Vaccination Session',
+      personId: 'child-1', eventDate: new Date('2026-11-10T00:00:00Z'), eventTime: new Date('2026-11-10T00:00:00Z'),
+      durationMinutes: 1440, eventType: 'education', notes: 'Time not provided by source.' });
+    expect(await autoProcessSavedCalendarIntake('family-1', intake.id)).toMatchObject({ newlyCreatedCount: 0,
+      duplicateCount: 1, outstandingDraftCount: 0, actionRequired: false });
+    expect(prisma.calendarEvent.create).not.toHaveBeenCalled();
+  });
+
+  it('sweeps one bounded saved-intake page using server trust and source-event dedupe', async () => {
+    (prisma.calendarEmailIntake.findMany as jest.Mock).mockResolvedValue(Array.from({ length: 11 }, (_, index) => ({ id: `intake-${index}` })));
+    (prisma.calendarEmailIntake.findFirst as jest.Mock).mockImplementation(async ({ where }) => ({ ...intake, id: where.id }));
+    const result = await sweepSavedCalendarIntakes('family-1', 'previous');
+    expect(result).toMatchObject({ checked: 10, processed: 10, batchLimit: 10, autoCreated: 1,
+      hasMore: true, nextAfterId: 'intake-9', errors: [] });
+    expect(prisma.calendarEmailIntake.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ familyId: 'family-1', id: { gt: 'previous' },
+        metadata: { path: ['schoolSenderVerified'], equals: true } }), take: 11,
+    }));
+    expect(prisma.calendarEvent.create).toHaveBeenCalledTimes(1);
+    expect(prisma.$transaction).toHaveBeenCalledTimes(10);
+  });
+
+  it('resets sweep cursor at the end and safely skips a trust change since candidate selection', async () => {
+    (prisma.calendarEmailIntake.findMany as jest.Mock).mockResolvedValue([{ id: intake.id }]);
+    intake.metadata.schoolSenderVerified = false;
+    expect(await sweepSavedCalendarIntakes('family-1', 'last-page')).toMatchObject({ checked: 1,
+      processed: 0, skipped: 1, autoCreated: 0, hasMore: false, nextAfterId: null, errors: [] });
+    expect(prisma.calendarEvent.create).not.toHaveBeenCalled();
+  });
+
+  it.each(['unverified', 'spoofed-sender', 'dismissed', 'gated'])('rejects %s saved intake without creating events', async (kind) => {
+    if (kind === 'unverified') intake.metadata = {};
+    if (kind === 'spoofed-sender') intake.sender = 'admin@example.com';
+    if (kind === 'dismissed') intake.metadata.schoolDismissed = { actorId: 'parent' };
+    if (kind === 'gated') intake.status = 'content_required';
+    await expect(autoProcessSavedCalendarIntake('family-1', intake.id)).rejects.toMatchObject({ statusCode: 409 });
+    expect(prisma.calendarEvent.create).not.toHaveBeenCalled();
+  });
+
+  it('family-scopes lookups and reports missing or concurrently changed intake', async () => {
+    (prisma.calendarEmailIntake.findFirst as jest.Mock).mockResolvedValueOnce(null);
+    await expect(autoProcessSavedCalendarIntake('family-1', 'foreign')).rejects.toMatchObject({ statusCode: 404 });
+    expect(prisma.calendarEmailIntake.findFirst).toHaveBeenCalledWith({ where: { familyId: 'family-1', id: 'foreign' } });
+    (prisma.calendarEmailIntake.updateMany as jest.Mock).mockResolvedValue({ count: 0 });
+    await expect(autoProcessSavedCalendarIntake('family-1', intake.id)).rejects.toMatchObject({ statusCode: 409 });
+    expect(prisma.notification.updateMany).not.toHaveBeenCalled();
   });
 });

@@ -17,6 +17,7 @@ import { mergeDatabaseAndCachedEvents } from '@/lib/calendarEventCache';
 
 interface CalendarContextValue {
   events: CalendarEvent[];
+  refreshEvents: () => Promise<void>;
   /** Homework, chores and anything else with a deadline. */
   tasks: CalendarTask[];
   createTask: (draft: Omit<CalendarTask, 'id' | 'createdAt' | 'updatedAt'>) => Promise<CalendarTask>;
@@ -931,6 +932,7 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
 
   const value = useMemo<CalendarContextValue>(() => ({
     events,
+    refreshEvents: refreshEventsFromDatabase,
     tasks,
     createTask,
     updateTask,
@@ -966,6 +968,7 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
     closeConflictSettings,
     saveConflictSettings,
   }), [
+    refreshEventsFromDatabase,
     closeConflictModal,
     closeConflictSettings,
     closeEventForm,

@@ -14,12 +14,12 @@ jest.mock('@/lib/prisma', () => ({
 }));
 
 jest.mock('@/lib/googleCalendarServer', () => ({ createOAuthClient: jest.fn() }));
-jest.mock('@/lib/calendarEmailIngestion', () => ({ ingestCalendarEmailPayload: jest.fn() }));
+jest.mock('@/lib/calendarEmailIngestion', () => ({ ingestCalendarEmailPayload: jest.fn(), sweepSavedCalendarIntakes: jest.fn() }));
 
 import { google } from 'googleapis';
 import prisma from '@/lib/prisma';
 import { createOAuthClient } from '@/lib/googleCalendarServer';
-import { ingestCalendarEmailPayload } from '@/lib/calendarEmailIngestion';
+import { ingestCalendarEmailPayload, sweepSavedCalendarIntakes } from '@/lib/calendarEmailIngestion';
 import { syncStewartFlemingGmail } from '@/lib/gmailCalendarServer';
 
 const connection = {
@@ -74,6 +74,8 @@ describe('Stewart Fleming Gmail polling', () => {
       statusCode: 200,
       body: { autoCreated: 1, needsReview: 0 },
     });
+    (sweepSavedCalendarIntakes as jest.Mock).mockResolvedValue({ checked: 0, processed: 0, autoCreated: 0,
+      needsReview: 0, errors: [], hasMore: false, nextAfterId: null, batchLimit: 10 });
   });
 
   afterAll(() => {
@@ -149,6 +151,28 @@ describe('Stewart Fleming Gmail polling', () => {
     expect(result.duplicates).toBe(1);
     expect(gmail.users.messages.get).toHaveBeenCalledTimes(1);
     expect(ingestCalendarEmailPayload).not.toHaveBeenCalled();
+  });
+  it('sweeps saved pending drafts even when the Gmail page is empty, and checkpoints the bounded scan', async () => {
+    gmail.users.messages.list.mockResolvedValue({ data: { messages: [] } });
+    (prisma.notification.findUnique as jest.Mock).mockResolvedValue({ metadata: { savedIntakeSweepAfterId: 'previous-page' } });
+    (prisma.notification.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
+    (sweepSavedCalendarIntakes as jest.Mock).mockResolvedValue({ checked: 10, processed: 10, autoCreated: 2,
+      needsReview: 3, errors: [], hasMore: true, nextAfterId: 'next-page', batchLimit: 10 });
+    const result = await syncStewartFlemingGmail('family-id');
+    expect(sweepSavedCalendarIntakes).toHaveBeenCalledWith('family-id', 'previous-page');
+    expect(result).toMatchObject({ matched: 0, autoCreated: 2, hasMore: true, savedIntakeSweep: { autoCreated: 2, needsReview: 3 } });
+    expect(prisma.notification.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      data: { metadata: expect.objectContaining({ savedIntakeSweepAfterId: 'next-page' }) },
+    }));
+    expect(ingestCalendarEmailPayload).not.toHaveBeenCalled();
+  });
+
+  it('exposes saved sweep errors and does not advance successful sync time on failure', async () => {
+    gmail.users.messages.list.mockResolvedValue({ data: { messages: [] } });
+    (sweepSavedCalendarIntakes as jest.Mock).mockResolvedValue({ checked: 1, processed: 0, autoCreated: 0,
+      needsReview: 0, errors: ['saved-intake: processing failed'], hasMore: false, nextAfterId: null });
+    expect(await syncStewartFlemingGmail('family-id')).toMatchObject({ errors: ['saved-intake: processing failed'] });
+    expect(prisma.gmailConnection.update).not.toHaveBeenCalled();
   });
 
   it('preserves HTML-only Grandir/Famly identity and dates without claiming authenticated nursery access', async () => {

@@ -11,6 +11,25 @@ function vanityTitleWidth(product: SourcedProduct) {
 }
 
 export type QuoteSizeAssessment = { status: 'within' | 'different' | 'unknown' | 'not_applicable'; label: string };
+
+export function quoteMountingAssessment(requirement: SourcingRequirement | undefined, product: SourcedProduct): QuoteSizeAssessment | undefined {
+  if (!requirement || !requirement.requiredComponents.includes('bath-filler') || !isDimensionedFixture(product, requirement)) return;
+  const quoted = `${requirement.name}; ${requirement.specification}`;
+  const supplied = [product.name, product.description, ...Object.entries(product.specs ?? {}).map(([key, value]) => `${key}: ${value}`)].join('; ');
+  const mounting = (text: string) => {
+    const wall = /\bwall[ -](?:mounted|mounting|mount)\b|\bmounting\s*:\s*wall\b/i.test(text);
+    const deck = /\b(?:deck|bath)[ -](?:mounted|mounting|mount)\b|\bmounting\s*:\s*deck\b/i.test(text);
+    return wall === deck ? undefined : wall ? 'wall' : 'deck';
+  };
+  const expected = mounting(quoted);
+  if (!expected) return;
+  const actual = mounting(supplied);
+  if (!actual) return { status: 'unknown', label: `Quote: ${expected}-mounted filler; supplier mounting not confirmed` };
+  return actual === expected
+    ? { status: 'within', label: `Mounting matches quote: ${actual}-mounted; plumbing fit not confirmed` }
+    : { status: 'different', label: `Different from quote: ${actual}-mounted filler selected; quote asks for ${expected}-mounted` };
+}
+
 export function quoteSizeAssessment(requirement: SourcingRequirement | undefined, product: SourcedProduct): QuoteSizeAssessment {
   if (!requirement) return { status: 'not_applicable', label: 'No quote dimensions to compare' };
   if (!isDimensionedFixture(product, requirement)) return { status: 'not_applicable', label: 'Supporting part - compatibility not confirmed' };
