@@ -16,7 +16,7 @@ import { annotateSchoolIntakeDrafts, loadSchoolRules, prepareSchoolIntake, resol
   schoolDraftKey, schoolEventMetadata, schoolImportedEventId } from '@/lib/schoolIntakeServer';
 import { schoolMetadata, type SchoolDraft } from '@/utils/schoolSources';
 import { calendarIntakeState, findImportedDraftEvent } from '@/lib/calendarIntakeState';
-import { isAdultSchoolEvent } from '@/utils/schoolEventPresentation';
+import { isAdultSchoolEvent, isChildProfile } from '@/utils/schoolEventPresentation';
 import { isStewartFlemingSender } from '@/utils/schoolEmail';
 import { schoolDraftHasUnconfirmedOffer, schoolDraftNonEventReason, schoolDraftTimeNeedsReview } from '@/lib/schoolIntakeDraftSafety';
 
@@ -109,7 +109,7 @@ const extractPdfAttachmentText = async (attachments: Array<{ fileName: string; m
 
 export const isHighConfidenceAutoCreate = (
   draft: CalendarImportDraft,
-  options: { eventSource?: string; authenticatedSchoolSender?: boolean },
+  options: { eventSource?: string; authenticatedSchoolSender?: boolean; verifiedGrandirMemberId?: string },
   now = new Date(),
 ) => {
   const genericTitle = Boolean(schoolDraftNonEventReason(draft));
@@ -119,6 +119,10 @@ export const isHighConfidenceAutoCreate = (
   const todayKey = `${today.find((part) => part.type === 'year')?.value}-${today.find((part) => part.type === 'month')?.value}-${today.find((part) => part.type === 'day')?.value}`;
   const hasExplicitTime = /\b\d{1,2}(?::|\.)(\d{2})\s*(?:am|pm)?\b|\b\d{1,2}\s*(?:am|pm)\b/i.test(draft.source);
   const verifiedSchoolEvent = options.eventSource === 'gmail-school-email' && options.authenticatedSchoolSender === true;
+  const verifiedNurseryEvent = options.eventSource === 'grandir-parent-portal' &&
+    Boolean(options.verifiedGrandirMemberId && draft.person === options.verifiedGrandirMemberId &&
+      (draft as SchoolDraft).schoolAssignment?.sourceKey === 'grandir');
+  if (options.eventSource === 'grandir-parent-portal' && !verifiedNurseryEvent) return false;
   const unconfirmedOffer = schoolDraftHasUnconfirmedOffer(draft);
   if (schoolDraftTimeNeedsReview(draft)) return false;
   if (isAdultSchoolEvent(draft.title) && (draft as SchoolDraft).schoolAssignment?.attendeeStatus !== 'confirmed') return false;
@@ -126,7 +130,7 @@ export const isHighConfidenceAutoCreate = (
   if (!parseDateKey(draft.date) || (draft.endDate && !parseDateKey(draft.endDate)) ||
       draft.importStatus !== 'ready' || !draft.person || genericTitle || unconfirmedOffer || draft.date < todayKey) return false;
   if (draft.confidence >= 0.9 && hasExplicitTime) return true;
-  return verifiedSchoolEvent && draft.type === 'education' && draft.confidence >= 0.85;
+  return (verifiedSchoolEvent || verifiedNurseryEvent) && draft.type === 'education' && draft.confidence >= 0.85;
 };
 
 const hasExplicitTime = (draft: CalendarImportDraft) =>
@@ -136,11 +140,11 @@ const persistHighConfidenceEvents = async (
   familyId: string,
   intakeId: string,
   drafts: CalendarImportDraft[],
-  options: { eventSource?: string; authenticatedSchoolSender?: boolean },
+  options: { eventSource?: string; authenticatedSchoolSender?: boolean; verifiedGrandirMemberId?: string },
   db: Prisma.TransactionClient = prisma,
 ) => {
   const schoolVerified = options.authenticatedSchoolSender && options.eventSource === 'gmail-school-email';
-  const source = schoolVerified ? 'gmail-school-email' :
+  const source = schoolVerified ? 'gmail-school-email' : options.eventSource === 'grandir-parent-portal' ? options.eventSource :
     options.eventSource === 'gmail-calendar-email' ? options.eventSource : 'calendar-email';
   const persisted = await db.calendarEvent.findMany({ where: { familyId, sourceId: intakeId } });
   const intake = await db.calendarEmailIntake.findFirst({ where: { id: intakeId, familyId } });
@@ -233,6 +237,7 @@ const createCalendarIntakeNotification = async (input: {
 }) => {
   const notificationId = `calendar-email-${input.intakeId}`;
   const actionRequired = input.needsReview > 0 || input.conflictCount > 0 || Boolean(input.contentRequired);
+  if (input.eventSource === 'grandir-parent-portal' && !actionRequired && !input.createdEvents.length) return null;
   const title = input.createdEvents.length > 0 || !actionRequired ? 'Calendar email processed' : 'Calendar email needs review';
   const message = input.createdEvents.length > 0
     ? `${input.createdEvents.length} event${input.createdEvents.length === 1 ? '' : 's'} added from "${input.subject || input.sender || 'email'}".`
@@ -290,7 +295,9 @@ export type CalendarEmailIngestionResult = {
 
 export const ingestCalendarEmailPayload = async (
   payload: any,
-  options: { familyId?: string; eventSource?: string; authenticatedSchoolSender?: boolean; reviewOnly?: boolean } = {},
+  options: { familyId?: string; eventSource?: string; authenticatedSchoolSender?: boolean; reviewOnly?: boolean;
+    verifiedGrandirMemberId?: string; referenceOnly?: boolean;
+    grandirPortal?: { postId: string; bodyHash: string; sourceUrl: string; nurseryName: string } } = {},
 ): Promise<CalendarEmailIngestionResult> => {
   const data = payloadData(payload);
   const recipients = recipientsFromValue(data?.to || data?.recipient || data?.recipients);
@@ -329,7 +336,12 @@ export const ingestCalendarEmailPayload = async (
       const drafts = Array.isArray(existingIntake.parsedDrafts)
         ? existingIntake.parsedDrafts as unknown as CalendarImportDraft[]
         : [];
-      const canResumeSchoolImport = intakeMetadata.schoolSenderVerified === true && existingIntake.status === 'processing';
+      const canResumeNurseryImport = options.eventSource === 'grandir-parent-portal' &&
+        Boolean(options.verifiedGrandirMemberId && options.grandirPortal &&
+          schoolMetadata(intakeMetadata.grandirPortal).childMemberId === options.verifiedGrandirMemberId &&
+          schoolMetadata(intakeMetadata.grandirPortal).postId === options.grandirPortal.postId) &&
+        existingIntake.status === 'processing';
+      const canResumeSchoolImport = (intakeMetadata.schoolSenderVerified === true && existingIntake.status === 'processing') || canResumeNurseryImport;
       if (existingIntake.status === 'processing' && !canResumeSchoolImport) {
         await prisma.calendarEmailIntake.update({
           where: { id: existingIntake.id },
@@ -341,8 +353,7 @@ export const ingestCalendarEmailPayload = async (
       }
       if (canResumeSchoolImport) {
         const createdEvents = await persistHighConfidenceEvents(family.id, existingIntake.id, drafts, {
-          eventSource: 'gmail-school-email',
-          authenticatedSchoolSender: true,
+          ...(canResumeNurseryImport ? options : { eventSource: 'gmail-school-email', authenticatedSchoolSender: true }),
         });
         const googleExportErrors = await exportCalendarEvents(family.id, createdEvents);
         if (googleExportErrors.length > 0) {
@@ -369,7 +380,7 @@ export const ingestCalendarEmailPayload = async (
           intakeId: existingIntake.id,
           subject,
           sender,
-          eventSource: 'gmail-school-email',
+          eventSource: canResumeNurseryImport ? 'grandir-parent-portal' : 'gmail-school-email',
           createdEvents,
           needsReview,
           duplicateCount,
@@ -433,8 +444,12 @@ export const ingestCalendarEmailPayload = async (
       ? ''
       : people[0]?.id,
     today: new Date(),
+    referenceOnly: options.eventSource === 'grandir-parent-portal' && options.referenceOnly === true,
   });
   const drafts = prepared.drafts;
+  const verifiedNursery = options.eventSource === 'grandir-parent-portal' && Boolean(options.verifiedGrandirMemberId && options.grandirPortal) &&
+    prepared.source.institution === 'grandir' && people.some(member => member.id === options.verifiedGrandirMemberId && isChildProfile(member)) &&
+    drafts.every(draft => draft.person === options.verifiedGrandirMemberId && draft.schoolAssignment?.sourceKey === 'grandir');
 
   const deterministicIntakeId = messageId
     ? `mail_${createHash('sha256').update(`${family.id}\0${String(messageId)}`).digest('hex')}`
@@ -453,7 +468,7 @@ export const ingestCalendarEmailPayload = async (
       html,
       normalizedText,
       parsedDrafts: drafts as unknown as Prisma.InputJsonValue,
-      status: prepared.source.contentRequired ? 'content_required' : options.authenticatedSchoolSender && options.eventSource === 'gmail-school-email'
+      status: prepared.source.contentRequired ? 'content_required' : verifiedNursery || options.authenticatedSchoolSender && options.eventSource === 'gmail-school-email'
         ? 'processing'
         : 'review_required',
       needsReview: prepared.source.contentRequired ? 1 : drafts.length,
@@ -468,6 +483,9 @@ export const ingestCalendarEmailPayload = async (
           options.authenticatedSchoolSender && options.eventSource === 'gmail-school-email'
         ),
         documentSummary: prepared.metadata.documentSummary,
+        ...(options.eventSource === 'grandir-parent-portal' && options.verifiedGrandirMemberId && options.grandirPortal ? {
+          grandirPortal: { ...options.grandirPortal, childMemberId: options.verifiedGrandirMemberId, verifiedAt: new Date().toISOString() },
+        } : {}),
         attachmentCount: Array.isArray(data?.attachments) ? data.attachments.length : 0,
         extractedPdfCount: extractedAttachmentText.length,
         attachmentNames: (Array.isArray(data?.attachments) ? data.attachments : []).map((attachment: any) =>
@@ -499,7 +517,7 @@ export const ingestCalendarEmailPayload = async (
   }
 
   const reviewOnly = options.reviewOnly || prepared.source.contentRequired ||
-    (prepared.source.isSchool && !isAuthenticatedSchoolEmail);
+    (prepared.source.isSchool && !isAuthenticatedSchoolEmail && !verifiedNursery);
   const createdEvents = reviewOnly ? [] : await persistHighConfidenceEvents(family.id, intake.id, drafts, options);
   const googleExportErrors = await exportCalendarEvents(family.id, createdEvents);
 

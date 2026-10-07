@@ -34,6 +34,14 @@ const importDraft = (overrides: Partial<CalendarImportDraft> = {}): CalendarImpo
 describe('school email auto-import rules', () => {
   const now = new Date('2026-09-30T09:00:00Z');
   const schoolSource = { eventSource: 'gmail-school-email', authenticatedSchoolSender: true };
+  it('requires the verified nursery child even for high-confidence timed imports', () => {
+    const options = { eventSource: 'grandir-parent-portal', verifiedGrandirMemberId: 'askia' };
+    const draft = { ...importDraft({ person: 'askia', confidence: 0.99, source: 'Photos 10 November at 9am' }),
+      schoolAssignment: { sourceKey: 'grandir' } } as CalendarImportDraft;
+    expect(isHighConfidenceAutoCreate(draft, options, now)).toBe(true);
+    expect(isHighConfidenceAutoCreate({ ...draft, person: 'amari' }, options, now)).toBe(false);
+    expect(isHighConfidenceAutoCreate(draft, { eventSource: 'grandir-parent-portal' }, now)).toBe(false);
+  });
 
   it('allows a future named school date with no supplied time, but rejects generic and past items', () => {
     expect(isHighConfidenceAutoCreate(importDraft(), schoolSource, now)).toBe(true);
@@ -92,6 +100,23 @@ describe('school email import retry recovery', () => {
   });
 
   afterEach(() => jest.useRealTimers());
+
+  it('stores an undated verified nursery update without creating a weekday event or review alert', async () => {
+    (prisma.familyDocument.findUnique as jest.Mock).mockResolvedValue(null);
+    (prisma.familyDocument.create as jest.Mock).mockImplementation(async ({ data }) => ({ ...data, version: 1 }));
+    (prisma.family.findUnique as jest.Mock).mockResolvedValue({ id: 'family-1', members: [
+      { id: 'amari', name: 'Amari', role: 'Child' }, { id: 'askia', name: 'Askia', role: 'Child' }] });
+    (prisma.calendarEmailIntake.findFirst as jest.Mock).mockResolvedValue(null);
+    (prisma.calendarEmailIntake.create as jest.Mock).mockResolvedValue({ id: 'nursery-reference' });
+    (prisma.calendarEmailIntake.update as jest.Mock).mockImplementation(async ({ data }) => ({ id: 'nursery-reference', ...data }));
+    (prisma.calendarEvent.findMany as jest.Mock).mockResolvedValue([]);
+    const result = await ingestCalendarEmailPayload({ data: { messageId: 'grandir-post:1', from: 'Nursery (Grandir nursery)',
+      subject: 'Grandir nursery update', text: 'We enjoyed a PE lesson on Wednesday.' } }, {
+      familyId: 'family-1', eventSource: 'grandir-parent-portal', verifiedGrandirMemberId: 'askia', referenceOnly: true,
+      grandirPortal: { postId: '1', bodyHash: 'test-hash', sourceUrl: 'https://www.app.grandiruk.com/#/account/post/1', nurseryName: 'Test nursery' } });
+    expect(result.body).toMatchObject({ status: 'no_events', autoCreated: 0, needsReview: 0 });
+    expect(prisma.calendarEvent.create).not.toHaveBeenCalled(); expect(prisma.notification.create).not.toHaveBeenCalled();
+  });
 
   it('maps an unnamed Stewart Fleming event to the actual Amari ID, not a narrow age-group match', async () => {
     (prisma.familyDocument.findUnique as jest.Mock).mockResolvedValue(null);

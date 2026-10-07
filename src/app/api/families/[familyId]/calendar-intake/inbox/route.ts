@@ -12,6 +12,7 @@ import { loadSchoolRules, resolveStoredSchoolDrafts, schoolDraftKey } from '@/li
 import { calendarIntakeState } from '@/lib/calendarIntakeState';
 import { autoProcessSavedCalendarIntake, isHighConfidenceAutoCreate, SavedIntakeProcessingError } from '@/lib/calendarEmailIngestion';
 import { isStewartFlemingSender } from '@/utils/schoolEmail';
+import { grandirPostUrl } from '@/lib/grandirClient';
 
 const reviewStatuses = ['processing', 'review_required', 'partial_review', 'no_events', 'needs_ocr', 'content_required'];
 
@@ -112,6 +113,10 @@ export const GET = requireFamilyAccess(async (_request: NextRequest, context) =>
         sender: intake.sender,
         schoolSource: resolved.source,
         sourceDate: schoolMetadata(intake.metadata).sourceDate || null,
+        originalPortalUrl: (() => {
+          const portal = schoolMetadata(schoolMetadata(intake.metadata).grandirPortal);
+          return typeof portal.postId === 'string' && /^[a-zA-Z0-9_-]{1,100}$/.test(portal.postId) ? grandirPostUrl(portal.postId) : null;
+        })(),
         subject: intake.subject,
         recipient: intake.recipient,
         ...state,

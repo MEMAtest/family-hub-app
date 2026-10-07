@@ -9,6 +9,10 @@
       "schedule": "0 * * * *"
     },
     {
+      "path": "/api/cron/grandir-intake",
+      "schedule": "0 * * * *"
+    },
+    {
       "path": "/api/cron/whatsapp-reminders",
       "schedule": "0 * * * *"
     },

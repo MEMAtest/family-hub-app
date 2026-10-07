@@ -24,4 +24,11 @@ describe('school provenance concern versus attendee', () => {
     expect(await screen.findByText('Attendee: Ademola')).toBeVisible();
     expect(screen.getByText('Concerns: Amari')).toBeVisible();
   });
+  it('offers the original nursery post rather than pretending it is an email', async () => {
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ source: { ...source, institution: 'Grandir nursery',
+      originalPortalUrl: 'https://www.app.grandiruk.com/#/account/post/test-post', schoolAssignment: null } }) });
+    render(<EventSourceDetails familyId="family" eventId="nursery-date" people={people} />);
+    expect(await screen.findByRole('link', { name: 'Open original nursery post' })).toHaveAttribute('href', 'https://www.app.grandiruk.com/#/account/post/test-post');
+    expect(screen.queryByRole('link', { name: 'Open original email' })).toBeNull();
+  });
 });

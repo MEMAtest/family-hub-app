@@ -6,6 +6,7 @@ import { CalendarPlus, CheckCircle2, Clock, ExternalLink, FileUp, Loader2, Mail,
 import type { CalendarEvent, Person } from '@/types/calendar.types';
 import type { CalendarTask } from '@/types/calendar.types';
 import { useFamilyStore } from '@/store/familyStore';
+import { GrandirConnection } from './GrandirConnection';
 import {
   CalendarImportDraft,
   importDraftToCalendarEventDraft,
@@ -45,6 +46,7 @@ interface CalendarInboxItem {
   authenticatedSchoolSender?: boolean;
   schoolSource?: SchoolSourceEvidence | null;
   sourceDate?: string | null;
+  originalPortalUrl?: string | null;
   duplicateCount: number;
   conflictCount: number;
   parsedDrafts: SchoolDraft[];
@@ -956,6 +958,7 @@ const CalendarCopilotPanel = ({
           <button type="button" onClick={() => { setActiveInboxItemId(null); setImportDrafts([]); setImportText(''); setDocumentSummary(null); setDocumentAttachments([]); setImportError(null); setImportSuccess(null); setSelectedDraftIds(new Set()); setIntakeOpen(true); }}
             className="inline-flex min-h-10 items-center gap-1.5 rounded-md border border-gray-200 px-2.5 text-xs font-medium dark:border-slate-700"><FileUp className="h-4 w-4" /> Add document</button>
         </div>
+        <GrandirConnection familyId={activeFamilyId} onChanged={async () => { await loadInbox(); await onEventsImported?.(); }} />
         <div className="mb-3 border-b border-gray-200 pb-3 text-xs dark:border-slate-800">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
@@ -1083,6 +1086,7 @@ const CalendarCopilotPanel = ({
             <p className="font-semibold">{item.schoolSource?.institutionName || documentSummary?.issuer || 'Source institution to confirm'}</p>
             <p className="break-words">From {item.sender || 'Sender unknown'} · Received {new Date(item.receivedAt).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/London' })}</p>
             {item.sourceDate && <p>Source date: {item.sourceDate}</p>}
+            {item.originalPortalUrl && <p><a href={item.originalPortalUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sky-700"><ExternalLink className="h-3 w-3" />Original nursery post</a></p>}
             {item.status === 'content_required' && <p className="mt-1 font-semibold">What you need to do: open the original nursery update and add its text or document. Portal access has not been verified.</p>}
             {item.schoolSource?.links.map((link) => <a key={link} href={link} target="_blank" rel="noreferrer" className="mt-1 mr-3 inline-flex items-center gap-1 text-teal-700"><ExternalLink className="h-3 w-3" />Open source</a>)}
             {(item.schoolSource?.institution === 'grandir' || item.status === 'content_required') && <p className="mt-1">

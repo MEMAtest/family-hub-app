@@ -42,6 +42,59 @@ const openSchoolInbox = async (page: Page) => {
   await page.getByRole('button', { name: 'School inbox & quick plan', exact: true }).click();
 };
 
+test('Grandir connection verifies Askia, requires consent, survives reload and reconnects on a phone', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.addInitScript(skipSetupWizard);
+  const state = { documentRequestBody: '', eventPosts: [] as unknown[], gmailSyncs: 0 };
+  await stubFamilyApis(page, state);
+  let connected = false;
+  let needsReconnect = false;
+  let syncs = 0;
+  let expires = false;
+  await page.route('**/api/families/*/grandir', async route => {
+    if (route.request().method() === 'POST') {
+      const body = route.request().postDataJSON();
+      expect(body.consent).toBe(true);
+      expect(body.email).toBe('parent@example.com');
+      expect(body.password).toBe('fixture-password-only');
+      connected = true;
+    }
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ configured: true, connected, needsReconnect,
+      childName: 'Askia', nurseryName: 'Test nursery', parentEmail: 'parent@example.com',
+      lastSyncAt: syncs ? '2026-10-07T19:00:00Z' : null, lastError: null }) });
+  });
+  await page.route('**/api/families/*/grandir/sync', async route => {
+    syncs += 1;
+    if (expires) {
+      connected = false; needsReconnect = true;
+      await route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: 'Grandir needs reconnection. Sign in again.' }) });
+    } else await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ processed: 2, autoCreated: 0, needsReview: 0, duplicates: 0, changedNotices: [] }) });
+  });
+  await openSchoolInbox(page);
+  await page.getByRole('button', { name: 'Connect Grandir', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toBeVisible();
+  await dialog.getByLabel('Parent email').fill('parent@example.com');
+  await dialog.getByLabel('Grandir password').fill('fixture-password-only');
+  await expect(dialog.getByRole('button', { name: 'Connect nursery intake', exact: true })).toBeDisabled();
+  await dialog.getByRole('checkbox').check();
+  await dialog.getByRole('button', { name: 'Connect nursery intake', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByText('Connected for Askia', { exact: true })).toBeVisible();
+  await expect(page.getByText('2 notices checked', { exact: false })).toBeVisible();
+  await page.reload();
+  await page.getByRole('button', { name: 'School inbox & quick plan', exact: true }).click();
+  await expect(page.getByText('Connected for Askia', { exact: true })).toBeVisible();
+  expires = true;
+  await page.getByRole('button', { name: 'Sync Grandir', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Reconnect', exact: true })).toBeVisible();
+  await expect(page.getByText('Connected for Askia', { exact: true })).toHaveCount(0);
+  expect(state.eventPosts).toHaveLength(0);
+  await page.reload();
+  await page.getByRole('button', { name: 'School inbox & quick plan', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Reconnect', exact: true })).toBeVisible();
+});
+
 test('rejected Gmail authorization offers a persistent reconnect action on a phone', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.addInitScript(skipSetupWizard);
@@ -115,6 +168,10 @@ const stubFamilyApis = async (
       contentType: 'application/json',
       body: route.request().method() === 'GET' ? '[]' : '{}',
     });
+  });
+  await page.route('**/api/families/*/grandir', async route => {
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ configured: true, connected: false, needsReconnect: false,
+      childName: null, nurseryName: null, parentEmail: null, lastSyncAt: null, lastError: null }) });
   });
 
   await page.route('**/api/families', async (route) => {

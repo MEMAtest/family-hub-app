@@ -173,12 +173,12 @@ export const enrichSavedSchoolEventResponses = async <T extends SavedSchoolEvent
 
 export const prepareSchoolIntake = async (input: {
   familyId: string; members: SchoolMember[]; text: string; rawText?: string; html?: string; sender?: string;
-  subject?: string; existingEvents?: any[]; today?: Date; defaultPersonId?: string;
+  subject?: string; existingEvents?: any[]; today?: Date; defaultPersonId?: string; referenceOnly?: boolean;
 }) => {
   const { rules, version } = await loadSchoolRules(input.familyId, input.members, true);
   const source = resolveSchoolSource({ sender: input.sender, subject: input.subject,
     text: input.rawText ?? input.text, html: input.html }, rules);
-  const parsed = source.contentRequired ? [] : parseCalendarImportText({ text: input.text, people: input.members as any,
+  const parsed = source.contentRequired || input.referenceOnly ? [] : parseCalendarImportText({ text: input.text, people: input.members as any,
     existingEvents: [], today: input.today,
     defaultPersonId: source.isSchool ? '' : input.defaultPersonId });
   const assigned = assignSchoolDrafts(parsed.map((draft) => ({ ...draft, sourceEventKey: schoolDraftKey(draft) })), source, rules, input.members);

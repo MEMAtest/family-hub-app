@@ -4,7 +4,7 @@ import { useFamilyStore } from '@/store/familyStore';
 import type { SchoolMember } from '@/utils/schoolSources';
 
 type Source = { institution: string | null; sender: string | null; subject: string | null; receivedAt: string;
-  originalText: string | null; messageUrl: string | null;
+  originalText: string | null; messageUrl: string | null; originalPortalUrl?: string | null;
   schoolAssignment?: { concernedMemberIds: string[]; attendeePersonId: string | null; attendeeStatus: 'confirmed' | 'needs_confirmation' } | null };
 export default function EventSourceDetails({ familyId, eventId, people }: { familyId?: string | null; eventId: string; people?: SchoolMember[] }) {
   const storedPeople = useFamilyStore((state) => state.people);
@@ -34,6 +34,7 @@ export default function EventSourceDetails({ familyId, eventId, people }: { fami
       <p>From: {source.sender || 'Sender not recorded'}</p>
       <p>Received: {new Date(source.receivedAt).toLocaleString('en-GB', { timeZone: 'Europe/London' })}</p>
       {source.messageUrl && <a href={source.messageUrl} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block text-teal-700 underline">Open original email</a>}
+      {source.originalPortalUrl && <a href={source.originalPortalUrl} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block text-sky-700 underline">Open original nursery post</a>}
       <details className="mt-1"><summary className="cursor-pointer">Original source</summary>
         <p className="font-medium">{source.subject}</p><p className="max-h-36 overflow-auto whitespace-pre-wrap">{source.originalText || 'Content not available'}</p>
       </details>

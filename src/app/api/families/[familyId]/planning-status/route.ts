@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireFamilyAccess } from '@/lib/auth-utils';
 import prisma from '@/lib/prisma';
+import { grandirStatus } from '@/lib/grandirSession';
 
 export const dynamic = 'force-dynamic';
 export const GET = requireFamilyAccess(async (_request, context, auth) => {
@@ -21,7 +22,9 @@ export const GET = requireFamilyAccess(async (_request, context, auth) => {
     schedulingConfigured: Boolean(process.env.CRON_SECRET && process.env.CALENDAR_INBOUND_FAMILY_ID === familyId),
     phonePushConfigured: Boolean(process.env.VAPID_PRIVATE_KEY && process.env.VAPID_PUBLIC_KEY),
     personalPhoneSubscriptions: await prisma.pushSubscription.count({ where: { familyId, personId: auth.familyMemberId, isActive: true } }),
-    grandir: { portalAccess: 'unverified', backgroundPortalSync: false },
+    grandir: await grandirStatus(familyId).then(status => ({ ...status,
+      portalAccess: status.connected ? 'verified' : 'unverified',
+      backgroundPortalSync: status.connected && Boolean(process.env.CRON_SECRET && process.env.CALENDAR_INBOUND_FAMILY_ID === familyId) })),
     activeReminders: reminders, deliveryNeedsReview: failureCount,
   });
 });
