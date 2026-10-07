@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { FixtureSpace, ProjectSourcing, SourcedProduct, SourcingRequirement } from '@/types/sourcing.types';
+import { isDimensionedFixture } from './selection';
 
 export const fitAxes = ['widthMm', 'lengthMm', 'depthMm', 'heightMm'] as const;
 const dimension = z.number().finite().positive().max(20000).optional();
@@ -8,8 +9,7 @@ export const fixtureSpaceSchema = productDimensionsSchema.extend({ clearanceMm: 
   .refine((value) => fitAxes.some((axis) => value[axis] !== undefined), 'Enter at least one measured dimension.');
 
 export function fixtureFit(requirement: SourcingRequirement, product: SourcedProduct) {
-  const primary = requirement.requiredComponents[0];
-  if (primary && !product.components.includes(primary)) return { status: 'unknown' as const, label: 'Supporting part - needs checking', detail: 'Check this part against the chosen fixture, not the room-space limits.' };
+  if (!isDimensionedFixture(product, requirement)) return { status: 'unknown' as const, label: 'Supporting part - needs checking', detail: 'Check this part against the chosen fixture, not the room-space limits.' };
   const parsed = fixtureSpaceSchema.safeParse(requirement.fitSpace);
   if (!parsed.success) return { status: 'unknown' as const, label: 'Needs checking', detail: 'No confirmed space measurements for this item.' };
   const space = parsed.data;

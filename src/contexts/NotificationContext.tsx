@@ -60,10 +60,16 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
 
   // Bind to current family and sync DB-backed notifications (offline-first)
   useEffect(() => {
-    notificationService.setFamilyId(familyId);
-    if (isConnected && familyId) {
-      void notificationService.syncFromDatabase();
-    }
+    let active = true;
+    void notificationService.setFamilyId(familyId).then(async () => {
+      if (!active) return;
+      setSettings(await notificationService.getSettings());
+      if (isConnected && familyId) await notificationService.syncFromDatabase();
+    });
+    const refresh = () => { if (active && isConnected && familyId) void notificationService.syncFromDatabase(); };
+    const interval = window.setInterval(refresh, 60_000);
+    window.addEventListener('focus', refresh);
+    return () => { active = false; clearInterval(interval); window.removeEventListener('focus', refresh); };
   }, [familyId, isConnected]);
 
   // Request notification permission
@@ -199,6 +205,7 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
     clearNotification,
     snoozeNotification,
     updateSettings,
+    applyReminderAction: (id, action, until) => notificationService.applyReminderAction(id, action, until),
     scheduleEventReminders,
     cancelEventReminders
   };

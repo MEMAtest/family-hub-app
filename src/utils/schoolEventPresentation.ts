@@ -17,6 +17,14 @@ export const isChildProfile = (person: { role: string; ageGroup?: string }) =>
 
 export const schoolEventLocation = (location?: string) => location && /^school\.\s/i.test(location) ? 'School' : location;
 
+export const schoolEventAction = (source: string) => {
+  const instruction = source.replace(/Imported from calendar intake:\s*/i, '').split(/[.!?•]\s*/)
+    .find((sentence) => /\b(?:wear|bring|return|complete|submit|collect|arrive|please)\b/i.test(sentence));
+  if (!instruction) return null;
+  const clean = instruction.trim();
+  return clean.length > 180 ? `${clean.slice(0, 177)}...` : clean;
+};
+
 /** A source month that disagrees with the series anchor is a review signal, not a replacement date. */
 export const recurringSourceDateWarning = (event: Pick<CalendarEvent, 'title' | 'date' | 'notes' | 'isRecurring'>) => {
   if (!event.isRecurring || !/\bphonics\b/i.test(event.title)) return null;

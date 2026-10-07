@@ -1,7 +1,14 @@
 export type SourcingRoomId = 'main-bathroom' | 'shower-room';
 export type SourcingRequirementStatus = 'confirmed' | 'fitter_check';
 export type SourcingBasketStatus = 'review' | 'ask_fitter' | 'approved' | 'ordered';
-export type SourcingCategory = 'Tiles' | 'Sanitaryware' | 'Furniture' | 'Showers' | 'Heating' | 'Fittings';
+export type SourcingCategory = 'Tiles' | 'Sanitaryware' | 'Furniture' | 'Showers' | 'Heating' | 'Fittings' | 'Lighting' | 'Ventilation' | 'Accessories' | 'Other';
+export interface ComponentEvidence {
+  /** Contents per purchased unit, not the total basket quantity. */
+  quantity: number;
+  state: 'included' | 'excluded' | 'unknown';
+  source: 'supplier' | 'user' | 'legacy';
+  text?: string;
+}
 /** IN_STOCK: supplier page says "In stock". TO_ORDER: "Available to order" (not held, longer delivery). */
 export type SourcingStock = 'IN_STOCK' | 'TO_ORDER' | 'LOW_STOCK' | 'OUT_OF_STOCK' | 'UNKNOWN';
 
@@ -65,6 +72,9 @@ export interface SourcingRequirement {
   notes?: string;
   constraints: Record<string, number | string>;
   requiredComponents: string[];
+  primaryComponent?: string;
+  purpose?: 'required' | 'alternative' | 'check' | 'replacement';
+  replacesRequirementId?: string;
   referenceProduct?: { name: string; supplier: string; url?: string };
   recommendationNote?: string;
   tilePlan?: TilePlan;
@@ -97,6 +107,7 @@ export interface SourcedProduct {
   material?: string;
   effect?: string;
   components: string[];
+  componentEvidence?: Record<string, ComponentEvidence>;
   note?: string;
   topPick?: boolean;
   /** Verdict from the sourcing AI on a supplier search result, against the quote item it was searched for. */
@@ -120,11 +131,18 @@ export interface SourcingBasketItem {
   productId: string;
   quantity: number;
   status: SourcingBasketStatus;
+  optionRequirementId?: string;
 }
 
 export interface ProjectSourcing {
   /** Bumped when the starter catalogue changes so older saved workspaces are refreshed. */
   version?: number;
+  /** Dated quotation reference, not a current invoice or commitment. Amounts are integer GBP pence. */
+  quoteCostReference?: {
+    supplier: string;
+    quotedOn: string;
+    rooms: Partial<Record<SourcingRoomId, { labourPence?: number; goodsPence?: number; totalPence?: number; deliveryPence?: number }>>;
+  };
   /** Household room names and measurement notes; not a guarantee that a product fits. */
   rooms?: Partial<Record<SourcingRoomId, { name?: string; sizeNotes?: string }>>;
   /** Source photos are stored once and referenced by measurement revisions. */

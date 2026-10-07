@@ -4,6 +4,7 @@ import { bathroomSourcingSeed } from '@/lib/sourcing/seed';
 import { requireAuth } from '@/lib/auth-utils';
 import { reviewCandidates } from '@/lib/sourcing/aiReview';
 import { reviewTiles, searchUkTiles, tileShopStock, tileStoreFor } from '@/lib/sourcing/tileSearch';
+import { STONEWATER, cleanProductUrl, isStonewaterUrl, productFromRecord, stripHtml } from '@/lib/sourcing/stonewaterProduct';
 
 // A tile search reads up to 16 product pages and asks the AI; give it room.
 export const maxDuration = 60;
@@ -11,15 +12,8 @@ export const maxDuration = 60;
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const STONEWATER = 'https://www.stonewaterbathrooms.com';
 const USER_AGENT = 'FamilyHub/HomeRenoSourcing (public catalogue lookup)';
 
-const stripHtml = (value: string) => value
-  .replace(/<[^>]*>/g, ' ')
-  .replace(/&nbsp;/g, ' ')
-  .replace(/&amp;/g, '&')
-  .replace(/\s+/g, ' ')
-  .trim();
 
 function stockFromText(text: string | null): SourcingStock {
   if (!text) return 'UNKNOWN';
@@ -31,19 +25,6 @@ function stockFromText(text: string | null): SourcingStock {
   return 'UNKNOWN';
 }
 
-function isStonewaterUrl(raw: string) {
-  try {
-    const url = new URL(raw, STONEWATER);
-    return /(^|\.)stonewaterbathrooms\.com$|(^|\.)tradebase\.com$/.test(url.hostname) && url.pathname.startsWith('/products/');
-  } catch {
-    return false;
-  }
-}
-
-/** Product URL on the current domain, without search-tracking parameters. */
-function cleanProductUrl(raw: string) {
-  return `${STONEWATER}${new URL(raw, STONEWATER).pathname}`;
-}
 
 async function fetchStockLine(productUrl: string) {
   const response = await fetch(productUrl, { headers: { 'User-Agent': USER_AGENT }, signal: AbortSignal.timeout(10000), cache: 'no-store' });
@@ -69,50 +50,6 @@ async function forEachLimited<T>(items: T[], limit: number, task: (item: T) => P
   }));
 }
 
-function productFromRecord(record: Record<string, unknown>): SourcedProduct | null {
-  const name = typeof record.title === 'string' ? record.title : '';
-  const rawUrl = typeof record.url === 'string' ? record.url : '';
-  if (!name || !rawUrl || !isStonewaterUrl(rawUrl)) return null;
-  const text = stripHtml(typeof record.body === 'string' ? record.body : '');
-
-  const dimensions: Record<string, number> = {};
-  const pair = name.match(/(\d{3,4})\s*(?:mm)?\s*(?:x|×)\s*(\d{3,4})\s*mm?/i);
-  const width = name.match(/(\d{3,4})\s*mm/i);
-  if (pair) {
-    dimensions.lengthMm = Number(pair[1]);
-    dimensions.widthMm = Number(pair[2]);
-  } else if (width) {
-    dimensions.maxWidthMm = Number(width[1]);
-  }
-
-  const components: string[] = [];
-  ['shower-tray', 'waste', 'screen', 'basin', 'seat', 'cistern', 'bath', 'vanity', 'shower-door', 'side-panel', 'towel-rail', 'valves'].forEach((key) => {
-    const pattern = key.replace('-', '[ -]');
-    const excluded = new RegExp(`(?:${pattern})[^.()]{0,30}(?:not included|excluded|sold separately)`, 'i').test(text);
-    if (!excluded && new RegExp(`\\b${pattern}\\b`, 'i').test(name)) components.push(key);
-  });
-
-  const image = typeof record.image === 'string' ? record.image
-    : typeof record.featured_image === 'object' && record.featured_image && 'url' in record.featured_image ? String(record.featured_image.url) : '';
-  const price = Number(record.price ?? record.price_min ?? 0);
-
-  return {
-    id: `sw-${String(record.id ?? name).replace(/[^a-z0-9]+/gi, '-').toLowerCase()}`,
-    supplier: 'Stonewater Bathrooms',
-    name,
-    size: pair ? `${pair[1]} × ${pair[2]}mm` : width ? `${width[1]}mm` : undefined,
-    url: cleanProductUrl(rawUrl),
-    imageUrl: image,
-    gallery: image ? [image] : [],
-    price: Number.isFinite(price) ? price : 0,
-    stock: 'UNKNOWN',
-    stockEvidence: 'Stock could not be checked',
-    dimensions,
-    components,
-    description: text.slice(0, 420),
-    lastChecked: new Date().toISOString(),
-  };
-}
 
 function findToppsProducts(query: string) {
   const normalized = query.toLowerCase();

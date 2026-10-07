@@ -2,6 +2,28 @@ import type { CalendarEvent, RecurringPattern } from '@/types/calendar.types';
 
 const RICH_RECURRENCE_PREFIX = 'kinboard:v1:';
 
+const richFields = ['workStatus', 'travel', 'reminders', 'reminderPreferences', 'attendees', 'priority', 'status', 'color'] as const;
+const objectRecord = (value: unknown): Record<string, unknown> =>
+  value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+
+/** Only editable event fields enter metadata; server-owned provenance stays intact. */
+export const mergeCalendarEventMetadata = (input: Record<string, unknown>, previous?: unknown) => {
+  const result = { ...objectRecord(previous) };
+  const nested = objectRecord(input.metadata);
+  for (const key of richFields) {
+    const value = input[key] !== undefined ? input[key] : nested[key];
+    if (value !== undefined) result[key] = value;
+  }
+  return JSON.parse(JSON.stringify(result)) as Record<string, any>;
+};
+
+export const readCalendarEventMetadata = (value: unknown): Partial<CalendarEvent> => {
+  const record = objectRecord(value);
+  const result: Record<string, unknown> = {};
+  for (const key of richFields) if (record[key] !== undefined) result[key] = record[key];
+  return { ...result, metadata: record } as Partial<CalendarEvent>;
+};
+
 const isRecurringPattern = (value: unknown): value is RecurringPattern => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const pattern = value as Partial<RecurringPattern>;
@@ -83,6 +105,7 @@ export const toCalendarEventResponse = (event: any) => {
   const recurrence = decodeStoredRecurringPattern(event.recurringPattern);
   return {
     ...event,
+    ...readCalendarEventMetadata(event.metadata),
     date: toDateKey(event.eventDate),
     endDate: inferEndDate(event.eventDate, event.eventTime, event.durationMinutes),
     time: toTimeKey(event.eventTime),
@@ -126,5 +149,6 @@ export const calendarEventDraftToDbData = (
     sourceId: draft.sourceId,
     googleCalendarId: draft.googleCalendarId,
     googleEventId: draft.googleEventId,
+    metadata: mergeCalendarEventMetadata(draft as unknown as Record<string, unknown>, draft.metadata),
   };
 };

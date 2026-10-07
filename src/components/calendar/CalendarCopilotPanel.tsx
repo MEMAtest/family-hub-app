@@ -15,7 +15,8 @@ import type { SchoolDocumentRoutine, SchoolDocumentSummary } from '@/utils/schoo
 import { extractRoutineWeekdays, nextDateForWeekday } from '@/utils/schoolRoutineSchedule';
 import { addDays, expandEvents } from '@/utils/recurrence';
 import { expandTasks } from '@/utils/tasks';
-import { isAdultSchoolEvent, recurringSourceDateWarning, schoolEventTitle } from '@/utils/schoolEventPresentation';
+import { isAdultSchoolEvent, recurringSourceDateWarning, schoolEventTitle, schoolEventAction } from '@/utils/schoolEventPresentation';
+import type { SchoolSourceEvidence } from '@/utils/schoolSources';
 
 interface CalendarCopilotPanelProps {
   events: CalendarEvent[];
@@ -40,6 +41,8 @@ interface CalendarInboxItem {
   autoCreated: number;
   needsReview: number;
   authenticatedSchoolSender?: boolean;
+  schoolSource?: SchoolSourceEvidence | null;
+  sourceDate?: string | null;
   duplicateCount: number;
   conflictCount: number;
   parsedDrafts: CalendarImportDraft[];
@@ -56,6 +59,7 @@ interface CalendarAttachment {
 }
 
 const inboxItemSummary = (item: CalendarInboxItem) => {
+  if (item.status === 'content_required') return 'Open the original update or add its content';
   if (item.status === 'no_events') return 'No dated events found';
   if (item.status === 'needs_ocr') return 'Attachment needs a text check';
 
@@ -156,6 +160,17 @@ const CalendarCopilotPanel = ({
   const [whatsappDeliveryTrackingConfigured, setWhatsappDeliveryTrackingConfigured] = useState(false);
   const [whatsappConsent, setWhatsappConsent] = useState('not_configured');
   const [gmailSyncLoading, setGmailSyncLoading] = useState(false);
+  const [assignmentSaving, setAssignmentSaving] = useState(false);
+  const [repairLoading, setRepairLoading] = useState(false);
+  const [repairAfterId, setRepairAfterId] = useState<string | undefined>();
+  const [repairNextCursor, setRepairNextCursor] = useState<string | null>(null);
+  const [repairPreview, setRepairPreview] = useState<{
+    planHash: string; nextCursor: string | null;
+    intakes: Array<{ intakeId: string; institution: string | null;
+      draftChanges: Array<{ title: string; beforePersonId: string; afterPersonId: string }>;
+      eventChanges: Array<{ eventId: string; title: string; beforePersonId: string; afterPersonId: string }> }>;
+  } | null>(null);
+  const [repairApprovedIds, setRepairApprovedIds] = useState<Set<string>>(new Set());
   const [activeInboxItemId, setActiveInboxItemId] = useState<string | null>(null);
   const [documentSummary, setDocumentSummary] = useState<SchoolDocumentSummary | null>(null);
   const [documentAttachments, setDocumentAttachments] = useState<CalendarAttachment[]>([]);
@@ -176,6 +191,7 @@ const CalendarCopilotPanel = ({
       item.needsReview > 0 ||
       item.conflictCount > 0 ||
       item.status === 'needs_ocr' ||
+      item.status === 'content_required' ||
       item.status === 'no_events' ||
       (item.status === 'review_required' && item.autoCreated === 0)
     ),
@@ -284,7 +300,7 @@ const CalendarCopilotPanel = ({
     const handleGmailAuthMessage = (event: MessageEvent<{ type?: string; message?: string }>) => {
       if (event.origin !== window.location.origin) return;
       if (event.data?.type === 'gmail_auth_success') {
-        setImportSuccess('Gmail connected. Stewart Fleming emails will be checked automatically.');
+        setImportSuccess('Gmail connected. School and nursery notices will be checked automatically.');
         void loadInbox();
       }
       if (event.data?.type === 'gmail_auth_error') {
@@ -323,12 +339,12 @@ const CalendarCopilotPanel = ({
     try {
       const response = await fetch(`/api/families/${activeFamilyId}/gmail`, { method: 'POST' });
       const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error || 'Gmail could not be synced.');
+      if (!response.ok || payload.errors?.length) throw new Error(payload.error || payload.errors?.[0] || 'Gmail could not be synced.');
       await loadInbox();
       setImportSuccess(
         payload.processed > 0
           ? `Synced ${payload.processed} email${payload.processed === 1 ? '' : 's'} from Gmail; ${payload.autoCreated} added to the calendar and ${payload.needsReview} left for review.`
-          : 'Gmail is up to date. Stewart Fleming emails are checked automatically; you can also forward other school emails below.',
+          : payload.hasMore ? 'More school notices are waiting. Sync again to continue.' : 'Gmail is up to date. School and nursery notices are checked automatically.',
       );
     } catch (error) {
       setInboxError(error instanceof Error ? error.message : 'Gmail could not be synced.');
@@ -370,7 +386,7 @@ const CalendarCopilotPanel = ({
       const response = await fetch(`/api/families/${activeFamilyId}/calendar-intake/inbox`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ intakeId: activeInboxItemId, createdEventIds: [], needsReview: 0 }),
+        body: JSON.stringify({ intakeId: activeInboxItemId, createdEventIds: [], needsReview: 0, dismissed: true }),
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || 'Inbox review status could not be saved.');
@@ -719,7 +735,25 @@ const CalendarCopilotPanel = ({
     });
   };
 
-  const assignDraftToPerson = (draftId: string, personId: string) => {
+  const assignDraftToPerson = async (draftId: string, personId: string) => {
+    if (activeInboxItemId && activeFamilyId) {
+      setAssignmentSaving(true);
+      setImportError(null);
+      try {
+        const response = await fetch(`/api/families/${activeFamilyId}/calendar-intake/inbox`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ intakeId: activeInboxItemId, assignments: [{ draftId, personId }] }),
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || 'Attendee choice could not be saved.');
+        setImportDrafts(payload.parsedDrafts);
+        setInboxItems((current) => current.map((item) => item.id === activeInboxItemId
+          ? { ...item, parsedDrafts: payload.parsedDrafts } : item));
+      } catch (error) {
+        setImportError(error instanceof Error ? error.message : 'Attendee choice could not be saved.');
+        return;
+      } finally { setAssignmentSaving(false); }
+    }
     setImportDrafts((current) => current.map((draft) => draft.importId === draftId ? { ...draft, person: personId } : draft));
     setSelectedDraftIds((current) => {
       const next = new Set(current);
@@ -730,7 +764,7 @@ const CalendarCopilotPanel = ({
   };
 
   const importSelectedDrafts = async () => {
-    if (selectedDrafts.length === 0) return;
+    if (selectedDrafts.length === 0 || assignmentSaving) return;
 
     setImporting(true);
     setImportError(null);
@@ -746,7 +780,7 @@ const CalendarCopilotPanel = ({
           const inboxItem = inboxItems.find((item) => item.id === activeInboxItemId);
           const schoolProvenance = inboxItem?.authenticatedSchoolSender
             ? { source: 'gmail-school-email', sourceId: inboxItem.id }
-            : {};
+            : activeInboxItemId ? { source: 'calendar-intake', sourceId: activeInboxItemId } : {};
           const result = await createEvent({ ...importDraftToCalendarEventDraft(draft), ...schoolProvenance });
           if (result.status === 'created') {
             createdDraftIds.add(draft.importId);
@@ -775,10 +809,11 @@ const CalendarCopilotPanel = ({
             const response = await fetch(`/api/families/${activeFamilyId}/calendar-intake/inbox`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ intakeId: activeInboxItemId, createdEventIds, needsReview: failedCount }),
+              body: JSON.stringify({ intakeId: activeInboxItemId, createdEventIds,
+                needsReview: remainingDrafts.filter((draft) => draft.importStatus !== 'duplicate').length }),
             });
             if (!response.ok) throw new Error('Inbox review status could not be saved.');
-            if (failedCount === 0) setActiveInboxItemId(null);
+            if (remainingDrafts.filter((draft) => draft.importStatus !== 'duplicate').length === 0) setActiveInboxItemId(null);
             void loadInbox();
           } catch (error) {
             setImportError(error instanceof Error ? error.message : 'Inbox review status could not be saved.');
@@ -799,6 +834,45 @@ const CalendarCopilotPanel = ({
     } finally {
       setImporting(false);
     }
+  };
+
+  const previewAssignmentRepair = async (afterId?: string) => {
+    if (!activeFamilyId) return;
+    setRepairLoading(true); setImportError(null);
+    try {
+      const response = await fetch(`/api/families/${activeFamilyId}/calendar-intake/repair`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'dry-run', afterId }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || 'Assignment repair could not be previewed.');
+      setRepairPreview(payload); setRepairApprovedIds(new Set());
+      setRepairAfterId(afterId); setRepairNextCursor(null);
+    } catch (error) { setImportError(error instanceof Error ? error.message : 'Assignment repair could not be previewed.'); }
+    finally { setRepairLoading(false); }
+  };
+
+  const applyAssignmentRepair = async () => {
+    if (!activeFamilyId || !repairPreview) return;
+    setRepairLoading(true); setImportError(null);
+    try {
+      const response = await fetch(`/api/families/${activeFamilyId}/calendar-intake/repair`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: 'apply', planHash: repairPreview.planHash, afterId: repairAfterId, approvedEventIds: [...repairApprovedIds] }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || 'Assignment repair could not be applied.');
+      const changes = repairPreview.intakes.flatMap((item) => item.eventChanges).filter((change) => repairApprovedIds.has(change.eventId));
+      const store = useFamilyStore.getState();
+      store.setEvents(store.events.map((event) => {
+        const change = changes.find((value) => value.eventId === event.id);
+        return change ? { ...event, person: change.afterPersonId } : event;
+      }));
+      setRepairNextCursor(repairPreview.nextCursor);
+      setRepairPreview(null); setActiveInboxItemId(null); setImportDrafts([]); setSelectedDraftIds(new Set());
+      setImportSuccess(`Corrected ${payload.repairedDrafts} previews and ${payload.repairedEvents} saved events. No messages sent.`);
+      await loadInbox();
+    } catch (error) { setImportError(error instanceof Error ? error.message : 'Assignment repair could not be applied.'); }
+    finally { setRepairLoading(false); }
   };
 
   // `min-w-0` on the section and on both cards below is load-bearing. A grid
@@ -847,10 +921,10 @@ const CalendarCopilotPanel = ({
                 <Mail className="h-3.5 w-3.5" />
                 Gmail school inbox
               </p>
-              {gmailConnected && gmailEmail ? (
+              {inboxLoading ? <p className="mt-1" role="status">Loading school inbox...</p> : gmailConnected && gmailEmail ? (
                 <>
                   <p className="mt-1">Connected to {gmailEmail}</p>
-                  <p className="mt-1">Stewart Fleming mail syncs morning and evening{gmailLastSyncAt ? ` · Last checked ${new Date(gmailLastSyncAt).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}` : ''}.</p>
+                  <p className="mt-1">School and nursery mail is checked at 08:00 and 20:00 London time{gmailLastSyncAt ? ` · Last successful check ${new Date(gmailLastSyncAt).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/London' })}` : ''}.</p>
                   {forwardingAddress && (
                     <p className="mt-1 break-all font-mono text-[11px]">Forward other school emails to {forwardingAddress}</p>
                   )}
@@ -881,6 +955,28 @@ const CalendarCopilotPanel = ({
             </div>
           </div>
           {inboxError && <p className="mt-2 text-amber-700 dark:text-amber-200">{inboxError}</p>}
+          <button type="button" onClick={() => void previewAssignmentRepair()} disabled={repairLoading || inboxLoading || !activeFamilyId}
+            className="mt-2 inline-flex min-h-9 items-center gap-1.5 rounded-md border border-purple-200 px-2 py-1 font-semibold">
+            {repairLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />} Review school assignments
+          </button>
+          {repairNextCursor && <button type="button" disabled={repairLoading} onClick={() => void previewAssignmentRepair(repairNextCursor)}
+            className="ml-2 inline-flex min-h-9 items-center gap-1.5 px-2 py-1 font-semibold"><RefreshCw className="h-3.5 w-3.5" /> Review next batch</button>}
+          {repairPreview && <div className="mt-2 space-y-2 border-t border-purple-200 pt-2">
+            <p>{repairPreview.intakes.reduce((count, item) => count + item.draftChanges.length, 0)} preview corrections. Confirm each saved event correction.</p>
+            {repairPreview.intakes.flatMap((item) => item.draftChanges.map((change, index) => <p key={`${item.intakeId}-${index}`}>
+              {change.title}: {personNameById.get(change.beforePersonId) || 'Unassigned'} to {personNameById.get(change.afterPersonId) || 'Unassigned'} (preview)
+            </p>))}
+            {repairPreview.intakes.flatMap((item) => item.eventChanges).map((change) => <label key={change.eventId} className="flex items-start gap-2">
+              <input type="checkbox" checked={repairApprovedIds.has(change.eventId)} onChange={(event) => setRepairApprovedIds((current) => {
+                const next = new Set(current); if (event.target.checked) next.add(change.eventId); else next.delete(change.eventId); return next;
+              })} />
+              <span>{change.title}: {personNameById.get(change.beforePersonId) || 'Unassigned'} to {personNameById.get(change.afterPersonId) || 'Unassigned'}</span>
+            </label>)}
+            {repairPreview.nextCursor && <p>Further source records remain. Review the next batch after this one.</p>}
+            <button type="button" disabled={repairLoading} onClick={() => void applyAssignmentRepair()} className="inline-flex min-h-9 items-center gap-1.5 rounded-md bg-purple-600 px-3 py-1 text-white">
+              <CheckCircle2 className="h-3.5 w-3.5" /> Apply preview corrections{repairApprovedIds.size ? ` and ${repairApprovedIds.size} event corrections` : ''}
+            </button>
+          </div>}
           <p className="mt-2 text-[11px]">
             {!whatsappConfigured
               ? 'WhatsApp reminders are not configured yet, so no WhatsApp messages are being sent.'
@@ -903,6 +999,8 @@ const CalendarCopilotPanel = ({
                 >
                   <span className="min-w-0">
                     <span className="block truncate font-semibold">{item.subject || item.sender || 'Forwarded email'}</span>
+                    <span className="block break-words text-[11px]">{item.schoolSource?.institutionName || 'Source institution to confirm'} · {item.sender || 'Sender unknown'}</span>
+                    <span className="block text-[11px]">Received {new Date(item.receivedAt).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/London' })}</span>
                     <span className="block text-[11px] opacity-75">
                       {inboxItemSummary(item)}
                     </span>
@@ -913,6 +1011,19 @@ const CalendarCopilotPanel = ({
             </div>
           )}
         </div>
+        {activeInboxItemId && (() => {
+          const item = inboxItems.find((value) => value.id === activeInboxItemId);
+          return item ? <div className="mb-3 border-l-2 border-teal-500 pl-3 text-xs text-gray-600 dark:text-slate-300">
+            <p className="font-semibold">{item.schoolSource?.institutionName || documentSummary?.issuer || 'Source institution to confirm'}</p>
+            <p className="break-words">From {item.sender || 'Sender unknown'} · Received {new Date(item.receivedAt).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/London' })}</p>
+            {item.sourceDate && <p>Source date: {item.sourceDate}</p>}
+            {item.status === 'content_required' && <p className="mt-1 font-semibold">What you need to do: open the original nursery update and add its text or document. Portal access has not been verified.</p>}
+            {item.schoolSource?.links.map((link) => <a key={link} href={link} target="_blank" rel="noreferrer" className="mt-1 mr-3 inline-flex items-center gap-1 text-teal-700"><ExternalLink className="h-3 w-3" />Open source</a>)}
+            {(item.schoolSource?.institution === 'grandir' || item.status === 'content_required') && <p className="mt-1">
+              Grandir portal access pending. <a href="https://www.app.grandiruk.com/" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-teal-700"><ExternalLink className="h-3 w-3" />Official sign-in</a>
+            </p>}
+          </div> : null;
+        })()}
         <textarea
           value={importText}
           onChange={(event) => setImportText(event.target.value)}
@@ -954,7 +1065,7 @@ const CalendarCopilotPanel = ({
             <button
               type="button"
               onClick={() => void importSelectedDrafts()}
-              disabled={importing}
+              disabled={importing || assignmentSaving}
               className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-md bg-[#147c72] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
             >
               {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
@@ -1130,13 +1241,16 @@ const CalendarCopilotPanel = ({
                     <select
                       aria-label={`Assign ${draft.title} to`}
                       value={draft.person || ''}
-                      onChange={(event) => assignDraftToPerson(draft.importId, event.target.value)}
+                      disabled={assignmentSaving || importing}
+                      onChange={(event) => void assignDraftToPerson(draft.importId, event.target.value)}
                       className="min-w-0 rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
                     >
                       <option value="">Choose attendee</option>
                       {people.filter((person) => !isAdultSchoolEvent(draft.title) || !isChildProfile(person)).map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}
                     </select>
                   </label>
+                  {schoolEventAction(draft.source) && <p className="mt-1 break-words text-[11px] text-gray-600 dark:text-slate-300"><strong>What you need to do:</strong> {schoolEventAction(draft.source)}</p>}
+                  <details className="mt-1 text-[11px] text-gray-500"><summary>Original event text</summary><p className="mt-1 break-words">{draft.source}</p></details>
                   {draft.warnings.length > 0 && (
                     <p className="mt-1 inline-flex items-center gap-1 text-[11px] text-amber-700 dark:text-amber-300">
                       <XCircle className="h-3 w-3" />

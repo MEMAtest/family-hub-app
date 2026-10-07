@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireFamilyAccess } from '@/lib/auth-utils';
-import { parseCalendarImportText } from '@/utils/calendarImport';
-import { summarizeSchoolDocument } from '@/utils/schoolDocumentSummary';
 import { Prisma } from '@prisma/client';
 import type { CalendarEvent, Person } from '@/types/calendar.types';
+import { prepareSchoolIntake } from '@/lib/schoolIntakeServer';
 
 const toDateKey = (value: Date) => value.toISOString().split('T')[0];
 
@@ -62,17 +61,18 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context) =>
       }),
     ]);
 
-    const drafts = parseCalendarImportText({
+    const prepared = await prepareSchoolIntake({
+      familyId, members: members.map(mapPerson),
       text,
-      people: members.map(mapPerson),
       existingEvents: events.map(mapDbEvent),
       defaultPersonId: typeof body.defaultPersonId === 'string' ? body.defaultPersonId : undefined,
       today: body.today ? new Date(body.today) : new Date(),
     });
-    const documentSummary = summarizeSchoolDocument(text);
+    const drafts = prepared.drafts;
+    const documentSummary = prepared.metadata.documentSummary;
     const sourceType = typeof body.sourceType === 'string' ? body.sourceType : null;
     const sourceName = typeof body.sourceName === 'string' ? body.sourceName : null;
-    const intake = sourceType ? await prisma.calendarEmailIntake.create({
+    const intake = await prisma.calendarEmailIntake.create({
       data: {
         familyId,
         subject: sourceName || 'Pasted school update',
@@ -80,22 +80,25 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context) =>
         text,
         normalizedText: text,
         parsedDrafts: drafts as unknown as Prisma.InputJsonValue,
-        status: drafts.length > 0 ? 'review_required' : 'no_events',
-        needsReview: drafts.length,
+        status: prepared.status,
+        needsReview: prepared.source.contentRequired ? 1 : drafts.length,
         duplicateCount: drafts.filter((draft) => draft.importStatus === 'duplicate').length,
         conflictCount: drafts.filter((draft) => draft.importStatus === 'conflict').length,
         metadata: {
+          ...prepared.metadata,
           sourceType,
           fileName: sourceName,
           documentSummary,
         } as Prisma.InputJsonValue,
       },
-    }) : null;
+    });
 
     return NextResponse.json({
       drafts,
       intakeId: intake?.id,
       documentSummary,
+      schoolSource: prepared.source,
+      status: prepared.status,
       summary: {
         total: drafts.length,
         ready: drafts.filter((draft) => draft.importStatus === 'ready').length,

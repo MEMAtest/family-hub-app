@@ -5,6 +5,8 @@ import { requireFamilyAccess } from '@/lib/auth-utils';
 import { sendFamilyPushNotification } from '@/lib/webPush';
 import type { CalendarEvent } from '@/types/calendar.types';
 import { getCalendarEventIcon, getEventNotificationMetadata } from '@/utils/eventSemantics';
+import { toCalendarEventResponse } from '@/lib/calendarEventMapping';
+import { travelContext, type ReminderEvent } from '@/lib/familyReminderPlanner';
 
 const hasDedupeKey = (metadata: unknown, dedupeKey: string) => {
   if (!metadata || typeof metadata !== 'object') return false;
@@ -70,6 +72,8 @@ export const POST = requireFamilyAccess(async (_request, context) => {
     });
 
     for (const event of events) {
+      // Travel has member-specific server intents; the old household sweep must not duplicate them.
+      if (travelContext(toCalendarEventResponse(event) as ReminderEvent)) continue;
       const start = eventDateTime(event);
       const minutesUntil = Math.round((start.getTime() - now.getTime()) / 60_000);
       if (minutesUntil < 0) continue;

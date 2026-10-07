@@ -70,6 +70,10 @@ type ParsedGmailMessage = {
   text: string;
   html: string;
   messageId: string;
+  gmailMessageId: string;
+  gmailThreadId: string | null;
+  gmailInternalDate: string | null;
+  sourceDate: string | null;
   attachments: Array<{
     fileName: string;
     mimeType: string;
@@ -125,9 +129,13 @@ const readGmailMessage = async (gmail: gmail_v1.Gmail, messageId: string, fallba
     to: headerValue(headers, 'Delivered-To') || headerValue(headers, 'To') || fallbackRecipient,
     from: headerValue(headers, 'From'),
     subject,
-    text: parts.text.join('\n\n') || fallbackText,
+    text: parts.text.join('\n\n') || (parts.html.length ? '' : fallbackText),
     html: parts.html.join('\n\n'),
     messageId: headerValue(headers, 'Message-ID') || message.id || messageId,
+    gmailMessageId: message.id || messageId,
+    gmailThreadId: message.threadId || null,
+    gmailInternalDate: message.internalDate || null,
+    sourceDate: headerValue(headers, 'Date') || null,
     attachments: parts.attachments,
   } satisfies ParsedGmailMessage;
 };
@@ -149,10 +157,13 @@ export const syncGmailCalendarInbox = async (familyId: string) => {
   const forwardingAddress = gmailForwardingAddress(googleUserEmail);
   if (!forwardingAddress) throw new Error('The connected Google account email could not be determined.');
 
+  const cursor = await prisma.notification.findUnique({ where: { id: `gmail-forwarded-cursor-${familyId}` }, select: { metadata: true } });
+  const forwardMetadata = jsonMetadata(cursor?.metadata ?? null);
   const list = await gmail.users.messages.list({
     userId: 'me',
     q: `to:${forwardingAddress} newer_than:90d`,
     maxResults: 50,
+    ...(typeof forwardMetadata.schoolGmailPageToken === 'string' ? { pageToken: forwardMetadata.schoolGmailPageToken } : {}),
   });
 
   let processed = 0;
@@ -185,7 +196,10 @@ export const syncGmailCalendarInbox = async (familyId: string) => {
     }
   }
 
-  await prisma.gmailConnection.update({ where: { familyId }, data: { lastSyncAt: new Date() } });
+  if (!errors.length) {
+    await storeSchoolGmailSyncState(familyId, { pageToken: list.data.nextPageToken || null }, 'forwarded');
+    if (!list.data.nextPageToken) await prisma.gmailConnection.update({ where: { familyId }, data: { lastSyncAt: new Date() } });
+  }
   return {
     connectedEmail: googleUserEmail,
     forwardingAddress,
@@ -195,6 +209,7 @@ export const syncGmailCalendarInbox = async (familyId: string) => {
     needsReview,
     duplicates,
     errors,
+    hasMore: Boolean(list.data.nextPageToken),
   };
 };
 
@@ -203,7 +218,7 @@ export const buildStewartFlemingGmailQuery = (cursorInternalDateMs?: number, upp
     ? ` after:${Math.max(0, Math.floor(cursorInternalDateMs / 1000) - 1)}`
     : '';
   const before = upperBoundMs && upperBoundMs > 0 ? ` before:${Math.floor(upperBoundMs / 1000)}` : '';
-  return `from:${STEWART_FLEMING_EMAIL_DOMAIN} newer_than:90d${after}${before}`;
+  return `(from:${STEWART_FLEMING_EMAIL_DOMAIN} OR Grandir OR Famly) newer_than:90d${after}${before}`;
 };
 
 const schoolSyncCursorId = (familyId: string) => `gmail-school-cursor-${familyId}`;
@@ -214,6 +229,7 @@ const metadataEquals = (value: Prisma.JsonValue | null) => ({
 });
 
 type SchoolGmailSyncState = {
+  queryVersion?: number;
   cursorMs?: number;
   activeQuery?: string | null;
   pageToken?: string | null;
@@ -221,13 +237,14 @@ type SchoolGmailSyncState = {
   failedMessageIds?: string[];
 };
 
-const storeSchoolGmailSyncState = async (familyId: string, state: SchoolGmailSyncState) => {
-  const id = schoolSyncCursorId(familyId);
+const storeSchoolGmailSyncState = async (familyId: string, state: SchoolGmailSyncState, kind = 'school') => {
+  const id = kind === 'school' ? schoolSyncCursorId(familyId) : `gmail-forwarded-cursor-${familyId}`;
   for (let attempt = 0; attempt < 4; attempt += 1) {
     const current = await prisma.notification.findUnique({ where: { id }, select: { metadata: true } });
     const currentMetadata = jsonMetadata(current?.metadata ?? null);
     const currentCursor = Number(currentMetadata.schoolGmailInternalDateMs) || 0;
     const metadata: Record<string, unknown> = { ...currentMetadata };
+    if (state.queryVersion !== undefined) metadata.schoolGmailQueryVersion = state.queryVersion;
     if (state.cursorMs !== undefined) metadata.schoolGmailInternalDateMs = Math.max(currentCursor, state.cursorMs);
     if (state.activeQuery !== undefined) {
       if (state.activeQuery) metadata.schoolGmailActiveQuery = state.activeQuery;
@@ -273,7 +290,7 @@ const storeSchoolGmailSyncState = async (familyId: string, state: SchoolGmailSyn
   }
 };
 
-/** Import only mail sent by Stewart Fleming; repeated cron runs are deduplicated by RFC Message-ID. */
+/** School and nursery intake. Famly transport alone never proves a Grandir institution or portal connection. */
 export const syncStewartFlemingGmail = async (familyId: string) => {
   const { connection, gmail } = await getAuthedGmailClient(familyId);
   let googleUserEmail = connection.googleUserEmail;
@@ -294,7 +311,9 @@ export const syncStewartFlemingGmail = async (familyId: string) => {
 
   const cursorId = schoolSyncCursorId(familyId);
   const cursorRecord = await prisma.notification.findUnique({ where: { id: cursorId }, select: { metadata: true } });
-  const cursorMetadata = jsonMetadata(cursorRecord?.metadata ?? null);
+  const storedMetadata = jsonMetadata(cursorRecord?.metadata ?? null);
+  // Expanding the source query needs one fresh bounded backfill, not an old school-only checkpoint.
+  const cursorMetadata = storedMetadata.schoolGmailQueryVersion === 2 ? storedMetadata : {};
   const cursorInternalDateMs = Number(cursorMetadata.schoolGmailInternalDateMs) || 0;
   const storedQuery = typeof cursorMetadata.schoolGmailActiveQuery === 'string'
     ? cursorMetadata.schoolGmailActiveQuery
@@ -329,7 +348,7 @@ export const syncStewartFlemingGmail = async (familyId: string) => {
   let autoCreated = 0;
   let needsReview = 0;
   let duplicates = 0;
-  let ignored = 0;
+  const ignored = 0;
   let unauthenticated = 0;
   let nextCursorMs = cursorInternalDateMs;
   const errors: string[] = [];
@@ -343,7 +362,7 @@ export const syncStewartFlemingGmail = async (familyId: string) => {
         userId: 'me',
         id: messageRef.id,
         format: 'metadata',
-        metadataHeaders: ['From', 'To', 'Delivered-To', 'Message-ID', 'Subject', 'Authentication-Results'],
+        metadataHeaders: ['From', 'To', 'Delivered-To', 'Message-ID', 'Subject', 'Authentication-Results', 'Date'],
       });
       const headers = metadataResponse.data.payload?.headers;
       const internalDateMs = Number(metadataResponse.data.internalDate);
@@ -353,12 +372,8 @@ export const syncStewartFlemingGmail = async (familyId: string) => {
         continue;
       }
       const sender = headerValue(headers, 'From');
-      if (!isStewartFlemingSender(sender)) {
-        ignored += 1;
-        nextCursorMs = Math.max(nextCursorMs, internalDateMs);
-        continue;
-      }
-      if (!hasAuthenticatedStewartFlemingSender(headers || [])) {
+      const stewart = isStewartFlemingSender(sender);
+      if (stewart && !hasAuthenticatedStewartFlemingSender(headers || [])) {
         unauthenticated += 1;
         nextCursorMs = Math.max(nextCursorMs, internalDateMs);
         continue;
@@ -409,8 +424,9 @@ export const syncStewartFlemingGmail = async (familyId: string) => {
       const parsed = await readGmailMessage(gmail, messageRef.id, googleUserEmail);
       const result = await ingestCalendarEmailPayload({ type: 'gmail', data: parsed }, {
         familyId,
-        eventSource: 'gmail-school-email',
-        authenticatedSchoolSender: true,
+        eventSource: stewart ? 'gmail-school-email' : 'gmail-nursery-email',
+        authenticatedSchoolSender: stewart,
+        reviewOnly: !stewart,
       });
       if (result.statusCode !== 200) {
         errors.push(`${messageRef.id}: ${String(result.body.error || 'Import failed')}`);
@@ -429,6 +445,7 @@ export const syncStewartFlemingGmail = async (familyId: string) => {
   }
 
   await storeSchoolGmailSyncState(familyId, {
+    queryVersion: 2,
     activeQuery: nextPageToken ? query : null,
     pageToken: nextPageToken,
     cursorMs: nextCursorMs,

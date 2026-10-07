@@ -27,6 +27,12 @@ const newsletterSummary = {
   documentLabel: 'School newsletter',
 };
 
+const schoolSource = {
+  institution: 'stewart-fleming', institutionName: 'Stewart Fleming Primary School',
+  transportSender: 'office@stewartfleming.bromley.sch.uk', originalSenderClaim: null,
+  evidence: ['Stewart Fleming Primary School'], links: [], contentRequired: false, isSchool: true,
+};
+
 const skipSetupWizard = () => {
   localStorage.setItem('familyHub_setupComplete', 'skipped');
 };
@@ -209,9 +215,20 @@ const stubFamilyApis = async (
     if (route.request().method() === 'PATCH') {
       const patch = route.request().postDataJSON();
       state.inboxPatches?.push(patch);
-      inboxItems = inboxItems.map((item: any) => item.id === patch.intakeId
-        ? { ...item, needsReview: patch.needsReview, status: patch.needsReview > 0 ? 'partial_review' : 'reviewed_imported' }
-        : item);
+      inboxItems = inboxItems.map((item: any) => item.id === patch.intakeId ? {
+        ...item,
+        ...(patch.needsReview !== undefined ? { needsReview: patch.needsReview, status: patch.needsReview > 0 ? 'partial_review' : 'reviewed_imported' } : {}),
+        parsedDrafts: (item.parsedDrafts || []).map((draft: any) => {
+          const choice = patch.assignments?.find((value: any) => value.draftId === draft.importId);
+          return choice ? { ...draft, person: choice.personId, schoolAssignment: {
+            basis: 'manual', originalPersonId: draft.person, sourceKey: 'stewart-fleming',
+            manualOverride: { personId: choice.personId, actorId: 'school-document-e2e-user', at: '2026-09-30T10:00:00Z' },
+          } } : draft;
+        }),
+      } : item);
+      const saved: any = inboxItems.find((item: any) => item.id === patch.intakeId);
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ status: saved?.status || 'reviewed', parsedDrafts: saved?.parsedDrafts || [] }) });
+      return;
     }
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ status: 'reviewed' }) });
   });
@@ -250,6 +267,7 @@ const stubFamilyApis = async (
         text: 'Stewart Fleming Primary School\nPE\nTest Child - Monday & Friday',
         drafts: [],
         documentSummary: newsletterSummary,
+        schoolSource,
         attachments: [{
           id: 'school-document-e2e-attachment',
           fileName: 'stewart-fleming-newsletter.pdf',
@@ -347,7 +365,8 @@ test.describe('school document calendar intake', () => {
     await openSchoolInbox(page);
 
     await expect(page.getByText('Gmail school inbox', { exact: true })).toBeVisible({ timeout: 60_000 });
-    await expect(page.getByText(/Stewart Fleming mail syncs morning and evening/)).toBeVisible();
+    await expect(page.getByText(/School and nursery mail is checked at 08:00 and 20:00 London time/)).toBeVisible();
+    await expect(page.getByText('Connected to ademolaomosanya@gmail.com', { exact: true })).toBeVisible();
     await expect(page.getByText('WhatsApp reminders and delivery-status tracking are active. Send STOP to pause.')).toBeVisible();
     await expect(page.getByText('Forward other school emails to ademolaomosanya+familyhub@gmail.com')).toBeVisible();
     await page.getByRole('button', { name: 'Sync Gmail' }).click();
@@ -392,7 +411,7 @@ test.describe('school document calendar intake', () => {
     await expect(page.getByRole('button', { name: 'Mark reviewed' })).toBeVisible();
     await page.getByRole('button', { name: 'Mark reviewed' }).click();
     await expect(page.getByText('Marked this email as reviewed.')).toBeVisible();
-    expect(state.inboxPatches).toContainEqual({ intakeId: 'no-dates-newsletter', createdEventIds: [], needsReview: 0 });
+    expect(state.inboxPatches).toContainEqual({ intakeId: 'no-dates-newsletter', createdEventIds: [], needsReview: 0, dismissed: true });
   });
 
   test('quick plan previews and saves a repeating child reminder', async ({ page }) => {
@@ -576,6 +595,7 @@ test.describe('school document calendar intake', () => {
     };
     const intake = {
       id: 'school-cohort-e2e-intake',
+      schoolSource,
       sender: 'office@stewartfleming.bromley.sch.uk',
       subject: 'Reading mornings',
       status: 'review_required',
@@ -619,11 +639,15 @@ test.describe('school document calendar intake', () => {
     await expect(page.getByText('2026-10-01 · Time not specified')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Import 1' })).toHaveCount(0);
     await page.getByLabel('Assign Reading Morning (Key Stage 2) to').selectOption(member.id);
+    await expect.poll(() => state.inboxPatches.length).toBe(1);
+    expect(state.inboxPatches[0]).toEqual({ intakeId: intake.id, assignments: [{ draftId: 'reading-morning-draft', personId: member.id }] });
+    expect(state.eventPosts).toHaveLength(0);
+    await expect(page.getByRole('button', { name: 'Import 1' })).toBeEnabled();
     await page.getByRole('button', { name: 'Import 1' }).click();
 
     await expect(page.getByText('1 event added to the calendar.')).toBeVisible();
     expect(state.eventPosts).toHaveLength(1);
     expect(state.eventPosts[0]).toMatchObject({ personId: member.id, time: '00:00', durationMinutes: 1439 });
-    expect(state.inboxPatches[0]).toMatchObject({ intakeId: intake.id, needsReview: 0 });
+    expect(state.inboxPatches[1]).toMatchObject({ intakeId: intake.id, needsReview: 0 });
   });
 });

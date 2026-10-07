@@ -1,5 +1,6 @@
 import type { ProjectSourcing, SourcingRoomId } from '@/types/sourcing.types';
 import { unionWcOptions } from './unionCatalogue';
+import { quoteSelection } from './selection';
 
 // Supply-of-goods lines transcribed from the two R & R quotations dated 18 January 2026.
 const goods: Array<[SourcingRoomId, string, number, string, string[]]> = [
@@ -51,11 +52,5 @@ export function quoteLineSelected(sourcing: ProjectSourcing, line: NonNullable<P
 }
 
 export function quoteLineSelection(sourcing: ProjectSourcing, line: NonNullable<ProjectSourcing['quoteLines']>[number]) {
-  const selections = sourcing.basket.filter((item) => item.requirementId === line.requirementId).flatMap((item) => {
-    const product = sourcing.products.find((candidate) => candidate.id === item.productId);
-    return product && line.components.some((part) => product.components.includes(part)) ? [{ item, product }] : [];
-  });
-  const coverage = line.components.map((component) => ({ component, quantity: selections.reduce((total, { item, product }) => total + (product.components.includes(component) ? item.quantity : 0), 0) }));
-  const complete = coverage.length > 0 && coverage.every((part) => part.quantity >= line.quantity);
-  return { selections, coverage, complete, partial: !complete && selections.length > 0 };
+  return quoteSelection(sourcing, line);
 }

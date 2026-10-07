@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import prisma from '@/lib/prisma';
 import { requireFamilyAccess } from '@/lib/auth-utils';
-import { sendFamilyPushNotification } from '@/lib/webPush';
+import { sendMemberPushNotification } from '@/lib/webPush';
+import { notificationVisibility } from '@/lib/notificationRecipients';
+import { FAMILY_REMINDER_SOURCE } from '@/lib/familyReminderContract';
 
 const dateString = z.string().datetime();
 
@@ -39,12 +41,13 @@ const toClient = (n: any) => ({
   actions: n.actions,
   relatedEventId: n.relatedEventId,
   relatedPersonId: n.relatedPersonId,
+  recipientPersonId: n.recipientPersonId,
   expiresAt: n.expiresAt ? (n.expiresAt instanceof Date ? n.expiresAt.toISOString() : n.expiresAt) : undefined,
   snoozedUntil: n.snoozedUntil ? (n.snoozedUntil instanceof Date ? n.snoozedUntil.toISOString() : n.snoozedUntil) : undefined,
   metadata: n.metadata,
 });
 
-export const GET = requireFamilyAccess(async (request: NextRequest, context, _authUser) => {
+export const GET = requireFamilyAccess(async (request: NextRequest, context, authUser) => {
   try {
     const { familyId } = await context.params;
     const { searchParams } = new URL(request.url);
@@ -55,11 +58,16 @@ export const GET = requireFamilyAccess(async (request: NextRequest, context, _au
     const limit = Math.min(200, Math.max(1, Number(searchParams.get('limit') || 50)));
     const offset = Math.max(0, Number(searchParams.get('offset') || 0));
 
-    const where: Record<string, any> = { familyId };
+    const visibility = await notificationVisibility(familyId, authUser);
+    const now = new Date();
+    const where: Record<string, any> = { ...visibility.where, type: { not: 'family_reminder_state' }, AND: [
+      { OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
+      { OR: [{ snoozedUntil: null }, { snoozedUntil: { lte: now } }] },
+    ] };
     if (read === 'true') where.read = true;
     if (read === 'false') where.read = false;
     if (category) where.category = category;
-    if (type) where.type = type;
+    if (type) where.AND.push({ type });
 
     const notifications = await prisma.notification.findMany({
       where,
@@ -68,14 +76,22 @@ export const GET = requireFamilyAccess(async (request: NextRequest, context, _au
       skip: offset,
     });
 
-    return NextResponse.json(notifications.map(toClient));
+    return NextResponse.json(notifications.map((notification) => {
+      const unclaimed = visibility.unclaimed.find((member) => member.id === notification.recipientPersonId);
+      const mapped = toClient(notification);
+      return { ...mapped, metadata: { ...(mapped.metadata || {}),
+        recipientName: unclaimed?.name ?? mapped.metadata?.recipientName,
+        recipientClaimed: !unclaimed,
+        canAct: !notification.recipientPersonId || notification.recipientPersonId === authUser.familyMemberId,
+      } };
+    }));
   } catch (error) {
     console.error('Error fetching notifications:', error);
     return NextResponse.json({ error: 'Failed to fetch notifications' }, { status: 500 });
   }
 });
 
-export const POST = requireFamilyAccess(async (request: NextRequest, context, _authUser) => {
+export const POST = requireFamilyAccess(async (request: NextRequest, context, authUser) => {
   try {
     const { familyId } = await context.params;
     const raw = await request.json().catch(() => null);
@@ -84,11 +100,16 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context, _a
     }
 
     const body = createNotificationSchema.parse(raw);
+    if (body.id?.startsWith('family-reminder-') || body.type === 'family_reminder_state' ||
+        [FAMILY_REMINDER_SOURCE, 'family-reminder-state'].includes(body.metadata?.source)) {
+      return NextResponse.json({ error: 'Reminder records are managed by the server.' }, { status: 400 });
+    }
 
     const notification = await prisma.notification.create({
       data: {
         ...(body.id ? { id: body.id } : {}),
         familyId,
+        recipientPersonId: authUser.familyMemberId,
         type: body.type,
         title: body.title,
         message: body.message,
@@ -107,7 +128,7 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context, _a
       },
     });
 
-    const pushResult = await sendFamilyPushNotification(familyId, {
+    const pushResult = await sendMemberPushNotification(familyId, authUser.familyMemberId, {
       title: notification.title,
       body: notification.message,
       tag: `notification-${notification.id}`,

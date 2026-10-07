@@ -2,12 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireFamilyAccess } from '@/lib/auth-utils';
 
-export const POST = requireFamilyAccess(async (_request: NextRequest, context, _authUser) => {
+export const POST = requireFamilyAccess(async (_request: NextRequest, context, authUser) => {
   try {
     const { familyId } = await context.params;
 
     await prisma.notification.updateMany({
-      where: { familyId, read: false },
+      where: { familyId, read: false, OR: [{ recipientPersonId: null }, { recipientPersonId: authUser.familyMemberId }] },
       data: { read: true },
     });
 

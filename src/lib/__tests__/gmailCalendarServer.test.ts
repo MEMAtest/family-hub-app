@@ -35,12 +35,12 @@ describe('isStewartFlemingSender', () => {
 });
 
 describe('buildStewartFlemingGmailQuery', () => {
-  it('starts with a bounded 90-day school-only query and resumes with a small overlap', () => {
-    expect(buildStewartFlemingGmailQuery()).toBe('from:stewartfleming.bromley.sch.uk newer_than:90d');
+  it('starts with a bounded 90-day school/nursery query and resumes with a small overlap', () => {
+    expect(buildStewartFlemingGmailQuery()).toBe('(from:stewartfleming.bromley.sch.uk OR Grandir OR Famly) newer_than:90d');
     expect(buildStewartFlemingGmailQuery(1_790_000_000_000))
-      .toBe('from:stewartfleming.bromley.sch.uk newer_than:90d after:1789999999');
+      .toBe('(from:stewartfleming.bromley.sch.uk OR Grandir OR Famly) newer_than:90d after:1789999999');
     expect(buildStewartFlemingGmailQuery(undefined, 1_790_000_000_999))
-      .toBe('from:stewartfleming.bromley.sch.uk newer_than:90d before:1790000000');
+      .toBe('(from:stewartfleming.bromley.sch.uk OR Grandir OR Famly) newer_than:90d before:1790000000');
   });
 });
 

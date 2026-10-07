@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Dialog } from '@headlessui/react';
 import type { LucideIcon } from 'lucide-react';
 import {
   Armchair, ArrowLeft, Bath, Check, ExternalLink, Grid2x2, Heater, LayoutGrid, LoaderCircle, Plus, RefreshCw,
@@ -17,10 +18,16 @@ import TilePlanner from './TilePlanner';
 import SourcingEntryDialog from './SourcingEntryDialog';
 import FixtureFitPanel from './FixtureFitPanel';
 import ProductRefresh from './ProductRefresh';
+import IncludedPartsEditor from './IncludedPartsEditor';
+import QuoteSizeStatus from './QuoteSizeStatus';
+import SelectedChoiceSummary from './SelectedChoiceSummary';
+import { migrate } from '@/lib/sourcing/migrate';
+import { demandFor, evaluateSelection } from '@/lib/sourcing/selection';
+import { productComponentEvidence } from '@/lib/sourcing/productMatching';
 import { fixtureFit, saveFixtureSpace } from '@/lib/sourcing/fixtureFit';
 import { addHouseholdItem, addHouseholdProduct, chooseSourcingOption, optionConflicts } from '@/lib/sourcing/householdItems';
 import { plannedTileCalculation } from '@/lib/sourcing/tilePlanner';
-import { bathroomRooms, basketStatuses, basketTotal as sourcingBasketTotal, basketLineCost, excludedBasketPrice, isBathroomProject as bathroomProject, isUncountedPrice, productLineCost, productSize, quoteSizeCheck, roomName } from './bathroomProject.helpers';
+import { bathroomRooms, basketStatuses, basketTotal as sourcingBasketTotal, basketLineCost, excludedBasketPrice, isBathroomProject as bathroomProject, isUncountedPrice, productLineCost, productSize, roomName } from './bathroomProject.helpers';
 
 const money = new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' });
 
@@ -37,7 +44,7 @@ const categories: { id: string; label: string; icon: LucideIcon }[] = [
 ];
 
 const stockStyles: Record<SourcingStock, { label: string; dot: string; text: string }> = {
-  IN_STOCK: { label: 'In stock', dot: 'bg-emerald-500', text: 'text-emerald-700 dark:text-emerald-300' },
+  IN_STOCK: { label: 'In stock', dot: 'bg-teal-500', text: 'text-teal-700 dark:text-teal-300' },
   LOW_STOCK: { label: 'Low stock', dot: 'bg-amber-500', text: 'text-amber-700 dark:text-amber-300' },
   TO_ORDER: { label: 'Available to order', dot: 'bg-amber-500', text: 'text-amber-700 dark:text-amber-300' },
   OUT_OF_STOCK: { label: 'Out of stock', dot: 'bg-red-500', text: 'text-red-700 dark:text-red-300' },
@@ -53,6 +60,7 @@ type Props = {
   selectedRequirementId?: string;
   selectedPart?: string;
   onNavigate?: (roomId: SourcingRoomId | null, requirementId?: string, part?: string) => void;
+  onBack?: () => void;
 };
 type SortOrder = 'recommended' | 'price' | 'stock';
 
@@ -69,48 +77,11 @@ const lineCost = (requirement: SourcingRequirement | undefined, product: Sourced
   productLineCost(product, requirement?.quantity ?? 1);
 
 
-function coverage(requirement: SourcingRequirement, products: SourcedProduct[]) {
-  const covered = new Set(products.flatMap((product) => product.components));
-  return requirement.requiredComponents.map((part) => ({ part, covered: covered.has(part) }));
-}
 
-// Products found by a live supplier search (Stonewater, the UK tile shops), as opposed to old placeholders.
-const SEARCHED_PRODUCT = /^(sw|capietra|tilesahead|walltiles|bertandmay|tile-plan|manual)-/;
 
-/**
- * Refresh a saved workspace to the current verified catalogue, keeping the household's own work:
- * custom quote items, products found by searches (with their basket entries) and fresher stock checks.
- * Older saved workspaces used placeholder products; those are still replaced.
- */
-export function migrate(saved: ProjectSourcing): ProjectSourcing {
-  const seed = createBathroomSourcingSeed();
-  const seedRequirementIds = new Set(seed.requirements.map((item) => item.id));
-  const known = new Set(rooms.map((room) => room.id));
-  const custom = saved.requirements.filter((item) => !seedRequirementIds.has(item.id) && item.id.startsWith('req-') && known.has(item.roomId));
-  const requirementIds = new Set([...seedRequirementIds, ...custom.map((item) => item.id)]);
-  const savedProducts = new Map(saved.products.map((product) => [product.id, product]));
-  const catalogue = seed.products.map((product) => {
-    const old = savedProducts.get(product.id);
-    const preserved = old ? { ...product, dimensions: old.dimensions, specs: old.specs ?? product.specs } : product;
-    return old && old.lastChecked > product.lastChecked ? { ...preserved, stock: old.stock, stockEvidence: old.stockEvidence, lastChecked: old.lastChecked } : preserved;
-  });
-  const catalogueIds = new Set(catalogue.map((product) => product.id));
-  const searched = saved.products.filter((product) => !catalogueIds.has(product.id) && SEARCHED_PRODUCT.test(product.id)
-    && product.requirementIds?.some((id) => requirementIds.has(id)));
-  const products = [...catalogue, ...searched];
-  const productIds = new Set(products.map((product) => product.id));
-  return {
-    ...seed,
-    rooms: saved.rooms,
-    tileDocuments: saved.tileDocuments,
-    choiceHistory: saved.choiceHistory,
-    requirements: [...seed.requirements.map((item) => ({ ...item, tilePlan: saved.requirements.find((old) => old.id === item.id)?.tilePlan, fitSpace: saved.requirements.find((old) => old.id === item.id)?.fitSpace })), ...custom],
-    products,
-    basket: saved.basket.filter((item) => productIds.has(item.productId) && requirementIds.has(item.requirementId)),
-  };
-}
+export { migrate } from '@/lib/sourcing/migrate';
 
-export default function ProjectMaterialsView({ project, onUpdateProject, isReadOnly = false, view = 'overview', selectedRoomId, selectedRequirementId, selectedPart, onNavigate }: Props) {
+export default function ProjectMaterialsView({ project, onUpdateProject, isReadOnly = false, view = 'overview', selectedRoomId, selectedRequirementId, selectedPart, onNavigate, onBack }: Props) {
   const isBathroomProject = bathroomProject(project);
   const needsSeed = isBathroomProject && (!project.sourcing || (project.sourcing.version ?? 1) < SOURCING_SEED_VERSION);
   const sourcing = useMemo<ProjectSourcing>(() => {
@@ -118,9 +89,12 @@ export default function ProjectMaterialsView({ project, onUpdateProject, isReadO
     return project.sourcing ? migrate(project.sourcing) : createBathroomSourcingSeed();
   }, [needsSeed, project.sourcing]);
 
-  const [roomId, setRoomId] = useState<SourcingRoomId | null>(selectedRoomId ?? null);
-  const [requirementId, setRequirementId] = useState<string | null>(selectedRequirementId ?? null);
-  const [partFilter, setPartFilter] = useState(selectedPart ?? '');
+  const [localRoomId, setRoomId] = useState<SourcingRoomId | null>(selectedRoomId ?? null);
+  const [localRequirementId, setRequirementId] = useState<string | null>(selectedRequirementId ?? null);
+  const [localPart, setPartFilter] = useState(selectedPart ?? '');
+  const roomId = onNavigate ? selectedRoomId ?? null : localRoomId;
+  const requirementId = onNavigate ? selectedRequirementId ?? null : localRequirementId;
+  const partFilter = onNavigate ? selectedPart ?? '' : localPart;
   const [detailRequirementId, setDetailRequirementId] = useState<string | null>(null);
   const [category, setCategory] = useState('All');
   const [query, setQuery] = useState('');
@@ -190,7 +164,7 @@ export default function ProjectMaterialsView({ project, onUpdateProject, isReadO
     const text = query.trim().toLowerCase();
     const rank: Record<SourcingStock, number> = { IN_STOCK: 0, LOW_STOCK: 1, TO_ORDER: 2, UNKNOWN: 3, OUT_OF_STOCK: 4 };
     return roomProducts
-      .filter((product) => !partFilter || product.components.includes(partFilter))
+      .filter((product) => !partFilter || productComponentEvidence(product, [partFilter])[partFilter]?.state === 'included')
       .filter((product) => category === 'All' || product.category === category)
       .filter((product) => !inStockOnly || product.stock === 'IN_STOCK')
       .filter((product) => showUnsuitable || !isRejected(product))
@@ -222,7 +196,7 @@ export default function ProjectMaterialsView({ project, onUpdateProject, isReadO
       return;
     }
     const current = latest.current;
-    const conflicts = optionConflicts(current, linked, product);
+    const conflicts = optionConflicts(current, demandFor(current, linked), product);
     if (conflicts.some((entry) => entry.status === 'ordered')) { setSelectionError('An existing choice is marked ordered. Resolve that order before replacing it.'); return; }
     if (conflicts.length && !window.confirm(`Replace the current choice for ${linked.name}? Supporting parts will remain. No supplier order is changed.`)) return;
     try { save(chooseSourcingOption(current, linked.id, product.id, status)); }
@@ -325,7 +299,7 @@ export default function ProjectMaterialsView({ project, onUpdateProject, isReadO
     fitPanel={detailRequirement && detailRequirement.category !== 'Tiles' ? <FixtureFitPanel key={`${detailRequirement.id}-${detail.id}`} requirement={detailRequirement} product={detail} disabled={isReadOnly}
       onSaveSpace={(space) => save(saveFixtureSpace(latest.current, detailRequirement.id, space))}
       onSaveDimensions={(dimensions) => save({ ...latest.current, products: latest.current.products.map((item) => item.id === detail.id ? { ...item, dimensions: { ...Object.fromEntries(Object.entries(item.dimensions).filter(([key]) => !/^(width|length|depth|height)Mm$/.test(key))), ...dimensions } } : item), basket: latest.current.basket.map((entry) => entry.productId === detail.id && entry.status !== 'ordered' ? { ...entry, status: 'ask_fitter' } : entry) })} /> : undefined}
-    inBasket={sourcing.basket.some((item) => item.productId === detail.id && item.requirementId === detailRequirement?.id)}
+    inBasket={!!detailRequirement && evaluateSelection(sourcing, detailRequirement).selected.some(({ product }) => product.id === detail.id)}
     onClose={() => setDetailId(null)} onAdd={(status) => addToBasket(detail, status, detailRequirement)} onUpdate={(updates) => updateProduct(detail.id, updates)} />;
   const showOverview = view === 'overview' ? !room : view === 'room' && !requirement;
   const visibleBasket = roomId ? { ...sourcing, basket: sourcing.basket.filter((item) => roomRequirements.some((linked) => linked.id === item.requirementId)) } : sourcing;
@@ -344,14 +318,15 @@ export default function ProjectMaterialsView({ project, onUpdateProject, isReadO
 
   const tiles = requirement?.category === 'Tiles';
   return (
-    <div className="space-y-5">
+    <div className="min-w-0 space-y-3">
+      {requirement && <SelectedChoiceSummary sourcing={sourcing} requirement={requirement} onOpen={openProduct} onBack={onBack ?? (() => onNavigate?.(roomId))} />}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 max-w-full">
-          <button onClick={() => { setRequirementId(null); if (onNavigate) onNavigate(roomId); else setRoomId(null); }} className="-my-2 inline-flex items-center gap-1.5 py-3 text-sm text-gray-500 hover:text-gray-800 dark:text-slate-400 dark:hover:text-white"><ArrowLeft className="h-4 w-4" /> {room ? 'Room overview' : 'Project overview'}</button>
+          <button onClick={() => { if (onBack) onBack(); else { setRequirementId(null); if (onNavigate) onNavigate(roomId); else setRoomId(null); } }} className="-my-2 inline-flex items-center gap-1.5 py-3 text-sm text-gray-500 hover:text-gray-800 dark:text-slate-400 dark:hover:text-white"><ArrowLeft className="h-4 w-4" /> {room ? 'Room overview' : 'Project overview'}</button>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <h2 className="min-w-0 break-words text-xl font-semibold text-gray-900 dark:text-white">{room ? roomName(sourcing, room.id) : 'Products'}</h2>
-            <select aria-label="Switch room" value={roomId ?? ''} onChange={(event) => { const id = event.target.value as SourcingRoomId; if (id) openRoom(id); else { setRoomId(null); setRequirementId(null); } }} className="min-h-10 max-w-full rounded-lg border-gray-200 py-1 text-sm dark:border-slate-700 dark:bg-slate-800">
-              {!room && <option value="">All rooms</option>}
+            <select aria-label="Switch room" value={roomId ?? ''} onChange={(event) => { const id = event.target.value as SourcingRoomId; if (id) openRoom(id); else { setRoomId(null); setRequirementId(null); setPartFilter(''); onNavigate?.(null); } }} className="min-h-10 max-w-full rounded-lg border-gray-200 py-1 text-sm dark:border-slate-700 dark:bg-slate-800">
+              <option value="">All rooms</option>
               {rooms.map((item) => <option key={item.id} value={item.id}>{roomName(sourcing, item.id)}</option>)}
             </select>
           </div>
@@ -363,10 +338,10 @@ export default function ProjectMaterialsView({ project, onUpdateProject, isReadO
       <section aria-label="Quote items">
         <div className="mb-2 flex items-center justify-between">
           <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">Project items</h3>
-          {!isReadOnly && <div className="flex flex-wrap gap-3"><button onClick={() => startEntry('item')} className="inline-flex min-h-11 items-center gap-1 text-sm font-medium text-emerald-700"><Plus className="h-4 w-4" />Add item</button><button onClick={() => startEntry('product')} className="inline-flex min-h-11 items-center gap-1 text-sm font-medium text-emerald-700"><Plus className="h-4 w-4" />Add supplier option</button></div>}
+          {!isReadOnly && <div className="flex flex-wrap gap-3"><button onClick={() => startEntry('item')} className="inline-flex min-h-11 items-center gap-1 text-sm font-medium text-teal-700"><Plus className="h-4 w-4" />Add item</button><button onClick={() => startEntry('product')} className="inline-flex min-h-11 items-center gap-1 text-sm font-medium text-teal-700"><Plus className="h-4 w-4" />Add supplier option</button></div>}
         </div>
         <label className="block text-xs font-medium text-gray-600 dark:text-slate-300">Quote item
-          <select value={requirement?.id ?? ''} onChange={(event) => { const item = sourcing.requirements.find((candidate) => candidate.id === event.target.value); if (item && onNavigate) openRequirement(item); else { setRequirementId(item?.id ?? null); setCategory('All'); setMessage(''); } }} className="mt-1 min-h-11 w-full min-w-0 rounded-lg border-gray-200 text-sm dark:border-slate-700 dark:bg-slate-800">
+          <select aria-label="Quote item" value={requirement?.id ?? ''} onChange={(event) => { const item = sourcing.requirements.find((candidate) => candidate.id === event.target.value); if (item) openRequirement(item); else { setRequirementId(null); setPartFilter(''); setCategory('All'); setMessage(''); onNavigate?.(roomId); } }} className="mt-1 min-h-11 w-full min-w-0 rounded-lg border-gray-200 text-sm dark:border-slate-700 dark:bg-slate-800">
             <option value="">All items ({roomRequirements.length})</option>
             {roomRequirements.map((item) => <option key={item.id} value={item.id}>{!room ? `${roomName(sourcing, item.roomId)} · ` : ''}{item.name} · {item.size || 'Size not stated'}{sourcing.basket.some((entry) => entry.requirementId === item.id) ? ' · Selected' : ''}</option>)}
           </select>
@@ -375,15 +350,11 @@ export default function ProjectMaterialsView({ project, onUpdateProject, isReadO
 
       {partFilter && requirement && <div className="flex flex-wrap items-center justify-between gap-2 border-l-4 border-amber-500 bg-amber-50 px-3 py-2 text-sm text-amber-900"><span>Missing part: {partFilter.replace(/-/g, ' ')}</span><button className="min-h-11 font-medium" onClick={() => openRequirement(requirement)}>Show all options</button></div>}
 
-      {requirement && <RequirementPanel requirement={requirement} products={productsFor(sourcing, requirement)} basketIds={sourcing.basket.filter((item) => item.requirementId === requirement.id).map((item) => item.productId)}
+      {requirement && <RequirementPanel sourcing={sourcing} requirement={requirement}
         searching={searching} tiles={tiles} message={message} onSearch={searchSupplier} isReadOnly={isReadOnly} />}
 
-      {requirement && !tiles && <FixtureFitPanel key={requirement.id} requirement={requirement} disabled={isReadOnly} onSaveSpace={(space) => save(saveFixtureSpace(latest.current, requirement.id, space))} />}
-      {requirement && <details className="border-b border-gray-200 pb-3"><summary className="min-h-11 cursor-pointer text-sm font-medium">Choice history ({sourcing.choiceHistory?.filter((item) => item.requirementId === requirement.id).length ?? 0})</summary><ul className="space-y-2 text-xs text-gray-600">{sourcing.choiceHistory?.filter((item) => item.requirementId === requirement.id).slice().reverse().map((item) => <li key={item.id} className="break-words">{new Date(item.at).toLocaleString('en-GB')} · {item.selected.name} · {money.format(item.selected.price)}{item.replaced.length ? ` · Replaced: ${item.replaced.map((old) => old.name).join(', ')}` : ' · Selected'}</li>)}</ul></details>}
 
-      {tiles && requirement && <div ref={plannerRef} className="scroll-mt-24"><TilePlanner key={requirement.id} sourcing={sourcing} requirement={requirement} isReadOnly={isReadOnly} candidate={planningProduct} onSave={saveTileSourcing} /></div>}
-
-      {!tiles && <div className="flex flex-wrap gap-1 border-b border-gray-200 dark:border-slate-700" role="tablist" aria-label="Product categories">
+      {!tiles && !requirement && <div className="flex flex-wrap gap-1 border-b border-gray-200 dark:border-slate-700" role="tablist" aria-label="Product categories">
         {categories.map(({ id, label, icon: Icon }) => (
           <button key={id} role="tab" aria-selected={category === id} onClick={() => setCategory(id)} disabled={id !== 'All' && categoryCounts[id] === 0}
             className={`flex min-w-[88px] shrink-0 flex-col items-center gap-1 border-b-2 px-3 pb-2 pt-1 text-xs font-medium disabled:opacity-35 ${category === id ? 'border-blue-600 text-blue-600 dark:text-blue-400' : 'border-transparent text-gray-500 hover:text-gray-800 dark:text-slate-400'}`}>
@@ -395,7 +366,7 @@ export default function ProjectMaterialsView({ project, onUpdateProject, isReadO
       <div className="flex flex-wrap items-center gap-2">
         <label className="relative min-w-[220px] flex-1"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           <span className="sr-only">Search products</span>
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search products, sizes or suppliers…" className="w-full rounded-xl border-gray-200 bg-gray-50 py-2.5 pl-9 text-sm dark:border-slate-700 dark:bg-slate-800" />
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search products, sizes or suppliers…" className="w-full rounded-lg border-gray-200 bg-gray-50 py-2.5 pl-9 text-sm dark:border-slate-700 dark:bg-slate-800" />
         </label>
         <label className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-700 dark:border-slate-700 dark:text-slate-200">
           <input type="checkbox" checked={inStockOnly} onChange={(event) => setInStockOnly(event.target.checked)} className="rounded border-gray-300" /> In stock only
@@ -406,20 +377,25 @@ export default function ProjectMaterialsView({ project, onUpdateProject, isReadO
       </div>
 
       <div>
-        {!isReadOnly && <div className="mb-3 flex justify-end"><button type="button" onClick={() => startEntry('product')} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-emerald-700 px-3 text-sm font-medium text-emerald-700"><Plus className="h-4 w-4" />Add product link</button></div>}
+        {!isReadOnly && <div className="mb-3 flex justify-end"><button type="button" onClick={() => startEntry('product')} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-teal-700 px-3 text-sm font-medium text-teal-700"><Plus className="h-4 w-4" />Add product link</button></div>}
         <h3 className="mb-3 font-semibold text-gray-900 dark:text-white">{tiles ? 'Supplier tile options' : category === 'All' ? 'Products' : category} <span className="font-normal text-gray-500">({results.length} results)</span>
           {hiddenUnsuitable > 0 && <button onClick={() => setShowUnsuitable((value) => !value)} className="ml-3 text-sm font-normal text-blue-600 hover:underline dark:text-blue-400">{showUnsuitable ? 'Hide' : 'Show'} {hiddenUnsuitable} not suitable</button>}</h3>
         {results.length === 0 ? <EmptyResults requirement={requirement} /> : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {results.map((product) => {
               const linked = requirementForProduct(product);
-              const inBasket = sourcing.basket.some((item) => item.productId === product.id && item.requirementId === linked?.id);
+              const inBasket = !!linked && evaluateSelection(sourcing, linked).selected.some(({ product: choice }) => choice.id === product.id);
               return <ProductCard key={product.id} product={product} requirement={linked} showRequirement={!requirement} inBasket={inBasket} disabled={isReadOnly}
                 onOpen={() => openProduct(product, linked)} onAdd={() => addToBasket(product, product.note || product.stock !== 'IN_STOCK' ? 'ask_fitter' : 'review')} />;
             })}
           </div>
         )}
       </div>
+
+      {requirement && !tiles && <details className="border-b border-gray-200"><summary className="min-h-11 cursor-pointer text-sm text-gray-600">Measurements & room fit</summary><FixtureFitPanel key={requirement.id} requirement={requirement} disabled={isReadOnly} onSaveSpace={(space) => save(saveFixtureSpace(latest.current, requirement.id, space))} /></details>}
+      {requirement && <details className="border-b border-gray-200 pb-3"><summary className="min-h-11 cursor-pointer text-sm font-medium">Choice history ({sourcing.choiceHistory?.filter((item) => item.requirementId === requirement.id).length ?? 0})</summary><ul className="space-y-2 text-xs text-gray-600">{sourcing.choiceHistory?.filter((item) => item.requirementId === requirement.id).slice().reverse().map((item) => <li key={item.id} className="break-words">{new Date(item.at).toLocaleString('en-GB')} · {item.selected.name} · {money.format(item.selected.price)}{item.replaced.length ? ` · Replaced: ${item.replaced.map((old) => old.name).join(', ')}` : ' · Selected'}</li>)}</ul></details>}
+
+      {tiles && requirement && <details open={!!planningProduct} className="scroll-mt-24"><summary className="min-h-11 cursor-pointer text-sm text-gray-600">Tile measurements & plan</summary><div ref={plannerRef}><TilePlanner key={requirement.id} sourcing={sourcing} requirement={requirement} isReadOnly={isReadOnly} candidate={planningProduct} onSave={saveTileSourcing} /></div></details>}
 
       {basket}
       {detailPanel}
@@ -447,7 +423,7 @@ function StockBadge({ stock, compact = false }: { stock: SourcingStock; compact?
 function BasketTable({ sourcing, total, isReadOnly, onUpdate, onOpen }: { sourcing: ProjectSourcing; total: number; isReadOnly: boolean; onUpdate: (basket: ProjectSourcing['basket']) => void; onOpen: (product: SourcedProduct, requirement?: SourcingRequirement) => void }) {
   const perBox = sourcing.basket.filter((item) => excludedBasketPrice(sourcing, item)).length;
   return <section className="min-w-0 border-y border-gray-200 dark:border-slate-700">
-    <div className="flex items-center justify-between bg-white px-4 py-3 dark:bg-slate-900"><div><h3 className="font-semibold text-gray-900 dark:text-white">Project basket</h3><p className="text-xs text-gray-500 dark:text-slate-400">Review before ordering. No orders are placed from here.</p></div><div className="text-right"><span className="font-semibold text-gray-900 dark:text-white">{money.format(total)}</span>{perBox > 0 && <p className="text-xs text-amber-700 dark:text-amber-300">+ {perBox} priced per box or tile (not in total)</p>}</div></div>
+    <div className="flex items-center justify-between bg-white px-4 py-3 dark:bg-slate-900"><div><h3 className="font-semibold text-gray-900 dark:text-white">Project basket</h3><p className="text-xs text-gray-500 dark:text-slate-400">Review before ordering. No orders are placed from here.</p></div><div className="text-right"><span className="font-semibold text-gray-900 dark:text-white">{money.format(total)}</span>{perBox > 0 && <p className="text-xs text-amber-700 dark:text-amber-300">+ {perBox} costs unconfirmed (not in total)</p>}</div></div>
     <div className="divide-y divide-gray-100 dark:divide-slate-800">{sourcing.basket.map((item) => {
       const product = sourcing.products.find((candidate) => candidate.id === item.productId);
       const linked = sourcing.requirements.find((candidate) => candidate.id === item.requirementId);
@@ -461,8 +437,8 @@ function BasketTable({ sourcing, total, isReadOnly, onUpdate, onOpen }: { sourci
           <div className="text-xs text-gray-500">{linked?.name} · {linked ? roomName(sourcing, linked.roomId) : ''} · {product.supplier} · <StockBadge stock={product.stock} /></div>
           <p className="mt-1 text-xs text-gray-500">{productSize(product)}</p></div>
         <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto sm:gap-3">
-          <span className="mr-auto text-sm font-semibold text-gray-800 sm:mr-0 dark:text-slate-200">{excludedBasketPrice(sourcing, item) ? `${money.format(product.price)} ${product.priceUnit!.replace('per ', '/ ')} · excluded` : money.format(basketLineCost(sourcing, item))}</span>
-          {planned ? <button type="button" onClick={() => onOpen(product, linked)} className="min-h-10 text-xs text-emerald-700 dark:text-emerald-300">{planned.boxesNeeded !== undefined ? `${planned.boxesNeeded} boxes` : `${planned.orderQuantity} ${product.priceUnit === 'per tile' ? 'tiles' : 'm²'}`} · Edit plan</button> : <label className="flex items-center gap-1 text-xs text-gray-500">Qty
+          <span className="mr-auto text-sm font-semibold text-gray-800 sm:mr-0 dark:text-slate-200">{excludedBasketPrice(sourcing, item) ? `${money.format(product.price)} ${(product.priceUnit ?? '').replace('per ', '/ ')} · excluded` : money.format(basketLineCost(sourcing, item))}</span>
+          {planned ? <button type="button" onClick={() => onOpen(product, linked)} className="min-h-10 text-xs text-teal-700 dark:text-teal-300">{planned.boxesNeeded !== undefined ? `${planned.boxesNeeded} boxes` : `${planned.orderQuantity} ${product.priceUnit === 'per tile' ? 'tiles' : 'm²'}`} · Edit plan</button> : <label className="flex items-center gap-1 text-xs text-gray-500">Qty
             <input type="number" aria-label={`Quantity for ${product.name}`} disabled={isReadOnly} min={product.priceUnit === 'per m²' ? 0.01 : 1} step={product.priceUnit === 'per m²' ? 'any' : 1} value={item.quantity} onChange={(event) => { const quantity = Number(event.target.value); if (Number.isFinite(quantity) && quantity > 0 && (product.priceUnit === 'per m²' || Number.isInteger(quantity))) onUpdate(sourcing.basket.map((entry) => entry.id === item.id ? { ...entry, quantity } : entry)); }} className="min-h-10 w-20 rounded-lg border-gray-200 text-xs dark:border-slate-700 dark:bg-slate-800" />
           </label>}
           <select aria-label={`Status for ${product.name}`} disabled={isReadOnly} value={item.status} onChange={(event) => onUpdate(sourcing.basket.map((entry) => entry.id === item.id ? { ...entry, status: event.target.value as SourcingBasketStatus } : entry))} className="min-h-10 rounded-lg border-gray-200 py-1.5 text-xs dark:border-slate-700 dark:bg-slate-800">{basketStatuses.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}</select>
@@ -473,22 +449,23 @@ function BasketTable({ sourcing, total, isReadOnly, onUpdate, onOpen }: { sourci
   </section>;
 }
 
-function RequirementPanel({ requirement, products, basketIds, searching, tiles, message, onSearch, isReadOnly }: {
-  requirement: SourcingRequirement; products: SourcedProduct[]; basketIds: string[]; searching: boolean; tiles: boolean; message: string; onSearch: () => void; isReadOnly: boolean;
+function RequirementPanel({ sourcing, requirement, searching, tiles, message, onSearch, isReadOnly }: {
+  sourcing: ProjectSourcing; requirement: SourcingRequirement; searching: boolean; tiles: boolean; message: string; onSearch: () => void; isReadOnly: boolean;
 }) {
-  const parts = coverage(requirement, products.filter((product) => basketIds.includes(product.id)));
+  const parts = evaluateSelection(sourcing, requirement).coverage.map((entry) => ({ part: entry.component, covered: entry.quantity >= entry.required, quantity: entry.quantity, required: entry.required }));
   return <section className="border-y border-gray-200 py-4 dark:border-slate-700">
     <div className="flex flex-wrap items-start justify-between gap-3">
-      <div className="min-w-0">
+      <details className="min-w-0 flex-1">
+        <summary className="min-h-11 cursor-pointer text-sm font-medium text-gray-600">Quote specification & coverage</summary>
         <div className="flex flex-wrap items-center gap-2"><h3 className="text-lg font-semibold text-gray-900 dark:text-white">{requirement.name}</h3>
-          <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${requirement.status === 'confirmed' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'}`}>{requirement.status === 'confirmed' ? 'Confirmed in quote' : 'Fitter check'}</span></div>
+          <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${requirement.status === 'confirmed' ? 'bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'}`}>{requirement.status === 'confirmed' ? 'Confirmed in quote' : 'Fitter check'}</span></div>
         <p className="mt-1 text-sm text-gray-700 dark:text-slate-200"><span className="font-medium">Size:</span> {requirement.size ?? 'Not stated'}{requirement.unit === 'm²' && requirement.category === 'Tiles' ? '' : ` · Qty ${requirement.quantity}`}</p>
         <p className="mt-0.5 text-sm text-gray-500 dark:text-slate-400">{requirement.specification}</p>
         {requirement.notes && <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">{requirement.notes}</p>}
         {requirement.referenceProduct && <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">Reference product outside Topps Tiles: <strong>{requirement.referenceProduct.name}</strong> by {requirement.referenceProduct.supplier}. {requirement.recommendationNote}</p>}
-        {parts.length > 0 && <div className="mt-2 flex flex-wrap gap-1.5">{parts.map(({ part, covered }) => <span key={part} className={`rounded-full px-2 py-0.5 text-xs ${covered ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' : 'bg-white text-gray-500 ring-1 ring-gray-200 dark:bg-slate-900 dark:ring-slate-700'}`}>{covered ? '✓ ' : ''}{part.replace(/-/g, ' ')}</span>)}</div>}
-      </div>
-      {requirement.category !== 'Fitter check' && <button onClick={onSearch} disabled={searching || isReadOnly} className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-60">
+        {parts.length > 0 && <div className="mt-2 flex flex-wrap gap-1.5">{parts.map(({ part, covered, quantity, required }) => <span key={part} className={`rounded-full px-2 py-0.5 text-xs ${covered ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' : 'bg-white text-gray-500 ring-1 ring-gray-200 dark:bg-slate-900 dark:ring-slate-700'}`}>{covered ? '✓ ' : ''}{part.replace(/-/g, ' ')}: {quantity}/{required}</span>)}</div>}
+      </details>
+      {requirement.category !== 'Fitter check' && <button onClick={onSearch} disabled={searching || isReadOnly} className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-teal-700 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-60">
         {searching ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}{searching ? 'Searching…' : tiles ? 'Search UK tile shops' : 'Search Stonewater'}</button>}
     </div>
     {message && <p role="status" className="mt-3 text-sm text-gray-600 dark:text-slate-300">{message}</p>}
@@ -506,7 +483,7 @@ function marketLinks(requirement: SourcingRequirement) {
 }
 
 function EmptyResults({ requirement }: { requirement?: SourcingRequirement }) {
-  return <div className="rounded-2xl border border-dashed border-gray-300 p-6 text-center dark:border-slate-700">
+  return <div className="rounded-lg border border-dashed border-gray-300 p-6 text-center dark:border-slate-700">
     <p className="text-sm text-gray-600 dark:text-slate-300">{requirement ? `No products matched yet for ${requirement.name}.` : 'No products match these filters.'}</p>
     {requirement && requirement.category !== 'Fitter check' && <div className="mt-3 flex flex-wrap justify-center gap-2">{marketLinks(requirement).map((link) => <a key={link.name} href={link.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 hover:border-blue-300 hover:text-blue-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"><ExternalLink className="h-3 w-3" />{link.name}</a>)}</div>}
   </div>;
@@ -526,15 +503,15 @@ function ProductCard({ product, requirement, showRequirement, inBasket, disabled
   return <article className="flex min-w-0 flex-col overflow-hidden rounded-lg border border-gray-200 bg-white transition hover:shadow-md dark:border-slate-700 dark:bg-slate-900">
     <button onClick={onOpen} className="relative block text-left" aria-label={`View details for ${product.name}`}>
       <ProductImage product={product} className="aspect-[4/3] w-full" />
-      {product.topPick && <span className="absolute left-2 top-2 rounded-md bg-emerald-600 px-2 py-0.5 text-xs font-semibold text-white">Top pick</span>}
+      {product.topPick && <span className="absolute left-2 top-2 rounded-md bg-teal-600 px-2 py-0.5 text-xs font-semibold text-white">Top pick</span>}
       <span className="absolute right-2 top-2"><StockBadge stock={product.stock} compact /></span>
     </button>
     <div className="flex flex-1 flex-col p-3">
-      {requirement && <span className={`mb-1 border-l-2 pl-2 text-xs font-medium ${requirement.roomId === 'main-bathroom' ? 'border-emerald-500 text-emerald-700' : 'border-sky-500 text-sky-700'}`}>{requirement.roomId === 'main-bathroom' ? 'Main Bathroom' : 'Shower Room'} · quote-linked option</span>}
+      {requirement && <span className={`mb-1 border-l-2 pl-2 text-xs font-medium ${requirement.roomId === 'main-bathroom' ? 'border-teal-500 text-teal-700' : 'border-blue-500 text-blue-700'}`}>{requirement.roomId === 'main-bathroom' ? 'Main Bathroom' : 'Shower Room'} · quote-linked option</span>}
       {showRequirement && requirement && <span className="text-[11px] font-medium uppercase tracking-wide text-blue-600 dark:text-blue-400">For: {requirement.name}</span>}
       <button onClick={onOpen} className="text-left"><h4 className="line-clamp-2 text-sm font-semibold text-gray-900 hover:text-blue-700 dark:text-white">{product.name}</h4></button>
       <p className="mt-0.5 text-xs text-gray-500 dark:text-slate-400">{productSize(product)}</p>
-      <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">{quoteSizeCheck(requirement, product)}</p>
+      <QuoteSizeStatus requirement={requirement} product={product} />
       {requirement && requirement.category !== 'Tiles' && <p className={`mt-1 text-xs ${fixtureFit(requirement, product).status === 'no_fit' ? 'text-red-700' : 'text-gray-600'}`}>{fixtureFit(requirement, product).label}</p>}
       <div className="mt-2 text-lg font-semibold text-gray-900 dark:text-white">{money.format(product.price)}{product.priceUnit && <span className="text-sm font-normal text-gray-500"> {product.priceUnit.replace('per ', '/ ')}</span>}</div>
       <a href={product.url} target="_blank" rel="noreferrer" className="mt-0.5 inline-flex w-fit items-center gap-1 text-xs text-gray-500 hover:text-blue-700 dark:text-slate-400">{product.supplier} <ExternalLink className="h-3 w-3" /></a>
@@ -592,8 +569,8 @@ function ProductDetail({ product, requirement, inBasket, disabled, selectionErro
     ...(product.components.length ? [['Includes', product.components.map((part) => part.replace(/-/g, ' ')).join(', ')] as [string, string]] : []),
   ];
 
-  return <div className="fixed inset-0 z-[70] flex justify-end bg-black/40" onClick={onClose}>
-    <aside role="dialog" aria-modal="true" aria-label={product.name} onClick={(event) => event.stopPropagation()} className="flex h-full w-full max-w-xl flex-col overflow-y-auto bg-white shadow-2xl dark:bg-slate-900">
+  return <Dialog open aria-label={product.name} onClose={onClose} className="fixed inset-0 z-[70] flex justify-end bg-black/40">
+    <Dialog.Panel className="flex h-full w-full max-w-xl flex-col overflow-y-auto bg-white shadow-2xl dark:bg-slate-900">
       <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-100 bg-white/95 px-5 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-900/95">
         <button onClick={onClose} className="inline-flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 dark:text-slate-300"><ArrowLeft className="h-4 w-4" /> Back to results</button>
         <button onClick={onClose} aria-label="Close product details" className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-800"><X className="h-5 w-5" /></button>
@@ -621,14 +598,14 @@ function ProductDetail({ product, requirement, inBasket, disabled, selectionErro
         </div>
 
         {product.aiReview && product.aiReview.requirementId === requirement?.id && <div className="rounded-xl border border-gray-200 p-3 dark:border-slate-700"><AiBadge review={product.aiReview} /><p className="mt-1 text-[11px] text-gray-400">Checked by AI ({product.aiReview.model.split('/').pop()}) from the supplier description. Confirm sizes with your fitter.</p></div>}
-        {requirement && <div className={`rounded-xl border p-3 text-sm ${needsFitter ? 'border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30' : 'border-emerald-200 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950/30'}`}>
-          <div className="font-semibold text-amber-800 dark:text-amber-200">{quoteSizeCheck(requirement, product)}</div>
+        {requirement && <div className="border-y border-gray-200 py-3 text-sm dark:border-slate-700">
+          <QuoteSizeStatus requirement={requirement} product={product} />
           <p className="mt-0.5 text-gray-700 dark:text-slate-200">For <strong>{requirement.name}</strong> ({requirement.size}).</p>
           {product.note && <p className="mt-1 text-gray-700 dark:text-slate-200">{product.note}</p>}
         </div>}
 
-        <ProductRefresh key={product.id} product={product} disabled={disabled} onUpdate={onUpdate} />
-        {fitPanel}
+        {requirement && <IncludedPartsEditor key={`${product.id}-${requirement.id}-${JSON.stringify(product.componentEvidence)}`} product={product} requirement={requirement} disabled={disabled} onSave={onUpdate} />}
+        <details className="border-b border-gray-200"><summary className="min-h-11 cursor-pointer text-sm text-gray-600">Photo, dimensions & room fit</summary><ProductRefresh key={product.id} product={product} disabled={disabled} onUpdate={onUpdate} />{fitPanel}</details>
 
         <div className="grid grid-cols-2 gap-2">
           <button disabled={disabled || inBasket} onClick={() => onAdd(needsFitter ? 'ask_fitter' : 'review')} className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-medium text-white disabled:bg-gray-300 dark:disabled:bg-slate-700">
@@ -650,12 +627,12 @@ function ProductDetail({ product, requirement, inBasket, disabled, selectionErro
           </dl>}
         </div>
       </div>
-    </aside>
-  </div>;
+    </Dialog.Panel>
+  </Dialog>;
 }
 
 const aiStyles: Record<NonNullable<SourcedProduct['aiReview']>['verdict'], { label: string; className: string }> = {
-  match: { label: 'AI: matches the quote', className: 'text-emerald-700 dark:text-emerald-300' },
+  match: { label: 'AI: matches the quote', className: 'text-teal-700 dark:text-teal-300' },
   needs_parts: { label: 'AI: needs extra parts', className: 'text-amber-700 dark:text-amber-300' },
   part: { label: 'AI: a part for this item', className: 'text-blue-700 dark:text-blue-300' },
   similar: { label: 'AI: similar look', className: 'text-amber-700 dark:text-amber-300' },

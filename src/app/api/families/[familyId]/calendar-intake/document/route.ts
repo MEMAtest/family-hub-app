@@ -8,9 +8,8 @@ import {
   extensionForMimeType,
   validateCalendarAttachments,
 } from '@/lib/calendarIntakeAttachments';
-import { parseCalendarImportText } from '@/utils/calendarImport';
-import { summarizeSchoolDocument } from '@/utils/schoolDocumentSummary';
 import type { CalendarEvent, Person } from '@/types/calendar.types';
+import { prepareSchoolIntake } from '@/lib/schoolIntakeServer';
 
 export const runtime = 'nodejs';
 
@@ -120,9 +119,9 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context) =>
       prisma.familyMember.findMany({ where: { familyId }, orderBy: { createdAt: 'asc' } }),
     ]);
 
-    const drafts = parseCalendarImportText({
+    const prepared = await prepareSchoolIntake({
+      familyId, members: members.map(mapPerson),
       text,
-      people: members.map(mapPerson),
       existingEvents: events.map(mapDbEvent),
       defaultPersonId: typeof formData.get('defaultPersonId') === 'string'
         ? String(formData.get('defaultPersonId'))
@@ -131,7 +130,8 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context) =>
         ? new Date(String(formData.get('today')))
         : new Date(),
     });
-    const documentSummary = summarizeSchoolDocument(text);
+    const drafts = prepared.drafts;
+    const documentSummary = prepared.metadata.documentSummary;
     const intake = await prisma.calendarEmailIntake.create({
       data: {
         familyId,
@@ -140,11 +140,12 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context) =>
         text,
         normalizedText: text,
         parsedDrafts: drafts as unknown as Prisma.InputJsonValue,
-        status: drafts.length > 0 ? 'review_required' : 'no_events',
-        needsReview: drafts.length,
+        status: prepared.status,
+        needsReview: prepared.source.contentRequired ? 1 : drafts.length,
         duplicateCount: drafts.filter((draft) => draft.importStatus === 'duplicate').length,
         conflictCount: drafts.filter((draft) => draft.importStatus === 'conflict').length,
         metadata: {
+          ...prepared.metadata,
           sourceType,
           fileName: sourceName,
           fileCount: files.length,
@@ -167,6 +168,8 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context) =>
       drafts,
       intakeId: intake.id,
       documentSummary,
+      schoolSource: prepared.source,
+      status: prepared.status,
       attachments: intake.attachments,
       summary: {
         total: drafts.length,

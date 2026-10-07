@@ -212,7 +212,7 @@ self.addEventListener('push', (event) => {
       tag: notificationData.tag,
       requireInteraction: notificationData.requireInteraction,
       data: notificationData.data,
-      actions: [
+      actions: notificationData.actions || [
         {
           action: 'view',
           title: 'View Event'
@@ -248,13 +248,7 @@ self.addEventListener('notificationclick', (event) => {
         // Check if app is already open
         for (const client of clientList) {
           if (client.url.includes(self.location.origin) && 'focus' in client) {
-            client.focus();
-            client.postMessage({
-              type: 'NOTIFICATION_CLICKED',
-              eventId: notificationData.eventId,
-              action: 'view'
-            });
-            return;
+            return client.navigate(urlToOpen).then((navigated) => (navigated || client).focus());
           }
         }
 
@@ -284,7 +278,7 @@ self.addEventListener('notificationclick', (event) => {
       clients.matchAll({ type: 'window' }).then((clientList) => {
         for (const client of clientList) {
           if (client.url.includes(self.location.origin) && 'focus' in client) {
-            return client.focus();
+            return client.navigate(urlToOpen).then((navigated) => (navigated || client).focus());
           }
         }
         if (clients.openWindow) {

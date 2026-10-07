@@ -1,6 +1,6 @@
 // Database Service - Handles all database operations and syncs with localStorage
 import { CalendarEvent, Person } from '@/types/calendar.types';
-import { decodeStoredRecurringPattern, encodeStoredRecurringPattern } from '@/lib/calendarEventMapping';
+import { decodeStoredRecurringPattern, encodeStoredRecurringPattern, mergeCalendarEventMetadata, readCalendarEventMetadata } from '@/lib/calendarEventMapping';
 import { mergeDatabaseAndCachedEvents } from '@/lib/calendarEventCache';
 
 const API_BASE = '/api/families';
@@ -254,6 +254,7 @@ class DatabaseService {
             googleEventId: e.googleEventId,
             priority: 'medium',
             status: 'confirmed',
+            ...readCalendarEventMetadata(e.metadata),
             createdAt: e.createdAt,
             updatedAt: e.updatedAt,
           };
@@ -325,6 +326,7 @@ class DatabaseService {
           sourceId: event.sourceId,
           googleCalendarId: event.googleCalendarId,
           googleEventId: event.googleEventId,
+          metadata: mergeCalendarEventMetadata(event as unknown as Record<string, unknown>),
         }),
       });
 

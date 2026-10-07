@@ -13,30 +13,35 @@ const subscriptionSchema = z.object({
   }),
   userAgent: z.string().optional().nullable(),
   deviceLabel: z.string().optional().nullable(),
+  enabled: z.boolean().optional().default(true),
 });
 
 const deleteSchema = z.object({
   endpoint: z.string().url(),
 });
 
-export const POST = requireFamilyAccess(async (request: NextRequest, context, _authUser) => {
+export const POST = requireFamilyAccess(async (request: NextRequest, context, authUser) => {
   try {
     const { familyId } = await context.params;
     const body = subscriptionSchema.parse(await request.json());
+    if (!authUser.familyMemberId) return NextResponse.json({ error: 'Link a family member before enabling private push.' }, { status: 403 });
 
     const subscription = await prisma.pushSubscription.upsert({
       where: { endpoint: body.subscription.endpoint },
       update: {
         familyId,
+        personId: authUser.familyMemberId,
         p256dh: body.subscription.keys.p256dh,
         auth: body.subscription.keys.auth,
         userAgent: body.userAgent ?? undefined,
         deviceLabel: body.deviceLabel ?? undefined,
-        isActive: true,
+        isActive: body.enabled,
         lastSeenAt: new Date(),
       },
       create: {
         familyId,
+        personId: authUser.familyMemberId,
+        isActive: body.enabled,
         endpoint: body.subscription.endpoint,
         p256dh: body.subscription.keys.p256dh,
         auth: body.subscription.keys.auth,
@@ -66,7 +71,7 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context, _a
   }
 });
 
-export const DELETE = requireFamilyAccess(async (request: NextRequest, context, _authUser) => {
+export const DELETE = requireFamilyAccess(async (request: NextRequest, context, authUser) => {
   try {
     const { familyId } = await context.params;
     const body = deleteSchema.parse(await request.json());
@@ -74,6 +79,7 @@ export const DELETE = requireFamilyAccess(async (request: NextRequest, context, 
     await prisma.pushSubscription.updateMany({
       where: {
         familyId,
+        personId: authUser.familyMemberId,
         endpoint: body.endpoint,
       },
       data: {

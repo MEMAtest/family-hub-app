@@ -104,7 +104,7 @@ describe('Stewart Fleming Gmail polling', () => {
     const firstResult = await syncStewartFlemingGmail('family-id');
 
     expect(gmail.users.messages.list).toHaveBeenNthCalledWith(1, expect.objectContaining({
-      q: expect.stringMatching(/^from:stewartfleming\.bromley\.sch\.uk newer_than:90d before:/),
+      q: expect.stringMatching(/^\(from:stewartfleming\.bromley\.sch\.uk OR Grandir OR Famly\) newer_than:90d before:/),
       maxResults: 20,
     }));
     expect(gmail.users.messages.list).toHaveBeenCalledTimes(1);
@@ -127,7 +127,7 @@ describe('Stewart Fleming Gmail polling', () => {
     expect(ingestCalendarEmailPayload).toHaveBeenCalledTimes(1);
     expect(ingestCalendarEmailPayload).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ from: 'Stewart Fleming <admin@stewartfleming.bromley.sch.uk>' }),
-    }), { familyId: 'family-id', eventSource: 'gmail-school-email', authenticatedSchoolSender: true });
+    }), { familyId: 'family-id', eventSource: 'gmail-school-email', authenticatedSchoolSender: true, reviewOnly: false });
     expect(secondResult).toMatchObject({ matched: 1, processed: 0, unauthenticated: 1, hasMore: false, errors: [] });
     expect(prisma.gmailConnection.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ lastSyncAt: expect.any(Date) }) }));
     expect(cursorMetadata).toMatchObject({ schoolGmailInternalDateMs: 1790000000000, schoolGmailBackfillComplete: true });
@@ -149,6 +149,25 @@ describe('Stewart Fleming Gmail polling', () => {
     expect(result.duplicates).toBe(1);
     expect(gmail.users.messages.get).toHaveBeenCalledTimes(1);
     expect(ingestCalendarEmailPayload).not.toHaveBeenCalled();
+  });
+
+  it('preserves HTML-only Grandir/Famly identity and dates without claiming authenticated nursery access', async () => {
+    gmail.users.messages.list.mockResolvedValue({ data: { messages: [{ id: 'nursery' }] } });
+    gmail.users.messages.get.mockResolvedValue({ data: {
+      id: 'nursery', threadId: 'nursery-thread', internalDate: '1790000000000', snippet: 'Truncated notification',
+      payload: { headers: [
+        { name: 'From', value: 'Famly <notify@famly.example>' },
+        { name: 'Subject', value: 'Grandir nursery: new update' },
+        { name: 'Date', value: 'Tue, 6 Oct 2026 20:00:00 +0100' },
+      ], mimeType: 'text/html', body: { data: Buffer.from('<p>Grandir nursery</p><a href="https://app.famly.co/post?id=example">Sign in to view the post</a>').toString('base64url') } },
+    } });
+    const result = await syncStewartFlemingGmail('family-id');
+    expect(result.processed).toBe(1);
+    expect(ingestCalendarEmailPayload).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({
+      from: 'Famly <notify@famly.example>', text: '', html: expect.stringContaining('Grandir nursery'),
+      gmailMessageId: 'nursery', gmailThreadId: 'nursery-thread', gmailInternalDate: '1790000000000',
+      sourceDate: 'Tue, 6 Oct 2026 20:00:00 +0100',
+    }) }), { familyId: 'family-id', eventSource: 'gmail-nursery-email', authenticatedSchoolSender: false, reviewOnly: true });
   });
 
   it('continues through the rest of a page and checkpoints a failed message for retry', async () => {

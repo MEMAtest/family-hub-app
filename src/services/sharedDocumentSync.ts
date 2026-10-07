@@ -4,7 +4,7 @@ import {
   type SharedDocumentKey,
   type SharedDocumentPayload,
 } from '@/lib/sharedDocuments';
-import { mergeCollection, mergeObject, sameValue } from '@/lib/sharedDocumentMerge';
+import { mergeCollection, mergeObject, mergePropertyProjects, sameValue } from '@/lib/sharedDocumentMerge';
 
 // Keeps household data that used to live only in this browser (property
 // records, issues, kids bookmarks, digest settings) in step with the server so
@@ -131,7 +131,9 @@ export class SharedDocumentSync {
   private merge(key: SharedDocumentKey, base: unknown | null, local: unknown, server: unknown) {
     if (SHARED_DOCUMENTS[key] === 'collection') {
       const asList = (value: unknown) => (Array.isArray(value) ? value : []);
-      return mergeCollection(base === null ? null : asList(base), asList(local), asList(server));
+      return key === 'property.projects'
+        ? mergePropertyProjects(base === null ? null : asList(base), asList(local), asList(server))
+        : mergeCollection(base === null ? null : asList(base), asList(local), asList(server));
     }
     return mergeObject(base, local, server);
   }

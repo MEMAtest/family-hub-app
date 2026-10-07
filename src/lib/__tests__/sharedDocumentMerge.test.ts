@@ -1,4 +1,6 @@
-import { mergeCollection, mergeObject, sameValue, stableStringify } from '../sharedDocumentMerge';
+import { mergeCollection, mergeObject, mergePropertyProjects, sameValue, stableStringify } from '../sharedDocumentMerge';
+import { createBathroomSourcingSeed } from '../sourcing/seed';
+import { evaluateSelection } from '../sourcing/selection';
 
 type Item = { id: string; title: string; updatedAt?: string };
 const item = (id: string, title = id, updatedAt?: string): Item => ({ id, title, ...(updatedAt ? { updatedAt } : {}) });
@@ -95,5 +97,57 @@ describe('mergeObject', () => {
 
   test('no base: server wins', () => {
     expect(mergeObject(null, { ...base, name: 'Mine' }, base)).toEqual(base);
+  });
+});
+
+describe('nested bathroom reconciliation', () => {
+  const fixture = () => {
+    const sourcing = createBathroomSourcingSeed();
+    sourcing.basket = [{ id: 'choice', requirementId: 'main-bath', productId: sourcing.products[0].id, quantity: 1, status: 'review' }];
+    return { id: 'project', title: 'Bathroom', sourcing };
+  };
+  const copy = <T,>(value: T): T => JSON.parse(JSON.stringify(value));
+
+  test('independent room edits, basket quantity, ordered status and component evidence survive', () => {
+    const base = fixture(), local = copy(base), server = copy(base);
+    local.sourcing.rooms = { 'main-bathroom': { name: 'Family bathroom' } };
+    server.sourcing.rooms = { 'shower-room': { sizeNotes: 'Door opening checked' } };
+    local.sourcing.basket[0].quantity = 2;
+    server.sourcing.basket[0].status = 'ordered';
+    local.sourcing.products[0].componentEvidence = { waste: { state: 'included', quantity: 2, source: 'user' } };
+    server.sourcing.products[0].dimensions.widthMm = 750;
+    const merged = mergePropertyProjects([base], [local], [server])[0];
+    expect(merged.sourcing.rooms).toEqual({ ...local.sourcing.rooms, ...server.sourcing.rooms });
+    expect(merged.sourcing.basket[0]).toMatchObject({ quantity: 2, status: 'ordered' });
+    expect(merged.sourcing.products[0]).toMatchObject({ componentEvidence: local.sourcing.products[0].componentEvidence, dimensions: { widthMm: 750 } });
+  });
+
+  test('unchanged deletions apply but an edited purchase is retained against a competing delete', () => {
+    const base = fixture(), local = copy(base), server = copy(base);
+    local.sourcing.basket = [];
+    expect(mergePropertyProjects([base], [local], [server])[0].sourcing.basket).toEqual([]);
+    server.sourcing.basket[0].quantity = 3;
+    expect(mergePropertyProjects([base], [local], [server])[0].sourcing.basket[0].quantity).toBe(3);
+  });
+
+  test('competing primary replacements survive reconciliation and produce a conflict warning', () => {
+    const base = fixture(), local = copy(base), server = copy(base);
+    const product = base.sourcing.products.find((item) => item.components.includes('bath'))!;
+    local.sourcing.products.push({ ...copy(product), id: 'manual-local' });
+    server.sourcing.products.push({ ...copy(product), id: 'manual-server' });
+    local.sourcing.basket = [{ ...base.sourcing.basket[0], id: 'new-local', productId: 'manual-local' }];
+    server.sourcing.basket = [{ ...base.sourcing.basket[0], id: 'new-server', productId: 'manual-server' }];
+    const sourcing = mergePropertyProjects([base], [local], [server])[0].sourcing;
+    expect(sourcing.basket).toHaveLength(2);
+    expect(evaluateSelection(sourcing, sourcing.requirements[0]).warnings).toContain('Multiple fixture choices for this demand. Resolve the competing selections before ordering.');
+  });
+
+  test('conflicting tile revisions remain atomic rather than combining surfaces and product', () => {
+    const base = { id: 'p', sourcing: { requirements: [{ id: 'tile', tilePlan: { id: 'plan', productId: 'a', surface: 1 } }] } };
+    const local = copy(base), server = copy(base);
+    local.sourcing.requirements[0].tilePlan.productId = 'b';
+    server.sourcing.requirements[0].tilePlan.surface = 9;
+    const plan = mergePropertyProjects([base], [local], [server])[0].sourcing.requirements[0].tilePlan;
+    expect(plan).toEqual(local.sourcing.requirements[0].tilePlan);
   });
 });

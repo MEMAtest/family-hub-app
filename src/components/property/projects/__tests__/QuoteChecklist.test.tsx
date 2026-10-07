@@ -48,3 +48,15 @@ test('bath alone does not show as selected for waste or screen lines or the othe
   rerender(<QuoteChecklist sourcing={sourcing} roomId="shower-room" onOpenRequirement={jest.fn()} onOpenProduct={jest.fn()} />);
   expect(screen.getByText('0 of 14 supply lines selected')).toBeInTheDocument();
 });
+
+test('linked wrong-tag filler stays Selected with its picture and missing coverage, not silently unselected', () => {
+  const sourcing = createBathroomSourcingSeed();
+  const product = { ...sourcing.products[0], id: 'manual-wrong', name: 'Chosen supplier option', components: ['cistern'], componentEvidence: {}, description: '', size: '', specs: {} };
+  sourcing.products.push(product);
+  sourcing.basket.push({ id: 'wrong-linked', requirementId: 'main-bath-filler', productId: product.id, quantity: 1, status: 'review' });
+  render(<QuoteChecklist sourcing={sourcing} roomId="main-bathroom" onOpenRequirement={jest.fn()} onOpenProduct={jest.fn()} />);
+  const line = screen.getByRole('listitem', { name: 'Element Five two-hole wall-mounted bath filler: Selected - contents unconfirmed' });
+  expect(within(line).getByRole('button', { name: /Inspect selected Chosen supplier option/ })).toBeInTheDocument();
+  expect(within(line).getByText('bath filler: 0/1')).toBeInTheDocument();
+  expect(within(line).queryByText('No product selected')).not.toBeInTheDocument();
+});

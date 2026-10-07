@@ -3,10 +3,10 @@ import pdf from 'pdf-parse/lib/pdf-parse.js';
 import prisma from '@/lib/prisma';
 import { requireFamilyAccess } from '@/lib/auth-utils';
 import { attachmentMetadata, validateCalendarAttachments } from '@/lib/calendarIntakeAttachments';
-import { parseCalendarImportText } from '@/utils/calendarImport';
 import { summarizeSchoolDocument } from '@/utils/schoolDocumentSummary';
 import { Prisma } from '@prisma/client';
 import type { CalendarEvent, Person } from '@/types/calendar.types';
+import { prepareSchoolIntake } from '@/lib/schoolIntakeServer';
 
 export const runtime = 'nodejs';
 
@@ -143,9 +143,9 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context) =>
       }),
     ]);
 
-    const drafts = parseCalendarImportText({
+    const prepared = await prepareSchoolIntake({
+      familyId, members: members.map(mapPerson),
       text,
-      people: members.map(mapPerson),
       existingEvents: events.map(mapDbEvent),
       defaultPersonId: typeof formData.get('defaultPersonId') === 'string'
         ? String(formData.get('defaultPersonId'))
@@ -154,6 +154,7 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context) =>
         ? new Date(String(formData.get('today')))
         : new Date(),
     });
+    const drafts = prepared.drafts;
 
     const intake = await prisma.calendarEmailIntake.create({
       data: {
@@ -163,11 +164,12 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context) =>
         text,
         normalizedText: text,
         parsedDrafts: drafts as unknown as Prisma.InputJsonValue,
-        status: drafts.length > 0 ? 'review_required' : 'no_events',
-        needsReview: drafts.length,
+        status: prepared.status,
+        needsReview: prepared.source.contentRequired ? 1 : drafts.length,
         duplicateCount: drafts.filter((draft) => draft.importStatus === 'duplicate').length,
         conflictCount: drafts.filter((draft) => draft.importStatus === 'conflict').length,
         metadata: {
+          ...prepared.metadata,
           sourceType: 'pdf',
           fileName: file.name || null,
           mimeType: file.type || 'application/pdf',
@@ -191,6 +193,8 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context) =>
       drafts,
       intakeId: intake.id,
       documentSummary,
+      schoolSource: prepared.source,
+      status: prepared.status,
       attachments: intake.attachments,
       summary: {
         total: drafts.length,

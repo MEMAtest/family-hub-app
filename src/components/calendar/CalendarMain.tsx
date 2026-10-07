@@ -47,6 +47,7 @@ import icalService from '@/services/icalService'
 import NotificationBell from '../notifications/NotificationBell'
 import YearView from './YearView'
 import WorkStatusManager from './WorkStatusManager'
+import EventSourceDetails from './EventSourceDetails'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { useFamilyStore } from '@/store/familyStore'
 import { formatConflictGroupTimeRange, getSameDayConflictGroups } from '@/utils/calendarConflicts'
@@ -55,6 +56,7 @@ import { buildTaskEntries, getTaskEntryStyle, isTaskEntry } from '@/utils/taskCa
 import { expandTasks } from '@/utils/tasks'
 import { schoolEventTitle } from '@/utils/schoolEventPresentation'
 import { hasUnspecifiedEventTime } from '@/utils/eventSemantics'
+import { useCalendarReminderLink } from '@/hooks/useCalendarReminderLink'
 
 // Set up moment localizer and drag-and-drop calendar
 const localizer = momentLocalizer(moment)
@@ -270,6 +272,11 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
   const [importType, setImportType] = useState<'pdf' | 'csv'>('pdf')
   const [dragFeedback, setDragFeedback] = useState<string | null>(null)
   const [showWorkStatusManager, setShowWorkStatusManager] = useState(false)
+  const [travelEditEvent, setTravelEditEvent] = useState<CalendarEvent | null>(null)
+  useCalendarReminderLink(events, (event) => {
+    setTravelEditEvent(event);
+    setShowWorkStatusManager(true);
+  }, onEventClick)
   const [showMobileMenu, setShowMobileMenu] = useState(false)
   const [selectedAgendaDate, setSelectedAgendaDate] = useState(() => moment(currentDate).format('YYYY-MM-DD'))
   useEffect(() => setSelectedAgendaDate(moment(currentDate).format('YYYY-MM-DD')), [currentDate])
@@ -2159,6 +2166,8 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                   )}
                 </div>
 
+                {hoveredEvent.sourceId && <EventSourceDetails familyId={familyId} eventId={hoveredEvent.id} />}
+
                 {/* Action Buttons */}
                 <div className="flex items-center justify-end space-x-2 pt-2 mt-2 border-t border-gray-100">
                   <button
@@ -2204,15 +2213,25 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
           {/* Work Status Manager Modal */}
           {showWorkStatusManager && (
             <WorkStatusManager
+              event={travelEditEvent ?? undefined}
               people={people}
               events={events}
-              onAddWorkEvent={(event) => {
-                if (onWorkEventCreate) {
-                  onWorkEventCreate(event);
-                }
+              onAddWorkEvent={async (draft) => {
+                if (travelEditEvent) {
+                  const response = await fetch(`/api/families/${familyId}/events`, {
+                    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: travelEditEvent.id, ...draft }),
+                  });
+                  const payload = await response.json();
+                  if (!response.ok) throw new Error(payload.error || 'Could not save travel details.');
+                  const state = useFamilyStore.getState();
+                  state.setEvents(state.events.map((event) => event.id === travelEditEvent.id ? { ...event, ...draft } : event));
+                } else if (onWorkEventCreate) await onWorkEventCreate(draft);
+                else throw new Error('Work event creation is not available in this view.');
+                setTravelEditEvent(null);
                 setShowWorkStatusManager(false);
               }}
-              onClose={() => setShowWorkStatusManager(false)}
+              onClose={() => { setTravelEditEvent(null); setShowWorkStatusManager(false); }}
             />
           )}
         </div>

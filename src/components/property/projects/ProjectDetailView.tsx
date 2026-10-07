@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { ArrowLeft, MoreHorizontal, Bath, ShowerHead, LayoutDashboard, Mail, Users, FileText, Calendar, Bell, CheckSquare, Settings, Edit2, Plus, CalendarPlus, Phone, Building2, UserPlus, Upload, BarChart3, PieChart, Download, FileSpreadsheet, FileJson, Printer, ShoppingBasket } from 'lucide-react';
 import { ProjectEmailInbox } from './ProjectEmailInbox';
 import PDFQuoteExtractor from '@/components/projects/PDFQuoteExtractor';
@@ -100,9 +100,67 @@ export const ProjectDetailView = ({
   isReadOnly = false,
 }: ProjectDetailViewProps) => {
   const bathroom = isBathroomProject(project);
-  const [activeTab, setActiveTab] = useState<TabId>(() => bathroom ? 'overview' : 'emails');
-  const [sourcingRequirementId, setSourcingRequirementId] = useState<string | undefined>();
-  const [sourcingPart, setSourcingPart] = useState<string | undefined>();
+  const [navigation, setNavigation] = useState<{ tab: TabId; requirementId?: string; part?: string }>(() => ({ tab: bathroom ? 'overview' : 'emails' }));
+  const { tab: activeTab, requirementId: sourcingRequirementId, part: sourcingPart } = navigation;
+  const contentRef = useRef<HTMLDivElement>(null);
+  const pendingScroll = useRef<number | 'entry'>('entry');
+  const navigationDepth = useRef(0);
+  const navigate = (tab: TabId, requirementId?: string, part?: string) => {
+    const next = { tab, requirementId, part };
+    if (JSON.stringify(next) === JSON.stringify(navigation)) return;
+    const main = contentRef.current?.closest('main');
+    window.history.replaceState({ ...window.history.state, bathroomNavigation: { projectId: project.id, navigation, scroll: main?.scrollTop ?? 0, depth: navigationDepth.current } }, '');
+    navigationDepth.current++;
+    const url = new URL(window.location.href);
+    url.searchParams.set('bathroomView', tab);
+    url.searchParams.set('bathroomProject', project.id);
+    if (requirementId) url.searchParams.set('bathroomItem', requirementId); else url.searchParams.delete('bathroomItem');
+    if (part) url.searchParams.set('bathroomPart', part); else url.searchParams.delete('bathroomPart');
+    window.history.pushState({ ...window.history.state, bathroomNavigation: { projectId: project.id, navigation: next, scroll: 0, depth: navigationDepth.current } }, '', url);
+    pendingScroll.current = 'entry'; setNavigation(next);
+  };
+  const goBack = () => {
+    if (navigationDepth.current > 0) window.history.back();
+    else navigate(activeTab === 'shower-room' ? 'shower-room' : activeTab === 'main-bathroom' ? 'main-bathroom' : 'overview');
+  };
+  useEffect(() => {
+    const restore = () => {
+      const saved = window.history.state?.bathroomNavigation;
+      if (saved?.projectId === project.id) {
+        navigationDepth.current = saved.depth ?? 0;
+        pendingScroll.current = saved.navigation?.requirementId && !saved.scroll ? 'entry' : saved.scroll ?? 0;
+        setNavigation(saved.navigation);
+        return;
+      }
+      const url = new URL(window.location.href);
+      const tab = url.searchParams.get('bathroomView');
+      if (url.searchParams.get('bathroomProject') === project.id && ['overview', 'materials', 'main-bathroom', 'shower-room', 'documents'].includes(tab ?? '')) {
+        const requirementId = url.searchParams.get('bathroomItem') ?? undefined;
+        pendingScroll.current = 'entry';
+        setNavigation({ tab: tab as TabId, requirementId, part: url.searchParams.get('bathroomPart') ?? undefined });
+      } else {
+        navigationDepth.current = 0;
+        pendingScroll.current = 'entry';
+        setNavigation({ tab: bathroom ? 'overview' : 'emails' });
+      }
+    };
+    restore(); window.addEventListener('popstate', restore);
+    return () => window.removeEventListener('popstate', restore);
+  }, [project.id]);
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      const content = contentRef.current;
+      const main = content?.closest('main');
+      if (!content || !main) return;
+      // Measure normal document flow, not the selected summary's sticky position.
+      const anchor = content;
+      const roomBar = main.querySelector<HTMLElement>('[data-bathroom-room-bar]');
+      const top = pendingScroll.current === 'entry' ? main.scrollTop + anchor.getBoundingClientRect().top - main.getBoundingClientRect().top - (roomBar?.offsetHeight ?? 0) : pendingScroll.current;
+      main.scrollTo({ top, behavior: 'auto' });
+      if (pendingScroll.current === 'entry') { const heading = anchor.querySelector<HTMLElement>('h2, h3'); heading?.setAttribute('tabindex', '-1'); heading?.focus({ preventScroll: true }); }
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [navigation]);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [showAddVisitForm, setShowAddVisitForm] = useState(false);
   const [newVisit, setNewVisit] = useState({ contractorName: '', date: '', time: '', purpose: '' });
@@ -666,8 +724,8 @@ export const ProjectDetailView = ({
       </div>
 
       {/* Tabs */}
-      {bathroom && <label className={`flex min-w-0 flex-wrap items-center gap-3 border-l-4 py-2 pl-3 text-sm font-medium ${activeTab === 'shower-room' ? 'border-sky-500 text-sky-800' : 'border-emerald-500 text-emerald-800'}`}>Bathroom
-        <select aria-label="Switch bathroom" value={activeTab === 'main-bathroom' || activeTab === 'shower-room' ? activeTab : ''} onChange={(event) => { setActiveTab(event.target.value ? event.target.value as SourcingRoomId : 'overview'); setSourcingRequirementId(undefined); setSourcingPart(undefined); }} className="min-h-11 min-w-0 max-w-full rounded-md border-gray-200 text-sm dark:bg-slate-800 dark:text-white">
+      {bathroom && <label data-bathroom-room-bar className={`sticky top-0 z-20 flex h-[60px] min-w-0 items-center gap-3 border-l-4 bg-white px-3 py-2 text-sm font-medium dark:bg-slate-900 ${activeTab === 'shower-room' ? 'border-sky-500 text-sky-800' : 'border-emerald-500 text-emerald-800'}`}>Room
+        <select aria-label="Switch bathroom" value={activeTab === 'main-bathroom' || activeTab === 'shower-room' ? activeTab : ''} onChange={(event) => { navigate(event.target.value ? event.target.value as SourcingRoomId : 'overview'); }} className="min-h-11 min-w-0 max-w-xs flex-1 rounded-md border-gray-200 text-sm dark:bg-slate-800 dark:text-white">
           <option value="">Both bathrooms</option><option value="main-bathroom">{roomName(project.sourcing, 'main-bathroom')} · bath</option><option value="shower-room">{roomName(project.sourcing, 'shower-room')} · shower</option>
         </select>
       </label>}
@@ -678,7 +736,7 @@ export const ProjectDetailView = ({
             return (
               <button
                 key={tab.id}
-                onClick={() => { setActiveTab(tab.id); setSourcingRequirementId(undefined); setSourcingPart(undefined); }}
+                onClick={() => { navigate(tab.id); }}
                 aria-current={activeTab === tab.id ? 'page' : undefined}
                 className={`flex min-h-11 min-w-0 max-w-full items-center gap-2 border-b-2 px-3 py-3 text-sm font-medium transition-colors ${
                   activeTab === tab.id
@@ -699,14 +757,14 @@ export const ProjectDetailView = ({
           <details className="relative ml-auto">
             <summary aria-label="More project views" title="More project views" className="flex min-h-11 cursor-pointer list-none items-center rounded-md border border-gray-200 p-3 text-gray-600 dark:border-slate-700 dark:text-slate-300"><MoreHorizontal className="h-5 w-5" /></summary>
             <div className="absolute right-0 top-full z-40 w-48 rounded-lg border border-gray-200 bg-white p-1 shadow-lg dark:border-slate-700 dark:bg-slate-900">
-              {secondaryTabs.map((tab) => <button key={tab.id} type="button" onClick={(event) => { setActiveTab(tab.id); event.currentTarget.closest('details')?.removeAttribute('open'); }} className={`flex min-h-11 w-full items-center gap-2 rounded-md px-3 text-left text-sm hover:bg-gray-50 dark:hover:bg-slate-800 ${activeTab === tab.id ? 'text-emerald-700 dark:text-emerald-300' : 'text-gray-600 dark:text-slate-300'}`}><tab.icon className="h-4 w-4" />{tab.label}{tab.count ? ` (${tab.count})` : ''}</button>)}
+              {secondaryTabs.map((tab) => <button key={tab.id} type="button" onClick={(event) => { navigate(tab.id); event.currentTarget.closest('details')?.removeAttribute('open'); }} className={`flex min-h-11 w-full items-center gap-2 rounded-md px-3 text-left text-sm hover:bg-gray-50 dark:hover:bg-slate-800 ${activeTab === tab.id ? 'text-emerald-700 dark:text-emerald-300' : 'text-gray-600 dark:text-slate-300'}`}><tab.icon className="h-4 w-4" />{tab.label}{tab.count ? ` (${tab.count})` : ''}</button>)}
             </div>
           </details>
         </nav>
       </div>
 
       {/* Tab Content */}
-      <div className={sourcingTab ? 'min-w-0' : 'min-w-0 bg-white py-4 dark:bg-slate-900'}>
+      <div ref={contentRef} className={sourcingTab ? 'min-w-0' : 'min-w-0 bg-white py-4 dark:bg-slate-900'}>
         {activeTab === 'emails' && (
           <ProjectEmailInbox
             project={project}
@@ -1406,7 +1464,8 @@ export const ProjectDetailView = ({
             selectedRoomId={activeTab === 'main-bathroom' || activeTab === 'shower-room' ? activeTab : undefined}
             selectedRequirementId={sourcingRequirementId}
             selectedPart={sourcingPart}
-            onNavigate={(roomId, requirementId, part) => { setActiveTab(roomId ?? (bathroom ? 'overview' : 'materials')); setSourcingRequirementId(requirementId); setSourcingPart(part); }}
+            onNavigate={(roomId, requirementId, part) => navigate(roomId ?? (bathroom ? 'overview' : 'materials'), requirementId, part)}
+            onBack={goBack}
           />
         )}
 

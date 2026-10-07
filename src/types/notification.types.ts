@@ -69,6 +69,7 @@ export interface InAppNotification {
   actions?: NotificationAction[];
   relatedEventId?: string;
   relatedPersonId?: string;
+  recipientPersonId?: string;
   expiresAt?: Date;
   snoozedUntil?: Date;
   metadata?: any;
@@ -194,6 +195,7 @@ export interface NotificationContextType {
   clearNotification(id: string): Promise<void>;
   snoozeNotification(id: string, until: Date): Promise<void>;
   updateSettings(settings: Partial<NotificationSettings>): Promise<void>;
+  applyReminderAction(id: string, action: 'done' | 'not_needed' | 'snooze' | 'details' | 'cover', until?: Date): Promise<{ url?: string }>;
 
   // Event scheduling
   scheduleEventReminders(event: CalendarEvent): Promise<void>;

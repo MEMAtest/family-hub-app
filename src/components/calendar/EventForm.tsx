@@ -22,6 +22,8 @@ import { CalendarEvent, Reminder, RecurringPattern, EventTemplate, Person } from
 import AIEnhancedField from '@/components/common/AIEnhancedField'
 import { addDays, parseDateKey } from '@/utils/recurrence'
 import { recurringSourceDateWarning } from '@/utils/schoolEventPresentation'
+import { useFamilyStore } from '@/store/familyStore'
+import EventSourceDetails from './EventSourceDetails'
 
 type CreateEventResult =
   | { status: 'conflict' }
@@ -204,6 +206,7 @@ const EventForm: React.FC<EventFormProps> = ({
   templates,
   defaultSlot
 }) => {
+  const sourceFamilyId = useFamilyStore((state) => state.databaseStatus.familyId)
   const defaultPersonId = people[0]?.id || ''
   const initializedFormKeyRef = useRef<string | null>(null)
   const [formData, setFormData] = useState<Partial<CalendarEvent>>(() => buildEmptyFormData(defaultPersonId))
@@ -761,6 +764,7 @@ const EventForm: React.FC<EventFormProps> = ({
               </div>
 
               {/* Location */}
+              {event?.sourceId && <EventSourceDetails familyId={sourceFamilyId} eventId={event.id} />}
               <div>
                 <label htmlFor="calendar-event-location" className="block text-sm font-medium text-gray-700 mb-1 dark:text-slate-300">
                   <MapPin className="w-4 h-4 inline mr-1" />

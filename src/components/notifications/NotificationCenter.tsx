@@ -22,6 +22,9 @@ import { useNotifications } from '@/contexts/NotificationContext';
 import { useFamilyStore } from '@/store/familyStore';
 import { useAppView } from '@/contexts/familyHub/AppViewContext';
 import { InAppNotification } from '@/types/notification.types';
+import type { CalendarEvent } from '@/types/calendar.types';
+import WorkStatusManager from '@/components/calendar/WorkStatusManager';
+import { isFamilyReminder, type FamilyReminderAction } from '@/lib/familyReminderContract';
 
 interface NotificationCenterProps {
   isOpen: boolean;
@@ -43,7 +46,8 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
     clearNotification,
     snoozeNotification,
     settings,
-    updateSettings
+    updateSettings,
+    applyReminderAction,
   } = useNotifications();
 
   const setActiveBrainProject = useFamilyStore((s) => s.setActiveBrainProject);
@@ -56,6 +60,10 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
   const [mounted, setMounted] = useState(false);
   const [pushStatus, setPushStatus] = useState<string | null>(null);
   const [sendingPushTest, setSendingPushTest] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [busyReminder, setBusyReminder] = useState<string | null>(null);
+  const [detailsEvent, setDetailsEvent] = useState<CalendarEvent | null>(null);
+  const people = useFamilyStore((state) => state.people);
 
   useEffect(() => {
     setMounted(true);
@@ -186,6 +194,23 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
     const action = notification.actions?.find(a => a.id === actionId);
     if (!action) return;
 
+    if (action.action.startsWith('reminder_')) {
+      setActionError(null);
+      setBusyReminder(notification.id);
+      try {
+        const command = action.action.slice('reminder_'.length) as FamilyReminderAction;
+        await applyReminderAction(notification.id, command,
+          command === 'snooze' ? new Date(Date.now() + 10 * 60_000) : undefined);
+        if (command === 'details') {
+          const event = useFamilyStore.getState().events.find((item) => item.id === notification.relatedEventId);
+          if (!event) throw new Error('This trip has not loaded yet. Open the calendar and try again.');
+          setDetailsEvent(event);
+        }
+      } catch (error) { setActionError(error instanceof Error ? error.message : 'Could not update reminder.'); }
+      finally { setBusyReminder(null); }
+      return;
+    }
+
     switch (action.action) {
       case 'mark_done':
         await markAsRead(notification.id);
@@ -261,7 +286,7 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
       channels: { ...settings.channels, push: true, browser: true }
     });
     await requestPermission();
-    setPushStatus('This device is ready for Family Hub push notifications.');
+    setPushStatus('Push permission requested. Device delivery has not been verified.');
   };
 
   const handleSendPushTest = async () => {
@@ -286,7 +311,7 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
       }
 
       if (payload.sent > 0) {
-        setPushStatus(`Sent ${payload.sent} test notification${payload.sent === 1 ? '' : 's'} to subscribed devices.`);
+        setPushStatus(`${payload.sent} push submission${payload.sent === 1 ? '' : 's'} accepted. Check your device; delivery is unverified.`);
       } else {
         setPushStatus('No device subscriptions yet. Enable push on your Android phone first.');
       }
@@ -443,6 +468,7 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
           )}
 
           {/* Notifications List */}
+          {actionError && <p role="alert" className="px-4 py-2 text-sm text-red-700">{actionError}</p>}
           <div className="flex-1 overflow-y-auto bg-gray-50/70 dark:bg-[#0b1117]">
             {filteredNotifications.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-gray-500 dark:text-slate-400">
@@ -479,12 +505,18 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
                             <p className="text-xs text-gray-400 mt-1 dark:text-slate-500">
                               {notification.timestamp.toLocaleString()}
                             </p>
+                            {isFamilyReminder(notification) && <div className="mt-2 text-xs text-gray-600 dark:text-slate-300">
+                              <p>For {notification.metadata?.recipientName}{notification.metadata?.recipientClaimed === false ? ' (account not linked)' : ''}</p>
+                              <p>In-app reminder. Push: {notification.metadata?.pushStatus === 'accepted' ? 'accepted, delivery unverified' : notification.metadata?.pushStatus ?? 'unavailable'}. WhatsApp: unavailable.</p>
+                              {notification.metadata?.canAct === false && <p>Sign in as the named recipient to respond.</p>}
+                            </div>}
                           </div>
 
                           <div className="flex items-center space-x-1 ml-2">
                             {!notification.read && (
                               <button
                                 onClick={() => markAsRead(notification.id)}
+                                disabled={notification.metadata?.canAct === false}
                                 className="p-1 rounded text-gray-600 transition-colors hover:bg-white/70 dark:text-slate-300 dark:hover:bg-white/10"
                                 title="Mark as read"
                               >
@@ -493,7 +525,7 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
                             )}
 
                             {/* Snooze dropdown */}
-                            <div className="relative group">
+                            {!isFamilyReminder(notification) && <div className="relative group">
                               <button
                                 className="p-1 rounded text-gray-600 transition-colors hover:bg-white/70 dark:text-slate-300 dark:hover:bg-white/10"
                                 title="Snooze"
@@ -511,9 +543,10 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
                                   </button>
                                 ))}
                               </div>
-                            </div>
+                            </div>}
 
                             <button
+                              disabled={notification.metadata?.canAct === false || isFamilyReminder(notification)}
                               onClick={() => clearNotification(notification.id)}
                               className="p-1 rounded text-gray-600 transition-colors hover:bg-white/70 dark:text-slate-300 dark:hover:bg-white/10"
                               title="Delete"
@@ -530,6 +563,7 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
                               <button
                                 key={action.id}
                                 onClick={() => handleNotificationAction(notification, action.id)}
+                                disabled={notification.metadata?.canAct === false || busyReminder === notification.id}
                                 className={`px-3 py-1 text-xs rounded transition-colors ${
                                   action.type === 'primary'
                                     ? 'bg-blue-600 text-white hover:bg-blue-700'
@@ -552,6 +586,19 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
           </div>
         </div>
       </div>
+      {detailsEvent && <div className="fixed inset-0 z-[110]">
+        <WorkStatusManager event={detailsEvent} people={people} events={[]} onClose={() => setDetailsEvent(null)}
+          onAddWorkEvent={async (draft) => {
+            const response = await fetch(`/api/families/${familyId}/events`, {
+              method: 'PUT', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ id: detailsEvent.id, ...draft }),
+            });
+            const payload = await response.json();
+            if (!response.ok) throw new Error(payload.error || 'Could not save travel details.');
+            const state = useFamilyStore.getState();
+            state.setEvents(state.events.map((event) => event.id === detailsEvent.id ? { ...event, ...draft } : event));
+          }} />
+      </div>}
     </div>
   );
 

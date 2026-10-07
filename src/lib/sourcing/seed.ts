@@ -1,7 +1,7 @@
 import type { ProjectSourcing } from '@/types/sourcing.types';
 import { withQuoteInventory } from './quoteInventory';
 
-export const SOURCING_SEED_VERSION = 5;
+export const SOURCING_SEED_VERSION = 7;
 
 /**
  * Bathroom quote for 21 Tremaine Road, matched to real supplier products.
@@ -1574,5 +1574,15 @@ export const bathroomSourcingSeed: ProjectSourcing = {
 };
 
 export function createBathroomSourcingSeed(): ProjectSourcing {
-  return withQuoteInventory(JSON.parse(JSON.stringify(bathroomSourcingSeed)) as ProjectSourcing);
+  const seed = withQuoteInventory(JSON.parse(JSON.stringify(bathroomSourcingSeed)) as ProjectSourcing);
+  seed.quoteCostReference = {
+    supplier: 'R & R', quotedOn: '2026-01-18',
+    rooms: {
+      'main-bathroom': { labourPence: 775000, goodsPence: 371000, totalPence: 1146000 },
+      'shower-room': { labourPence: 617000, goodsPence: 402000, totalPence: 1019000 },
+    },
+  };
+  const alternatives = new Set(['tile-harlem-caliza-equivalent', 'tile-kapital-grey']);
+  seed.requirements = seed.requirements.map((item) => ({ ...item, primaryComponent: item.requiredComponents[0], purpose: alternatives.has(item.id) ? 'alternative' : item.category === 'Fitter check' ? 'check' : 'required' }));
+  return seed;
 }

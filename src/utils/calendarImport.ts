@@ -23,6 +23,7 @@ export interface CalendarImportDraft {
   confidence: number;
   source: string;
   sourceLine: number;
+  personEvidence?: string;
   importStatus: CalendarImportStatus;
   warnings: string[];
   duplicateOf?: string;
@@ -768,6 +769,7 @@ const toDraft = (
   status: 'confirmed',
   confidence: event.confidence ?? 0.78,
   source: line,
+  personEvidence,
   sourceLine,
   importStatus: attendeeNeedsReview || titleNeedsReview ? 'needs_review' : 'ready',
   warnings: [...(event.warnings || []), ...(attendeeNeedsReview ? ['Choose the adult attending. The child concerned is not automatically the attendee.'] : []), ...(titleNeedsReview ? ['The source heading is unclear. Confirm a short event title before importing.'] : [])],

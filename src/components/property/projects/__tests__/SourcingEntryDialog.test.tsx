@@ -76,3 +76,31 @@ test('import failure is visible and manual fields remain available', async () =>
   expect(screen.getByLabelText('Product name')).toBeEnabled();
   expect(screen.getByRole('button', { name: 'Read product page' })).toBeEnabled();
 });
+
+test('manual WITH basin inference and editable per-unit quantities are saved as explicit evidence', () => {
+  const onProduct = jest.fn();
+  render(<SourcingEntryDialog mode="product" sourcing={createBathroomSourcingSeed()} roomId="main-bathroom" requirementId="main-vanity" onClose={jest.fn()} onItem={jest.fn()} onProduct={onProduct} />);
+  fireEvent.change(screen.getByLabelText('Product name'), { target: { value: 'Vanity WITH basin' } });
+  fireEvent.change(screen.getByLabelText('Price (£)'), { target: { value: '150' } });
+  expect(screen.getByLabelText('vanity')).toBeChecked();
+  expect(screen.getByLabelText('basin')).toBeChecked();
+  fireEvent.change(screen.getByLabelText('Included quantity basin'), { target: { value: '2' } });
+  fireEvent.change(screen.getByLabelText('Notes'), { target: { value: 'Supplier includes basin' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save option' }));
+  expect(onProduct).toHaveBeenCalledWith(expect.objectContaining({ components: ['vanity', 'basin'], componentEvidence: expect.objectContaining({ basin: { quantity: 2, state: 'included', source: 'user' } }) }));
+});
+
+test('in-flight import uses the latest linked demand after a target switch', async () => {
+  let resolve!: (value: unknown) => void;
+  (global.fetch as jest.Mock).mockImplementationOnce(() => new Promise((done) => { resolve = done; }));
+  const onProduct = jest.fn();
+  render(<SourcingEntryDialog mode="product" sourcing={createBathroomSourcingSeed()} roomId="main-bathroom" requirementId="main-bath" onClose={jest.fn()} onItem={jest.fn()} onProduct={onProduct} />);
+  fireEvent.change(screen.getByLabelText('Product link'), { target: { value: draft.url } });
+  await act(async () => { jest.advanceTimersByTime(600); });
+  fireEvent.change(screen.getByLabelText('Option for'), { target: { value: 'main-vanity' } });
+  await act(async () => { resolve({ ok: true, json: async () => ({ draft: { ...draft, name: '600mm vanity WITH basin', description: 'Vanity with basin; tap not included' } }) }); });
+  expect(screen.getByLabelText('vanity')).toBeChecked();
+  expect(screen.getByLabelText('basin')).toBeChecked();
+  fireEvent.click(screen.getByRole('button', { name: 'Save option' }));
+  expect(onProduct).toHaveBeenCalledWith(expect.objectContaining({ requirementId: 'main-vanity', components: ['vanity', 'basin'] }));
+});

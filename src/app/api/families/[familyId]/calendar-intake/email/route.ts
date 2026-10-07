@@ -3,12 +3,9 @@ import { z } from 'zod';
 import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { requireFamilyAccess } from '@/lib/auth-utils';
-import {
-  normalizeCalendarEmailText,
-  parseCalendarImportText,
-} from '@/utils/calendarImport';
-import { summarizeSchoolDocument } from '@/utils/schoolDocumentSummary';
+import { normalizeCalendarEmailText } from '@/utils/calendarImport';
 import type { CalendarEvent, Person } from '@/types/calendar.types';
+import { prepareSchoolIntake } from '@/lib/schoolIntakeServer';
 
 const emailIntakeSchema = z.object({
   subject: z.string().optional().nullable(),
@@ -85,15 +82,18 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context) =>
       html: body.html,
     });
 
-    const drafts = parseCalendarImportText({
+    const prepared = await prepareSchoolIntake({
+      familyId,
+      members: members.map(mapPerson),
       text: normalizedText,
-      people: members.map(mapPerson),
+      rawText: body.text || '', html: body.html || '', sender: body.from || '', subject: body.subject || '',
       existingEvents: events.map(mapDbEvent),
       defaultPersonId: body.defaultPersonId || undefined,
       today: body.today ? new Date(body.today) : new Date(),
     });
+    const drafts = prepared.drafts;
 
-    const documentSummary = summarizeSchoolDocument(normalizedText);
+    const documentSummary = prepared.metadata.documentSummary;
     const intake = await prisma.calendarEmailIntake.create({
       data: {
         familyId,
@@ -103,11 +103,12 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context) =>
         html: body.html || null,
         normalizedText,
         parsedDrafts: drafts as unknown as Prisma.InputJsonValue,
-        status: drafts.length > 0 ? 'review_required' : 'no_events',
-        needsReview: drafts.length,
+        status: prepared.status,
+        needsReview: prepared.source.contentRequired ? 1 : drafts.length,
         duplicateCount: drafts.filter((draft) => draft.importStatus === 'duplicate').length,
         conflictCount: drafts.filter((draft) => draft.importStatus === 'conflict').length,
         metadata: {
+          ...prepared.metadata,
           sourceType: 'manual-email-review',
           documentSummary,
         } as Prisma.InputJsonValue,
@@ -119,6 +120,8 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context) =>
       drafts,
       intakeId: intake.id,
       documentSummary,
+      schoolSource: prepared.source,
+      status: prepared.status,
       summary: {
         total: drafts.length,
         ready: drafts.filter((draft) => draft.importStatus === 'ready').length,

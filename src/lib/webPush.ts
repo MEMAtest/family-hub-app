@@ -16,6 +16,8 @@ type PushSendResult = {
   sent: number;
   failed: number;
   inactive: number;
+  configured?: boolean;
+  subscriptions?: number;
 };
 
 const subject = process.env.VAPID_SUBJECT || 'mailto:admin@familyhub.app';
@@ -32,20 +34,22 @@ export const getVapidPublicKey = () => publicKey;
 
 export const sendFamilyPushNotification = async (
   familyId: string,
-  payload: PushPayload
+  payload: PushPayload,
+  personId?: string,
 ): Promise<PushSendResult> => {
   if (!isWebPushConfigured()) {
-    return { sent: 0, failed: 0, inactive: 0 };
+    return { sent: 0, failed: 0, inactive: 0, configured: false, subscriptions: 0 };
   }
 
   const subscriptions = await prisma.pushSubscription.findMany({
     where: {
       familyId,
       isActive: true,
+      ...(personId ? { personId } : {}),
     },
   });
 
-  const results: PushSendResult = { sent: 0, failed: 0, inactive: 0 };
+  const results: PushSendResult = { sent: 0, failed: 0, inactive: 0, configured: true, subscriptions: subscriptions.length };
   const body = JSON.stringify({
     icon: '/icon-192x192.png',
     badge: '/icon-96x96.png',
@@ -85,4 +89,9 @@ export const sendFamilyPushNotification = async (
   );
 
   return results;
+};
+
+export const sendMemberPushNotification = (familyId: string, personId: string, payload: PushPayload) => {
+  if (!personId) throw new Error('A recipient member is required for private push');
+  return sendFamilyPushNotification(familyId, payload, personId);
 };

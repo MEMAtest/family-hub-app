@@ -11,7 +11,7 @@ import { createId } from '@/utils/id';
 import { useNotifications } from '@/contexts/NotificationContext';
 import { DEFAULT_FAMILY_ID } from '@/lib/defaultFamilyProfile';
 import { getCalendarEventIcon, getEventNotificationMetadata } from '@/utils/eventSemantics';
-import { decodeStoredRecurringPattern } from '@/lib/calendarEventMapping';
+import { decodeStoredRecurringPattern, readCalendarEventMetadata } from '@/lib/calendarEventMapping';
 import { toggleTaskOccurrenceCompletion } from '@/utils/tasks';
 import { mergeDatabaseAndCachedEvents } from '@/lib/calendarEventCache';
 
@@ -211,6 +211,7 @@ const mapDatabaseEventsToCalendarEvents = (dbEvents: any[]): CalendarEvent[] =>
       updatedAt: e.updatedAt,
       reminders: [{ id: 'reminder-15', type: 'notification' as const, time: 15, enabled: true }],
       attendees: [],
+      ...readCalendarEventMetadata(e.metadata),
     };
   });
 

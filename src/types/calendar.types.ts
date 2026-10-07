@@ -1,4 +1,5 @@
 // Calendar System TypeScript Definitions
+import type { TravelReminderContext } from '@/lib/familyReminderContract';
 
 export interface CalendarEvent {
   id: string;
@@ -32,6 +33,9 @@ export interface CalendarEvent {
   updatedAt: Date;
   // Work-specific properties
   workStatus?: WorkStatus;
+  travel?: TravelReminderContext;
+  reminderPreferences?: { enabled?: boolean; push?: boolean };
+  metadata?: Record<string, unknown>;
 }
 
 export interface WorkStatus {

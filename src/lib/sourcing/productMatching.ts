@@ -1,10 +1,12 @@
+import type { ComponentEvidence, SourcedProduct } from '@/types/sourcing.types';
+
 const PART_HINTS: Record<string, RegExp> = {
   'wc-unit': /\b(?:wc|toilet)\s*(?:furniture\s*)?(?:unit|cabinet)\b|\bback to wall unit\b/i,
   cistern: /\bcistern\b|\bflush tank\b/i,
-  toilet: /\btoilet\b|\bwc pan\b/i,
+  toilet: /\btoilet\b(?!\s*(?:unit|seat|cabinet))|\bwc pan\b/i,
   seat: /\btoilet seat\b|\bsoft close seat\b/i,
-  basin: /\bbasin\b|\bwashbasin\b/i,
-  vanity: /\bvanity\b|\bvanity unit\b/i,
+  basin: /\b(?:wash)?basin\b(?![ -]*(?:tap|waste|mixer))/i,
+  vanity: /\bvanity\b|\b(?:drawer|wall[ -]hung|floor[ -]standing) unit\b|\bunit with (?:a )?basin\b/i,
   'basin-tap': /\bbasin tap\b|\bmixer tap\b/i,
   'basin-waste': /\bbasin waste\b|\bclick waste\b/i,
   'led-bulb': /\bled bulbs?\b|\bled lamps?\b|\blight ?bulbs?\b/i,
@@ -16,14 +18,50 @@ const PART_HINTS: Record<string, RegExp> = {
   shower: /\bshower (?:system|kit|mixer|valve)\b/i,
   riser: /\b(?:fixed )?riser\b|\briser rail\b/i,
   'bath-filler': /\bbath filler\b|\bbath taps?\b/i,
+  bath: /\bbath\b(?![ -]*(?:filler|mixer|taps?|screens?|panels?|waste))/i,
   'shower-tray': /\bshower tray\b/i,
   waste: /\bwaste\b|\btrap\b/i,
   'shower-door': /\bshower doors?\b|\bsliding doors?\b/i,
   'towel-rail': /\btowel rails?\b|\btowel radiators?\b/i,
   screen: /\b(?:bath|shower) screens?\b/i,
+  'front-panel': /\b(?:bath|front) panel\b/i,
+  'end-panel': /\bend panel\b/i,
+  'side-panel': /\bside panel\b/i,
+  worktop: /\bworktop\b/i,
 };
 
-/** Conservative title/description hints. The user reviews the included-parts checklist before saving. */
+export const sourcingComponents = Object.keys(PART_HINTS);
+const hint = (part: string) => PART_HINTS[part] ?? new RegExp(`\\b${part.replace(/[^a-z0-9-]/gi, '').replace(/-/g, '[ -]')}\\b`, 'i');
+
+/** Negation attaches to the named part, not every fixture earlier in the sentence. */
+export function inferComponentEvidence(text: string, required = sourcingComponents): Record<string, ComponentEvidence> {
+  const evidence: Record<string, ComponentEvidence> = {};
+  const clauses = text.replace(/<[^>]*>/g, ' ').split(/[;\n]|\.(?!\d)/);
+  for (const part of required) {
+    const pattern = hint(part);
+    const matches = clauses.flatMap((clause) => {
+      const match = pattern.exec(clause);
+      if (!match) return [];
+      const before = clause.slice(Math.max(0, match.index - 45), match.index);
+      const after = clause.slice(match.index + match[0].length);
+      const negativeList = before.match(/(?:without|excludes?|excluding|does not include|not supplied with|not included:|sold separately:|no)\s+([^.;]*)$/i);
+      const excluded = !!negativeList && !/\b(?:with|includes?|supplied|included)\b/i.test(negativeList[1])
+        || /^\s*(?:(?:and|&|,)\s+(?!with\b|includes?\b)[a-z -]{1,40}\s+)?(?:is |are )?[:(-]?\s*(?:not included|not supplied|excluded|sold separately|optional|available separately)/i.test(after);
+      const count = before.match(/(?:^|\s)(\d+)\s*(?:x\s*)?$/i);
+      return [{ quantity: excluded ? 0 : count ? Number(count[1]) : 1, state: excluded ? 'excluded' as const : 'included' as const, source: 'supplier' as const, text: clause.trim().slice(0, 200) }];
+    });
+    if (matches.length) evidence[part] = matches.find((entry) => entry.state === 'excluded') ?? matches[0];
+  }
+  return evidence;
+}
+
 export function inferIncludedComponents(text: string, required: string[]) {
-  return required.filter((part) => PART_HINTS[part]?.test(text) ?? new RegExp(`\\b${part.replace(/-/g, '[ -]')}\\b`, 'i').test(text));
+  return Object.entries(inferComponentEvidence(text, required)).filter(([, entry]) => entry.state === 'included').map(([part]) => part);
+}
+
+export function productComponentEvidence(product: SourcedProduct, required: string[]) {
+  const text = [product.name, product.size, ...Object.entries(product.specs ?? {}).map(([key, value]) => `${key}: ${value}`), product.description].filter(Boolean).join('; ');
+  const inferred = inferComponentEvidence(text, required);
+  for (const part of product.components) if (!inferred[part]) inferred[part] = { quantity: 1, state: 'included', source: 'legacy' };
+  return { ...inferred, ...product.componentEvidence };
 }

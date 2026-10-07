@@ -15,11 +15,13 @@ import {
   Plus
 } from 'lucide-react';
 import { WorkStatus, CalendarEvent, Person } from '@/types/calendar.types';
+import type { TravelChecklistItem } from '@/lib/familyReminderContract';
 
 interface WorkStatusManagerProps {
   people: Person[];
   events: CalendarEvent[];
-  onAddWorkEvent: (event: Omit<CalendarEvent, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  onAddWorkEvent: (event: Omit<CalendarEvent, 'id' | 'createdAt' | 'updatedAt'>) => void | Promise<void>;
+  event?: CalendarEvent;
   onClose: () => void;
 }
 
@@ -27,17 +29,41 @@ const WorkStatusManager: React.FC<WorkStatusManagerProps> = ({
   people,
   events,
   onAddWorkEvent,
-  onClose
+  onClose,
+  event,
 }) => {
-  const [selectedPerson, setSelectedPerson] = useState<string>('');
-  const [workDate, setWorkDate] = useState<string>(new Date().toISOString().split('T')[0]);
-  const [workTime, setWorkTime] = useState<string>('09:00');
-  const [duration, setDuration] = useState<number>(480); // 8 hours default
+  const initialTravel = event?.travel ?? event?.metadata?.travel as CalendarEvent['travel'];
+  const [selectedPerson, setSelectedPerson] = useState<string>(event?.person ?? '');
+  const [workDate, setWorkDate] = useState<string>(event?.date ?? new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/London' }).format(new Date()));
+  const [workTime, setWorkTime] = useState<string>(event?.time ?? '09:00');
+  const [duration, setDuration] = useState<number>(event?.duration ?? 480);
   const [workStatus, setWorkStatus] = useState<WorkStatus>({
     type: 'office',
     affectsPickup: false,
-    location: ''
+    location: event?.location ?? '',
+    notes: event?.notes,
+    ...event?.workStatus,
+    ...(initialTravel ? { type: 'travel', location: initialTravel.destination ?? event?.location ?? '',
+      travelDetails: { destination: initialTravel.destination ?? '',
+        departureTime: initialTravel.departureTime, returnTime: initialTravel.returnTime,
+        transportation: initialTravel.transportation ?? event?.workStatus?.travelDetails?.transportation ?? 'other' },
+    } : {}),
   });
+  const [departureDate, setDepartureDate] = useState(initialTravel?.departureDate ?? event?.date ?? '');
+  const [departureTime, setDepartureTime] = useState(initialTravel?.departureTime ?? event?.workStatus?.travelDetails?.departureTime ?? '');
+  const [departureZone, setDepartureZone] = useState(initialTravel?.departureTimeZone ?? 'Europe/London');
+  const [returnDate, setReturnDate] = useState(initialTravel?.returnDate ?? '');
+  const [returnTime, setReturnTime] = useState(initialTravel?.returnTime ?? event?.workStatus?.travelDetails?.returnTime ?? '');
+  const [preparationText, setPreparationText] = useState((initialTravel?.preparation ?? []).map((item) => item.title).join('\n'));
+  const [coverageText, setCoverageText] = useState((initialTravel?.coverage ?? []).map((item) => item.title).join('\n'));
+  const [coordinators, setCoordinators] = useState<string[] | undefined>(initialTravel?.coordinatorPersonIds);
+  const initialPreferences = event?.reminderPreferences ?? event?.metadata?.reminderPreferences as CalendarEvent['reminderPreferences'];
+  const [pushEnabled, setPushEnabled] = useState(initialPreferences?.push !== false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const checklist = (text: string, previous: TravelChecklistItem[] = []): TravelChecklistItem[] =>
+    text.split('\n').map((title) => title.trim()).filter(Boolean).map((title, index) =>
+      previous.find((item) => item.title === title) ?? { id: `item-${index}`, title, status: 'unknown' });
 
   const workTypeIcons = {
     office: <Building2 className="w-5 h-5" />,
@@ -49,7 +75,7 @@ const WorkStatusManager: React.FC<WorkStatusManagerProps> = ({
   const workTypeLabels = {
     office: 'Office',
     remote: 'Working from Home',
-    travel: 'Business Travel',
+    travel: 'Travel',
     client_site: 'Client Site'
   };
 
@@ -60,7 +86,7 @@ const WorkStatusManager: React.FC<WorkStatusManagerProps> = ({
     other: <MapPin className="w-4 h-4" />
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!selectedPerson) {
@@ -68,33 +94,56 @@ const WorkStatusManager: React.FC<WorkStatusManagerProps> = ({
       return;
     }
 
-    const title = workStatus.type === 'travel' && workStatus.travelDetails?.destination
-      ? `Business Travel - ${workStatus.travelDetails.destination}`
+    const title = event?.title ?? (workStatus.type === 'travel'
+      ? `Travel${workStatus.location ? ` - ${workStatus.location}` : ''}`
       : workStatus.type === 'office'
       ? `Office Work${workStatus.location ? ` - ${workStatus.location}` : ''}`
       : workStatus.type === 'remote'
       ? 'Working from Home'
-      : `Client Work${workStatus.location ? ` - ${workStatus.location}` : ''}`;
+      : `Client Work${workStatus.location ? ` - ${workStatus.location}` : ''}`);
 
     const newEvent: Omit<CalendarEvent, 'id' | 'createdAt' | 'updatedAt'> = {
+      ...(event ?? {}),
       title,
       person: selectedPerson,
       date: workDate,
       time: workTime,
       duration,
       location: workStatus.location || undefined,
-      recurring: 'none',
-      cost: 0,
-      type: 'work',
-      isRecurring: false,
-      priority: 'medium',
-      status: 'confirmed',
-      workStatus,
-      notes: workStatus.notes
+      recurring: event?.recurring ?? 'none',
+      cost: event?.cost ?? 0,
+      type: event?.type ?? 'work',
+      isRecurring: event?.isRecurring ?? false,
+      priority: event?.priority ?? 'medium',
+      status: event?.status ?? 'confirmed',
+      workStatus: { ...workStatus, ...(workStatus.type === 'travel' ? { travelDetails: {
+        destination: workStatus.location ?? '', departureTime: departureTime || undefined,
+        returnTime: returnTime || undefined, transportation: workStatus.travelDetails?.transportation ?? 'other',
+      } } : {}) },
+      metadata: { ...(event?.metadata ?? {}), version: 1, ...(workStatus.type === 'travel' ? {
+        travel: { destination: workStatus.location ?? '', departureDate: departureDate || workDate,
+          departureTime: departureTime || undefined, departureTimeZone: departureZone,
+          returnDate: returnDate || undefined, returnTime: returnTime || undefined,
+          transportation: workStatus.travelDetails?.transportation ?? 'other', coordinatorPersonIds: coordinators,
+          preparation: checklist(preparationText, initialTravel?.preparation), coverage: checklist(coverageText, initialTravel?.coverage),
+        }, reminderPreferences: { ...initialPreferences, enabled: initialPreferences?.enabled !== false, push: pushEnabled },
+      } : {}) },
+      travel: workStatus.type === 'travel' ? {
+        destination: workStatus.location ?? '', departureDate: departureDate || workDate,
+        departureTime: departureTime || undefined, departureTimeZone: departureZone,
+        returnDate: returnDate || undefined, returnTime: returnTime || undefined,
+        transportation: workStatus.travelDetails?.transportation ?? 'other', coordinatorPersonIds: coordinators,
+        preparation: checklist(preparationText, initialTravel?.preparation), coverage: checklist(coverageText, initialTravel?.coverage),
+      } : undefined,
+      reminderPreferences: { ...initialPreferences, enabled: initialPreferences?.enabled !== false, push: pushEnabled },
+      notes: workStatus.notes ?? event?.notes,
     };
 
-    onAddWorkEvent(newEvent);
-    onClose();
+    setSaving(true);
+    setError(null);
+    try { await onAddWorkEvent(newEvent); onClose(); }
+    catch (failure) { setError(failure instanceof Error ? failure.message : 'Could not save travel details.'); }
+    finally { setSaving(false); }
   };
 
   const updateWorkStatus = (updates: Partial<WorkStatus>) => {
@@ -113,7 +162,7 @@ const WorkStatusManager: React.FC<WorkStatusManagerProps> = ({
       <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-semibold text-gray-900">Log Work Status</h2>
+            <h2 className="text-xl font-semibold text-gray-900">{event ? 'Travel details' : 'Log Work Status'}</h2>
             <button
               onClick={onClose}
               className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
@@ -248,8 +297,8 @@ const WorkStatusManager: React.FC<WorkStatusManagerProps> = ({
                     </label>
                     <input
                       type="time"
-                      value={workStatus.travelDetails?.departureTime || ''}
-                      onChange={(e) => updateTravelDetails({ departureTime: e.target.value })}
+                      value={departureTime}
+                      onChange={(e) => setDepartureTime(e.target.value)}
                       className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
                   </div>
@@ -259,12 +308,28 @@ const WorkStatusManager: React.FC<WorkStatusManagerProps> = ({
                     </label>
                     <input
                       type="time"
-                      value={workStatus.travelDetails?.returnTime || ''}
-                      onChange={(e) => updateTravelDetails({ returnTime: e.target.value })}
+                      value={returnTime}
+                      onChange={(e) => setReturnTime(e.target.value)}
                       className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
                   </div>
                 </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="text-sm">Departure date<input type="date" value={departureDate || workDate} onChange={(e) => setDepartureDate(e.target.value)} className="mt-1 w-full rounded border p-2" /></label>
+                  <label className="text-sm">Return date<input type="date" min={departureDate || workDate} value={returnDate} onChange={(e) => setReturnDate(e.target.value)} className="mt-1 w-full rounded border p-2" /></label>
+                </div>
+                <label className="block text-sm">Departure timezone<input value={departureZone} onChange={(e) => setDepartureZone(e.target.value)} className="mt-1 w-full rounded border p-2" /></label>
+                <label className="block text-sm">Preparation<textarea value={preparationText} onChange={(e) => setPreparationText(e.target.value)} rows={3} className="mt-1 w-full rounded border p-2" /></label>
+                <label className="block text-sm">Household cover<textarea value={coverageText} onChange={(e) => setCoverageText(e.target.value)} rows={3} className="mt-1 w-full rounded border p-2" /></label>
+                <fieldset><legend className="text-sm">Coordination recipients</legend>{people.filter((person) => person.id !== selectedPerson && (/adult|parent/i.test(person.role ?? '') || /adult/i.test(person.ageGroup ?? ''))).map((person) => {
+                  const defaults = people.filter((candidate) => candidate.id !== selectedPerson && (/adult|parent/i.test(candidate.role ?? '') || /adult/i.test(candidate.ageGroup ?? '')));
+                  const selected = coordinators ?? (defaults.length === 1 ? [defaults[0].id] : []);
+                  return <label key={person.id} className="mr-4 inline-flex items-center gap-2 text-sm"><input type="checkbox" checked={selected.includes(person.id)} onChange={(e) => setCoordinators(e.target.checked ? [...selected, person.id] : selected.filter((id) => id !== person.id))} />{person.name}</label>;
+                })}</fieldset>
+                <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={pushEnabled} onChange={(e) => setPushEnabled(e.target.checked)} />Push reminders</label>
+                {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
+                {saving && <p role="status" className="text-sm">Saving travel details...</p>}
 
                 <div>
                   <label className="block text-sm font-medium text-blue-700 mb-2">
@@ -360,10 +425,11 @@ const WorkStatusManager: React.FC<WorkStatusManagerProps> = ({
               </button>
               <button
                 type="submit"
+                disabled={saving}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2"
               >
-                <Plus className="w-4 h-4" />
-                <span>Add Work Event</span>
+                {event ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                <span>{saving ? 'Saving...' : event ? 'Save travel details' : 'Add Work Event'}</span>
               </button>
             </div>
           </form>

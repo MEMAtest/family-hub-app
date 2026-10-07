@@ -159,6 +159,7 @@ model CalendarEvent {
   sourceId         String?  @map("source_id")
   googleCalendarId String?  @map("google_calendar_id")
   googleEventId    String?  @map("google_event_id")
+  metadata         Json?
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
 
@@ -1063,6 +1064,7 @@ model Notification {
   actions         Json?
   relatedEventId  String?  @map("related_event_id")
   relatedPersonId String?  @map("related_person_id")
+  recipientPersonId String? @map("recipient_person_id")
   expiresAt       DateTime? @map("expires_at")
   snoozedUntil    DateTime? @map("snoozed_until")
   metadata        Json?
@@ -1072,6 +1074,7 @@ model Notification {
   family Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
 
   @@index([familyId, read])
+  @@index([familyId, recipientPersonId, read])
   @@index([familyId, timestamp])
   @@map("notifications")
 }
@@ -1079,6 +1082,7 @@ model Notification {
 model PushSubscription {
   id          String   @id @default(cuid())
   familyId    String   @map("family_id")
+  personId    String?  @map("person_id")
   endpoint    String   @unique
   p256dh      String
   auth        String
@@ -1092,6 +1096,7 @@ model PushSubscription {
   family Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
 
   @@index([familyId, isActive])
+  @@index([familyId, personId, isActive])
   @@map("push_subscriptions")
 }
 

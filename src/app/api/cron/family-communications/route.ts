@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { isAuthorisedCronRequest } from '@/lib/cronAuth';
 import { syncStewartFlemingGmail } from '@/lib/gmailCalendarServer';
+import { isLondonSchoolSyncSlot } from '@/utils/schoolSyncSchedule';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -10,6 +11,10 @@ export const runtime = 'nodejs';
 export async function GET(request: NextRequest) {
   if (!isAuthorisedCronRequest(request)) {
     return NextResponse.json({ error: 'Unauthorised' }, { status: 401 });
+  }
+
+  if (!isLondonSchoolSyncSlot()) {
+    return NextResponse.json({ ok: true, emailSync: { skipped: 'Outside 08:00/20:00 Europe/London school sync slots' } });
   }
 
   const familyId = process.env.CALENDAR_INBOUND_FAMILY_ID;

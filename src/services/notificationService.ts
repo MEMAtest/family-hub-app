@@ -11,12 +11,16 @@ import { CalendarEvent } from '@/types/calendar.types';
 import { getCalendarEventIcon, getEventNotificationMetadata } from '@/utils/eventSemantics';
 import conflictDetectionService, { DetectedConflict } from './conflictDetectionService';
 import { emailService } from './emailService';
+import { isFamilyReminder, type FamilyReminderAction } from '@/lib/familyReminderContract';
 
 class FamilyHubNotificationService implements NotificationService {
   private notifications: InAppNotification[] = [];
   private reminders: NotificationReminder[] = [];
   private settings: NotificationSettings;
   private familyId: string | null = null;
+  private personId: string | null = null;
+  private scopeVersion = 0;
+  private reminderTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
   private serviceWorkerRegistration?: ServiceWorkerRegistration;
   private pushSubscriptionInFlight: Promise<void> | null = null;
   private conflicts: DetectedConflict[] = [];
@@ -30,20 +34,44 @@ class FamilyHubNotificationService implements NotificationService {
     // Only initialize in browser environment
     if (typeof window !== 'undefined') {
       this.initializeServiceWorker();
-      this.loadPersistedData();
     }
   }
 
-  setFamilyId(familyId: string | null) {
+  async setFamilyId(familyId: string | null) {
+    const version = ++this.scopeVersion;
     this.familyId = familyId;
-    if (typeof window !== 'undefined' && familyId && this.checkPermission().granted) {
-      void this.syncPushSubscription();
+    this.personId = null;
+    this.notifications = [];
+    this.reminders = [];
+    this.reminderTimeouts.forEach(clearTimeout);
+    this.reminderTimeouts.clear();
+    this.snoozeTimeouts.forEach(clearTimeout);
+    this.snoozeTimeouts.clear();
+    this.notifySubscribers();
+    if (typeof window === 'undefined' || !familyId) return;
+    try {
+      const response = await fetch('/api/auth/me');
+      if (!response.ok) return;
+      const identity = await response.json();
+      if (version !== this.scopeVersion || identity.family?.id !== familyId) return;
+      this.personId = identity.familyMember?.id ?? null;
+      this.settings = this.getDefaultSettings();
+      this.loadPersistedData();
+      this.notifySubscribers();
+      if (this.settings.channels.push && this.checkPermission().granted) await this.syncPushSubscription();
+    } catch (error) {
+      console.warn('Unable to bind notification account:', error);
     }
+  }
+
+  private storageKey(kind: string) {
+    return `family-hub:${this.familyId ?? 'none'}:${this.personId ?? 'unclaimed'}:${kind}`;
   }
 
   async syncFromDatabase(): Promise<void> {
     if (!this.familyId) return;
 
+    const version = this.scopeVersion;
     try {
       const response = await fetch(`/api/families/${this.familyId}/notifications?limit=100&offset=0`);
       if (!response.ok) {
@@ -51,6 +79,7 @@ class FamilyHubNotificationService implements NotificationService {
       }
 
       const payload = await response.json();
+      if (version !== this.scopeVersion) return;
       const remote = Array.isArray(payload) ? payload : [];
 
       const remoteNotifications: InAppNotification[] = remote.map((n: any) => ({
@@ -64,7 +93,7 @@ class FamilyHubNotificationService implements NotificationService {
       const merged = new Map<string, InAppNotification>();
       remoteNotifications.forEach((n) => merged.set(n.id, n));
       this.notifications.forEach((n) => {
-        if (!merged.has(n.id)) {
+        if (!merged.has(n.id) && !isFamilyReminder(n)) {
           merged.set(n.id, n);
         }
       });
@@ -109,7 +138,7 @@ class FamilyHubNotificationService implements NotificationService {
    */
   private loadPersistedData() {
     try {
-      const storedNotifications = localStorage.getItem('family-hub-notifications');
+      const storedNotifications = localStorage.getItem(this.storageKey('notifications'));
       if (storedNotifications) {
         const parsedNotifications = JSON.parse(storedNotifications).map((n: any) => ({
           ...n,
@@ -123,7 +152,7 @@ class FamilyHubNotificationService implements NotificationService {
         }
       }
 
-      const storedSettings = localStorage.getItem('family-hub-notification-settings');
+      const storedSettings = localStorage.getItem(this.storageKey('notification-settings'));
       if (storedSettings) {
         const parsedSettings = JSON.parse(storedSettings);
         this.settings = {
@@ -140,7 +169,7 @@ class FamilyHubNotificationService implements NotificationService {
         };
       }
 
-      const storedReminders = localStorage.getItem('family-hub-reminders');
+      const storedReminders = localStorage.getItem(this.storageKey('reminders'));
       if (storedReminders) {
         this.reminders = JSON.parse(storedReminders).map((r: any) => ({
           ...r,
@@ -151,6 +180,10 @@ class FamilyHubNotificationService implements NotificationService {
         }));
       }
       this.normalizeSnoozes();
+      if (this.settings.enabled && this.settings.channels.browser && this.checkPermission().granted) {
+        this.reminders.filter((reminder) => reminder.status === 'pending' && reminder.scheduledFor > new Date())
+          .forEach((reminder) => this.scheduleBrowserReminder(reminder));
+      }
     } catch (error) {
       console.error('Failed to load persisted notification data:', error);
     }
@@ -161,9 +194,9 @@ class FamilyHubNotificationService implements NotificationService {
    */
   private persistData() {
     try {
-      localStorage.setItem('family-hub-notifications', JSON.stringify(this.notifications));
-      localStorage.setItem('family-hub-notification-settings', JSON.stringify(this.settings));
-      localStorage.setItem('family-hub-reminders', JSON.stringify(this.reminders));
+      localStorage.setItem(this.storageKey('notifications'), JSON.stringify(this.notifications));
+      localStorage.setItem(this.storageKey('notification-settings'), JSON.stringify(this.settings));
+      localStorage.setItem(this.storageKey('reminders'), JSON.stringify(this.reminders));
     } catch (error) {
       console.error('Failed to persist notification data:', error);
     }
@@ -226,7 +259,7 @@ class FamilyHubNotificationService implements NotificationService {
 
     if (permission === 'granted') {
       result.grantedAt = new Date();
-      await this.syncPushSubscription();
+      if (this.settings.channels.push) await this.syncPushSubscription();
     }
 
     return result;
@@ -235,6 +268,7 @@ class FamilyHubNotificationService implements NotificationService {
   async syncPushSubscription(): Promise<void> {
     if (process.env.NODE_ENV !== 'production') return;
     if (!this.familyId || typeof window === 'undefined') return;
+    if (!this.personId || !this.settings.channels.push || !this.settings.enabled) return;
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
     if (!this.checkPermission().granted) return;
 
@@ -278,6 +312,7 @@ class FamilyHubNotificationService implements NotificationService {
         subscription: subscription.toJSON(),
         userAgent: navigator.userAgent,
         deviceLabel: this.getDeviceLabel(),
+        enabled: this.settings.channels.push && this.settings.enabled,
       }),
     });
 
@@ -349,9 +384,15 @@ class FamilyHubNotificationService implements NotificationService {
     const timeUntilReminder = reminder.scheduledFor.getTime() - now.getTime();
 
     if (timeUntilReminder > 0) {
-      setTimeout(() => {
-        this.deliverBrowserReminder(reminder);
-      }, timeUntilReminder);
+      const previous = this.reminderTimeouts.get(reminder.id);
+      if (previous) clearTimeout(previous);
+      const timeout = setTimeout(() => {
+        this.reminderTimeouts.delete(reminder.id);
+        if (!this.reminders.some((item) => item.id === reminder.id) || reminder.status !== 'pending') return;
+        if (reminder.scheduledFor > new Date()) this.scheduleBrowserReminder(reminder);
+        else void this.deliverBrowserReminder(reminder);
+      }, Math.min(timeUntilReminder, 2_147_483_647));
+      this.reminderTimeouts.set(reminder.id, timeout);
     }
   }
 
@@ -432,6 +473,9 @@ class FamilyHubNotificationService implements NotificationService {
    * Cancel a scheduled reminder
    */
   async cancelReminder(reminderId: string): Promise<void> {
+    const timeout = this.reminderTimeouts.get(reminderId);
+    if (timeout) clearTimeout(timeout);
+    this.reminderTimeouts.delete(reminderId);
     this.reminders = this.reminders.filter(r => r.id !== reminderId);
     this.persistData();
   }
@@ -576,6 +620,7 @@ class FamilyHubNotificationService implements NotificationService {
    */
   async markAsRead(notificationId: string): Promise<void> {
     const notification = this.notifications.find(n => n.id === notificationId);
+    if (notification?.metadata?.canAct === false) throw new Error('Sign in as the named recipient.');
     if (notification) {
       notification.read = true;
       this.persistData();
@@ -597,7 +642,7 @@ class FamilyHubNotificationService implements NotificationService {
    * Mark all notifications as read
    */
   async markAllAsRead(): Promise<void> {
-    this.notifications.forEach(n => n.read = true);
+    this.notifications.forEach(n => { if (n.metadata?.canAct !== false) n.read = true; });
     this.persistData();
     this.notifySubscribers();
 
@@ -614,6 +659,12 @@ class FamilyHubNotificationService implements NotificationService {
    * Clear a notification
    */
   async clearNotification(notificationId: string): Promise<void> {
+    const notification = this.notifications.find((item) => item.id === notificationId);
+    if (notification?.metadata?.canAct === false) throw new Error('Sign in as the named recipient.');
+    if (notification && isFamilyReminder(notification)) {
+      await this.applyReminderAction(notificationId, 'not_needed');
+      return;
+    }
     const timeoutId = this.snoozeTimeouts.get(notificationId);
     if (timeoutId) {
       clearTimeout(timeoutId);
@@ -637,6 +688,10 @@ class FamilyHubNotificationService implements NotificationService {
    */
   async snoozeNotification(notificationId: string, until: Date): Promise<void> {
     const notification = this.notifications.find(n => n.id === notificationId);
+    if (notification && isFamilyReminder(notification)) {
+      await this.applyReminderAction(notificationId, 'snooze', until);
+      return;
+    }
     if (notification) {
       notification.snoozedUntil = until;
       this.scheduleSnoozeWakeup(notification);
@@ -668,13 +723,42 @@ class FamilyHubNotificationService implements NotificationService {
   async updateSettings(updates: Partial<NotificationSettings>): Promise<NotificationSettings> {
     this.settings = { ...this.settings, ...updates };
     this.persistData();
+    if (this.familyId && typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+      const registration = await navigator.serviceWorker.getRegistration('/sw.js');
+      const subscription = await registration?.pushManager.getSubscription();
+      if ((!this.settings.channels.push || !this.settings.enabled) && subscription) {
+        const response = await fetch(`/api/families/${this.familyId}/push-subscriptions`, {
+          method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ endpoint: subscription.endpoint }),
+        });
+        if (!response.ok) throw new Error('Could not disable this device subscription.');
+      } else if (this.settings.channels.push && this.checkPermission().granted) await this.syncPushSubscription();
+    }
     return { ...this.settings };
+  }
+
+  async applyReminderAction(id: string, action: FamilyReminderAction, until?: Date): Promise<{ url?: string }> {
+    if (!this.familyId) throw new Error('Family account is not connected.');
+    const notification = this.notifications.find((item) => item.id === id);
+    if (notification?.metadata?.canAct === false) throw new Error('Sign in as the named recipient.');
+    const response = await fetch(`/api/families/${this.familyId}/notifications/${id}/actions`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, until: until?.toISOString() }),
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || 'Could not update reminder.');
+    await this.syncFromDatabase();
+    return payload;
   }
 
   /**
    * Schedule reminders for a calendar event
    */
   async scheduleEventReminders(event: CalendarEvent): Promise<void> {
+    await this.cancelEventReminders(event.id);
+    // Travel is scheduled server-side; a second browser timer would duplicate private prompts.
+    if (event.workStatus?.type === 'travel' || (event as CalendarEvent & { metadata?: { travel?: unknown } }).metadata?.travel) return;
+    if (!this.settings.enabled || event.status === 'cancelled' || event.person !== this.personId) return;
     const eventDateTime = new Date(`${event.date}T${event.time}`);
     const eventIcon = getCalendarEventIcon(event);
     const reminderKey =
@@ -687,7 +771,9 @@ class FamilyHubNotificationService implements NotificationService {
         : event.type === 'social'
         ? 'social'
         : 'other';
-    const reminderTimes = this.settings.defaultReminders[reminderKey] || this.settings.defaultReminders.other;
+    const reminderTimes = event.reminders
+      ? event.reminders.filter((reminder) => reminder.enabled && reminder.type === 'notification').map((reminder) => reminder.time)
+      : this.settings.defaultReminders[reminderKey] || this.settings.defaultReminders.other;
 
     // Cancel existing reminders for this event
     await this.cancelEventReminders(event.id);

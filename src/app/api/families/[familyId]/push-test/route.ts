@@ -1,21 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireFamilyAccess } from '@/lib/auth-utils';
-import { sendFamilyPushNotification } from '@/lib/webPush';
+import { sendMemberPushNotification } from '@/lib/webPush';
 
 const pushTestSchema = z.object({
   title: z.string().min(1).optional(),
   message: z.string().min(1).optional(),
 });
 
-export const POST = requireFamilyAccess(async (request: NextRequest, context, _authUser) => {
+export const POST = requireFamilyAccess(async (request: NextRequest, context, authUser) => {
   try {
     const { familyId } = await context.params;
     const body = pushTestSchema.parse(await request.json().catch(() => ({})));
     const title = body.title ?? 'Omosanya Home notifications are on';
-    const message = body.message ?? 'This test notification was sent to your mobile web app.';
+    const message = body.message ?? 'Check this device for your Family Hub test notification.';
 
-    const result = await sendFamilyPushNotification(familyId, {
+    const result = await sendMemberPushNotification(familyId, authUser.familyMemberId, {
       title,
       body: message,
       tag: `push-test-${familyId}`,

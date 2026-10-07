@@ -2,6 +2,9 @@ import {
   decodeStoredRecurringPattern,
   encodeStoredRecurringPattern,
   toCalendarEventResponse,
+  calendarEventDraftToDbData,
+  mergeCalendarEventMetadata,
+  readCalendarEventMetadata,
 } from '@/lib/calendarEventMapping';
 
 describe('calendar recurrence persistence mapping', () => {
@@ -36,5 +39,32 @@ describe('calendar recurrence persistence mapping', () => {
     expect(response.recurringPattern).toEqual(pattern);
     expect(response.date).toBe('2026-09-01');
     expect(response.time).toBe('15:30');
+  });
+});
+
+describe('durable event context', () => {
+  it('round-trips travel and reminders across save and reload', () => {
+    const metadata = mergeCalendarEventMetadata({
+      status: 'tentative', priority: 'high', attendees: ['ade'],
+      workStatus: { type: 'travel', affectsPickup: true },
+      travel: { departureDate: '2026-10-08', coordinatorPersonIds: ['ade'] },
+      reminders: [{ id: 'hour', type: 'notification', time: 60, enabled: true }],
+    });
+    expect(readCalendarEventMetadata(JSON.parse(JSON.stringify(metadata)))).toMatchObject(metadata);
+  });
+
+  it('preserves server provenance and manual assignment audit while ignoring client spoofing', () => {
+    const previous = { assignmentOverride: { personId: 'amari' }, institution: 'Stewart Fleming', travel: { destination: 'London' } };
+    const next = mergeCalendarEventMetadata({ metadata: { institution: 'Fake', assignmentOverride: null }, status: 'cancelled' }, previous);
+    expect(next).toEqual({ ...previous, status: 'cancelled' });
+  });
+
+  it('includes rich context when ingestion writes a calendar draft', () => {
+    const data = calendarEventDraftToDbData('family', {
+      title: 'Trip', person: 'angela', date: '2026-10-08', time: '08:00', duration: 60,
+      recurring: 'none', cost: 0, type: 'work', isRecurring: false, priority: 'high', status: 'confirmed',
+      workStatus: { type: 'travel', affectsPickup: true },
+    });
+    expect(data.metadata.workStatus).toEqual({ type: 'travel', affectsPickup: true });
   });
 });

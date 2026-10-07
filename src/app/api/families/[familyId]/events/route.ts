@@ -1,69 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireFamilyAccess } from '@/lib/auth-utils';
-import { buildUtcDateTime, encodeStoredRecurringPattern, toCalendarEventResponse, toDateKey, toTimeKey } from '@/lib/calendarEventMapping';
-import { isStewartFlemingSender } from '@/utils/schoolEmail';
+import { buildUtcDateTime, encodeStoredRecurringPattern, mergeCalendarEventMetadata, toCalendarEventResponse, toDateKey, toTimeKey } from '@/lib/calendarEventMapping';
+import { getSchoolEventImportMetadata, schoolImportedEventId } from '@/lib/schoolIntakeServer';
 import { parseDateKey } from '@/utils/recurrence';
 
-const matchesSchoolIntakeDraft = async (
-  familyId: string,
-  intakeId: string | undefined,
-  event: { title?: string; personId?: string; date?: string; time?: string; durationMinutes?: number; eventType?: string; location?: string },
-) => {
-  if (!intakeId) return false;
-  const intake = await prisma.calendarEmailIntake.findFirst({
-    where: { id: intakeId, familyId },
-    select: { sender: true, metadata: true, parsedDrafts: true },
-  });
-  const metadata = intake?.metadata;
-  if (!intake || !isStewartFlemingSender(intake.sender || '') || !metadata ||
-      typeof metadata !== 'object' || Array.isArray(metadata) ||
-      (metadata as Record<string, unknown>).schoolSenderVerified !== true || !Array.isArray(intake.parsedDrafts)) {
-    return false;
-  }
-  const draft = intake.parsedDrafts.find((value) => {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    const candidate = value as Record<string, unknown>;
-    return candidate.title === event.title && candidate.date === event.date &&
-      (candidate.type || 'other') === (event.eventType || 'other') &&
-      String(candidate.location || '') === String(event.location || '');
-  });
-  if (!draft || typeof draft !== 'object' || Array.isArray(draft)) return false;
-  const candidate = draft as Record<string, unknown>;
-  if (candidate.person && candidate.person !== event.personId) return false;
-  if (!candidate.person && event.personId) {
-    const cohortSpecific = /\b(?:Reception|Year\s+[1-6]|Key\s+Stage\s+[12])\b/i.test(String(candidate.source || ''));
-    const member = await prisma.familyMember.findFirst({
-      where: {
-        id: event.personId,
-        familyId,
-        ...(cohortSpecific ? {
-          AND: [
-            { OR: [{ role: { contains: 'student', mode: 'insensitive' } }, { role: { contains: 'child', mode: 'insensitive' } }] },
-            { OR: [{ ageGroup: { contains: 'child', mode: 'insensitive' } }, { ageGroup: { contains: 'primary', mode: 'insensitive' } }] },
-          ],
-        } : {}),
-      },
-      select: { id: true },
-    });
-    if (!member) return false;
-  }
-  const source = String(candidate.source || '');
-  const timeSpecified = typeof candidate.timeSpecified === 'boolean'
-    ? candidate.timeSpecified
-    : /\b\d{1,2}(?::|\.)(\d{2})\s*(?:am|pm)?\b|\b\d{1,2}\s*(?:am|pm)\b/i.test(source);
-  const expectedTime = timeSpecified ? candidate.time : '00:00';
-  const expectedDuration = timeSpecified
-    ? Number(candidate.duration || 60)
-    : (() => {
-        if (typeof candidate.endDate !== 'string') return 1439;
-        const start = new Date(`${String(candidate.date)}T00:00:00Z`).getTime();
-        const end = new Date(`${candidate.endDate}T00:00:00Z`).getTime();
-        return Math.max(1, Math.floor((end - start) / 86_400_000) + 1) * 1440 - 1;
-      })();
-  return expectedTime === event.time &&
-    expectedDuration === Number(event.durationMinutes || 60);
-};
+const validEventTime = (time: unknown) => time === undefined ||
+  (typeof time === 'string' && /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(time));
 
 // GET all calendar events for a family
 export const GET = requireFamilyAccess(async (_request: NextRequest, context, _authUser) => {
@@ -115,34 +58,48 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context, _a
       googleEventId,
     } = body;
 
+    if (!validEventTime(time)) return NextResponse.json({ error: 'Event time must be HH:MM' }, { status: 400 });
+
+    if (!await prisma.familyMember.findFirst({ where: { id: personId, familyId }, select: { id: true } })) {
+      return NextResponse.json({ error: 'Choose a member of this household' }, { status: 400 });
+    }
+    let metadata = mergeCalendarEventMetadata(body);
+    if (JSON.stringify(metadata).length > 64000) {
+      return NextResponse.json({ error: 'Event details are too large' }, { status: 400 });
+    }
+
     if (date && !parseDateKey(date)) {
       return NextResponse.json({ error: 'Event date is invalid' }, { status: 400 });
     }
 
-    if (source === 'gmail-school-email' && !(await matchesSchoolIntakeDraft(familyId, sourceId, {
-      title,
-      personId,
-      date,
-      time,
-      durationMinutes,
-      eventType,
-      location,
-    }))) {
-      return NextResponse.json({ error: 'School reminder provenance could not be verified' }, { status: 400 });
+    const intakeImport = source === 'gmail-school-email' || source === 'calendar-intake';
+    if (intakeImport) {
+      const trustedMetadata = await getSchoolEventImportMetadata(familyId, sourceId, {
+        source, title, personId, date, time, durationMinutes, eventType, location,
+      });
+      if (!trustedMetadata) return NextResponse.json({ error: 'Calendar intake provenance could not be verified' }, { status: 400 });
+      metadata = { ...metadata, ...trustedMetadata };
+      if (JSON.stringify(metadata).length > 64000) return NextResponse.json({ error: 'Event details are too large' }, { status: 400 });
     }
 
     const dateTime = buildUtcDateTime(date, time, eventDateTime);
 
-    if (source === 'gmail-school-email') {
+    if (intakeImport) {
       const existing = await prisma.calendarEvent.findFirst({
-        where: { familyId, source, sourceId, personId, title, eventDate: dateTime, eventTime: dateTime, eventType },
+        where: { familyId, sourceId, title, eventDate: dateTime, eventTime: dateTime, eventType },
         include: { person: true },
       });
+      if (existing && existing.personId !== personId) return NextResponse.json({ error: 'An existing imported event needs assignment repair before another import' }, { status: 409 });
       if (existing) return NextResponse.json(toCalendarEventResponse(existing));
     }
 
-    const event = await prisma.calendarEvent.create({
+    const importedId = intakeImport ? schoolImportedEventId(familyId, sourceId,
+      String((metadata.schoolAssignment as Record<string, unknown>).sourceEventKey), personId) : undefined;
+    let event;
+    try {
+      event = await prisma.calendarEvent.create({
       data: {
+        ...(importedId ? { id: importedId } : {}),
         familyId,
         personId,
         title,
@@ -160,11 +117,17 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context, _a
         sourceId,
         googleCalendarId,
         googleEventId,
+        metadata,
       },
       include: {
         person: true,
       },
     });
+    } catch (error) {
+      if ((error as { code?: string }).code !== 'P2002' || !importedId) throw error;
+      event = await prisma.calendarEvent.findFirst({ where: { id: importedId, familyId, sourceId }, include: { person: true } });
+      if (!event) throw error;
+    }
 
     return NextResponse.json(toCalendarEventResponse(event));
   } catch (error) {
@@ -180,13 +143,15 @@ export const PUT = requireFamilyAccess(async (request: NextRequest, context, _au
     const body = await request.json();
     const { id, date, time, person, type, duration, recurring, recurringPattern, ...rest } = body;
 
+    if (!validEventTime(time)) return NextResponse.json({ error: 'Event time must be HH:MM' }, { status: 400 });
+
     if (!id) {
       return NextResponse.json({ error: 'Event ID required' }, { status: 400 });
     }
 
     const existing = await prisma.calendarEvent.findFirst({
       where: { id, familyId },
-      select: { id: true, eventDate: true, eventTime: true, source: true, sourceId: true },
+      select: { id: true, personId: true, eventDate: true, eventTime: true, source: true, sourceId: true, metadata: true },
     });
 
     if (!existing) {
@@ -202,6 +167,13 @@ export const PUT = requireFamilyAccess(async (request: NextRequest, context, _au
 
     // Map UI fields to Prisma columns
     const updateData: any = {};
+    updateData.metadata = mergeCalendarEventMetadata(body, existing.metadata);
+    if (JSON.stringify(updateData.metadata).length > 64000) {
+      return NextResponse.json({ error: 'Event details are too large' }, { status: 400 });
+    }
+    if (date && !parseDateKey(date)) {
+      return NextResponse.json({ error: 'Event date is invalid' }, { status: 400 });
+    }
 
     // Map date/time fields
     if (date || time) {
@@ -214,7 +186,13 @@ export const PUT = requireFamilyAccess(async (request: NextRequest, context, _au
 
     // Map person to personId
     if (person !== undefined) {
+      if (!await prisma.familyMember.findFirst({ where: { id: person, familyId }, select: { id: true } })) {
+        return NextResponse.json({ error: 'Choose a member of this household' }, { status: 400 });
+      }
       updateData.personId = person;
+      if (existing.sourceId && person !== existing.personId) {
+        updateData.metadata.assignmentOverride = { personId: person, changedAt: new Date().toISOString(), changedBy: _authUser.familyMemberId };
+      }
     }
 
     // Map type to eventType
