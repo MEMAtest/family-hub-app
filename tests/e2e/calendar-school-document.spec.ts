@@ -490,7 +490,9 @@ test.describe('school document calendar intake', () => {
 
     await page.addInitScript(skipSetupWizard);
     await stubFamilyApis(page, state, { gmailConnected: false });
+    const inboxLoaded = page.waitForResponse((response) => response.url().endsWith('/calendar-intake/inbox') && response.ok());
     await openSchoolInbox(page);
+    await inboxLoaded;
 
     await expect(page.getByRole('button', { name: 'Connect Gmail' })).toBeEnabled({ timeout: 60_000 });
     const popupPromise = page.waitForEvent('popup');

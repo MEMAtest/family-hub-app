@@ -7,8 +7,8 @@ const PART_HINTS: Record<string, RegExp> = {
   seat: /\btoilet seat\b|\bsoft close seat\b/i,
   basin: /\b(?:wash)?basin\b(?![ -]*(?:tap|waste|mixer))/i,
   vanity: /\bvanity\b|\b(?:drawer|wall[ -]hung|floor[ -]standing) unit\b|\bunit with (?:a )?basin\b/i,
-  'basin-tap': /\bbasin tap\b|\bmixer tap\b/i,
-  'basin-waste': /\bbasin waste\b|\bclick waste\b/i,
+  'basin-tap': /\bbasin[ -]+(?:tap|mixer)\b/i,
+  'basin-waste': /\bbasin waste\b/i,
   'led-bulb': /\bled bulbs?\b|\bled lamps?\b|\blight ?bulbs?\b/i,
   downlight: /\bdownlights?\b|\bspotlights?\b/i,
   'extractor-fan': /\bextractor fans?\b|\bventilation fans?\b|\bbathroom fans?\b/i,
@@ -40,14 +40,16 @@ export function inferComponentEvidence(text: string, required = sourcingComponen
   for (const part of required) {
     const pattern = hint(part);
     const matches = clauses.flatMap((clause) => {
-      const match = pattern.exec(clause);
+      const basinContext = /\bbasin[ -]+(?:tap|mixer|waste)\b/i.test(clause) && !/\b(?:bath|shower|tray)\b/i.test(clause);
+      const match = pattern.exec(clause) ?? (part === 'basin-waste' && basinContext ? /\b(?:push[ -]button|click(?:[ -]clack)?|pop[ -]up) waste\b/i.exec(clause) : null);
       if (!match) return [];
       const before = clause.slice(Math.max(0, match.index - 45), match.index);
       const after = clause.slice(match.index + match[0].length);
       const negativeList = before.match(/(?:without|excludes?|excluding|does not include|not supplied with|not included:|sold separately:|no)\s+([^.;]*)$/i);
       const excluded = !!negativeList && !/\b(?:with|includes?|supplied|included)\b/i.test(negativeList[1])
         || /^\s*(?:(?:and|&|,)\s+(?!with\b|includes?\b)[a-z -]{1,40}\s+)?(?:is |are )?[:(-]?\s*(?:not included|not supplied|excluded|sold separately|optional|available separately)/i.test(after);
-      const count = before.match(/(?:^|\s)(\d+)\s*(?:x\s*)?$/i);
+      const prefix = clause.slice(0, match.index);
+      const count = prefix.match(/\b(\d+)\s*x\s*$/i) ?? prefix.match(/(?:^\s*|\b(?:includes?|contains?|with|and|pack of|set of)\s+|[,:]\s*)(\d+)\s*$/i);
       return [{ quantity: excluded ? 0 : count ? Number(count[1]) : 1, state: excluded ? 'excluded' as const : 'included' as const, source: 'supplier' as const, text: clause.trim().slice(0, 200) }];
     });
     if (matches.length) evidence[part] = matches.find((entry) => entry.state === 'excluded') ?? matches[0];

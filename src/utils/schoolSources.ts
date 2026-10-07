@@ -11,6 +11,9 @@ export type SchoolAssignment = {
   basis: 'institution' | 'named' | 'manual' | 'adult' | 'unresolved';
   originalPersonId: string;
   sourceKey: SchoolSourceKey | null;
+  concernedMemberIds: string[];
+  attendeePersonId: string | null;
+  attendeeStatus: 'confirmed' | 'needs_confirmation';
   manualOverride?: { personId: string; actorId: string; at: string };
 };
 export type SchoolDraft = CalendarImportDraft & { sourceEventKey?: string; schoolAssignment?: SchoolAssignment };
@@ -101,25 +104,52 @@ export const resolveSchoolSource = (input: {
 export const assignSchoolDrafts = (drafts: SchoolDraft[], source: SchoolSourceEvidence, rules: SchoolRules,
   members: SchoolMember[], overrides: Record<string, any> = {}): SchoolDraft[] => drafts.map((draft) => {
   const originalPersonId = draft.schoolAssignment?.originalPersonId ?? draft.person;
+  const eligible = rules.sources.find((rule) => rule.key === source.institution)?.memberIds || [];
+  const adult = isAdultSchoolEvent(draft.title);
+  const cohort = /\b(?:Reception|Year\s+[1-6]|Key\s+Stage\s+[12])\b/i.test(draft.source);
+  const concernedMemberIds = cohort ? eligible.filter((id) => id === draft.person) : [...eligible];
   const override = overrides[draft.sourceEventKey || draft.importId] || draft.schoolAssignment?.manualOverride;
   if (override && (override.personId === '' || members.some((member) => member.id === override.personId))) {
+    const attendee = members.find((member) => member.id === override.personId);
+    const confirmed = Boolean(attendee && (!adult || !isChildProfile({ role: attendee.role || '', ageGroup: attendee.ageGroup })));
     return { ...draft, person: override.personId, schoolAssignment: {
       basis: 'manual', originalPersonId, sourceKey: source.institution, manualOverride: override,
+      concernedMemberIds: cohort ? eligible.filter((id) => id === override.personId) : concernedMemberIds,
+      attendeePersonId: confirmed ? override.personId : null,
+      attendeeStatus: confirmed ? 'confirmed' : 'needs_confirmation',
     } };
   }
   if (!source.isSchool) return draft;
-  const eligible = rules.sources.find((rule) => rule.key === source.institution)?.memberIds || [];
-  const adult = isAdultSchoolEvent(draft.title);
   const named = members.filter((member) => new RegExp(`\\b${escape(member.name)}\\b`, 'i').test(draft.personEvidence ?? draft.source));
   const namedAdult = named.length === 1 && !isChildProfile({ role: named[0].role || '', ageGroup: named[0].ageGroup });
-  const cohort = /\b(?:Reception|Year\s+[1-6]|Key\s+Stage\s+[12])\b/i.test(draft.source);
   const person = adult ? (namedAdult ? named[0].id : '') :
     named.length === 1 ? (eligible.includes(named[0].id) ? named[0].id : '') :
       named.length === 0 && !cohort && eligible.length === 1 ? eligible[0] : '';
   const basis = adult ? 'adult' : person ? named.length === 1 ? 'named' : 'institution' : 'unresolved';
   const warning = adult ? 'Choose the adult attending.' : source.institution
     ? 'Confirm the child or cohort at this institution.' : 'Confirm the source institution before assigning a child.';
-  return { ...draft, person, schoolAssignment: { basis, originalPersonId, sourceKey: source.institution },
+  return { ...draft, person, schoolAssignment: { basis, originalPersonId, sourceKey: source.institution,
+    concernedMemberIds: cohort ? eligible.filter((id) => id === person) : concernedMemberIds,
+    attendeePersonId: person || null, attendeeStatus: person ? 'confirmed' : 'needs_confirmation' },
     importStatus: !person && draft.importStatus !== 'duplicate' ? 'needs_review' : draft.importStatus,
     warnings: [...(draft.warnings || []).filter((value) => value !== warning), ...(!person ? [warning] : [])] };
 });
+
+/** Safe display fallback before a legacy saved event's source is loaded. Never confirm a child as a PTA attendee. */
+export const schoolSavedEventAttendance = (event: {
+  title: string; person?: string | { id: string }; personId?: string; sourceId?: string | null; metadata?: unknown;
+}, members: SchoolMember[]) => {
+  const personId = event.personId ?? (typeof event.person === 'string' ? event.person : event.person?.id) ?? '';
+  const metadata = schoolMetadata(event.metadata);
+  const assignment = schoolMetadata(metadata.schoolAssignment);
+  const adult = Boolean(event.sourceId && isAdultSchoolEvent(event.title));
+  const member = members.find((value) => value.id === personId);
+  if (adult && (!member || isChildProfile({ role: member.role || '', ageGroup: member.ageGroup }))) {
+    return { attendeePersonId: null, attendeeStatus: 'needs_confirmation' as const };
+  }
+  const override = metadata.assignmentOverride || metadata.manualAssignmentOverride || assignment.manualOverride;
+  if (override && member) return { attendeePersonId: personId, attendeeStatus: 'confirmed' as const };
+  if (assignment.attendeeStatus === 'needs_confirmation') return { attendeePersonId: null, attendeeStatus: 'needs_confirmation' as const };
+  if (adult && assignment.attendeeStatus !== 'confirmed') return { attendeePersonId: null, attendeeStatus: 'needs_confirmation' as const };
+  return { attendeePersonId: personId || null, attendeeStatus: personId ? 'confirmed' as const : 'needs_confirmation' as const };
+};

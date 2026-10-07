@@ -10,6 +10,46 @@ Preferred single-call integration: `getSchoolEventImportMetadata(familyId, sourc
 
 ## Saved-event metadata
 
+### Concern versus attendee (legacy adult follow-up)
+
+`schoolAssignment` now also persists `concernedMemberIds: string[]`, `attendeePersonId: string | null`, and `attendeeStatus: "confirmed" | "needs_confirmation"`. `schoolProvenance.concernedMemberIds` is derived from the same family source rules. Concern is the institution's enrollment, not the stored attendee/default child; a narrow cohort remains unresolved without explicit evidence or choice. Source enrollment and a parent's attendance are independent.
+
+The secured, read-only `/events/[eventId]/source` response exposes these as `source.schoolAssignment` and `source.schoolProvenance`, including legacy PTA cases whose event metadata is null or whose preview was already cleared. A Stewart Fleming PTA stored against Askia has concerns `[Amari actual ID]`, null attendee and `needs_confirmation`; the stored person, event ID and manual overrides are not changed. Main's explicit adult `assignmentOverride` remains confirmed, with the school child concern unchanged.
+
+Main owns CalendarMain and shared eventPeopleLabel integration; this workstream owns the authorized narrow EventForm/EventSourceDetails changes. Display **Concerns Amari** separately from **Adult attendee to confirm**; never label the old child as **For Askia** or a confirmed attendee when `attendeeStatus` is `needs_confirmation`. Before source loading completes, use `schoolSavedEventAttendance(event, people)` from `schoolSources.ts` to suppress a source-linked adult meeting's legacy child label. On the fetched source response use its authoritative assignment; concerns must not be inferred from `event.person`. Do not replace event ownership when applying this display enrichment. No CalendarMain changes are made in this follow-up.
+
+### Unopened event list contract
+
+The secured family events GET also calls `enrichSavedSchoolEventResponses(familyId, events)` for all source-linked events. Its response remains a raw DB-shape array for databaseService; `id`, `personId`, included `person`, dates, manual overrides and unrelated metadata are preserved. It adds authoritative `metadata.schoolAssignment` and `metadata.schoolProvenance` before the source panel is opened for uniquely matched school drafts, with an institution-only fallback for adult school meetings. The entire batch uses one family-member read, one read-only source-rule lookup and one family-scoped linked-intake read with deduplicated IDs, with no writes or per-event database queries. Missing/foreign evidence, unmatched nonadult events and malformed dates are left unchanged; no well-formed source-linked events means no enrichment reads.
+
+Main should use `schoolSavedEventAttendance(event, people)` on every grid/day/upcoming/hover view, and `event.metadata.schoolAssignment.concernedMemberIds` (or matching provenance IDs) for **Concerns** labels. Do not use the preserved raw `personId` as a confirmed attendee/concern when `attendeeStatus` is `needs_confirmation`. The list therefore exposes the legacy Askia-owned PTA as concerns Amari, null attendee, needs confirmation, without silently changing ownership. Manual adult overrides remain confirmed. Only the GET response integration is added to the general events route in this batch follow-up.
+
+An unambiguously matched Stewart Fleming Arbor booking deadline stored against Askia therefore receives concerns Amari with `needs_confirmation` while retaining personId Askia. Explicit nonadult manual overrides remain confirmed independently of source concern.
+
+Batch/form follow-up files: `src/lib/schoolIntakeServer.ts`, `src/utils/schoolSources.ts` (helper accepts normalized and raw DB person shapes), `src/app/api/families/[familyId]/events/route.ts`, `src/lib/__tests__/schoolEventListEnrichment.test.ts`, `src/components/calendar/EventForm.tsx`, `src/components/calendar/EventSourceDetails.tsx`, their two school regression test files, and this contract. No CalendarMain, databaseService, Copilot or integrator-owned schoolEventPeople edits are made in this batch/form follow-up. EventForm clears only its local selection for unconfirmed legacy adult school events and requires an adult choice before explicit save; durable adult overrides remain selected. Provenance displays concerns and attendance separately.
+
+Final bounded batch/form verification: 7 focused suites / 65 tests passed, nonincremental TypeScript and scoped ESLint passed, and `git diff --check` passed. Coverage includes source-linked adult and matched nonadult legacy records, manual overrides, family boundaries, malformed evidence, batch query counts, idempotence, local-only form clearing and explicit adult save enforcement. OAuth isolated rerun passed; main stabilized the test by waiting for the first inbox response, with no Copilot production-code patch needed.
+
+Follow-up files (no schema or general event route changes):
+
+```text
+src/utils/schoolSources.ts
+src/utils/__tests__/schoolSources.test.ts
+src/lib/schoolIntakeServer.ts
+src/lib/schoolIntakeRepair.ts
+src/lib/__tests__/schoolIntakeServer.test.ts
+src/lib/__tests__/schoolIntakeRepair.test.ts
+src/lib/__tests__/schoolEventImportRoute.test.ts
+src/app/api/families/[familyId]/calendar-intake/inbox/route.ts
+src/app/api/families/[familyId]/calendar-intake/inbox/route.test.ts
+src/app/api/families/[familyId]/events/[eventId]/source/route.ts
+src/app/api/families/[familyId]/events/[eventId]/source/route.test.ts
+src/components/calendar/CalendarCopilotPanel.tsx
+docs/school-integration-contract.md
+```
+
+Follow-up focused verification: 13 suites / 140 tests in the final shared run. Added coverage for legacy PTA/no remaining draft, read-only source enrichment, anonymous/foreign-family rejection, concern versus adult choice, durable manual override preservation, rejecting child attendance for a new adult event, and replacing spoofed concern metadata with trusted enrollment. No database repair or browser/deployment verification is claimed by this follow-up.
+
 `schoolEventMetadata(draft, intake)` produces the following JSON, preserving the separation between source identity and assignment:
 
 ```json

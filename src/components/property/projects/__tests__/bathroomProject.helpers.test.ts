@@ -1,5 +1,6 @@
 import type { ProjectSourcing, SourcedProduct, SourcingRequirement } from '@/types/sourcing.types';
-import { basketTotal, isBathroomProject, leadingRequirementOption, productLineCost, productSize, quoteSizeCheck, requirementSelection, roomName } from '../bathroomProject.helpers';
+import { basketTotal, isBathroomProject, leadingRequirementOption, productLineCost, productSize, quoteSizeAssessment, quoteSizeCheck, requirementSelection, roomName } from '../bathroomProject.helpers';
+import { fixtureFit } from '@/lib/sourcing/fixtureFit';
 
 const requirement: SourcingRequirement = {
   id: 'vanity', roomId: 'main-bathroom', name: 'Vanity', category: 'Furniture', specification: 'Vanity and basin',
@@ -113,4 +114,32 @@ test('size presentation preserves supplier size or labelled specs and identifies
   expect(productSize({ ...product, specs: { Width: '600mm', Finish: 'White' } })).toBe('Width: 600mm');
   expect(productSize({ ...product, dimensions: { widthMm: 400 } })).toBe('width: 400mm');
   expect(productSize(product)).toBe('Size not stated');
+});
+
+test('Sophia vanity title supplies a bounded quote-width inference, never a confirmed room fit', () => {
+  const sophia = { ...product, name: 'Sophia 600mm Wall Hung Vanity Unit with Basin' };
+  expect(quoteSizeAssessment(requirement, sophia)).toMatchObject({ status: 'within', label: expect.stringContaining('Width inferred from vanity title') });
+  expect(quoteSizeCheck(requirement, sophia)).toContain('confirm supplier and room measurements');
+  expect(productSize(sophia)).toBe('600mm in supplier title; confirm dimension axis');
+  expect(fixtureFit(requirement, sophia).status).toBe('unknown');
+  expect(fixtureFit({ ...requirement, fitSpace: { widthMm: 650, depthMm: 500, clearanceMm: 0, source: 'Measured room', confirmedAt: '2026-10-07T10:00:00.000Z' } }, sophia).status).toBe('unknown');
+  expect(sophia.dimensions).toEqual({});
+  expect(quoteSizeAssessment({ ...requirement, constraints: { maxWidthMm: 600, depthMm: 400 } }, sophia).status).toBe('unknown');
+  expect(quoteSizeAssessment(requirement, { ...sophia, dimensions: { widthMm: 650 } }).status).toBe('different');
+});
+
+test.each([
+  'Sophia 600mm High Vanity Unit with Basin',
+  'Sophia 600 x 450mm Wall Hung Vanity Unit with Basin',
+  'Sophia 600mm Wall Hung Vanity Unit with Basin 800mm high',
+  '600mm Basin Mixer',
+  '600mm Tall Cabinet',
+])('unlabelled sizes outside the narrow vanity pattern remain unknown: %s', (name) => {
+  expect(quoteSizeAssessment(requirement, { ...product, name }).status).toBe('unknown');
+});
+
+test('supplier-labelled title width compares without inventing room dimensions', () => {
+  const labelled = { ...product, name: 'Sophia Vanity Unit 600mm wide' };
+  expect(quoteSizeAssessment(requirement, labelled).status).toBe('within');
+  expect(fixtureFit(requirement, labelled).status).toBe('unknown');
 });

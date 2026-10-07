@@ -14,11 +14,11 @@ export default function SelectedChoiceSummary({ sourcing, requirement, onOpen, o
       const cost = basketCostPence(sourcing, item);
       return <button key={item.id} type="button" onClick={() => onOpen(product, check.demand)} aria-label={`Inspect current selection ${product.name}`} className="flex min-h-14 w-full min-w-0 items-center gap-3 text-left">
         <SelectionThumbnail product={product} />
-        <span className="min-w-0 flex-1"><span className="block text-[10px] font-medium text-teal-700">SELECTED</span><span className="line-clamp-2 break-words text-xs font-medium">{product.name}</span><span className="block text-xs text-gray-600">{cost === undefined ? 'Cost unconfirmed' : money.format(cost / 100)} · Qty {item.quantity}</span></span><ArrowRight className="h-4 w-4 shrink-0 text-teal-700" />
+        <span className="min-w-0 flex-1"><span className="block text-[10px] font-medium text-teal-700 dark:text-teal-300">SELECTED</span><span className="line-clamp-2 break-words text-xs font-medium">{product.name}</span><span className="block text-xs text-gray-600 dark:text-slate-300">{cost === undefined ? 'Cost unconfirmed' : money.format(cost / 100)} · Qty {item.quantity}</span></span><ArrowRight className="h-4 w-4 shrink-0 text-teal-700 dark:text-teal-300" />
       </button>;
     }) : <p className="py-2 text-xs text-gray-500">No selected choice</p>}
-    {choices.length > 2 && <p className="text-xs text-gray-500">+ {choices.length - 2} selected supporting parts in basket</p>}
-    <p className={`mt-1 text-xs ${check.complete ? 'text-teal-700' : 'text-gray-600'}`}>{check.complete ? 'Required quantity covered' : choices.length ? check.unknown ? 'Selected - contents need confirmation' : 'Selected - quantity or parts still needed' : 'To choose'}</p>
+    {choices.length > 2 && <p className="text-xs text-gray-500 dark:text-slate-300">+ {choices.length - 2} selected supporting parts in basket</p>}
+    <p className={`mt-1 text-xs ${check.complete ? 'text-teal-700 dark:text-teal-300' : 'text-gray-600 dark:text-slate-300'}`}>{check.complete ? 'Required quantity covered' : choices.length ? check.unknown ? 'Selected - contents need confirmation' : 'Selected - quantity or parts still needed' : 'To choose'}</p>
     {check.deviation && <p className="text-xs text-blue-700">Replacement - quote deviation needs review</p>}
     {check.warnings.map((warning) => <p key={warning} role="status" className="mt-1 text-xs text-amber-800">{warning}</p>)}
   </section>;

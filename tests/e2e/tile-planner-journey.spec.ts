@@ -128,7 +128,7 @@ test('visual quote checklist: selected photos, missing parts, specification diff
   await open(page, 390, fixture);
   await page.getByRole('button', { name: 'Room overview', exact: true }).click();
   const quote = page.getByRole('region', { name: 'Main Bathroom digital quote' });
-  await expect(quote).toContainText('2 of 14 supply lines selected');
+  await expect(quote).toContainText('2 of 14 fully covered');
   const bathLine = quote.getByRole('listitem', { name: 'B-shaped shower bath: Selected', exact: true });
   await expect(bathLine.getByRole('img', { name: bath.name })).toBeVisible();
   await expect(quote.getByRole('listitem', { name: 'Bath pop-up waste: To choose' })).toContainText('No product selected');
@@ -147,7 +147,7 @@ test('visual quote checklist: selected photos, missing parts, specification diff
   await quote.scrollIntoViewIfNeeded();
   await page.screenshot({ path: 'output/playwright/visual-quote-desktop.png' });
   await page.getByRole('button', { name: 'Shower Room', exact: true }).click();
-  await expect(page.getByRole('region', { name: 'Shower Room digital quote' })).toContainText('0 of 14 supply lines selected');
+  await expect(page.getByRole('region', { name: 'Shower Room digital quote' })).toContainText('0 of 14 fully covered');
 });
 test('phone: paste a product link beside results to automatically import photo and price', async ({ page }) => {
   await open(page);

@@ -90,6 +90,7 @@ export const applySchoolRepair = async (familyId: string, input: {
       const metadata = { ...schoolMetadata((event as any).metadata), ...schoolEventMetadata(repairedDraft, {
         ...item.intake, metadata: { ...item.metadata, schoolSource: item.source },
       }), schoolAssignment: {
+        ...repairedDraft.schoolAssignment,
         basis: 'institution', sourceKey: change.sourceKey, sourceEventKey: change.sourceEventKey,
         originalPersonId: change.beforePersonId, repairedBy: actorId, repairedAt: at,
       }, ...(change.googleExportPending ? { schoolExportPending: true } : {}) };

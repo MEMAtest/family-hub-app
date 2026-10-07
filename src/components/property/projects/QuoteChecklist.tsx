@@ -22,13 +22,16 @@ export default function QuoteChecklist({ sourcing, roomId, search = '', onOpenRe
   return <section aria-label={`${roomName(sourcing, roomId)} digital quote`} className="mt-4 min-w-0 border-y border-gray-200 py-4 dark:border-slate-700">
     <div className="flex flex-wrap items-baseline justify-between gap-2">
       <h4 className="text-base font-semibold">Original quote checklist</h4>
-      <span className="text-sm font-medium text-teal-700 dark:text-teal-300">{complete} of {lines.length} supply lines selected</span>
+      <span className="text-sm font-medium text-teal-700 dark:text-teal-300">{chosen} of {lines.length} supply lines chosen · {complete} of {lines.length} fully covered</span>
       <button aria-expanded={expanded} aria-label={expanded ? 'Collapse quote checklist' : 'Expand quote checklist'} title={expanded ? 'Collapse quote checklist' : 'Expand quote checklist'} onClick={() => setExpanded(!expanded)} className="flex min-h-11 min-w-11 items-center justify-center text-gray-600">{expanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}</button>
     </div>
     <p className="mt-1 text-xs text-gray-500">R & R · 18 January 2026 · Supply of goods · Selections are not orders or fitter approval.</p>
-    <progress aria-label="Quote selection progress" value={complete} max={lines.length || 1} className="mt-3 h-2 w-full accent-teal-600" />
+    <progress aria-label="Quote coverage progress" value={complete} max={lines.length || 1} className="mt-3 h-2 w-full accent-teal-600" />
     {expanded && <>
-    <label className="mt-3 block text-xs font-medium">Quote line<select aria-label={`${roomName(sourcing, roomId)} quote line`} value={focusedLine} onChange={(event) => { setFocusedLine(event.target.value); setFilter('all'); }} className="mt-1 min-h-11 w-full min-w-0 rounded-md border-gray-200 text-sm dark:bg-slate-800"><option value="">All supply lines</option>{lines.map((line) => <option key={line.id} value={line.id}>{quoteLineSelection(sourcing, line).complete ? 'Selected' : 'Still needed'} · {line.text}</option>)}</select></label>
+    <label className="mt-3 block text-xs font-medium">Quote line<select aria-label={`${roomName(sourcing, roomId)} quote line`} value={focusedLine} onChange={(event) => { setFocusedLine(event.target.value); setFilter('all'); }} className="mt-1 min-h-11 w-full min-w-0 rounded-md border-gray-200 text-sm dark:bg-slate-800"><option value="">All supply lines</option>{lines.map((line) => {
+      const selection = quoteLineSelection(sourcing, line);
+      return <option key={line.id} value={line.id}>{selection.selections.length ? 'Selected' : 'Not selected'} · {selection.complete ? 'Fully covered' : selection.unknown ? 'Contents unconfirmed' : 'Coverage incomplete'} · {line.text}</option>;
+    })}</select></label>
     <div role="group" aria-label="Quote checklist filter" className="mt-3 flex flex-wrap gap-1 border-b border-gray-100 pb-2 dark:border-slate-800">
       {([{ value: 'all', label: `All (${lines.length})` }, { value: 'chosen', label: `Chosen (${chosen})` }, { value: 'missing', label: `Still needed (${lines.length - complete})` }] as const).map((option) => <button key={option.value} type="button" aria-pressed={filter === option.value} onClick={() => setFilter(option.value)} className={`min-h-11 rounded-md px-3 text-xs font-medium ${filter === option.value ? 'bg-teal-50 text-teal-800 dark:bg-teal-950 dark:text-teal-200' : 'text-gray-600 dark:text-slate-300'}`}>{option.label}</button>)}
     </div>

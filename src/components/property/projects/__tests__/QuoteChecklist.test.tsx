@@ -11,7 +11,9 @@ function fixture() {
 
 test('visual checklist shows partial quantities, photo and actual selection rather than a false tick', () => {
   render(<QuoteChecklist sourcing={fixture()} roomId="main-bathroom" onOpenRequirement={jest.fn()} onOpenProduct={jest.fn()} />);
-  expect(screen.getByText('0 of 14 supply lines selected')).toBeInTheDocument();
+  expect(screen.getByText('1 of 14 supply lines chosen · 0 of 14 fully covered')).toBeInTheDocument();
+  expect(screen.getByRole('progressbar', { name: 'Quote coverage progress' })).toHaveAttribute('value', '0');
+  expect(screen.getByRole('option', { name: 'Selected · Coverage incomplete · Chrome downlights with LED bulbs' })).toBeInTheDocument();
   const line = screen.getByRole('listitem', { name: 'Chrome downlights with LED bulbs: Part selected' });
   expect(within(line).getByText('downlight: 1/6 · led bulb: 1/6')).toBeInTheDocument();
   expect(within(line).getByRole('img', { name: 'Test chrome downlight' })).toBeInTheDocument();
@@ -28,7 +30,8 @@ test('full quoted quantity ticks the line and opening or changing uses the corre
   const sourcing = fixture(); sourcing.basket[0].quantity = 6;
   const onOpenRequirement = jest.fn(); const onOpenProduct = jest.fn();
   render(<QuoteChecklist sourcing={sourcing} roomId="main-bathroom" onOpenRequirement={onOpenRequirement} onOpenProduct={onOpenProduct} />);
-  expect(screen.getByText('1 of 14 supply lines selected')).toBeInTheDocument();
+  expect(screen.getByText('1 of 14 supply lines chosen · 1 of 14 fully covered')).toBeInTheDocument();
+  expect(screen.getByRole('option', { name: 'Selected · Fully covered · Chrome downlights with LED bulbs' })).toBeInTheDocument();
   const line = screen.getByRole('listitem', { name: 'Chrome downlights with LED bulbs: Selected' });
   fireEvent.click(within(line).getByRole('button', { name: /Inspect selected/ }));
   expect(onOpenProduct).toHaveBeenCalledWith(sourcing.products.find((p) => p.id === 'test-light'), sourcing.requirements.find((r) => r.id === 'main-downlights'));
@@ -46,7 +49,7 @@ test('bath alone does not show as selected for waste or screen lines or the othe
   expect(within(waste).getByText('No product selected')).toBeInTheDocument();
   expect(within(waste).queryByText(bath.name)).not.toBeInTheDocument();
   rerender(<QuoteChecklist sourcing={sourcing} roomId="shower-room" onOpenRequirement={jest.fn()} onOpenProduct={jest.fn()} />);
-  expect(screen.getByText('0 of 14 supply lines selected')).toBeInTheDocument();
+  expect(screen.getByText('0 of 14 supply lines chosen · 0 of 14 fully covered')).toBeInTheDocument();
 });
 
 test('linked wrong-tag filler stays Selected with its picture and missing coverage, not silently unselected', () => {
@@ -59,4 +62,38 @@ test('linked wrong-tag filler stays Selected with its picture and missing covera
   expect(within(line).getByRole('button', { name: /Inspect selected Chosen supplier option/ })).toBeInTheDocument();
   expect(within(line).getByText('bath filler: 0/1')).toBeInTheDocument();
   expect(within(line).queryByText('No product selected')).not.toBeInTheDocument();
+  expect(screen.getByRole('option', { name: 'Selected · Contents unconfirmed · Element Five two-hole wall-mounted bath filler' })).toBeInTheDocument();
+});
+
+test('real selected basin mixer title covers tap and waste instead of displaying 0/1 unconfirmed', () => {
+  const sourcing = createBathroomSourcingSeed();
+  const product = { ...sourcing.products[0], id: 'manual-icon', name: 'Fairford Icon1 Basin Mixer with Push Button Waste', components: [], componentEvidence: {}, description: '', size: '', specs: {} };
+  sourcing.products.push(product);
+  sourcing.basket.push({ id: 'icon', requirementId: 'main-basin-tap', productId: product.id, quantity: 1, status: 'review' });
+  render(<QuoteChecklist sourcing={sourcing} roomId="main-bathroom" onOpenRequirement={jest.fn()} onOpenProduct={jest.fn()} />);
+  const line = screen.getByRole('listitem', { name: 'Element Five basin tap with click waste: Selected' });
+  expect(within(line).getByText('basin tap: 1/1 · basin waste: 1/1')).toBeInTheDocument();
+  expect(within(line).queryByText(/Included contents need confirmation/)).not.toBeInTheDocument();
+  expect(screen.getByText('1 of 14 supply lines chosen · 1 of 14 fully covered')).toBeInTheDocument();
+});
+
+test('rehearsal header distinguishes eight chosen lines from five fully covered lines', () => {
+  const sourcing = createBathroomSourcingSeed();
+  const choices = [
+    ['main-bath', 'Bath bundle', ['bath', 'waste', 'screen', 'front-panel', 'end-panel']],
+    ['main-basin-tap', 'Fairford Icon1 Basin Mixer with Push Button Waste', []],
+    ['main-downlights', 'Downlight', ['downlight', 'led-bulb']],
+    ['main-bath-filler', 'Wrong-tag chosen option', ['cistern']],
+    ['main-vanity', 'Unconfirmed household choice', []],
+  ] as const;
+  for (const [id, name, parts] of choices) {
+    const product = { ...sourcing.products[0], id: 'test-' + id, name, components: [...parts], componentEvidence: {}, description: '', specs: {}, size: '' };
+    sourcing.products.push(product);
+    sourcing.basket.push({ id, requirementId: id, productId: product.id, quantity: 1, status: 'review' });
+  }
+  render(<QuoteChecklist sourcing={sourcing} roomId="main-bathroom" onOpenRequirement={jest.fn()} onOpenProduct={jest.fn()} />);
+  expect(screen.getByText('8 of 14 supply lines chosen · 5 of 14 fully covered')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Chosen (8)' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Still needed (9)' })).toBeInTheDocument();
+  expect(screen.getByRole('progressbar', { name: 'Quote coverage progress' })).toHaveAttribute('value', '5');
 });

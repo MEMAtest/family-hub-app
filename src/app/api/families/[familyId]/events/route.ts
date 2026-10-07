@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireFamilyAccess } from '@/lib/auth-utils';
 import { buildUtcDateTime, encodeStoredRecurringPattern, mergeCalendarEventMetadata, toCalendarEventResponse, toDateKey, toTimeKey } from '@/lib/calendarEventMapping';
-import { getSchoolEventImportMetadata, schoolImportedEventId } from '@/lib/schoolIntakeServer';
+import { enrichSavedSchoolEventResponses, getSchoolEventImportMetadata, schoolImportedEventId } from '@/lib/schoolIntakeServer';
 import { parseDateKey } from '@/utils/recurrence';
 
 const validEventTime = (time: unknown) => time === undefined ||
@@ -25,7 +25,7 @@ export const GET = requireFamilyAccess(async (_request: NextRequest, context, _a
     });
 
     // Return DB-shape events; clients already normalize into CalendarEvent UI format.
-    return NextResponse.json(events);
+    return NextResponse.json(await enrichSavedSchoolEventResponses(familyId, events));
   } catch (error) {
     console.error('Error fetching events:', error);
     return NextResponse.json({ error: 'Failed to fetch events' }, { status: 500 });

@@ -4,7 +4,7 @@ jest.mock('@/lib/prisma', () => ({ __esModule: true, default: {
   calendarEmailIntake: { findFirst: jest.fn() },
 } }));
 import prisma from '@/lib/prisma';
-import { getSchoolEventImportMetadata, loadSchoolRules, prepareSchoolIntake } from '../schoolIntakeServer';
+import { getSavedSchoolEventMetadata, getSchoolEventImportMetadata, loadSchoolRules, prepareSchoolIntake } from '../schoolIntakeServer';
 import { initialSchoolRules } from '@/utils/schoolSources';
 import { importDraftToCalendarEventDraft } from '@/utils/calendarImport';
 
@@ -94,5 +94,41 @@ describe('school intake server trust and source persistence', () => {
       rawText: 'Stewart Fleming Primary School', today: new Date('2026-10-06'), defaultPersonId: 'askia-id',
       existingEvents: [{ id: 'overlap', title: 'Appointment', person: 'amari-id', date: '2026-10-07', time: '10:00', duration: 60 }] });
     expect(prepared.drafts[0]).toMatchObject({ person: 'amari-id', importStatus: 'conflict', conflictWith: ['overlap'] });
+  });
+  it('read-only enriches legacy adult source concerns without confirming the stored child', async () => {
+    intake.parsedDrafts[0].title = 'PTA AGM';
+    intake.parsedDrafts[0].source = 'PTA AGM 7 October 2026';
+    const event = { id: 'legacy-pta', sourceId: 'intake', title: 'PTA AGM', personId: 'askia-id', eventDate: new Date('2026-10-07'), metadata: null };
+    const metadata = await getSavedSchoolEventMetadata('family', event, intake);
+    expect(metadata).toMatchObject({ schoolProvenance: { institutionKey: 'stewart-fleming', concernedMemberIds: ['amari-id'] },
+      schoolAssignment: { concernedMemberIds: ['amari-id'], attendeePersonId: null, attendeeStatus: 'needs_confirmation', originalPersonId: 'askia-id' } });
+    expect(event.personId).toBe('askia-id');
+    expect(intake.parsedDrafts[0].person).toBe('askia-id');
+    expect(prisma.familyDocument.create).not.toHaveBeenCalled();
+    expect(await getSavedSchoolEventMetadata('other-family', event, intake)).toBeNull();
+    expect(await getSavedSchoolEventMetadata('family', { ...event, sourceId: 'foreign-intake' }, intake)).toBeNull();
+  });
+  it('enriches a legacy PTA with no remaining draft without inventing a confirmed attendee', async () => {
+    intake.parsedDrafts = [];
+    const result = await getSavedSchoolEventMetadata('family', { id: 'pta', sourceId: 'intake', title: 'PTA AGM',
+      personId: 'askia-id', eventDate: new Date('2026-10-07') }, intake);
+    expect(result?.schoolAssignment).toMatchObject({ concernedMemberIds: ['amari-id'], attendeePersonId: null, attendeeStatus: 'needs_confirmation' });
+  });
+  it('preserves durable manual adult attendance while keeping the source child concern separate', async () => {
+    const adult = { id: 'parent-id', name: 'Ademola', role: 'Parent' };
+    (prisma.familyMember.findMany as jest.Mock).mockResolvedValue([...members, adult]);
+    intake.parsedDrafts[0].title = 'PTA AGM';
+    const override = { personId: 'parent-id', changedAt: '2026-10-07', changedBy: 'parent-id' };
+    const event = { id: 'pta', sourceId: 'intake', title: 'PTA AGM', personId: 'parent-id', eventDate: new Date('2026-10-07'), metadata: { assignmentOverride: override } };
+    const result = await getSavedSchoolEventMetadata('family', event, intake);
+    expect(result?.schoolAssignment).toMatchObject({ concernedMemberIds: ['amari-id'], attendeePersonId: 'parent-id', attendeeStatus: 'confirmed', basis: 'manual', assignmentOverride: override });
+    expect(event.metadata.assignmentOverride).toEqual(override);
+    expect(prisma.familyDocument.create).not.toHaveBeenCalled();
+  });
+  it('does not permit a legacy manual child choice to create a new confirmed adult event', async () => {
+    intake.parsedDrafts[0].title = 'PTA AGM';
+    intake.metadata.schoolOverrides = { 'photo-key': { personId: 'askia-id', actorId: 'parent', at: '2026-10-07' } };
+    expect(await getSchoolEventImportMetadata('family', 'intake', event({ title: 'PTA AGM', personId: 'askia-id' }))).toBeNull();
+    expect(intake.metadata.schoolOverrides['photo-key'].personId).toBe('askia-id');
   });
 });

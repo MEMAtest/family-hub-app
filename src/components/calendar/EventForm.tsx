@@ -21,7 +21,8 @@ import {
 import { CalendarEvent, Reminder, RecurringPattern, EventTemplate, Person } from '@/types/calendar.types'
 import AIEnhancedField from '@/components/common/AIEnhancedField'
 import { addDays, parseDateKey } from '@/utils/recurrence'
-import { recurringSourceDateWarning } from '@/utils/schoolEventPresentation'
+import { isAdultSchoolEvent, isChildProfile, recurringSourceDateWarning } from '@/utils/schoolEventPresentation'
+import { schoolSavedEventAttendance } from '@/utils/schoolSources'
 import { useFamilyStore } from '@/store/familyStore'
 import EventSourceDetails from './EventSourceDetails'
 
@@ -207,7 +208,8 @@ const EventForm: React.FC<EventFormProps> = ({
   defaultSlot
 }) => {
   const sourceFamilyId = useFamilyStore((state) => state.databaseStatus.familyId)
-  const defaultPersonId = people[0]?.id || ''
+  const requiresAdultAttendee = Boolean(event?.sourceId && isAdultSchoolEvent(event.title))
+  const defaultPersonId = requiresAdultAttendee ? '' : people[0]?.id || ''
   const initializedFormKeyRef = useRef<string | null>(null)
   const [formData, setFormData] = useState<Partial<CalendarEvent>>(() => buildEmptyFormData(defaultPersonId))
 
@@ -234,6 +236,8 @@ const EventForm: React.FC<EventFormProps> = ({
       : 'none'
     const formKey = event ? `event:${event.id}:${event.occurrenceDate || event.date}` : `new:${defaultSlotKey}`
 
+    if (event && requiresAdultAttendee && people.length === 0) return
+
     if (initializedFormKeyRef.current === formKey) return
     initializedFormKeyRef.current = formKey
 
@@ -251,6 +255,8 @@ const EventForm: React.FC<EventFormProps> = ({
       setFormData({
         ...buildEmptyFormData(defaultPersonId),
         ...event,
+        person: requiresAdultAttendee && schoolSavedEventAttendance(event, people).attendeeStatus === 'needs_confirmation'
+          ? '' : event.person,
         date: event.isRecurring ? seriesDate : event.date,
         endDate: event.isRecurring && multiDay ? addDays(seriesDate, spanDays) : event.endDate,
         attendees: event.attendees || []
@@ -283,7 +289,7 @@ const EventForm: React.FC<EventFormProps> = ({
       setShowRecurring(false)
       setIsMultiDay(false)
     }
-  }, [event, defaultSlot, isOpen, defaultPersonId])
+  }, [event, defaultSlot, isOpen, defaultPersonId, people, requiresAdultAttendee])
 
   // Auto-select first person when people become available
   useEffect(() => {
@@ -393,7 +399,9 @@ const EventForm: React.FC<EventFormProps> = ({
     }
 
     if (!formData.person) {
-      newErrors.person = 'Person is required'
+      newErrors.person = requiresAdultAttendee ? 'Choose the adult attending' : 'Person is required'
+    } else if (requiresAdultAttendee && !people.some((person) => person.id === formData.person && !isChildProfile(person))) {
+      newErrors.person = 'Choose the adult attending'
     }
 
     if (formData.duration && formData.duration < 5) {
@@ -619,7 +627,7 @@ const EventForm: React.FC<EventFormProps> = ({
               {/* Person */}
               <div>
               <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-slate-300">
-                  Assigned to *
+                  {requiresAdultAttendee ? 'Adult attendee *' : 'Assigned to *'}
                 </label>
                 {people.length === 0 ? (
                   <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
@@ -629,12 +637,13 @@ const EventForm: React.FC<EventFormProps> = ({
                   </div>
                 ) : (
                   <select
+                    aria-label={requiresAdultAttendee ? 'Adult attendee' : 'Assigned to'}
                     value={formData.person || ''}
                     onChange={(e) => setFormData(prev => ({ ...prev, person: e.target.value }))}
                     className={fieldClass(Boolean(errors.person))}
                   >
-                    <option value="">Select person</option>
-                    {people.map(person => (
+                    <option value="">{requiresAdultAttendee ? 'Choose adult attendee' : 'Select person'}</option>
+                    {people.filter(person => !requiresAdultAttendee || !isChildProfile(person)).map(person => (
                       <option key={person.id} value={person.id}>
                         {person.name}
                       </option>
@@ -764,7 +773,7 @@ const EventForm: React.FC<EventFormProps> = ({
               </div>
 
               {/* Location */}
-              {event?.sourceId && <EventSourceDetails familyId={sourceFamilyId} eventId={event.id} />}
+              {event?.sourceId && <EventSourceDetails familyId={sourceFamilyId} eventId={event.id} people={people} />}
               <div>
                 <label htmlFor="calendar-event-location" className="block text-sm font-medium text-gray-700 mb-1 dark:text-slate-300">
                   <MapPin className="w-4 h-4 inline mr-1" />

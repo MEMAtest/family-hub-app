@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useRef, useState, type ReactNode } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { X, Shield, Eye, Home } from 'lucide-react';
 import { useFamilyStore } from '@/store/familyStore';
 import { createId } from '@/utils/id';
@@ -50,6 +50,7 @@ const ModalShell = ({
 
 export const PropertyDashboard = () => {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const shareMode = searchParams.get('mode') === 'share';
   const shareTaskId = searchParams.get('task') || '';
 
@@ -82,7 +83,14 @@ export const PropertyDashboard = () => {
   const removeTaskFollowUp = useFamilyStore((state) => state.removeTaskFollowUp);
 
   // UI State
-  const [activeTab, setActiveTab] = useState<PropertyTabId>(() => searchParams.get('tab') === 'projects' ? 'projects' : 'overview');
+  const [activeTab, updateActiveTab] = useState<PropertyTabId>(() => searchParams.get('tab') === 'projects' ? 'projects' : 'overview');
+  const setActiveTab = (tab: PropertyTabId) => {
+    updateActiveTab(tab);
+    const params = new URLSearchParams(searchParams.toString());
+    if (tab === 'projects') params.set('tab', 'projects');
+    else params.delete('tab');
+    router.replace(`?${params.toString()}`, { scroll: false });
+  };
   const focusedProject = activeTab === 'projects' && propertyProjects.some((project) => project.id === activeProjectId);
   const [selectedComponent, setSelectedComponent] = useState<string | null>(null);
   const [showAddTaskModal, setShowAddTaskModal] = useState(false);

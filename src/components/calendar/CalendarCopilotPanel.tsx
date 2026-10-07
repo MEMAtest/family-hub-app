@@ -16,7 +16,7 @@ import { extractRoutineWeekdays, nextDateForWeekday } from '@/utils/schoolRoutin
 import { addDays, expandEvents } from '@/utils/recurrence';
 import { expandTasks } from '@/utils/tasks';
 import { isAdultSchoolEvent, recurringSourceDateWarning, schoolEventTitle, schoolEventAction } from '@/utils/schoolEventPresentation';
-import type { SchoolSourceEvidence } from '@/utils/schoolSources';
+import { schoolSavedEventAttendance, type SchoolDraft, type SchoolSourceEvidence } from '@/utils/schoolSources';
 
 interface CalendarCopilotPanelProps {
   events: CalendarEvent[];
@@ -45,7 +45,7 @@ interface CalendarInboxItem {
   sourceDate?: string | null;
   duplicateCount: number;
   conflictCount: number;
-  parsedDrafts: CalendarImportDraft[];
+  parsedDrafts: SchoolDraft[];
   documentSummary?: SchoolDocumentSummary | null;
   attachments?: CalendarAttachment[];
 }
@@ -143,7 +143,7 @@ const CalendarCopilotPanel = ({
   const [savingDraft, setSavingDraft] = useState(false);
 
   const [importText, setImportText] = useState('');
-  const [importDrafts, setImportDrafts] = useState<CalendarImportDraft[]>([]);
+  const [importDrafts, setImportDrafts] = useState<SchoolDraft[]>([]);
   const [selectedDraftIds, setSelectedDraftIds] = useState<Set<string>>(new Set());
   const [importLoading, setImportLoading] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
@@ -222,7 +222,7 @@ const CalendarCopilotPanel = ({
     // weekly club only ever counted as "on" during the week it was created, so
     // "where everyone is today" was blank on every later week.
     const live = events.filter((event) => event.status !== 'cancelled' && !recurringSourceDateWarning(event) &&
-      !(event.source === 'gmail-school-email' && isAdultSchoolEvent(event.title) && people.some((person) => person.id === event.person && isChildProfile(person))));
+      !(event.sourceId && isAdultSchoolEvent(event.title) && schoolSavedEventAttendance(event, people).attendeeStatus === 'needs_confirmation'));
     expandEvents(live, addDays(dateKey, -31), addDays(dateKey, 1))
       .filter((occ) => occ.date <= dateKey && occ.endDate >= dateKey)
       .map((occ) => ({ ...occ.event, date: occ.date, endDate: occ.endDate, time: occ.time, duration: occ.duration }))
@@ -244,7 +244,9 @@ const CalendarCopilotPanel = ({
         date: occurrence.date,
         time: hasUnspecifiedEventTime(occurrence.event) ? '' : occurrence.time,
         location: occurrence.event.location,
-        person: personNameById.get(occurrence.event.person) || 'Family',
+        person: occurrence.event.sourceId && isAdultSchoolEvent(occurrence.event.title) &&
+          schoolSavedEventAttendance(occurrence.event, people).attendeeStatus === 'needs_confirmation'
+          ? 'Adult attendee to confirm' : personNameById.get(occurrence.event.person) || 'Family',
         priority: occurrence.event.priority,
         kind: 'Event' as const,
       }));
@@ -262,7 +264,7 @@ const CalendarCopilotPanel = ({
     return [...eventItems, ...taskItems]
       .sort((a, b) => priorityRank[a.priority] - priorityRank[b.priority] || a.date.localeCompare(b.date) || a.time.localeCompare(b.time))
       .slice(0, 5);
-  }, [currentDate, events, personNameById, tasks]);
+  }, [currentDate, events, people, personNameById, tasks]);
 
   const loadInbox = useCallback(async () => {
     if (!activeFamilyId) return;
@@ -1249,6 +1251,10 @@ const CalendarCopilotPanel = ({
                       {people.filter((person) => !isAdultSchoolEvent(draft.title) || !isChildProfile(person)).map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}
                     </select>
                   </label>
+                  {draft.schoolAssignment?.concernedMemberIds?.length ? <p className="mt-1 text-[11px] text-gray-600 dark:text-slate-300">
+                    Concerns {draft.schoolAssignment.concernedMemberIds.map((id) => personNameById.get(id)).filter(Boolean).join(', ')}
+                  </p> : null}
+                  {isAdultSchoolEvent(draft.title) && !draft.person && <p className="mt-1 text-[11px] text-amber-700 dark:text-amber-300">Adult attendee to confirm</p>}
                   {schoolEventAction(draft.source) && <p className="mt-1 break-words text-[11px] text-gray-600 dark:text-slate-300"><strong>What you need to do:</strong> {schoolEventAction(draft.source)}</p>}
                   <details className="mt-1 text-[11px] text-gray-500"><summary>Original event text</summary><p className="mt-1 break-words">{draft.source}</p></details>
                   {draft.warnings.length > 0 && (

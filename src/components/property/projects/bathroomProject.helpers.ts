@@ -2,6 +2,7 @@ import type { ProjectSourcing, SourcedProduct, SourcingBasketItem, SourcingRequi
 
 import { evaluateSelection, isPrimaryOption } from '@/lib/sourcing/selection';
 import { basketCostPence, productCostPence, selectedSpend } from '@/lib/sourcing/spend';
+import { labelledDimensions } from '@/lib/sourcing/dimensions';
 export { isUncountedPrice } from '@/lib/sourcing/spend';
 
 export const bathroomRooms: { id: SourcingRoomId; label: string }[] = [
@@ -51,7 +52,11 @@ export function productSize(product: SourcedProduct) {
   const sizes = Object.entries(product.specs ?? {}).filter(([key]) => /^(width|length|height|depth|projection|thickness)$/i.test(key));
   if (sizes.length) return sizes.map(([key, value]) => `${key}: ${value}`).join(' · ');
   const dimensions = Object.entries(product.dimensions).filter(([key]) => /Mm$/.test(key));
-  return dimensions.length ? dimensions.map(([key, value]) => `${key.replace(/Mm$/, '')}: ${value}mm`).join(' · ') : 'Size not stated';
+  if (dimensions.length) return dimensions.map(([key, value]) => `${key.replace(/Mm$/, '')}: ${value}mm`).join(' · ');
+  const titleDimensions = Object.entries(labelledDimensions(product.name));
+  if (titleDimensions.length) return titleDimensions.map(([key, value]) => `${key.replace(/Mm$/, '')}: ${value}mm (supplier title)`).join(' · ');
+  const titleSize = product.name.match(/\b\d+(?:\.\d+)?\s*mm\b/i);
+  return titleSize ? `${titleSize[0]} in supplier title; confirm dimension axis` : 'Size not stated';
 }
 
 export { quoteSizeAssessment } from '@/lib/sourcing/quoteSize';

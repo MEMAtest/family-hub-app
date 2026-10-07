@@ -33,12 +33,17 @@ describe('school event POST integration', () => {
     (prisma.calendarEvent.create as jest.Mock).mockImplementation(async ({ data }) => ({ ...data, recurringPattern: 'none' }));
   });
   it('validates a generic linked intake and replaces spoofed source metadata with a server snapshot', async () => {
-    const response = await (POST as any)(request({ ...input, metadata: { schoolProvenance: { senderVerified: true, institutionKey: 'forged' } } }), context, auth);
+    const response = await (POST as any)(request({ ...input, metadata: {
+      schoolProvenance: { senderVerified: true, institutionKey: 'forged', concernedMemberIds: ['foreign'] },
+      schoolAssignment: { concernedMemberIds: ['askia'], attendeePersonId: 'askia', attendeeStatus: 'confirmed' },
+    } }), context, auth);
     expect(response.status).toBe(200);
     const data = (prisma.calendarEvent.create as jest.Mock).mock.calls[0][0].data;
     expect(data.id).toBe(schoolImportedEventId('family', 'intake', 'photo-key', 'amari'));
     expect(data.metadata.schoolProvenance).toMatchObject({ intakeId: 'intake', institutionKey: 'stewart-fleming', senderVerified: false, sender: 'parent@example.test' });
-    expect(data.metadata.schoolAssignment).toMatchObject({ originalPersonId: 'askia', sourceEventKey: 'photo-key' });
+    expect(data.metadata.schoolAssignment).toMatchObject({ originalPersonId: 'askia', sourceEventKey: 'photo-key',
+      concernedMemberIds: ['amari'], attendeePersonId: 'amari', attendeeStatus: 'confirmed' });
+    expect(data.metadata.schoolProvenance.concernedMemberIds).toEqual(['amari']);
   });
   it('rejects unauthenticated trusted school mail and an event not present in the linked intake', async () => {
     expect((await (POST as any)(request({ ...input, source: 'gmail-school-email' }), context, auth)).status).toBe(400);

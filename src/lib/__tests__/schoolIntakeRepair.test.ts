@@ -107,4 +107,16 @@ describe('audited school repair', () => {
     expect(events[0].eventDate).toEqual(new Date('2025-12-01'));
     expect(events[0].id).toBe('saved-photo');
   });
+  it('does not reassign a legacy PTA child to another child while enriching its draft concerns', async () => {
+    intake.parsedDrafts[0].title = 'PTA AGM';
+    intake.parsedDrafts[0].source = 'PTA AGM 7 October 2026';
+    events[0].title = 'PTA AGM';
+    const plan = await buildSchoolRepairPlan('family');
+    expect(plan.plans[0].drafts[0].schoolAssignment).toMatchObject({ concernedMemberIds: ['amari'], attendeePersonId: null, attendeeStatus: 'needs_confirmation' });
+    expect(plan.plans[0].eventChanges).toEqual([]);
+    await applySchoolRepair('family', { planHash: plan.planHash, approvedEventIds: [] }, 'actor');
+    expect(events[0].personId).toBe('askia');
+    expect(prisma.calendarEvent.updateMany).not.toHaveBeenCalled();
+    expect(intake.parsedDrafts[0].schoolAssignment.concernedMemberIds).toEqual(['amari']);
+  });
 });

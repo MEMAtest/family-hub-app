@@ -14,10 +14,11 @@
 
 ## Verification
 
-- 93 Jest suites / 808 tests passed.
+- 98 Jest suites / 870 tests passed after the authenticated-rehearsal fixes.
 - Typecheck, whitespace checks and production build passed before final browser refinements; final build is repeated for the release commit.
 - Isolated real-Postgres reminder rehearsal: 8 checks passed, including closed-browser scheduling, two-parent records, deduplication, recipient authorization, persistent snooze, independent completion and cancellation. No external push was attempted in this rehearsal.
-- Phone/desktop browser journeys cover saved choices, replacements, bundle quantities, cost reconciliation, deep checklist Back, reload, school intake, assigned-child review and event summary.
+- 18 phone/desktop browser journeys passed together. They cover saved choices, replacements, bundle quantities, cost reconciliation, deep checklist Back, reload from property overview, school intake, assigned-child review and event summary. The OAuth test now waits for the initial inbox response before clicking its rendered control.
+- Live-found regressions were covered: historical school events now receive read-only family-scoped concerns/attendance enrichment; ambiguous parent meetings require an adult in the edit form; reminder links fetch authoritative metadata rather than selecting an editor from stale cache. Basin mixers with push-button waste cover both named parts; inferred vanity-title width is labelled and never treated as room-fit approval.
 - School repair was applied to the verified household and repeated read-only; approved event IDs no longer appear as proposed corrections.
 - The actual saved Angela event was reloaded. A read-only 20:00 preview targets Angela for preparation and Ade for cover; departure and return remain unknown.
 

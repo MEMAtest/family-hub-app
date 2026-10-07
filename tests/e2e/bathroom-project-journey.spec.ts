@@ -44,6 +44,20 @@ test('two-room overview preserves the existing selection and offers direct next 
   await expect(page.getByRole('heading', { name: 'Shower Room', exact: true })).toBeVisible();
 });
 
+test('Projects opened from property overview survives item reload', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await openProject(page);
+  await page.goto('/?view=property');
+  await page.getByRole('button', { name: 'Projects', exact: true }).click();
+  await expect(page).toHaveURL(/tab=projects/);
+  await expect(page.getByRole('heading', { name: 'Bathroom UX check' })).toBeVisible();
+  await page.getByRole('button', { name: 'Main Bathroom', exact: true }).click();
+  await page.getByLabel('Jump to project item').selectOption('main-wc-unit');
+  await page.reload();
+  await expect(page.getByRole('region', { name: 'Current selected choice' })).toContainText('£239.00');
+  await expect(page.getByRole('combobox', { name: 'Quote item', exact: true })).toHaveValue('main-wc-unit');
+});
+
 test('phone navigation, room notes and basket quantities survive reload', async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 812 });
   await openProject(page);

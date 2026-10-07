@@ -4,10 +4,10 @@ import prisma from './prisma';
 import { annotateCalendarImportDrafts, parseCalendarImportText, type CalendarImportDraft } from '@/utils/calendarImport';
 import { summarizeSchoolDocument } from '@/utils/schoolDocumentSummary';
 import { assignSchoolDrafts, initialSchoolRules, resolveSchoolSource, schoolMetadata, SCHOOL_RULES_KEY,
-  validateSchoolRules, type SchoolDraft, type SchoolMember, type SchoolRules } from '@/utils/schoolSources';
+  validateSchoolRules, schoolSavedEventAttendance, type SchoolDraft, type SchoolMember, type SchoolRules } from '@/utils/schoolSources';
 import { importDraftToCalendarEventDraft } from '@/utils/calendarImport';
 import { isStewartFlemingSender } from '@/utils/schoolEmail';
-import { schoolEventTitle } from '@/utils/schoolEventPresentation';
+import { isAdultSchoolEvent, schoolEventTitle } from '@/utils/schoolEventPresentation';
 
 /** Main's events POST uses this for both trusted school mail and ordinary linked intake imports. */
 export type SchoolEventImportInput = {
@@ -28,6 +28,7 @@ export const getSchoolEventImportMetadata = async (familyId: string, intakeId: s
   const resolved = resolveStoredSchoolDrafts(intake, rules, members);
   if (resolved.source.contentRequired) return null;
   const matched = resolved.drafts.find((draft) => {
+    if (isAdultSchoolEvent(draft.title) && draft.schoolAssignment?.attendeeStatus !== 'confirmed') return false;
     const candidate = importDraftToCalendarEventDraft(draft);
     return candidate.person === event.personId && schoolEventTitle(candidate.title) === schoolEventTitle(event.title || '') && candidate.date === event.date &&
       candidate.time === event.time && candidate.duration === Number(event.durationMinutes || 60) &&
@@ -72,9 +73,95 @@ export const schoolEventMetadata = (draft: SchoolDraft, intake: {
       sender: intake.sender || source.transportSender || null, originalSenderClaim: source.originalSenderClaim || null,
       sourceDate: metadata.sourceDate || null, receivedAt: intake.receivedAt ? new Date(intake.receivedAt).toISOString() : null,
       links: Array.isArray(source.links) ? source.links : [], senderVerified: metadata.schoolSenderVerified === true,
+      concernedMemberIds: draft.schoolAssignment?.concernedMemberIds || [],
     },
     schoolAssignment: { ...draft.schoolAssignment, sourceEventKey: draft.sourceEventKey || schoolDraftKey(draft) },
   };
+};
+
+type SavedSchoolEvent = {
+  id: string; sourceId: string | null; title: string; personId: string; eventDate: Date; metadata?: unknown; familyId?: string;
+};
+type SavedSchoolIntake = Parameters<typeof resolveStoredSchoolDrafts>[0] & {
+  id: string; familyId: string; receivedAt?: Date | string;
+};
+
+const hasUsableSchoolDrafts = (intake: SavedSchoolIntake) => !Array.isArray(intake.parsedDrafts) ||
+  intake.parsedDrafts.every((value) => {
+    const draft = schoolMetadata(value);
+    return ['importId', 'title', 'person', 'date', 'source'].every((key) => typeof draft[key] === 'string') &&
+      (!draft.warnings || Array.isArray(draft.warnings));
+  });
+
+const deriveSavedSchoolEventMetadata = (familyId: string, event: SavedSchoolEvent, intake: SavedSchoolIntake,
+  members: SchoolMember[], rules: SchoolRules, resolved = resolveStoredSchoolDrafts(intake, rules, members)) => {
+  if (intake.familyId !== familyId || event.sourceId !== intake.id) return null;
+  if (typeof event.title !== 'string' || !(event.eventDate instanceof Date) || !Number.isFinite(event.eventDate.getTime())) return null;
+  if (!resolved.source.institution) return null;
+  const date = event.eventDate.toISOString().slice(0, 10);
+  const candidates = resolved.drafts.filter((draft) => draft.date === date &&
+    schoolEventTitle(draft.title).toLowerCase() === schoolEventTitle(event.title).toLowerCase());
+  let draft: SchoolDraft;
+  if (candidates.length === 1) draft = candidates[0];
+  else if (isAdultSchoolEvent(event.title)) {
+    draft = assignSchoolDrafts([{ importId: event.id, title: event.title, person: event.personId, date,
+      time: '00:00', duration: 60, recurring: 'none', cost: 0, type: 'education', isRecurring: false,
+      priority: 'medium', status: 'confirmed', confidence: 0, source: event.title, sourceLine: 0,
+      importStatus: 'needs_review', warnings: [] }], resolved.source, rules, members)[0];
+  } else return null;
+  const trusted = schoolEventMetadata(draft, { ...intake, metadata: { ...schoolMetadata(intake.metadata), schoolSource: resolved.source } });
+  const saved = schoolMetadata(event.metadata);
+  const existingAssignment = schoolMetadata(saved.schoolAssignment);
+  const explicit = saved.assignmentOverride || saved.manualAssignmentOverride || existingAssignment.manualOverride ||
+    (existingAssignment.basis === 'manual' ? existingAssignment : null);
+  const display = schoolSavedEventAttendance({ ...event, metadata: {
+    ...saved, ...(explicit ? { manualAssignmentOverride: explicit } : {}),
+    schoolAssignment: { ...existingAssignment, ...trusted.schoolAssignment },
+  } }, members);
+  // A named source attendee must agree with the stored member; a legacy child/default is not attendance evidence.
+  const attendance = explicit ? display : trusted.schoolAssignment.attendeePersonId === event.personId
+    ? display : { attendeePersonId: null, attendeeStatus: 'needs_confirmation' as const };
+  return { ...trusted, schoolAssignment: { ...trusted.schoolAssignment,
+    ...(explicit ? { basis: 'manual', manualOverride: existingAssignment.manualOverride,
+      assignmentOverride: saved.assignmentOverride } : {}), ...attendance } };
+};
+
+/** Read-only, family-scoped enrichment for historical imports. Stored ownership and manual decisions are untouched. */
+export const getSavedSchoolEventMetadata = async (familyId: string, event: SavedSchoolEvent, intake: SavedSchoolIntake) => {
+  if (intake.familyId !== familyId || event.sourceId !== intake.id || !hasUsableSchoolDrafts(intake)) return null;
+  const members = await prisma.familyMember.findMany({ where: { familyId } });
+  const { rules } = await loadSchoolRules(familyId, members);
+  return deriveSavedSchoolEventMetadata(familyId, event, intake, members, rules);
+};
+
+/** Three family-scoped reads for the whole batch, never a member/rules/intake query per event. */
+export const enrichSavedSchoolEventResponses = async <T extends SavedSchoolEvent>(familyId: string, events: T[], db = prisma): Promise<T[]> => {
+  const candidates = events.filter((event) => typeof event.sourceId === 'string' && event.sourceId &&
+    typeof event.title === 'string' && event.eventDate instanceof Date && Number.isFinite(event.eventDate.getTime()) &&
+    (event.familyId === undefined || event.familyId === familyId));
+  if (!candidates.length) return events;
+  const intakeIds = Array.from(new Set(candidates.map((event) => event.sourceId!)));
+  const members = await db.familyMember.findMany({ where: { familyId } });
+  const { rules } = await loadSchoolRules(familyId, members, false, db);
+  const intakes = await db.calendarEmailIntake.findMany({ where: { familyId, id: { in: intakeIds } }, select: {
+    id: true, familyId: true, subject: true, sender: true, receivedAt: true, metadata: true,
+    text: true, html: true, normalizedText: true, parsedDrafts: true,
+  } });
+  const resolvedById = new Map(intakes.filter((intake) => intake.familyId === familyId && hasUsableSchoolDrafts(intake)).map((intake) => [intake.id, {
+    intake, resolved: resolveStoredSchoolDrafts(intake, rules, members),
+  }]));
+  const candidateIds = new Set(candidates.map((event) => event.id));
+  return events.map((event) => {
+    if (!candidateIds.has(event.id)) return event;
+    const entry = resolvedById.get(event.sourceId!);
+    if (!entry) return event;
+    const trusted = deriveSavedSchoolEventMetadata(familyId, event, entry.intake, members, rules, entry.resolved);
+    if (!trusted) return event;
+    const metadata = schoolMetadata(event.metadata);
+    return { ...event, metadata: { ...metadata, ...trusted,
+      schoolAssignment: { ...schoolMetadata(metadata.schoolAssignment), ...trusted.schoolAssignment },
+    } };
+  });
 };
 
 export const prepareSchoolIntake = async (input: {

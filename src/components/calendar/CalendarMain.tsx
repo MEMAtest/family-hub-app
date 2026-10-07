@@ -55,6 +55,7 @@ import { addDays, expandEvents, getExpansionRange, type Occurrence } from '@/uti
 import { buildTaskEntries, getTaskEntryStyle, isTaskEntry } from '@/utils/taskCalendar'
 import { expandTasks } from '@/utils/tasks'
 import { displayEventTitle, hasSchoolSource, schoolEventAction, schoolEventContext } from '@/utils/schoolEventPresentation'
+import { eventPeopleLabel } from '@/utils/schoolEventPeople'
 import { hasUnspecifiedEventTime } from '@/utils/eventSemantics'
 import { useCalendarReminderLink } from '@/hooks/useCalendarReminderLink'
 
@@ -264,7 +265,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
       className={`h-full w-full cursor-pointer ${isMobile ? 'mobile-event touch-target' : ''}`}
     >
       <span data-calendar-event-title className="block truncate text-xs font-medium">{event.title}</span>
-      {!isMobile && view === Views.MONTH && !isTaskEntry(event) && <span className="block truncate text-[10px] opacity-85">{hasUnspecifiedEventTime(event.resource) ? 'Time not provided' : moment(event.start).format('HH:mm')} {people.find((person) => person.id === event.resource?.person)?.name}</span>}
+      {!isMobile && view === Views.MONTH && !isTaskEntry(event) && <span className="block truncate text-[10px] opacity-85">{hasUnspecifiedEventTime(event.resource) ? 'Time not provided' : moment(event.start).format('HH:mm')} {event.resource && eventPeopleLabel(event.resource, people)}</span>}
     </div>
   ), [dismissHoverSoon, isMobile, keepHoverOpen, people, view]);
   const calendarComponents = useMemo(() => ({ event: CalendarEventContent }), [CalendarEventContent]);
@@ -273,10 +274,10 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
   const [dragFeedback, setDragFeedback] = useState<string | null>(null)
   const [showWorkStatusManager, setShowWorkStatusManager] = useState(false)
   const [travelEditEvent, setTravelEditEvent] = useState<CalendarEvent | null>(null)
-  useCalendarReminderLink(events, (event) => {
+  const reminderLink = useCalendarReminderLink(events, (event) => {
     setTravelEditEvent(event);
     setShowWorkStatusManager(true);
-  }, onEventClick)
+  }, onEventClick, familyId)
   const [showMobileMenu, setShowMobileMenu] = useState(false)
   const [selectedAgendaDate, setSelectedAgendaDate] = useState(() => moment(currentDate).format('YYYY-MM-DD'))
   useEffect(() => setSelectedAgendaDate(moment(currentDate).format('YYYY-MM-DD')), [currentDate])
@@ -1820,6 +1821,8 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
 
       {/* Calendar Component */}
       <div className={`flex-1 min-w-0 ${isMobile ? 'p-3 pb-6' : 'p-4'}`}>
+        {reminderLink.loading && <p role="status" className="mb-3 text-sm text-gray-600 dark:text-slate-300">Loading current event details...</p>}
+        {reminderLink.error && <div role="alert" className="mb-3 flex flex-wrap items-center gap-3 text-sm text-amber-800 dark:text-amber-200"><span>{reminderLink.error}</span><button type="button" onClick={reminderLink.retry} className="min-h-11 font-medium underline">Retry</button></div>}
         <div className="mb-4 flex flex-wrap gap-2" aria-label="Family calendar filters">
           <button type="button" aria-pressed={people.every((person) => selectedPeople.includes(person.id))} onClick={() => setSelectedPeople([...people.map((person) => person.id), 'member-4'])} className="min-h-10 rounded-md bg-[#147c72] px-3 text-sm font-semibold text-white">All family</button>
           {people.map((person) => <button type="button" key={person.id} aria-pressed={selectedPeople.includes(person.id)} onClick={() => togglePersonFilter(person.id)} className={`inline-flex min-h-10 items-center gap-2 rounded-md border px-3 text-sm ${selectedPeople.includes(person.id) ? 'border-gray-300 bg-white dark:border-slate-600 dark:bg-slate-800' : 'border-transparent text-gray-400'}`}><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: person.color }} />{person.name}</button>)}
@@ -1948,7 +1951,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                                     {displayEventTitle(event)}
                                   </span>
                                   <span className="mt-0.5 block text-xs text-gray-600 dark:text-slate-300">
-                                    {hasUnspecifiedEventTime(event) ? 'All day' : event.time} · {person?.name || 'Family'}
+                                    {hasUnspecifiedEventTime(event) ? 'All day' : event.time} · {eventPeopleLabel(event, people)}
                                   </span>
                                 </span>
                               </button>
@@ -1993,8 +1996,8 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                           </span>
                           <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-600 dark:text-slate-300">
                             <span>{hasUnspecifiedEventTime(event) ? 'Time not provided' : `${event.time} · ${event.duration} min`}</span>
-                            {person && <span>{person.name}</span>}
-                            {event.location && <span className="truncate">{event.location}</span>}
+                            <span>{eventPeopleLabel(event, people)}</span>
+                            {event.location && <span className="truncate">{hasSchoolSource(event) && /^school\.\s/i.test(event.location) ? 'School' : event.location}</span>}
                             {event.isRecurring && <span className="inline-flex items-center gap-1"><Repeat className="h-3 w-3" />Repeats {event.recurringPattern?.frequency || event.recurring}</span>}
                             {isConflicting && (
                               <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800 dark:bg-amber-400/15 dark:text-amber-100">
@@ -2044,7 +2047,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                         className="w-3 h-3 rounded-full"
                         style={{ backgroundColor: person.color }}
                       />
-                      <span className="text-sm text-gray-600 dark:text-slate-300">{person.name}</span>
+                      <span className="text-sm text-gray-600 dark:text-slate-300">{eventPeopleLabel(hoveredEvent, people)}</span>
                     </div>
                   ) : null;
                 })()}

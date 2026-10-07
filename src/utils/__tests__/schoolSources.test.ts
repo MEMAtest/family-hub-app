@@ -1,5 +1,5 @@
 import { parseCalendarImportText } from '../calendarImport';
-import { assignSchoolDrafts, initialSchoolRules, resolveSchoolSource, schoolSourceLinks, validateSchoolRules, type SchoolDraft } from '../schoolSources';
+import { assignSchoolDrafts, initialSchoolRules, resolveSchoolSource, schoolSavedEventAttendance, schoolSourceLinks, validateSchoolRules, type SchoolDraft } from '../schoolSources';
 
 const members = [
   { id: 'actual-askia-id', name: 'Askia', role: 'Child', ageGroup: 'Child' },
@@ -41,6 +41,27 @@ describe('institution-scoped school assignment', () => {
   it('does not assign an adult school meeting to a child', () => {
     expect(assign({ ...draft(), title: 'Parents evening' }).person).toBe('');
     expect(assign({ ...draft('Ademola parents evening 7 October 2026'), title: 'Parents evening' }).person).toBe('adult-id');
+  });
+  it('separates source concerns from an unknown or explicitly chosen adult attendee', () => {
+    const pta = assign({ ...draft(), title: 'PTA AGM', source: 'PTA AGM 7 October 2026' });
+    expect(pta.schoolAssignment).toMatchObject({ concernedMemberIds: ['actual-amari-id'], attendeePersonId: null, attendeeStatus: 'needs_confirmation' });
+    const chosen = assign({ ...pta, schoolAssignment: { ...pta.schoolAssignment!, manualOverride: {
+      personId: 'adult-id', actorId: 'adult-id', at: '2026-10-07',
+    } } });
+    expect(chosen).toMatchObject({ person: 'adult-id', schoolAssignment: { basis: 'manual', concernedMemberIds: ['actual-amari-id'], attendeePersonId: 'adult-id', attendeeStatus: 'confirmed' } });
+  });
+  it('does not confirm the old child as a PTA attendee, even while source details are loading', () => {
+    const event = { title: 'PTA AGM', sourceId: 'legacy-intake', person: 'actual-askia-id', metadata: null };
+    expect(schoolSavedEventAttendance(event, members)).toEqual({ attendeePersonId: null, attendeeStatus: 'needs_confirmation' });
+    expect(schoolSavedEventAttendance({ ...event, metadata: { assignmentOverride: { personId: 'actual-askia-id' } } }, members).attendeeStatus).toBe('needs_confirmation');
+    expect(schoolSavedEventAttendance({ ...event, person: 'adult-id', metadata: { assignmentOverride: { personId: 'adult-id' } } }, members)).toEqual({ attendeePersonId: 'adult-id', attendeeStatus: 'confirmed' });
+  });
+  it('keeps child concern enrollment independent of a manual attendee choice at another institution', () => {
+    const chosen = assignSchoolDrafts([draft()], resolve('Stewart Fleming'), rules, members, {
+      'photo-key': { personId: 'actual-askia-id', actorId: 'adult-id', at: '2026-10-07' },
+    })[0];
+    expect(chosen.schoolAssignment).toMatchObject({ concernedMemberIds: ['actual-amari-id'], attendeePersonId: 'actual-askia-id', basis: 'manual' });
+    expect(assign(draft('Key Stage 2 assembly 7 October 2026')).schoolAssignment?.concernedMemberIds).toEqual([]);
   });
   it('does not borrow a child name from a later line when resolving a parsed cohort', () => {
     const parsed = parseCalendarImportText({ text: 'Key Stage 2 reading morning 7 October 2026\nAmari should bring a reading record', people: members as any, defaultPersonId: '' });

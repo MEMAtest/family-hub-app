@@ -7,9 +7,9 @@ import type { CalendarImportDraft } from '@/utils/calendarImport';
 import type { SchoolDocumentSummary } from '@/utils/schoolDocumentSummary';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
-import { schoolMetadata, type SchoolDraft } from '@/utils/schoolSources';
+import { assignSchoolDrafts, schoolMetadata, type SchoolDraft } from '@/utils/schoolSources';
 import { isAdultSchoolEvent, isChildProfile } from '@/utils/schoolEventPresentation';
-import { schoolDraftKey } from '@/lib/schoolIntakeServer';
+import { loadSchoolRules, resolveStoredSchoolDrafts, schoolDraftKey } from '@/lib/schoolIntakeServer';
 
 const reviewStatuses = ['review_required', 'partial_review', 'no_events', 'needs_ocr', 'content_required'];
 
@@ -64,6 +64,8 @@ export const GET = requireFamilyAccess(async (_request: NextRequest, context) =>
       _sum: { needsReview: true },
       _count: { id: true },
     });
+    const members = await prisma.familyMember.findMany({ where: { familyId } });
+    const { rules } = await loadSchoolRules(familyId, members);
 
     return NextResponse.json({
       pendingReviewCount: pending._sum.needsReview ?? 0,
@@ -79,10 +81,12 @@ export const GET = requireFamilyAccess(async (_request: NextRequest, context) =>
       whatsappDeliveryTrackingConfigured: Boolean(
         process.env.WHATSAPP_APP_SECRET && process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN,
       ),
-      intakes: intakes.map((intake) => ({
+      intakes: intakes.map((intake) => {
+        const resolved = resolveStoredSchoolDrafts(intake, rules, members);
+        return ({
         id: intake.id,
         sender: intake.sender,
-        schoolSource: schoolMetadata(intake.metadata).schoolSource || null,
+        schoolSource: resolved.source,
         sourceDate: schoolMetadata(intake.metadata).sourceDate || null,
         subject: intake.subject,
         recipient: intake.recipient,
@@ -97,13 +101,14 @@ export const GET = requireFamilyAccess(async (_request: NextRequest, context) =>
         duplicateCount: intake.duplicateCount,
         conflictCount: intake.conflictCount,
         createdEventIds: intake.createdEventIds,
-        parsedDrafts: parsedDraftsFromJson(intake.parsedDrafts),
+        parsedDrafts: parsedDraftsFromJson(intake.parsedDrafts).map((draft) => isAdultSchoolEvent(draft.title)
+          ? resolved.drafts.find((value) => value.importId === draft.importId) || draft : draft),
         documentSummary: summaryFromMetadata(intake.metadata),
         attachments: intake.attachments.map((attachment) => ({
           ...attachment,
           downloadUrl: `/api/families/${familyId}/calendar-intake/attachments/${attachment.id}`,
         })),
-      })),
+      }); }),
     });
   } catch (error) {
     console.error('Calendar intake inbox error:', error);
@@ -139,6 +144,8 @@ export const PATCH = requireFamilyAccess(async (request: NextRequest, context, a
     const overrides = { ...schoolMetadata(metadata.schoolOverrides) };
     if (body.assignments.length) {
       const members = await prisma.familyMember.findMany({ where: { familyId } });
+      const { rules } = await loadSchoolRules(familyId, members);
+      const resolved = resolveStoredSchoolDrafts(intake, rules, members);
       for (const assignment of body.assignments) {
         const draft = drafts.find((value) => value.importId === assignment.draftId);
         const person = members.find((member) => member.id === assignment.personId);
@@ -149,8 +156,8 @@ export const PATCH = requireFamilyAccess(async (request: NextRequest, context, a
         const key = draft.sourceEventKey || schoolDraftKey(draft);
         const choice = { personId: assignment.personId, actorId: authUser.familyMemberId, at: new Date().toISOString() };
         overrides[key] = choice;
-        draft.schoolAssignment = { basis: 'manual', originalPersonId: draft.schoolAssignment?.originalPersonId ?? draft.person,
-          sourceKey: draft.schoolAssignment?.sourceKey || metadata.schoolSource?.institution || null, manualOverride: choice };
+        draft.schoolAssignment = assignSchoolDrafts([{ ...draft, sourceEventKey: key }],
+          resolved.source, rules, members, overrides)[0].schoolAssignment;
         draft.person = assignment.personId;
         draft.sourceEventKey = key;
       }

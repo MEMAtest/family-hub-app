@@ -10,7 +10,8 @@ import { useAppView } from '@/contexts/familyHub/AppViewContext';
 import type { CalendarEvent } from '@/types/calendar.types';
 import { weeklyCalendarPriorities } from '@/utils/weeklyCalendarPriorities';
 import { useFamilyStore } from '@/store/familyStore';
-import { isAdultSchoolEvent, isChildProfile, recurringSourceDateWarning, schoolEventLocation, schoolEventTitle } from '@/utils/schoolEventPresentation';
+import { recurringSourceDateWarning, schoolEventLocation, schoolEventTitle } from '@/utils/schoolEventPresentation';
+import { eventPeopleLabel } from '@/utils/schoolEventPeople';
 import { formatDateForInput } from '@/utils/formatDate';
 import toast from 'react-hot-toast';
 import { hasUnspecifiedEventTime } from '@/utils/eventSemantics';
@@ -116,10 +117,9 @@ export const CalendarView = () => {
             if (entry.kind === 'task') { const item = entry.occurrence; return <label key={item.occurrenceId} className="flex min-h-11 items-start gap-3 py-3 text-sm"><input type="checkbox" aria-label={`Complete ${item.task.title} on ${item.assignedDate}`} checked={Boolean(item.completedAt)} onChange={() => { void toggleTaskComplete(item.task.id, undefined, item.isRecurring ? item.assignedDate : undefined).catch(() => toast.error('Could not update this reminder.')); }} className="mt-1 h-5 w-5 rounded border-gray-300 text-teal-700" /><span className="min-w-0"><strong className="block">{item.task.title}</strong><span className="mt-1 block text-xs text-gray-500">Due {new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }).format(new Date(`${item.dueDate}T12:00:00`))} · {item.task.assignees.map((id) => people.find((person) => person.id === id)?.name).filter(Boolean).join(', ') || 'Family'} · Reminder</span></span></label>; }
             const item = entry.occurrence;
             const person = people.find((person) => person.id === item.event.person);
-            const adultAttendanceUnknown = item.event.source === 'gmail-school-email' && isAdultSchoolEvent(item.event.title) && person && isChildProfile(person);
             return <button key={item.occurrenceId} type="button" onClick={() => openEditForm({ ...item.event, date: item.date, time: item.time, duration: item.duration, endDate: item.endDate, occurrenceDate: item.date, seriesStartDate: item.event.isRecurring ? item.event.date : undefined })} className="flex w-full items-start gap-3 py-3 text-left">
             <span className="w-11 shrink-0 text-center text-xs text-gray-500 dark:text-slate-400">{new Intl.DateTimeFormat('en-GB', { weekday: 'short' }).format(new Date(`${item.date}T12:00:00`))}<strong className="mt-1 block text-base text-gray-800 dark:text-slate-200">{item.date.slice(8)}</strong></span>
-            <span className="min-w-0"><span className="block text-sm font-semibold">{titleFor(item.event)}</span><span className="mt-1 block text-xs text-gray-500 dark:text-slate-400">{hasUnspecifiedEventTime(item.event) ? 'All day' : item.time} · {adultAttendanceUnknown ? `For ${person.name}; adult attendee to confirm` : person?.name || 'Family'}</span>{item.event.location && <span className="mt-1 block truncate text-xs text-gray-500">{item.event.source === 'gmail-school-email' ? schoolEventLocation(item.event.location) : item.event.location}</span>}</span>
+            <span className="min-w-0"><span className="block text-sm font-semibold">{titleFor(item.event)}</span><span className="mt-1 block text-xs text-gray-500 dark:text-slate-400">{hasUnspecifiedEventTime(item.event) ? 'All day' : item.time} · {eventPeopleLabel(item.event, members)}</span>{item.event.location && <span className="mt-1 block truncate text-xs text-gray-500">{item.event.source === 'gmail-school-email' ? schoolEventLocation(item.event.location) : item.event.location}</span>}</span>
           </button>; })}</div> : <p className="text-sm text-gray-500 dark:text-slate-400">No events or outstanding reminders in the next seven days.</p>}
         </section>
       </aside>

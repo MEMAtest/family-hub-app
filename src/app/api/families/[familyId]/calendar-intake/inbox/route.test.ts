@@ -1,5 +1,6 @@
 jest.mock('@/lib/prisma', () => ({ __esModule: true, default: {
   family: { findUnique: jest.fn() }, familyMember: { findMany: jest.fn() }, gmailConnection: { findUnique: jest.fn() },
+  familyDocument: { findUnique: jest.fn() },
   calendarEmailIntake: { findFirst: jest.fn(), findMany: jest.fn(), aggregate: jest.fn(), updateMany: jest.fn() },
   calendarEvent: { findMany: jest.fn() },
 } }));
@@ -19,6 +20,7 @@ const intake = { id: 'intake-id', status: 'review_required', needsReview: 2, cre
 describe('calendar intake decisions', () => {
   beforeEach(() => {
     jest.resetAllMocks();
+    (prisma.familyDocument.findUnique as jest.Mock).mockResolvedValue(null);
     (prisma.calendarEmailIntake.findFirst as jest.Mock).mockImplementation(async () => ({ ...intake, parsedDrafts: [{ ...draft }] }));
     (prisma.calendarEmailIntake.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
     (prisma.calendarEvent.findMany as jest.Mock).mockResolvedValue([{ id: 'created-now', personId: 'askia', title: 'Photographs', eventDate: new Date('2026-10-07') }]);
@@ -65,5 +67,36 @@ describe('calendar intake decisions', () => {
     (prisma.calendarEmailIntake.findFirst as jest.Mock).mockResolvedValue({ ...intake, status: 'content_required' });
     const response = await (PATCH as any)(request({ intakeId: 'intake-id', needsReview: 0 }), context, auth);
     expect(response.body.status).toBe('content_required');
+  });
+  it('read-only resolves a legacy PTA preview into separate concern and attendee fields', async () => {
+    (prisma.family.findUnique as jest.Mock).mockResolvedValue({ id: 'family-id' });
+    (prisma.calendarEmailIntake.aggregate as jest.Mock).mockResolvedValue({ _sum: { needsReview: 1 }, _count: { id: 1 } });
+    (prisma.calendarEmailIntake.findMany as jest.Mock).mockResolvedValue([{ ...intake, text: 'Stewart Fleming Primary School',
+      receivedAt: new Date('2026-10-06'), attachments: [], parsedDrafts: [{ ...draft, title: 'PTA AGM', source: 'PTA AGM 7 October 2026', warnings: [] }] }]);
+    const response = await (GET as any)({}, context);
+    expect(response.status).toBe(200);
+    expect(response.body.intakes[0].parsedDrafts[0]).toMatchObject({ person: '', schoolAssignment: {
+      concernedMemberIds: ['amari'], attendeePersonId: null, attendeeStatus: 'needs_confirmation',
+    } });
+    expect(prisma.calendarEmailIntake.updateMany).not.toHaveBeenCalled();
+  });
+  it('persists a chosen adult independently of the source child concern', async () => {
+    (prisma.familyMember.findMany as jest.Mock).mockResolvedValue([{ id: 'amari', name: 'Amari', role: 'Child' },
+      { id: 'askia', name: 'Askia', role: 'Child' }, { id: 'parent-id', name: 'Ademola', role: 'Parent' }]);
+    (prisma.calendarEmailIntake.findFirst as jest.Mock).mockResolvedValue({ ...intake, text: 'Stewart Fleming Primary School',
+      parsedDrafts: [{ ...draft, title: 'PTA AGM', source: 'PTA AGM 7 October 2026', warnings: [] }] });
+    const response = await (PATCH as any)(request({ intakeId: 'intake-id', assignments: [{ draftId: 'photo', personId: 'parent-id' }] }), context, auth);
+    expect(response.status).toBe(200);
+    const data = (prisma.calendarEmailIntake.updateMany as jest.Mock).mock.calls[0][0].data;
+    expect(data.parsedDrafts[0]).toMatchObject({ person: 'parent-id', schoolAssignment: {
+      concernedMemberIds: ['amari'], attendeePersonId: 'parent-id', attendeeStatus: 'confirmed', originalPersonId: 'askia',
+    } });
+    expect(data.metadata.schoolOriginalParsedDrafts[0].person).toBe('askia');
+  });
+  it('rejects choosing a child as the adult PTA attendee', async () => {
+    (prisma.calendarEmailIntake.findFirst as jest.Mock).mockResolvedValue({ ...intake, text: 'Stewart Fleming Primary School',
+      parsedDrafts: [{ ...draft, title: 'PTA AGM', source: 'PTA AGM 7 October 2026', warnings: [] }] });
+    expect((await (PATCH as any)(request({ intakeId: 'intake-id', assignments: [{ draftId: 'photo', personId: 'amari' }] }), context, auth)).status).toBe(400);
+    expect(prisma.calendarEmailIntake.updateMany).not.toHaveBeenCalled();
   });
 });
