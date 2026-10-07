@@ -91,9 +91,10 @@ export const GET = requireFamilyAccess(async (_request: NextRequest, context) =>
         (intake.text || intake.normalizedText || '').replace(/^Grandir nursery:[^\n]*\n/, ''),
         schoolMetadata(metadata.grandirPortal).hasAttachments === true || Boolean(intake.attachments?.length)) : null;
       const accountNotice = nurserySummary?.title === 'Parent account security notice';
-      if (nurserySummary && !accountNotice && resolved.source.contentRequired) {
+      const nurseryEmailPreview = /\bposted on your Grandir UK wall\b/i.test(intake.text || intake.normalizedText || '');
+      if (nurserySummary && !accountNotice && (resolved.source.contentRequired || nurseryEmailPreview)) {
         nurserySummary = { ...nurserySummary, kind: 'content_pending',
-          title: intake.subject || 'Nursery notice preview',
+          title: 'Nursery notice preview',
           purpose: 'This notification contains a preview. The full nursery post has not been read.',
           actions: ['Open the original nursery post to check its dates and preparation.'], timing: null };
       }

@@ -70,12 +70,13 @@ describe('calendar intake decisions', () => {
       attachments: [], receivedAt: new Date('2026-10-06'), subject: 'Grandir new nursery post' };
     (prisma.calendarEmailIntake.findMany as jest.Mock).mockResolvedValue([
       { ...base, id: 'preview', text: 'View this post: https://www.app.grandiruk.com/#/account/post/post-1' },
+      { ...base, id: 'wall-preview', text: 'Hi parent, Nursery staff posted on your Grandir UK wall: "Next week is Book of the Week..."' },
       { ...base, id: 'account', text: 'We noticed you logged in using a device. Please sign in to review.' },
       { ...base, id: 'dismissed', status: 'reviewed', text: 'View this post in Grandir.' },
     ]);
     (prisma.calendarEvent.findMany as jest.Mock).mockResolvedValue([]);
     const response = await (GET as any)({}, context);
-    expect(response.body.pendingReviewCount).toBe(1);
+    expect(response.body.pendingReviewCount).toBe(2);
     expect(response.body.intakes.find((row: any) => row.id === 'preview')).toMatchObject({
       status: 'content_required', actionRequired: true, nurseryChildId: 'askia',
       nurserySummary: expect.objectContaining({ kind: 'content_pending' }),
@@ -83,6 +84,10 @@ describe('calendar intake decisions', () => {
     });
     expect(response.body.intakes.find((row: any) => row.id === 'account')).toMatchObject({
       status: 'no_events', actionRequired: false, nurserySummary: expect.objectContaining({ title: 'Parent account security notice' }),
+    });
+    expect(response.body.intakes.find((row: any) => row.id === 'wall-preview')).toMatchObject({
+      status: 'content_required', actionRequired: true,
+      nurserySummary: expect.objectContaining({ title: 'Nursery notice preview', kind: 'content_pending' }),
     });
     expect(response.body.intakes.find((row: any) => row.id === 'dismissed')).toMatchObject({ status: 'reviewed', actionRequired: false });
     expect(prisma.calendarEmailIntake.updateMany).not.toHaveBeenCalled();
