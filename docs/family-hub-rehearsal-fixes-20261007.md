@@ -76,13 +76,18 @@ output; no household purchase records are published in these notes.
 ## Verification
 
 - Initial rehearsal: 102 Jest suites, 917 tests passed; 36 browser journeys passed.
-- Final unit run: 106 Jest suites, 964 tests passed, including older-inbox
+- Final unit run: 108 Jest suites, 972 tests passed, including older-inbox
   decision visibility, restricted-cohort abbreviations, permission-independent
   reminder access and privacy-safe cron failure diagnostics.
 - Historical school reminders now read the same family-scoped source enrichment
   as the calendar, including corrected children and short titles. Recipient,
   read, snooze and completion ownership stay unchanged; displaying a reminder
   does not rewrite its stored record or trigger a push.
+- Rejected Gmail refresh grants now persist reconnect-needed state and return
+  a typed, actionable response. The phone view shows Reconnect Gmail across
+  reload instead of still claiming Connected or exposing raw invalid_grant.
+  Transient failures do not disconnect Gmail, and optimistic concurrency protects
+  a newer sign-in from an older failed refresh. Existing messages are retained.
 - Full local journey run: 112 passed, two external-email checks skipped, one
   timeline visibility failure. The focused rerun passed the timeline journey
   and the strengthened attendee-close/reopen regression. Release acceptance also
@@ -90,6 +95,8 @@ output; no household purchase records are published in these notes.
 - All 12 bathroom tile, supplier-link, quote, measurement, photo refresh and
   download journeys passed in a complete separate run.
 - All 16 school-intake browser journeys passed after the cohort and badge changes.
+- A further phone regression verifies rejected Gmail authorization, a visible
+  reconnect action after reload, and no imported event during authorization failure.
 - A phone browser regression verifies that reminders open and close even while
   the browser notification permission request remains unanswered. Opening the
   inbox no longer requests permission; phone opt-in stays in explicit settings.
@@ -123,3 +130,5 @@ portal sync stays disabled. WhatsApp delivery and physical phone receipt are
 not proven. Actual production scheduled slots, second-parent/cross-device writes,
 original project PDF download and saved production CSV download are not newly
 claimed by the initial fix pass. No departure time or accepted childcare coverage was invented.
+Google consent is still required after a rejected refresh grant; a code change
+cannot mint new user authorization. The reconnect flow uses the existing scopes.

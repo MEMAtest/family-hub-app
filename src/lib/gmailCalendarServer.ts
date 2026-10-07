@@ -1,6 +1,7 @@
 import { google, gmail_v1 } from 'googleapis';
 import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
+import { GmailReconnectRequiredError, isInvalidGmailGrant } from './gmailAuthorization';
 import { createOAuthClient } from '@/lib/googleCalendarServer';
 import { ingestCalendarEmailPayload, sweepSavedCalendarIntakes } from '@/lib/calendarEmailIngestion';
 import {
@@ -27,7 +28,8 @@ export const gmailForwardingAddress = (email: string | null | undefined) => {
 
 export const getAuthedGmailClient = async (familyId: string) => {
   const connection = await prisma.gmailConnection.findUnique({ where: { familyId } });
-  if (!connection || !connection.enabled) throw new Error('Gmail is not connected');
+  if (!connection) throw new Error('Gmail is not connected');
+  if (!connection.enabled) throw new GmailReconnectRequiredError();
   if (!isExpectedGmailAccount(connection.googleUserEmail, process.env.GOOGLE_GMAIL_ACCOUNT)) {
     throw new Error('The connected Gmail account does not match the configured Family Hub account. Reconnect the intended account.');
   }
@@ -42,8 +44,19 @@ export const getAuthedGmailClient = async (familyId: string) => {
   });
 
   if (connection.expiryDate && connection.expiryDate.getTime() <= Date.now() + 60_000) {
-    if (!connection.refreshToken) throw new Error('Gmail authorization has expired. Reconnect Gmail.');
-    const { credentials } = await oauth2Client.refreshAccessToken();
+    let credentials;
+    try {
+      if (!connection.refreshToken) throw new GmailReconnectRequiredError();
+      ({ credentials } = await oauth2Client.refreshAccessToken());
+    } catch (error) {
+      if (!isInvalidGmailGrant(error) && !(error instanceof GmailReconnectRequiredError)) throw error;
+      // A failed old refresh must not disable a newer grant saved by another sign-in.
+      const invalidated = await prisma.gmailConnection.updateMany({
+        where: { familyId, enabled: true, updatedAt: connection.updatedAt }, data: { enabled: false },
+      });
+      if (!invalidated.count) throw new Error('Gmail authorization changed. Refresh the inbox and try again.');
+      throw new GmailReconnectRequiredError();
+    }
     oauth2Client.setCredentials(credentials);
     await prisma.gmailConnection.update({
       where: { familyId },

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireFamilyAccess } from '@/lib/auth-utils';
+import { GmailReconnectRequiredError } from '@/lib/gmailAuthorization';
 import {
   gmailForwardingAddress,
   syncGmailCalendarInbox,
@@ -42,6 +43,9 @@ export const POST = requireFamilyAccess(async (_request: NextRequest, context) =
       errors: [...school.errors, ...forwarded.errors],
     });
   } catch (error) {
+    if (error instanceof GmailReconnectRequiredError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: 401 });
+    }
     console.error('Gmail calendar sync error:', error);
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Failed to sync Gmail' }, { status: 500 });
   }

@@ -351,6 +351,11 @@ const CalendarCopilotPanel = ({
     try {
       const response = await fetch(`/api/families/${activeFamilyId}/gmail`, { method: 'POST' });
       const payload = await response.json();
+      if (payload.code === 'GMAIL_RECONNECT_REQUIRED') {
+        await loadInbox();
+        setGmailConnected(false);
+        throw new Error(payload.error);
+      }
       if (!response.ok || payload.errors?.length) throw new Error(payload.error || payload.errors?.[0] || 'Gmail could not be synced.');
       await loadInbox();
       await onEventsImported?.();
@@ -963,6 +968,8 @@ const CalendarCopilotPanel = ({
                   <p className="mt-1">Connected to {gmailEmail}</p>
                   <p className="mt-1">School and nursery mail is checked at 08:00 and 20:00 London time{gmailLastSyncAt ? ` · Last successful check ${new Date(gmailLastSyncAt).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/London' })}` : ''}.</p>
                 </>
+              ) : gmailEmail ? (
+                <p className="mt-1 text-amber-700 dark:text-amber-200">Gmail needs reconnection. Automatic inbox checks are paused until you sign in again.</p>
               ) : (
                 <p className="mt-1">Connect Gmail to automatically import Stewart Fleming emails and forward other school emails to a private Family Hub address.</p>
               )}
@@ -975,7 +982,7 @@ const CalendarCopilotPanel = ({
                 className="inline-flex min-h-8 items-center gap-1 rounded-md bg-purple-600 px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-purple-700 disabled:opacity-50"
               >
                 {gmailSyncLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Mail className="h-3.5 w-3.5" />}
-                {gmailConnected ? 'Sync Gmail' : 'Connect Gmail'}
+                {gmailConnected ? 'Sync Gmail' : gmailEmail ? 'Reconnect Gmail' : 'Connect Gmail'}
               </button>
               <button
                 type="button"
@@ -1026,7 +1033,9 @@ const CalendarCopilotPanel = ({
                     : 'WhatsApp reminders are opted in, but delivery-status tracking still needs setup.'}
           </p>
           </details>
-          <p className="mt-2 font-medium text-emerald-700 dark:text-emerald-300">Confirmed dates are added automatically. Only unresolved details need review.</p>
+          <p className="mt-2 font-medium text-emerald-700 dark:text-emerald-300">{!gmailConnected && gmailEmail
+            ? 'Saved updates remain available. Reconnect Gmail to resume new email checks.'
+            : 'Confirmed dates are added automatically. Only unresolved details need review.'}</p>
           {pendingInboxItems.length > 0 && (
             <div className="mt-3 space-y-2">
               <p className="font-semibold">Needs your decision · {pendingInboxItems.length} update{pendingInboxItems.length === 1 ? '' : 's'}</p>

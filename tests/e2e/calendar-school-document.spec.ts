@@ -42,6 +42,36 @@ const openSchoolInbox = async (page: Page) => {
   await page.getByRole('button', { name: 'School inbox & quick plan', exact: true }).click();
 };
 
+test('rejected Gmail authorization offers a persistent reconnect action on a phone', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.addInitScript(skipSetupWizard);
+  const state = { documentRequestBody: '', eventPosts: [] as unknown[], gmailSyncs: 0 };
+  await stubFamilyApis(page, state);
+  let connected = true;
+  await page.route('**/calendar-intake/inbox', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+      gmail: { connected, googleUserEmail: 'test@example.com', lastSyncAt: null }, intakes: [],
+      pendingReviewCount: 0, pendingReviewEmailCount: 0,
+    }) });
+  });
+  await page.route('**/api/families/*/gmail', async (route) => {
+    connected = false;
+    await route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({
+      code: 'GMAIL_RECONNECT_REQUIRED', error: 'Gmail authorization expired or was revoked. Reconnect Gmail to resume automatic checks.',
+    }) });
+  });
+  await openSchoolInbox(page);
+  await page.getByRole('button', { name: 'Sync Gmail', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Reconnect Gmail', exact: true })).toBeVisible();
+  await expect(page.getByText('Gmail needs reconnection.', { exact: false })).toBeVisible();
+  await expect(page.getByText('Connected to test@example.com', { exact: true })).toHaveCount(0);
+  await page.reload();
+  await page.getByRole('button', { name: 'School inbox & quick plan', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Reconnect Gmail', exact: true })).toBeVisible();
+  expect(state.eventPosts).toHaveLength(0);
+});
+
 const stubFamilyApis = async (
   page: Page,
   state: {
