@@ -71,6 +71,7 @@ interface CalendarAttachment {
 }
 
 const inboxItemSummary = (item: CalendarInboxItem) => {
+  if (item.nurserySummary?.title === 'Parent account security notice') return 'Account notification · not a nursery activity';
   if (item.preparationTask) return item.preparationTask.completed ? 'Preparation done' : `Added to tasks · due ${item.preparationTask.dueDate}`;
   if (item.nurserySummary) return ({ preparation: 'Things to bring / preparation', routine: 'Recurring nursery routine',
     event: 'Nursery date', reference: 'Learning & nursery update', content_pending: 'Original content needs checking' })[item.nurserySummary.kind];

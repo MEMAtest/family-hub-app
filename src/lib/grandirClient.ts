@@ -30,6 +30,17 @@ export const grandirPostUrl = (id: string) => {
   return `${GRANDIR_ORIGIN}/#/account/post/${id}`;
 };
 
+export const grandirOriginalPostLink = (text: string) => {
+  for (const candidate of text.match(/https:\/\/[^\s<>"']+/gi) || []) {
+    try {
+      const url = new URL(candidate.replace(/&amp;/g, '&').replace(/[).,]+$/, ''));
+      const id = url.hash.match(/^#\/account\/post\/([a-zA-Z0-9_-]{1,100})$/)?.[1];
+      if (url.origin === GRANDIR_ORIGIN && !url.username && !url.password && id) return grandirPostUrl(id);
+    } catch { /* Invalid or unrelated links do not establish nursery provenance. */ }
+  }
+  return null;
+};
+
 // Fixed-origin, GET-only provider access. Never follow redirects carrying a parent token.
 async function request(path: '/api/me/me/me' | '/api/feed/feed/feed' | '/api/v2/calendar' | '/graphql', token?: string,
   query?: Record<string, string>, loginBody?: { query: string; variables: { email: string; password: string } }) {

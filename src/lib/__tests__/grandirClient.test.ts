@@ -1,5 +1,5 @@
 /** @jest-environment node */
-import { authenticateGrandir, readGrandirFeed, readGrandirIdentity, grandirPostUrl } from '../grandirClient';
+import { authenticateGrandir, readGrandirFeed, readGrandirIdentity, grandirPostUrl, grandirOriginalPostLink } from '../grandirClient';
 const originalFetch = global.fetch;
 describe('read-only Grandir transport', () => {
   beforeEach(() => { global.fetch = jest.fn(); });
@@ -36,6 +36,15 @@ describe('read-only Grandir transport', () => {
   it('only builds validated portal links', () => {
     expect(grandirPostUrl('post-1')).toBe('https://www.app.grandiruk.com/#/account/post/post-1');
     expect(() => grandirPostUrl('../../evil?token=x')).toThrow();
+  });
+  it('extracts only official original-post links and drops query credentials', () => {
+    expect(grandirOriginalPostLink('<a href="https://www.app.grandiruk.com/?token=discard#/account/post/post-1">Open</a>'))
+      .toBe('https://www.app.grandiruk.com/#/account/post/post-1');
+    for (const link of ['https://www.app.grandiruk.com.evil.example/#/account/post/post-1',
+      'https://parent:secret@www.app.grandiruk.com/#/account/post/post-1',
+      'https://www.app.grandiruk.com/#/account/post/../../bad', 'https://www.app.grandiruk.com/#/account/home']) {
+      expect(grandirOriginalPostLink(link)).toBeNull();
+    }
   });
   it('uses the observed paging pair without changing provider origin', async () => {
     respond({ feedItems: [] });

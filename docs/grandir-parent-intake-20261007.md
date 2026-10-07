@@ -23,6 +23,8 @@ The authenticated portal contained a next-week Book of the Week preparation noti
 
 Follow-up validation: 115 unit suites / 1,043 tests passed; 21 school/nursery browser journeys plus a nursery-routine phone journey passed. The browser suite includes immediate task display, save/reload, separate source filtering and attachment/reference handling. Independent review found verified-child remapping and same-page duplicate edge cases; both were fixed with regression tests and rechecked. Exact Grandir portal links resolve nursery notices; generic Famly links and lookalike hosts do not assert a child or nursery.
 
+Authenticated live rehearsal found two legacy email presentation issues. Parent login/security notifications are now account notices, not learning activities. Gated nursery email previews remain pending until the original content is read, preserving explicit prior dismissals. Original-post links are recovered only from the official portal origin and rebuilt without query credentials. Regression validation: 115 suites / 1,046 tests passed.
+
 ## Configuration
 
 `GRANDIR_SESSION_ENCRYPTION_KEY` must be a canonical base64-encoded, cryptographically random 32-byte production secret. Do not rotate it without an explicit reconnect/migration plan. `CRON_SECRET` and `CALENDAR_INBOUND_FAMILY_ID` scope the existing household scheduler.

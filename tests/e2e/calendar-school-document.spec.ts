@@ -962,6 +962,9 @@ test('nursery learning stays reference and unread attachments have an original-c
     { ...base, id: 'attachment', subject: 'Nursery attachment', status: 'content_required', needsReview: 1, actionRequired: true,
       nurserySummary: { kind: 'content_pending', title: 'Nursery attachment to review', purpose: 'The notice has an attachment but no readable text.',
         actions: ['Open the original notice and review its attachment.'], timing: null, hasAttachments: true } },
+    { ...base, id: 'account', subject: 'Grandir sign-in notification', status: 'no_events', needsReview: 0, actionRequired: false,
+      nurserySummary: { kind: 'reference', title: 'Parent account security notice',
+        purpose: 'Grandir sent an account security notification. This is not a nursery activity.', actions: [], timing: null, hasAttachments: false } },
   ] });
   await openSchoolInbox(page);
   await page.getByLabel('Filter school and nursery updates').selectOption('nursery');
@@ -970,7 +973,8 @@ test('nursery learning stays reference and unread attachments have an original-c
   await expect(page.getByText('The full content has not been read.', { exact: false })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Add preparation task', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Close school update' }).click();
-  await page.getByText('Added & reference updates · 1', { exact: true }).click();
+  await page.getByText('Added & reference updates · 2', { exact: true }).click();
+  await expect(page.getByText('Account notification · not a nursery activity', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: /Today at nursery.*Open/ }).click();
   await expect(page.getByText('Saved as an update, not a future event.', { exact: true })).toBeVisible();
   expect(state.eventPosts).toHaveLength(0);

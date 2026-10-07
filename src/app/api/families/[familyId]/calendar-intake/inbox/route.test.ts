@@ -65,6 +65,28 @@ describe('calendar intake decisions', () => {
       expect((await (POST as any)(request(body), context, auth)).status).toBe(409);
     } finally { save.mockRestore(); }
   });
+  it('marks unread nursery email previews pending while keeping account notices and dismissals separate', async () => {
+    const base = { ...intake, status: 'no_events', sender: 'Grandir', parsedDrafts: [], createdEventIds: [],
+      attachments: [], receivedAt: new Date('2026-10-06'), subject: 'Grandir new nursery post' };
+    (prisma.calendarEmailIntake.findMany as jest.Mock).mockResolvedValue([
+      { ...base, id: 'preview', text: 'View this post: https://www.app.grandiruk.com/#/account/post/post-1' },
+      { ...base, id: 'account', text: 'We noticed you logged in using a device. Please sign in to review.' },
+      { ...base, id: 'dismissed', status: 'reviewed', text: 'View this post in Grandir.' },
+    ]);
+    (prisma.calendarEvent.findMany as jest.Mock).mockResolvedValue([]);
+    const response = await (GET as any)({}, context);
+    expect(response.body.pendingReviewCount).toBe(1);
+    expect(response.body.intakes.find((row: any) => row.id === 'preview')).toMatchObject({
+      status: 'content_required', actionRequired: true, nurseryChildId: 'askia',
+      nurserySummary: expect.objectContaining({ kind: 'content_pending' }),
+      originalPortalUrl: 'https://www.app.grandiruk.com/#/account/post/post-1',
+    });
+    expect(response.body.intakes.find((row: any) => row.id === 'account')).toMatchObject({
+      status: 'no_events', actionRequired: false, nurserySummary: expect.objectContaining({ title: 'Parent account security notice' }),
+    });
+    expect(response.body.intakes.find((row: any) => row.id === 'dismissed')).toMatchObject({ status: 'reviewed', actionRequired: false });
+    expect(prisma.calendarEmailIntake.updateMany).not.toHaveBeenCalled();
+  });
   it('accepts only the explicit single-intake processing request and uses the authorized family', async () => {
     const process = jest.spyOn(ingestion, 'autoProcessSavedCalendarIntake').mockResolvedValue({ intakeId: 'intake-id', newlyCreatedCount: 1 } as any);
     try {

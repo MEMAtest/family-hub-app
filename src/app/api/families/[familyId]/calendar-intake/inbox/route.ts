@@ -12,7 +12,7 @@ import { loadSchoolRules, resolveStoredSchoolDrafts, schoolDraftKey } from '@/li
 import { calendarIntakeState } from '@/lib/calendarIntakeState';
 import { autoProcessSavedCalendarIntake, isHighConfidenceAutoCreate, SavedIntakeProcessingError } from '@/lib/calendarEmailIngestion';
 import { isStewartFlemingSender } from '@/utils/schoolEmail';
-import { grandirPostUrl } from '@/lib/grandirClient';
+import { grandirPostUrl, grandirOriginalPostLink } from '@/lib/grandirClient';
 import { summarizeNurseryNotice } from '@/utils/nurseryNoticeSummary';
 import { nurseryPreparationTaskId, saveNurseryPreparation, NurseryPreparationError } from '@/lib/nurseryPreparation';
 
@@ -87,16 +87,26 @@ export const GET = requireFamilyAccess(async (_request: NextRequest, context) =>
       const trusted = schoolMetadata(intake.metadata).schoolSenderVerified === true && isStewartFlemingSender(intake.sender || '');
       const drafts = resolved.drafts;
       const metadata = schoolMetadata(intake.metadata);
-      const nurserySummary = resolved.source.institution === 'grandir' ? summarizeNurseryNotice(
+      let nurserySummary = resolved.source.institution === 'grandir' ? summarizeNurseryNotice(
         (intake.text || intake.normalizedText || '').replace(/^Grandir nursery:[^\n]*\n/, ''),
         schoolMetadata(metadata.grandirPortal).hasAttachments === true || Boolean(intake.attachments?.length)) : null;
+      const accountNotice = nurserySummary?.title === 'Parent account security notice';
+      if (nurserySummary && !accountNotice && resolved.source.contentRequired) {
+        nurserySummary = { ...nurserySummary, kind: 'content_pending',
+          title: intake.subject || 'Nursery notice preview',
+          purpose: 'This notification contains a preview. The full nursery post has not been read.',
+          actions: ['Open the original nursery post to check its dates and preparation.'], timing: null };
+      }
       const preparationTask = nurseryTasks.find(task => task.id === nurseryPreparationTaskId(familyId, intake.id));
       const mappedNurseryChildId = rules.sources.find(source => source.key === 'grandir')?.memberIds.length === 1
         ? rules.sources.find(source => source.key === 'grandir')?.memberIds[0] : null;
       const verifiedChildId = schoolMetadata(metadata.grandirPortal).childMemberId;
       const nurseryChildId = typeof verifiedChildId === 'string' && verifiedChildId !== mappedNurseryChildId
         ? null : mappedNurseryChildId;
-      const state = calendarIntakeState({ ...intake, metadata: { ...metadata, nurserySummary,
+      const nurseryStatus = accountNotice && !drafts.length ? 'no_events' :
+        nurserySummary?.kind === 'content_pending' ? 'content_required' : intake.status;
+      const state = calendarIntakeState({ ...intake, status: ['reviewed', 'reviewed_imported'].includes(intake.status) ? intake.status : nurseryStatus,
+        metadata: { ...metadata, nurserySummary,
         nurseryPreparationSaved: Boolean(preparationTask) } }, drafts, savedEvents, (draft) => trusted &&
         !resolved.source.contentRequired && members.some((member) => member.id === draft.person) &&
         isHighConfidenceAutoCreate(resolved.drafts.find((value) => value.importId === draft.importId) || draft,
@@ -139,7 +149,8 @@ export const GET = requireFamilyAccess(async (_request: NextRequest, context) =>
         sourceDate: schoolMetadata(intake.metadata).sourceDate || null,
         originalPortalUrl: (() => {
           const portal = schoolMetadata(schoolMetadata(intake.metadata).grandirPortal);
-          return typeof portal.postId === 'string' && /^[a-zA-Z0-9_-]{1,100}$/.test(portal.postId) ? grandirPostUrl(portal.postId) : null;
+          return typeof portal.postId === 'string' && /^[a-zA-Z0-9_-]{1,100}$/.test(portal.postId) ? grandirPostUrl(portal.postId) :
+            resolved.source.institution === 'grandir' ? grandirOriginalPostLink(`${intake.text || ''}\n${intake.html || ''}`) : null;
         })(),
         subject: intake.subject,
         recipient: intake.recipient,

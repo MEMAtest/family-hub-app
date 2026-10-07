@@ -62,6 +62,11 @@ const titleFrom = (text: string, kind: NurseryNoticeSummary['kind']) => {
 
 export function summarizeNurseryNotice(body: string, hasAttachments = false): NurseryNoticeSummary {
   const text = cleanText(typeof body === 'string' ? body : '');
+  if (/\b(?:logged in using a device|new (?:device|sign.in|login)|password reset|verification code|security alert)\b/i.test(text)) {
+    return { kind: 'reference', title: 'Parent account security notice',
+      purpose: 'Grandir sent an account security notification. This is not a nursery activity.',
+      actions: [], timing: null, hasAttachments };
+  }
   if (!text) {
     return {
       kind: hasAttachments ? 'content_pending' : 'reference',

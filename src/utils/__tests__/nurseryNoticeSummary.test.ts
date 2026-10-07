@@ -1,5 +1,11 @@
 import { summarizeNurseryNotice } from '../nurseryNoticeSummary';
 
+test('keeps parent login security messages out of nursery activities', () => {
+  const summary = summarizeNurseryNotice('Grandir noticed you logged in using a device. Verification code: private-example.');
+  expect(summary).toMatchObject({ kind: 'reference', title: 'Parent account security notice', actions: [], timing: null });
+  expect(JSON.stringify(summary)).not.toContain('private-example');
+});
+
 test('summarizes the Book of the Week invitation as preparation with source timing and action', () => {
   const summary = summarizeNurseryNotice(
     'Good afternoon parents. Next week, our Book of the Week is children are invited to bring in their favourite books.',
