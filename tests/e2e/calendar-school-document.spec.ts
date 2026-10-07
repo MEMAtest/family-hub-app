@@ -377,8 +377,8 @@ test.describe('school document calendar intake', () => {
     await stubFamilyApis(page, state, { inboxItems: [{ id: 'pending-school-mail', status: 'partial_review', needsReview: 8, autoCreated: 9, conflictCount: 0, duplicateCount: 0, parsedDrafts: [] }] });
     await page.goto('/?view=calendar');
     const action = page.getByRole('button', { name: 'School inbox & quick plan', exact: true });
-    await expect(action).toContainText('8 events');
-    await expect(action.locator('#school-review-count')).toHaveAttribute('title', '8 event suggestions across 1 school email need review');
+    await expect(action).toContainText('Review 8');
+    await expect(action.locator('#school-review-count')).toHaveAttribute('title', '8 suggestions across 1 school email need a decision; not added events');
     await expect(action).toHaveAttribute('aria-expanded', 'false');
     await expect(page.getByRole('region', { name: 'School inbox and import' })).not.toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

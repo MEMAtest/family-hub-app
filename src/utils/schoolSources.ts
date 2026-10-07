@@ -106,7 +106,7 @@ export const assignSchoolDrafts = (drafts: SchoolDraft[], source: SchoolSourceEv
   const originalPersonId = draft.schoolAssignment?.originalPersonId ?? draft.person;
   const eligible = rules.sources.find((rule) => rule.key === source.institution)?.memberIds || [];
   const adult = isAdultSchoolEvent(draft.title);
-  const cohort = /\b(?:Reception|Year\s+[1-6]|Key\s+Stage\s+[12])\b/i.test(draft.source);
+  const cohort = /\b(?:Reception|EYFS|KS\s*[12]|Year\s+[1-6]|Key\s+Stage\s+[12])\b/i.test(draft.source);
   const concernedMemberIds = cohort ? eligible.filter((id) => id === draft.person) : [...eligible];
   const override = overrides[draft.sourceEventKey || draft.importId] || draft.schoolAssignment?.manualOverride;
   if (override && (override.personId === '' || members.some((member) => member.id === override.personId))) {

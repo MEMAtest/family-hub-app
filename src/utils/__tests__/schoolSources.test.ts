@@ -26,7 +26,7 @@ describe('institution-scoped school assignment', () => {
     expect(assign(draft())).toMatchObject({ person: 'actual-amari-id', schoolAssignment: { basis: 'institution', originalPersonId: 'actual-askia-id' } });
     expect(assign(draft(), 'Grandir nursery')).toMatchObject({ person: 'actual-askia-id' });
   });
-  it.each(['Reception', 'Year 1', 'Year 6', 'Key Stage 1', 'Key Stage 2'])('does not infer a narrow %s cohort from enrollment or age', (cohort) => {
+  it.each(['Reception', 'Year 1', 'Year 6', 'Key Stage 1', 'Key Stage 2', 'EYFS', 'KS1', 'KS2', 'KS 2'])('does not infer a narrow %s cohort from enrollment or age', (cohort) => {
     expect(assign(draft(`${cohort} assembly 7 October 2026`))).toMatchObject({ person: '', schoolAssignment: { basis: 'unresolved' } });
   });
   it('preserves saved choices including explicitly unassigned and cross-institution household choices', () => {

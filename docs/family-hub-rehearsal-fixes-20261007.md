@@ -53,6 +53,11 @@ that these local changes are already live.
 - Every outstanding update included in the pending count is available in the
   inbox, even when older than the recent reference-mail window. Recent notices
   cannot push unresolved decisions out of view; overlapping rows are deduplicated.
+- Restricted cohort abbreviations (EYFS, KS1, KS2) require confirmation just
+  like Reception and named year groups. An institution rule alone does not prove
+  enrolment in a particular cohort, and explicit manual assignments are retained.
+- The calendar badge says Review, not events: pending suggestions are not
+  presented as if they were already-added calendar appointments.
 - The intake panel opens near the calendar header. Settings and reference mail
   are collapsed; document upload and event decisions use a focus-managed dialog
   with a phone-reachable footer. Sync refreshes current calendar events directly.
@@ -71,14 +76,15 @@ output; no household purchase records are published in these notes.
 ## Verification
 
 - Initial rehearsal: 102 Jest suites, 917 tests passed; 36 browser journeys passed.
-- Final unit run: 103 Jest suites, 948 tests passed, including older-inbox
-  decision visibility beyond the recent reference-mail window.
+- Final unit run: 103 Jest suites, 952 tests passed, including older-inbox
+  decision visibility and restricted-cohort abbreviations.
 - Full local journey run: 112 passed, two external-email checks skipped, one
   timeline visibility failure. The focused rerun passed the timeline journey
   and the strengthened attendee-close/reopen regression. Release acceptance also
   requires the full Git pipeline journey run to pass, not just this focused rerun.
 - All 12 bathroom tile, supplier-link, quote, measurement, photo refresh and
   download journeys passed in a complete separate run.
+- All 16 school-intake browser journeys passed after the cohort and badge changes.
 - Three isolated database-backed budget smoke checks passed.
 - TypeScript check passed.
 - Optimized production build passed, including lint and type validation.
