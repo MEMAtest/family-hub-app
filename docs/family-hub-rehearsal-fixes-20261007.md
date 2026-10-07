@@ -76,9 +76,13 @@ output; no household purchase records are published in these notes.
 ## Verification
 
 - Initial rehearsal: 102 Jest suites, 917 tests passed; 36 browser journeys passed.
-- Final unit run: 104 Jest suites, 956 tests passed, including older-inbox
+- Final unit run: 106 Jest suites, 964 tests passed, including older-inbox
   decision visibility, restricted-cohort abbreviations, permission-independent
   reminder access and privacy-safe cron failure diagnostics.
+- Historical school reminders now read the same family-scoped source enrichment
+  as the calendar, including corrected children and short titles. Recipient,
+  read, snooze and completion ownership stay unchanged; displaying a reminder
+  does not rewrite its stored record or trigger a push.
 - Full local journey run: 112 passed, two external-email checks skipped, one
   timeline visibility failure. The focused rerun passed the timeline journey
   and the strengthened attendee-close/reopen regression. Release acceptance also

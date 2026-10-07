@@ -5,6 +5,8 @@ import { requireFamilyAccess } from '@/lib/auth-utils';
 import { sendMemberPushNotification } from '@/lib/webPush';
 import { notificationVisibility } from '@/lib/notificationRecipients';
 import { FAMILY_REMINDER_SOURCE } from '@/lib/familyReminderContract';
+import { enrichSavedSchoolEventResponses } from '@/lib/schoolIntakeServer';
+import { presentSchoolNotification } from '@/lib/schoolNotificationPresentation';
 
 const dateString = z.string().datetime();
 
@@ -76,9 +78,19 @@ export const GET = requireFamilyAccess(async (request: NextRequest, context, aut
       skip: offset,
     });
 
+    // Historical reminders keep their recipient/read state but display current source-backed event assignments.
+    const schoolEventIds = [...new Set(notifications.filter((notification) =>
+      (notification.metadata as any)?.source === 'notification-sweep' && notification.relatedEventId)
+      .map((notification) => notification.relatedEventId!))];
+    const schoolEvents = schoolEventIds.length ? await enrichSavedSchoolEventResponses(familyId,
+      await prisma.calendarEvent.findMany({ where: { familyId, id: { in: schoolEventIds } } })) : [];
+    const schoolMembers = schoolEvents.length ? await prisma.familyMember.findMany({ where: { familyId } }) : [];
+    const schoolEventsById = new Map(schoolEvents.map((event) => [event.id, event]));
+
     return NextResponse.json(notifications.map((notification) => {
       const unclaimed = visibility.unclaimed.find((member) => member.id === notification.recipientPersonId);
-      const mapped = toClient(notification);
+      const mapped = presentSchoolNotification(toClient(notification),
+        schoolEventsById.get(notification.relatedEventId || ''), schoolMembers);
       return { ...mapped, metadata: { ...(mapped.metadata || {}),
         recipientName: unclaimed?.name ?? mapped.metadata?.recipientName,
         recipientClaimed: !unclaimed,
