@@ -54,7 +54,7 @@ import { formatConflictGroupTimeRange, getSameDayConflictGroups } from '@/utils/
 import { addDays, expandEvents, getExpansionRange, type Occurrence } from '@/utils/recurrence'
 import { buildTaskEntries, getTaskEntryStyle, isTaskEntry } from '@/utils/taskCalendar'
 import { expandTasks } from '@/utils/tasks'
-import { schoolEventTitle } from '@/utils/schoolEventPresentation'
+import { displayEventTitle, hasSchoolSource, schoolEventAction, schoolEventContext } from '@/utils/schoolEventPresentation'
 import { hasUnspecifiedEventTime } from '@/utils/eventSemantics'
 import { useCalendarReminderLink } from '@/hooks/useCalendarReminderLink'
 
@@ -555,7 +555,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
       // event.id is no longer unique once a series expands; duplicate keys make
       // the grid reuse DOM nodes across different weeks.
       id: occ.occurrenceId,
-      title: occ.event.source === 'gmail-school-email' ? schoolEventTitle(occ.event.title) : occ.event.title,
+      title: displayEventTitle(occ.event),
       start: moment(`${occ.date} ${occ.time}`, 'YYYY-MM-DD HH:mm').toDate(),
       end: getOccurrenceEnd(occ),
       resource: occ.event,
@@ -1945,7 +1945,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                                 />
                                 <span className="min-w-0">
                                   <span className="block truncate text-xs font-semibold text-gray-900 dark:text-slate-100">
-                                    {event.source === 'gmail-school-email' ? schoolEventTitle(event.title) : event.title}
+                                    {displayEventTitle(event)}
                                   </span>
                                   <span className="mt-0.5 block text-xs text-gray-600 dark:text-slate-300">
                                     {hasUnspecifiedEventTime(event) ? 'All day' : event.time} · {person?.name || 'Family'}
@@ -1989,7 +1989,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                         />
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-sm font-semibold text-gray-900 dark:text-slate-100">
-                            {event.source === 'gmail-school-email' ? schoolEventTitle(event.title) : event.title}
+                            {displayEventTitle(event)}
                           </span>
                           <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-600 dark:text-slate-300">
                             <span>{hasUnspecifiedEventTime(event) ? 'Time not provided' : `${event.time} · ${event.duration} min`}</span>
@@ -2028,7 +2028,7 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
             >
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <h3 className="font-semibold text-gray-900 dark:text-slate-100">{hoveredEvent.title}</h3>
+                  <h3 className="font-semibold text-gray-900 dark:text-slate-100">{displayEventTitle(hoveredEvent)}</h3>
                   <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                     categoryColors[hoveredEvent.type as keyof typeof categoryColors] || 'bg-gray-100 text-gray-800 dark:bg-slate-700 dark:text-slate-200'
                   }`}>
@@ -2153,8 +2153,12 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
                     </button>
                   </div>
                   <p className="mt-1 whitespace-pre-line text-sm leading-5 text-gray-700 dark:text-slate-200">
-                    {eventAiSummaries[eventSummaryKey(hoveredEvent)] || conciseEventContext(hoveredEvent.notes || '') || 'No extra details saved.'}
+                    {eventAiSummaries[eventSummaryKey(hoveredEvent)] || conciseEventContext(schoolEventContext(hoveredEvent)) || 'No extra details saved.'}
                   </p>
+                  {hasSchoolSource(hoveredEvent) && schoolEventAction(schoolEventContext(hoveredEvent)) && <div className="mt-2 border-l-2 border-teal-600 pl-2">
+                    <p className="text-xs font-semibold text-gray-800 dark:text-slate-100">What you need to do</p>
+                    <p className="mt-1 text-xs leading-5">{schoolEventAction(schoolEventContext(hoveredEvent))}</p>
+                  </div>}
                   {eventAiSummaryErrors[eventSummaryKey(hoveredEvent)] && eventAiSummaryLoading === null && (
                     <p role="alert" className="mt-1 text-xs text-red-600 dark:text-red-400">{eventAiSummaryErrors[eventSummaryKey(hoveredEvent)]}</p>
                   )}

@@ -9,6 +9,24 @@ const schoolTitles: Array<[RegExp, string]> = [
 export const schoolEventTitle = (title: string) =>
   schoolTitles.find(([pattern]) => pattern.test(title))?.[1] ?? title;
 
+export const hasSchoolSource = (event: Pick<CalendarEvent, 'source' | 'metadata'>) => {
+  const provenance = event.metadata?.schoolProvenance;
+  return event.source === 'gmail-school-email' || Boolean(provenance && typeof provenance === 'object' &&
+    'institutionKey' in provenance && provenance.institutionKey);
+};
+
+export const displayEventTitle = (event: Pick<CalendarEvent, 'title' | 'source' | 'metadata'>) =>
+  hasSchoolSource(event) ? schoolEventTitle(event.title) : event.title;
+
+export const schoolEventContext = (event: Pick<CalendarEvent, 'title' | 'notes'>) => {
+  const text = event.notes || '';
+  const pattern = schoolTitles.find(([candidate]) => candidate.test(event.title))?.[0];
+  const match = pattern?.exec(text);
+  if (!match) return text;
+  const section = text.slice(match.index).split(/[•\n]/)[0];
+  return section.split(/(?<=[.!?])\s+/).slice(0, 3).join(' ');
+};
+
 export const isAdultSchoolEvent = (title: string) =>
   /\b(?:PTA AGM|parent(?:s)?['’]? (?:evening|workshop|meeting)|parent workshop)\b/i.test(title);
 

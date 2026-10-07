@@ -1,4 +1,16 @@
-import { isAdultSchoolEvent, recurringSourceDateWarning, schoolEventLocation, schoolEventTitle } from '../schoolEventPresentation';
+import { displayEventTitle, hasSchoolSource, isAdultSchoolEvent, recurringSourceDateWarning, schoolEventAction, schoolEventContext, schoolEventLocation, schoolEventTitle } from '../schoolEventPresentation';
+
+test('repaired legacy school events display concise titles and event-specific actions without rewriting evidence', () => {
+  const event = { title: 'Individual And Sibling Photographs. All Children Should Wear Their Full School Uniform',
+    source: 'calendar-intake', metadata: { schoolProvenance: { institutionKey: 'stewart-fleming' } },
+    notes: 'Weekly update. Bring harvest donations. • Individual and sibling photographs. All children should wear their full school uniform today. • Christmas dinner information.' };
+  expect(hasSchoolSource(event)).toBe(true);
+  expect(displayEventTitle(event)).toBe('Individual and sibling photographs');
+  expect(schoolEventContext(event)).not.toContain('harvest');
+  expect(schoolEventAction(schoolEventContext(event))).toMatch(/wear their full school uniform/);
+  expect(event.title).toContain('All Children');
+  expect(displayEventTitle({ ...event, metadata: {} })).toBe(event.title);
+});
 
 test('school headings stay short without removing source instructions', () => {
   expect(schoolEventTitle("African Storytelling Assembly The Children Will Enjoy A Special Assembly Titled 'Come An")).toBe('African storytelling assembly');
