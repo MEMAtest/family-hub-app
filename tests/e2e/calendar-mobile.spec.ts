@@ -80,6 +80,20 @@ const PHONES = [
   { name: 'small Android', width: 360, height: 800 },
 ];
 
+test('opens in-app reminders when phone permission remains unanswered', async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(Notification, 'permission', { configurable: true, get: () => 'default' });
+    Notification.requestPermission = () => new Promise<NotificationPermission>(() => {});
+  });
+  await openCalendar(page, [], 390, 844);
+  await page.getByRole('button', { name: 'Open notifications' }).click();
+  const center = page.getByRole('dialog', { name: 'Notifications', exact: true });
+  await expect(center).toBeVisible();
+  await expect(center.getByRole('heading', { name: 'Notifications' })).toBeVisible();
+  await center.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(center).toBeHidden();
+});
+
 const openCalendar = async (page: Page, events: unknown[], width: number, height: number) => {
   await page.setViewportSize({ width, height });
   await page.clock.setFixedTime(TODAY);

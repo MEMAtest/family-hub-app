@@ -76,8 +76,9 @@ output; no household purchase records are published in these notes.
 ## Verification
 
 - Initial rehearsal: 102 Jest suites, 917 tests passed; 36 browser journeys passed.
-- Final unit run: 103 Jest suites, 952 tests passed, including older-inbox
-  decision visibility and restricted-cohort abbreviations.
+- Final unit run: 104 Jest suites, 956 tests passed, including older-inbox
+  decision visibility, restricted-cohort abbreviations, permission-independent
+  reminder access and privacy-safe cron failure diagnostics.
 - Full local journey run: 112 passed, two external-email checks skipped, one
   timeline visibility failure. The focused rerun passed the timeline journey
   and the strengthened attendee-close/reopen regression. Release acceptance also
@@ -85,6 +86,9 @@ output; no household purchase records are published in these notes.
 - All 12 bathroom tile, supplier-link, quote, measurement, photo refresh and
   download journeys passed in a complete separate run.
 - All 16 school-intake browser journeys passed after the cohort and badge changes.
+- A phone browser regression verifies that reminders open and close even while
+  the browser notification permission request remains unanswered. Opening the
+  inbox no longer requests permission; phone opt-in stays in explicit settings.
 - Three isolated database-backed budget smoke checks passed.
 - TypeScript check passed.
 - Optimized production build passed, including lint and type validation.

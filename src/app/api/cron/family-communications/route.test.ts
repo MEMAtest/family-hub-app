@@ -30,8 +30,9 @@ describe('family communications cron', () => {
     process.env.CALENDAR_INBOUND_FAMILY_ID = 'family-id';
     jest.clearAllMocks();
     jest.useFakeTimers().setSystemTime(new Date('2026-10-07T07:00:00Z'));
+    jest.spyOn(console, 'error').mockImplementation(() => {});
   });
-  afterEach(() => jest.useRealTimers());
+  afterEach(() => { jest.useRealTimers(); jest.restoreAllMocks(); });
 
   afterAll(() => {
     process.env = originalEnv;
@@ -61,6 +62,28 @@ describe('family communications cron', () => {
     expect(payload).not.toHaveProperty('whatsapp');
     expect(syncStewartFlemingGmail).toHaveBeenCalledWith('family-id');
     expect(response.status).toBe(200);
+  });
+
+  it('reports a database lookup failure without leaking exception details', async () => {
+    (prisma.gmailConnection.findUnique as jest.Mock).mockRejectedValue(new Error('private database credential'));
+    const response = await GET(cronRequest());
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: 'School inbox connection could not be checked' });
+    expect(console.error).toHaveBeenCalledWith('School intake failed', { reason: 'connection_lookup_failed' });
+  });
+
+  it('logs only a fixed category and numeric provider status for a sync exception', async () => {
+    (prisma.gmailConnection.findUnique as jest.Mock).mockResolvedValue({ enabled: true });
+    (syncStewartFlemingGmail as jest.Mock).mockRejectedValue(Object.assign(new Error('private message body'), { code: 401 }));
+    expect((await GET(cronRequest())).status).toBe(503);
+    expect(console.error).toHaveBeenCalledWith('School intake failed', { reason: 'gmail_sync_exception', providerStatus: 401 });
+  });
+
+  it('logs processing failure counts without message IDs or bodies', async () => {
+    (prisma.gmailConnection.findUnique as jest.Mock).mockResolvedValue({ enabled: true });
+    (syncStewartFlemingGmail as jest.Mock).mockResolvedValue({ errors: ['private message id and body'] });
+    expect((await GET(cronRequest())).status).toBe(503);
+    expect(console.error).toHaveBeenCalledWith('School intake failed', { reason: 'intake_processing_failed', errorCount: 1 });
   });
 
   it.each(['2026-07-01T07:00:00Z', '2026-07-01T19:00:00Z', '2026-12-01T08:00:00Z', '2026-12-01T20:00:00Z',

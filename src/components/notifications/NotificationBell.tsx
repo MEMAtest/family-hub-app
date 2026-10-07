@@ -10,14 +10,10 @@ interface NotificationBellProps {
 }
 
 const NotificationBell: React.FC<NotificationBellProps> = ({ className = '' }) => {
-  const { unreadCount, permission, requestPermission } = useNotifications();
+  const { unreadCount, permission } = useNotifications();
   const [isNotificationCenterOpen, setIsNotificationCenterOpen] = useState(false);
 
-  const handleBellClick = async () => {
-    // If permission not granted, request it first
-    if (permission.prompt) {
-      await requestPermission();
-    }
+  const handleBellClick = () => {
     setIsNotificationCenterOpen(true);
   };
 
@@ -27,6 +23,7 @@ const NotificationBell: React.FC<NotificationBellProps> = ({ className = '' }) =
         onClick={handleBellClick}
         className={`relative rounded-md p-2 text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100 ${className}`}
         title={unreadCount > 0 ? `${unreadCount} unread notifications` : 'Notifications'}
+        aria-label="Open notifications"
       >
         {unreadCount > 0 ? (
           <BellRing className="w-5 h-5" />
