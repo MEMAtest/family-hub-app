@@ -71,6 +71,24 @@ describe('calendar intake decisions', () => {
         parsedDrafts: [], allParsedDrafts: [expect.objectContaining({ importStatus: 'ready', disposition: 'imported', importedEventId: 'already-imported' })] })] });
     expect(prisma.calendarEmailIntake.updateMany).not.toHaveBeenCalled();
   });
+  it('includes older outstanding decisions beyond the recent reference window without duplicate rows', async () => {
+    (prisma.family.findUnique as jest.Mock).mockResolvedValue({ id: 'family-id' });
+    const recent = { ...intake, id: 'recent-reference', parsedDrafts: [], status: 'no_events',
+      receivedAt: new Date('2026-10-07'), attachments: [] };
+    const older = { ...intake, receivedAt: new Date('2026-09-20'), attachments: [{ id: 'original',
+      fileName: 'original.pdf', mimeType: 'application/pdf', sizeBytes: 100 }] };
+    (prisma.calendarEmailIntake.findMany as jest.Mock).mockResolvedValueOnce([recent])
+      .mockResolvedValueOnce([recent, older]);
+    (prisma.calendarEvent.findMany as jest.Mock).mockResolvedValue([]);
+    const response = await (GET as any)({}, context);
+    expect(response.status).toBe(200);
+    expect(response.body.pendingReviewCount).toBe(1);
+    expect(response.body.pendingReviewEmailCount).toBe(1);
+    expect(response.body.intakes.map((row: any) => row.id)).toEqual(['recent-reference', 'intake-id']);
+    expect(response.body.intakes.filter((row: any) => row.actionRequired)).toHaveLength(1);
+    expect(response.body.intakes[1].attachments[0].downloadUrl).toContain('/attachments/original');
+    expect(prisma.calendarEmailIntake.updateMany).not.toHaveBeenCalled();
+  });
   it('normalizes a legacy Askia photo draft to Amari and excludes generic old date rows from decisions', async () => {
     (prisma.family.findUnique as jest.Mock).mockResolvedValue({ id: 'family-id' });
     const ready = { ...draft, type: 'education', time: '09:00', timeSpecified: false, importStatus: 'ready', warnings: [], confidence: 0.95 };

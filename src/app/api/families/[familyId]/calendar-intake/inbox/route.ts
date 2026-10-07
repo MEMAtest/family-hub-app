@@ -60,8 +60,12 @@ export const GET = requireFamilyAccess(async (_request: NextRequest, context) =>
     });
     const pending = await prisma.calendarEmailIntake.findMany({
       where: { familyId, status: { in: ['processing', 'review_required', 'partial_review', 'needs_ocr', 'content_required', 'auto_created', 'no_events'] } },
-      select: { id: true, familyId: true, status: true, parsedDrafts: true, metadata: true,
-        sender: true, subject: true, text: true, html: true, normalizedText: true },
+      include: {
+        attachments: {
+          select: { id: true, fileName: true, mimeType: true, sizeBytes: true },
+          orderBy: { createdAt: 'asc' },
+        },
+      },
     });
     const members = await prisma.familyMember.findMany({ where: { familyId } });
     const { rules } = await loadSchoolRules(familyId, members);
@@ -79,11 +83,17 @@ export const GET = requireFamilyAccess(async (_request: NextRequest, context) =>
           { eventSource: 'gmail-school-email', authenticatedSchoolSender: true }));
       return { state, resolved };
     };
-    const pendingStates = pending.map((intake) => stateFor(intake).state).filter((state) => state.actionRequired);
+    const pendingEntries = pending.map((intake) => ({ intake, ...stateFor(intake) }))
+      .filter(({ state }) => state.actionRequired);
+    const recentIds = new Set(intakes.map((intake) => intake.id));
+    // The reference window must never hide a decision included in the header count.
+    const visibleIntakes = [...intakes, ...pendingEntries.filter(({ intake }) => !recentIds.has(intake.id))
+      .map(({ intake }) => intake)].sort((a, b) =>
+      new Date(b.receivedAt || 0).getTime() - new Date(a.receivedAt || 0).getTime());
 
     return NextResponse.json({
-      pendingReviewCount: pendingStates.reduce((sum, state) => sum + state.needsReview, 0),
-      pendingReviewEmailCount: pendingStates.length,
+      pendingReviewCount: pendingEntries.reduce((sum, { state }) => sum + state.needsReview, 0),
+      pendingReviewEmailCount: pendingEntries.length,
       forwardingAddress,
       gmail: {
         connected: Boolean(gmailConnection?.enabled),
@@ -95,7 +105,7 @@ export const GET = requireFamilyAccess(async (_request: NextRequest, context) =>
       whatsappDeliveryTrackingConfigured: Boolean(
         process.env.WHATSAPP_APP_SECRET && process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN,
       ),
-      intakes: intakes.map((intake) => {
+      intakes: visibleIntakes.map((intake) => {
         const { state, resolved } = stateFor(intake);
         return ({
         id: intake.id,
@@ -114,7 +124,7 @@ export const GET = requireFamilyAccess(async (_request: NextRequest, context) =>
           (intake.metadata as Record<string, unknown>).schoolSenderVerified === true
         ),
         documentSummary: summaryFromMetadata(intake.metadata),
-        attachments: intake.attachments.map((attachment) => ({
+        attachments: (intake.attachments || []).map((attachment) => ({
           ...attachment,
           downloadUrl: `/api/families/${familyId}/calendar-intake/attachments/${attachment.id}`,
         })),

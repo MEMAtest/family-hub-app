@@ -50,6 +50,9 @@ that these local changes are already live.
   Explicit adult attendance, invitation/booking confirmation and unsupported
   source clock values remain review-required. School preview routing uses current
   household rules while retaining manual overrides and original source evidence.
+- Every outstanding update included in the pending count is available in the
+  inbox, even when older than the recent reference-mail window. Recent notices
+  cannot push unresolved decisions out of view; overlapping rows are deduplicated.
 - The intake panel opens near the calendar header. Settings and reference mail
   are collapsed; document upload and event decisions use a focus-managed dialog
   with a phone-reachable footer. Sync refreshes current calendar events directly.
@@ -68,7 +71,8 @@ output; no household purchase records are published in these notes.
 ## Verification
 
 - Initial rehearsal: 102 Jest suites, 917 tests passed; 36 browser journeys passed.
-- Final unit run: 103 Jest suites, 947 tests passed.
+- Final unit run: 103 Jest suites, 948 tests passed, including older-inbox
+  decision visibility beyond the recent reference-mail window.
 - Full local journey run: 112 passed, two external-email checks skipped, one
   timeline visibility failure. The focused rerun passed the timeline journey
   and the strengthened attendee-close/reopen regression. Release acceptance also
