@@ -6,6 +6,7 @@ import { loadGrandirSession, openGrandirToken, updateGrandirSession, verifyGrand
 import { loadSchoolRules } from './schoolIntakeServer';
 import { schoolMetadata } from '@/utils/schoolSources';
 import { isChildProfile } from '@/utils/schoolEventPresentation';
+import { summarizeNurseryNotice } from '@/utils/nurseryNoticeSummary';
 
 export type GrandirSyncResult = { processed: number; autoCreated: number; needsReview: number; duplicates: number;
   changedNotices: Array<{ title: string; sourceUrl: string }>; skipped?: string };
@@ -35,8 +36,32 @@ export async function syncGrandirIntake(familyId: string): Promise<GrandirSyncRe
     if (verified.childMemberId !== session.childMemberId || verified.providerChildId !== session.providerChildId) {
       throw new GrandirConnectionError('CHILD_NOT_VERIFIED', 'The verified nursery child changed. Reconnect Grandir before importing notices.');
     }
-    // One bounded page per slot; never ingest generated care records, comments, images or payments.
-    const notices = (await readGrandirFeed(token)).filter(item => !item.generated && item.body.trim()).slice(0, 40);
+    // Use the parent app's observed cursor/olderThan pair, with bounded recent history.
+    const notices = [];
+    const seen = new Set<string>();
+    const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    let cursor: string | undefined;
+    let olderThan: string | undefined;
+    for (let page = 0; page < 4 && notices.length < 120; page += 1) {
+      const current = await loadGrandirSession(familyId);
+      if (!current.session?.enabled || current.row?.version !== row.version) {
+        throw new GrandirConnectionError('RECONNECT_REQUIRED', 'The Grandir connection changed. Refresh before checking again.');
+      }
+      const items = await readGrandirFeed(token, cursor, olderThan);
+      const unseen = items.filter(item => !seen.has(item.feedItemId));
+      if (!unseen.length) break;
+      for (const item of unseen) {
+        if (seen.has(item.feedItemId)) continue;
+        seen.add(item.feedItemId);
+        if (Date.parse(item.createdDate) < cutoff) continue;
+        if (!item.generated && (item.body.trim() || item.files?.length)) notices.push(item);
+        if (notices.length >= 120) break;
+      }
+      const last = items[items.length - 1];
+      if (!last || !Number.isFinite(Date.parse(last.createdDate)) || Date.parse(last.createdDate) < cutoff) break;
+      cursor = last.feedItemId;
+      olderThan = last.createdDate;
+    }
     for (const notice of notices) {
       const current = await loadGrandirSession(familyId);
       if (!current.session?.enabled || current.row?.version !== row.version) {
@@ -51,13 +76,16 @@ export async function syncGrandirIntake(familyId: string): Promise<GrandirSyncRe
         result.changedNotices.push({ title: existing.subject || 'Nursery update changed', sourceUrl });
         continue;
       }
-      const subject = `Grandir nursery: ${notice.body.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80) || 'Nursery update'}`;
+      const summary = summarizeNurseryNotice(notice.body, Boolean(notice.files?.length));
+      const subject = `Grandir nursery: ${summary.title}`;
       const intake = await ingestCalendarEmailPayload({ type: 'grandir-parent-portal', data: {
         messageId, from: `${notice.sender.name} (Grandir nursery)`, subject,
         text: `Grandir nursery: ${verified.nurseryName}\n${notice.body}`, sourceDate: notice.createdDate,
       } }, { familyId, eventSource: 'grandir-parent-portal', verifiedGrandirMemberId: session.childMemberId,
-        referenceOnly: !hasDatedGrandirNotice(notice.body),
-        grandirPortal: { postId: notice.feedItemId, bodyHash, sourceUrl, nurseryName: verified.nurseryName } });
+        referenceOnly: !['event', 'preparation'].includes(summary.kind) || !hasDatedGrandirNotice(notice.body),
+        contentPending: summary.kind === 'content_pending',
+        grandirPortal: { postId: notice.feedItemId, bodyHash, sourceUrl, nurseryName: verified.nurseryName,
+          hasAttachments: summary.hasAttachments }, nurserySummary: summary });
       if (intake.statusCode >= 400) throw new GrandirConnectionError('PROVIDER_UNAVAILABLE', 'A Grandir notice could not be saved. Existing selections and calendar events are unchanged.');
       result.processed += 1;
       result.autoCreated += intake.body.duplicate ? 0 : Number(intake.body.autoCreated || 0);

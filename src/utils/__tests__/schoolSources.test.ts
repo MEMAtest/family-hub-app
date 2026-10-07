@@ -17,6 +17,12 @@ const resolve = (text: string, sender?: string) => resolveSchoolSource({ text, s
 const assign = (value: SchoolDraft, text = 'Stewart Fleming Primary School') => assignSchoolDrafts([value], resolve(text), rules, members)[0];
 
 describe('institution-scoped school assignment', () => {
+  it('recognises the exact Grandir parent portal in notice emails without trusting lookalike hosts or generic Famly', () => {
+    expect(resolve('View this update: https://www.app.grandiruk.com/#/account/post/notice')).toMatchObject({
+      institution: 'grandir', contentRequired: true });
+    expect(resolve('View this update: https://www.app.grandiruk.com.evil.example/notice').institution).toBeNull();
+    expect(resolve('New Famly message. View this update: https://app.famly.co/notice').institution).toBeNull();
+  });
   it('uses actual unique family IDs independently of member order and age labels', () => {
     expect(rules.sources[0].memberIds).toEqual(['actual-amari-id']);
     expect(rules.sources[1].memberIds).toEqual(['actual-askia-id']);

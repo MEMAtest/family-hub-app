@@ -13,6 +13,8 @@ import { calendarIntakeState } from '@/lib/calendarIntakeState';
 import { autoProcessSavedCalendarIntake, isHighConfidenceAutoCreate, SavedIntakeProcessingError } from '@/lib/calendarEmailIngestion';
 import { isStewartFlemingSender } from '@/utils/schoolEmail';
 import { grandirPostUrl } from '@/lib/grandirClient';
+import { summarizeNurseryNotice } from '@/utils/nurseryNoticeSummary';
+import { nurseryPreparationTaskId, saveNurseryPreparation, NurseryPreparationError } from '@/lib/nurseryPreparation';
 
 const reviewStatuses = ['processing', 'review_required', 'partial_review', 'no_events', 'needs_ocr', 'content_required'];
 
@@ -74,15 +76,32 @@ export const GET = requireFamilyAccess(async (_request: NextRequest, context) =>
     const savedEvents = intakeIds.length ? await prisma.calendarEvent.findMany({
       where: { familyId, sourceId: { in: intakeIds } },
     }) : [];
+    const nurseryIntakeIds = [...intakes, ...pending].filter(intake =>
+      resolveStoredSchoolDrafts(intake, rules, members).source.institution === 'grandir').map(intake => intake.id);
+    const nurseryTasks = nurseryIntakeIds.length ? await prisma.calendarTask.findMany({
+      where: { familyId, id: { in: nurseryIntakeIds.map(id => nurseryPreparationTaskId(familyId, id)) } },
+      select: { id: true, dueDate: true, completedAt: true },
+    }) : [];
     const stateFor = (intake: typeof pending[number]) => {
       const resolved = resolveStoredSchoolDrafts(intake, rules, members);
       const trusted = schoolMetadata(intake.metadata).schoolSenderVerified === true && isStewartFlemingSender(intake.sender || '');
       const drafts = resolved.drafts;
-      const state = calendarIntakeState(intake, drafts, savedEvents, (draft) => trusted &&
+      const metadata = schoolMetadata(intake.metadata);
+      const nurserySummary = resolved.source.institution === 'grandir' ? summarizeNurseryNotice(
+        (intake.text || intake.normalizedText || '').replace(/^Grandir nursery:[^\n]*\n/, ''),
+        schoolMetadata(metadata.grandirPortal).hasAttachments === true || Boolean(intake.attachments?.length)) : null;
+      const preparationTask = nurseryTasks.find(task => task.id === nurseryPreparationTaskId(familyId, intake.id));
+      const mappedNurseryChildId = rules.sources.find(source => source.key === 'grandir')?.memberIds.length === 1
+        ? rules.sources.find(source => source.key === 'grandir')?.memberIds[0] : null;
+      const verifiedChildId = schoolMetadata(metadata.grandirPortal).childMemberId;
+      const nurseryChildId = typeof verifiedChildId === 'string' && verifiedChildId !== mappedNurseryChildId
+        ? null : mappedNurseryChildId;
+      const state = calendarIntakeState({ ...intake, metadata: { ...metadata, nurserySummary,
+        nurseryPreparationSaved: Boolean(preparationTask) } }, drafts, savedEvents, (draft) => trusted &&
         !resolved.source.contentRequired && members.some((member) => member.id === draft.person) &&
         isHighConfidenceAutoCreate(resolved.drafts.find((value) => value.importId === draft.importId) || draft,
           { eventSource: 'gmail-school-email', authenticatedSchoolSender: true }));
-      return { state, resolved };
+      return { state, resolved, nurserySummary, nurseryChildId, preparationTask };
     };
     const pendingEntries = pending.map((intake) => ({ intake, ...stateFor(intake) }))
       .filter(({ state }) => state.actionRequired);
@@ -107,11 +126,16 @@ export const GET = requireFamilyAccess(async (_request: NextRequest, context) =>
         process.env.WHATSAPP_APP_SECRET && process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN,
       ),
       intakes: visibleIntakes.map((intake) => {
-        const { state, resolved } = stateFor(intake);
+        const { state, resolved, nurserySummary, nurseryChildId, preparationTask } = stateFor(intake);
         return ({
         id: intake.id,
         sender: intake.sender,
         schoolSource: resolved.source,
+        nurserySummary,
+        nurseryChildId,
+        nurseryAssignmentWarning: nurserySummary && !nurseryChildId ? 'Check the nursery rule and verified child before saving preparation.' : null,
+        preparationTask: preparationTask ? { id: preparationTask.id,
+          dueDate: preparationTask.dueDate.toISOString().slice(0, 10), completed: Boolean(preparationTask.completedAt) } : null,
         sourceDate: schoolMetadata(intake.metadata).sourceDate || null,
         originalPortalUrl: (() => {
           const portal = schoolMetadata(schoolMetadata(intake.metadata).grandirPortal);
@@ -141,16 +165,26 @@ export const GET = requireFamilyAccess(async (_request: NextRequest, context) =>
   }
 });
 
-const autoProcessSchema = z.object({ action: z.literal('auto-process'), intakeId: z.string().min(1) }).strict();
+const autoProcessSchema = z.discriminatedUnion('action', [
+  z.object({ action: z.literal('auto-process'), intakeId: z.string().min(1) }).strict(),
+  z.object({ action: z.literal('add-nursery-task'), intakeId: z.string().min(1), dueDate: z.string() }).strict(),
+]);
 
 export const POST = requireFamilyAccess(async (request: NextRequest, context) => {
   try {
     const { familyId } = await context.params;
     const body = autoProcessSchema.parse(await request.json());
+    if (body.action === 'add-nursery-task') {
+      if (request.headers.get('origin') !== request.nextUrl.origin || !request.headers.get('content-type')?.startsWith('application/json')) {
+        return NextResponse.json({ error: 'Use the Family Hub nursery preparation controls.' }, { status: 403 });
+      }
+      return NextResponse.json(await saveNurseryPreparation(familyId, body.intakeId, body.dueDate));
+    }
     return NextResponse.json(await autoProcessSavedCalendarIntake(familyId, body.intakeId));
   } catch (error) {
     if (error instanceof z.ZodError || error instanceof SyntaxError) return NextResponse.json({ error: 'Invalid automatic processing request' }, { status: 400 });
     if (error instanceof SavedIntakeProcessingError) return NextResponse.json({ error: error.message }, { status: error.statusCode });
+    if (error instanceof NurseryPreparationError) return NextResponse.json({ error: error.message }, { status: error.statusCode });
     if (['P2034', 'P2002'].includes((error as { code?: string }).code || '')) {
       return NextResponse.json({ error: 'This intake changed. Reload before processing.' }, { status: 409 });
     }

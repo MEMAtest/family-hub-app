@@ -20,6 +20,7 @@ interface CalendarContextValue {
   refreshEvents: () => Promise<void>;
   /** Homework, chores and anything else with a deadline. */
   tasks: CalendarTask[];
+  refreshTasks: () => Promise<void>;
   createTask: (draft: Omit<CalendarTask, 'id' | 'createdAt' | 'updatedAt'>) => Promise<CalendarTask>;
   updateTask: (id: string, updates: Partial<CalendarTask>) => Promise<void>;
   deleteTask: (id: string) => Promise<void>;
@@ -514,6 +515,25 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
     }
   }, []);
 
+  const refreshTasks = useCallback(async () => {
+    const familyId = databaseStatus.familyId;
+    if (!databaseStatus.connected || !familyId) return;
+    const response = await fetch(`/api/families/${familyId}/tasks`);
+    if (!response.ok) throw new Error('Family reminders could not be refreshed.');
+    const payload = await response.json();
+    if (!Array.isArray(payload)) throw new Error('Family reminders returned an invalid response.');
+    if (useFamilyStore.getState().databaseStatus.familyId !== familyId) return;
+    setTasks(current => {
+      const databaseTasks = payload.map((task: CalendarTask) => ({ ...task,
+        createdAt: new Date(task.createdAt), updatedAt: new Date(task.updatedAt) }));
+      const pendingLocal = current.filter(task => task.id.startsWith('task-'));
+      const merged = [...new Map([...databaseTasks, ...pendingLocal].map(task => [task.id, task])).values()];
+      try { localStorage.setItem(TASKS_KEY, JSON.stringify(merged)); }
+      catch { console.warn('CalendarContext: refreshed reminders could not be cached'); }
+      return merged;
+    });
+  }, [databaseStatus.connected, databaseStatus.familyId]);
+
   const createTask = useCallback(
     async (draft: Omit<CalendarTask, 'id' | 'createdAt' | 'updatedAt'>): Promise<CalendarTask> => {
       const validDraft = {
@@ -934,6 +954,7 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
     events,
     refreshEvents: refreshEventsFromDatabase,
     tasks,
+    refreshTasks,
     createTask,
     updateTask,
     deleteTask,
@@ -969,6 +990,7 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
     saveConflictSettings,
   }), [
     refreshEventsFromDatabase,
+    refreshTasks,
     closeConflictModal,
     closeConflictSettings,
     closeEventForm,

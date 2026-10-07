@@ -52,6 +52,30 @@ describe('Grandir intake', () => {
     expect(hasDatedGrandirNotice('We practised music on Wednesday.')).toBe(false);
     for (const text of ['Photos 12 October', 'Photos October 12', 'Party 12/10/2026', 'Party 2026-10-12']) expect(hasDatedGrandirNotice(text)).toBe(true);
   });
+  it('reads subsequent pages with the observed cursor and stops repeated pages', async () => {
+    const second = { ...notice, feedItemId: 'post-2', body: 'Next week is Book of the Week. Please bring a favourite book.' };
+    (readGrandirFeed as jest.Mock).mockResolvedValueOnce([notice]).mockResolvedValueOnce([second]).mockResolvedValue([second]);
+    expect(await syncGrandirIntake('family')).toMatchObject({ processed: 2 });
+    expect(readGrandirFeed).toHaveBeenNthCalledWith(2, 'opaque-test-session', notice.feedItemId, notice.createdDate);
+    expect(ingestCalendarEmailPayload).toHaveBeenLastCalledWith(expect.anything(), expect.objectContaining({ referenceOnly: true,
+      nurserySummary: expect.objectContaining({ kind: 'preparation', title: 'Book of the Week' }) }));
+  });
+  it('keeps attachment-only notices pending, rather than saying no events', async () => {
+    (readGrandirFeed as jest.Mock).mockResolvedValue([{ ...notice, body: '', files: [{ name: 'notice.pdf' }] }]);
+    await syncGrandirIntake('family');
+    expect(ingestCalendarEmailPayload).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      referenceOnly: true, contentPending: true, nurserySummary: expect.objectContaining({ kind: 'content_pending' }) }));
+  });
+  it('excludes notices outside the recent history window', async () => {
+    (readGrandirFeed as jest.Mock).mockResolvedValue([{ ...notice, createdDate: '2026-01-01T12:00:00Z' }]);
+    expect(await syncGrandirIntake('family')).toMatchObject({ processed: 0 });
+    expect(ingestCalendarEmailPayload).not.toHaveBeenCalled();
+  });
+  it('deduplicates repeated posts inside a single provider page', async () => {
+    (readGrandirFeed as jest.Mock).mockResolvedValue([notice, { ...notice, body: 'Repeated page copy' }]);
+    expect(await syncGrandirIntake('family')).toMatchObject({ processed: 1, changedNotices: [] });
+    expect(ingestCalendarEmailPayload).toHaveBeenCalledTimes(1);
+  });
   it('counts duplicate notices without claiming old events as newly added', async () => {
     (ingestCalendarEmailPayload as jest.Mock).mockResolvedValue({ statusCode: 200, body: { duplicate: true, autoCreated: 2 } });
     expect(await syncGrandirIntake('family')).toMatchObject({ autoCreated: 0, duplicates: 1 });

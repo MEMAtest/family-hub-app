@@ -84,10 +84,14 @@ export const resolveSchoolSource = (input: {
   const sender = input.sender || '';
   const body = [input.text, input.html?.replace(/<[^>]*>/g, ' ')].filter(Boolean).join('\n');
   const text = [input.subject, body].filter(Boolean).join('\n');
-  const candidates = rules.sources.filter((rule) => rule.aliases.some((alias) => containsAlias(text, alias)) ||
-    (rule.key === 'stewart-fleming' && /@stewartfleming\.bromley\.sch\.uk(?:[>\s]|$)/i.test(sender)));
-  const source = candidates.length === 1 ? candidates[0] : null;
   const links = schoolSourceLinks(input.text || '', input.html || '');
+  const grandirPortalLink = links.some(link => {
+    try { return new URL(link).hostname === 'www.app.grandiruk.com'; } catch { return false; }
+  });
+  const candidates = rules.sources.filter((rule) => rule.aliases.some((alias) => containsAlias(text, alias)) ||
+    (rule.key === 'stewart-fleming' && /@stewartfleming\.bromley\.sch\.uk(?:[>\s]|$)/i.test(sender)) ||
+    (rule.key === 'grandir' && grandirPortalLink));
+  const source = candidates.length === 1 ? candidates[0] : null;
   const famly = /\bfamly\b/i.test([sender, input.subject, body, ...links].join(' '));
   const gated = /log\s?in|sign\s?in|view (?:the |this |your )?(?:post|update|message)|read (?:the |this |full )?(?:post|update|message)|new (?:post|message|update)|open (?:the |your )?app/i.test(text);
   const hasEventDetails = /\b(?:\d{1,2}(?:st|nd|rd|th)?\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)|20\d{2}-\d{2}-\d{2})\b/i.test(body) &&

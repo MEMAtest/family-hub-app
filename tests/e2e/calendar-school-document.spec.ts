@@ -322,6 +322,12 @@ const stubFamilyApis = async (
       const body = route.request().postDataJSON();
       state.autoProcessRequests?.push(body);
       const item: any = inboxItems.find((item: any) => item.id === body.intakeId);
+      if (body.action === 'add-nursery-task') {
+        const next = { ...item, preparationTask: { id: 'nursery-task', dueDate: body.dueDate, completed: false }, actionRequired: false, needsReview: 0 };
+        inboxItems = inboxItems.map((item: any) => item.id === body.intakeId ? next : item);
+        await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ taskId: 'nursery-task', dueDate: body.dueDate, completed: false }) });
+        return;
+      }
       const next = { ...item, parsedDrafts: [], outstandingDrafts: [], pendingAutoCreate: 0, autoProcessEligibleCount: 0,
         autoCreated: 1, newlyCreatedCount: 1, needsReview: 0, conflictCount: 0, status: 'auto_created', actionRequired: false };
       inboxItems = inboxItems.map((item: any) => item.id === body.intakeId ? next : item);
@@ -892,4 +898,101 @@ test.describe('school document calendar intake', () => {
     expect(state.eventPosts[0]).toMatchObject({ personId: member.id, time: '00:00', durationMinutes: 1439 });
     expect(state.inboxPatches[1]).toMatchObject({ intakeId: intake.id, needsReview: 0 });
   });
+});
+
+for (const width of [390, 1280]) {
+  test(`nursery preparation is clear, child-scoped and saved once at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 });
+    await page.addInitScript(skipSetupWizard);
+    const state = { documentRequestBody: '', eventPosts: [] as unknown[], gmailSyncs: 0, autoProcessRequests: [] as Record<string, unknown>[] };
+    const due = new Date(Date.now() + 2 * 86_400_000).toISOString().slice(0, 10);
+    const nursery = { id: 'nursery-books', subject: 'Grandir nursery update', receivedAt: '2026-10-06T13:00:00Z',
+      schoolSource: { ...schoolSource, institution: 'grandir', institutionName: 'Test nursery' },
+      sourceDate: '2026-10-06T13:00:00Z', nurseryChildId: member.id, originalPortalUrl: 'https://www.app.grandiruk.com/#/account/post/test-post',
+      status: 'review_required', autoCreated: 0, needsReview: 1, actionRequired: true, parsedDrafts: [], duplicateCount: 0, conflictCount: 0,
+      nurserySummary: { kind: 'preparation', title: 'Book of the Week', purpose: 'Next week is Book of the Week.',
+        actions: ['Please bring a favourite book.'], timing: 'Next week', hasAttachments: false } };
+    await stubFamilyApis(page, state, { inboxItems: [nursery, { ...nursery, id: 'school-post', nurserySummary: null,
+      nurseryChildId: null, subject: 'School photographs', schoolSource }] });
+    await page.route('**/api/families/*/tasks', async route => {
+      if (route.request().method() !== 'GET') return route.fallback();
+      await route.fulfill({ contentType: 'application/json', body: JSON.stringify(state.autoProcessRequests.length ? [{
+        id: 'nursery-task', title: 'Prepare: Book of the Week', assignees: [member.id],
+        assignedDate: new Date().toISOString().slice(0, 10), dueDate: due, taskType: 'admin', priority: 'medium',
+        completedAt: null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }] : []) });
+    });
+    await openSchoolInbox(page);
+    await page.getByRole('button', { name: 'Today', exact: true }).click();
+    await page.getByLabel('Filter school and nursery updates').selectOption('nursery');
+    await expect(page.getByRole('button', { name: /School photographs/ })).toHaveCount(0);
+    await page.getByRole('button', { name: /Book of the Week.*Review/ }).click();
+    const dialog = page.getByRole('dialog');
+    const summary = dialog.getByRole('region', { name: 'Nursery notice summary' });
+    await expect(summary.getByText(`${member.name} · Things to bring / preparation`, { exact: true })).toBeVisible();
+    await expect(summary.getByText('Please bring a favourite book.', { exact: true })).toBeVisible();
+    if (width === 390) await page.screenshot({ path: 'output/playwright/nursery-preparation-phone-rehearsal-20261007.png' });
+    await expect(summary.getByRole('button', { name: 'Add preparation task', exact: true })).toBeDisabled();
+    await summary.getByLabel('Nursery preparation due date').fill(due);
+    await summary.getByRole('button', { name: 'Add preparation task', exact: true }).click();
+    await expect(dialog.getByText('Nursery preparation added to tasks.', { exact: true })).toBeVisible();
+    await expect(summary.getByRole('button', { name: 'Add preparation task', exact: true })).toHaveCount(0);
+    expect(state.autoProcessRequests).toEqual([{ action: 'add-nursery-task', intakeId: 'nursery-books', dueDate: due }]);
+    expect(state.eventPosts).toHaveLength(0);
+    await dialog.getByRole('button', { name: 'Close school update' }).click();
+    await expect(page.getByText('Prepare: Book of the Week', { exact: true }).first()).toBeVisible();
+    await page.reload();
+    await page.getByRole('button', { name: 'School inbox & quick plan', exact: true }).click();
+    await page.getByLabel('Filter school and nursery updates').selectOption('nursery');
+    await page.getByText('Added & reference updates · 1', { exact: true }).click();
+    await page.getByRole('button', { name: /Book of the Week.*Open/ }).click();
+    await expect(page.getByRole('region', { name: 'Nursery notice summary' }).getByText(`Added to tasks · due ${due}`, { exact: false })).toBeVisible();
+  });
+}
+
+test('nursery learning stays reference and unread attachments have an original-content action', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.addInitScript(skipSetupWizard);
+  const state = { documentRequestBody: '', eventPosts: [] as unknown[], gmailSyncs: 0 };
+  const base = { receivedAt: '2026-10-07T12:00:00Z', schoolSource: { ...schoolSource, institution: 'grandir', institutionName: 'Test nursery' },
+    originalPortalUrl: 'https://www.app.grandiruk.com/#/account/post/test-post', nurseryChildId: member.id,
+    autoCreated: 0, parsedDrafts: [], duplicateCount: 0, conflictCount: 0 };
+  await stubFamilyApis(page, state, { inboxItems: [
+    { ...base, id: 'learning', subject: 'Today at nursery', status: 'no_events', needsReview: 0, actionRequired: false,
+      nurserySummary: { kind: 'reference', title: 'Today at nursery', purpose: 'Today we enjoyed PE and a reading session.', actions: [], timing: 'Today', hasAttachments: false } },
+    { ...base, id: 'attachment', subject: 'Nursery attachment', status: 'content_required', needsReview: 1, actionRequired: true,
+      nurserySummary: { kind: 'content_pending', title: 'Nursery attachment to review', purpose: 'The notice has an attachment but no readable text.',
+        actions: ['Open the original notice and review its attachment.'], timing: null, hasAttachments: true } },
+  ] });
+  await openSchoolInbox(page);
+  await page.getByLabel('Filter school and nursery updates').selectOption('nursery');
+  await page.getByRole('button', { name: /Nursery attachment to review.*Review/ }).click();
+  await expect(page.getByRole('link', { name: 'Original nursery post', exact: true })).toHaveAttribute('href', base.originalPortalUrl);
+  await expect(page.getByText('The full content has not been read.', { exact: false })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Add preparation task', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Close school update' }).click();
+  await page.getByText('Added & reference updates · 1', { exact: true }).click();
+  await page.getByRole('button', { name: /Today at nursery.*Open/ }).click();
+  await expect(page.getByText('Saved as an update, not a future event.', { exact: true })).toBeVisible();
+  expect(state.eventPosts).toHaveLength(0);
+});
+
+test('nursery recurring routines use the nursery child and require a chosen time', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.addInitScript(skipSetupWizard);
+  const state = { documentRequestBody: '', eventPosts: [] as unknown[], gmailSyncs: 0 };
+  await stubFamilyApis(page, state, { inboxItems: [{ id: 'nursery-routine', subject: 'Grandir PE routine', status: 'review_required',
+    schoolSource: { ...schoolSource, institution: 'grandir', institutionName: 'Test nursery' }, nurseryChildId: member.id,
+    receivedAt: new Date().toISOString(), autoCreated: 0, needsReview: 1, actionRequired: true, parsedDrafts: [], duplicateCount: 0, conflictCount: 0,
+    nurserySummary: { kind: 'routine', title: 'Nursery PE', purpose: 'We have PE every Thursday.', timing: null, actions: [], hasAttachments: false } }] });
+  await openSchoolInbox(page);
+  await page.getByRole('button', { name: /Nursery PE.*Review/ }).click();
+  await page.getByRole('button', { name: 'Schedule routine', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByLabel('Child or family member')).toHaveValue(member.id);
+  await expect(dialog.getByRole('button', { name: 'Add weekly routine', exact: true })).toBeDisabled();
+  await dialog.getByLabel('Start time').fill('10:00');
+  await dialog.getByRole('button', { name: 'Add weekly routine', exact: true }).click();
+  await expect(dialog.getByText('1 weekly nursery pe session added.', { exact: true })).toBeVisible();
+  expect(state.eventPosts).toHaveLength(1);
+  expect(state.eventPosts[0]).toMatchObject({ personId: member.id, time: '10:00' });
 });

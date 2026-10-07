@@ -15,6 +15,19 @@ const event = (value: CalendarImportDraft) => ({ id: schoolImportedEventId('fami
   eventDate: new Date('2026-11-10'), eventTime: new Date('2026-11-10') });
 
 describe('calendar intake action contract', () => {
+  it('keeps nursery preparation actionable until a task is saved or explicitly reviewed', () => {
+    const metadata = { nurserySummary: { kind: 'preparation' } };
+    expect(calendarIntakeState({ ...intake, status: 'no_events', metadata }, [], [])).toMatchObject({
+      actionRequired: true, needsReview: 1, status: 'review_required', autoProcessEligibleCount: 0 });
+    expect(calendarIntakeState({ ...intake, metadata: { ...metadata, nurseryPreparationSaved: true } }, [], []))
+      .toMatchObject({ actionRequired: false, needsReview: 0 });
+    expect(calendarIntakeState({ ...intake, status: 'reviewed', metadata }, [], []))
+      .toMatchObject({ actionRequired: false, needsReview: 0 });
+    expect(calendarIntakeState({ ...intake, metadata: { nurserySummary: { kind: 'reference' } } }, [], []))
+      .toMatchObject({ actionRequired: false, needsReview: 0 });
+    expect(calendarIntakeState({ ...intake, metadata: { nurserySummary: { kind: 'event' } } }, [], []))
+      .toMatchObject({ actionRequired: true, needsReview: 1, autoProcessEligibleCount: 0 });
+  });
   it('matches each draft, not event totals, including imported needs-review and duplicate labels', () => {
     const drafts = [draft('saved', 'needs_review'), draft('ready'), draft('review', 'needs_review'),
       draft('conflict', 'conflict'), draft('duplicate', 'duplicate')];

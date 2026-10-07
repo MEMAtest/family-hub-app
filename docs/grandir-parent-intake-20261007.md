@@ -10,6 +10,19 @@
 - Deterministic notice/event identities prevent duplicate imports. Changed notices flag original-source review rather than replacing manually saved dates. New sync results do not count earlier imported dates as newly added.
 - Connection, last successful check, explicit reconnect, disconnect and original-post links are available from the School & nursery inbox. Errors never expose provider tokens or raw provider exceptions.
 
+## Nursery Clarity Follow-up
+
+- School and nursery updates have separate inbox filters and source accents. Nursery notices show the mapped child, a short purpose, original timing and preparation actions.
+- Preparation such as bringing a book stays actionable even without a dated appointment. A parent chooses a due date and saves one child-linked task. Deterministic task IDs prevent retries from duplicating tasks or resetting completion. Saved tasks are reconciled with the inbox and refreshed into the calendar immediately.
+- Explicit weekly routines can be scheduled for the nursery child using the existing routine flow. Past learning reports do not imply recurring attendance. Unknown dates, days or times remain decisions rather than invented calendar entries.
+- Recent notice intake follows the parent app's observed cursor and older-than paging parameters: at most four pages, 120 non-generated notices and a 30-day lookback per check. Repeated pages stop safely. This is not a full-history guarantee.
+- Relative timing is shown with the original notice date. Dated portal parsing uses that source date rather than the day a later sync runs.
+- Attachment-only notices retain a pending-content action and original-post link. Attachment contents, photos and private messages are not automatically read by this connector.
+
+The authenticated portal contained a next-week Book of the Week preparation notice behind the first page of daily updates. This follow-up addresses that missed-page and reference-only presentation problem; it does not activate the production account without the outstanding explicit session-retention consent.
+
+Follow-up validation: 115 unit suites / 1,043 tests passed; 21 school/nursery browser journeys plus a nursery-routine phone journey passed. The browser suite includes immediate task display, save/reload, separate source filtering and attachment/reference handling. Independent review found verified-child remapping and same-page duplicate edge cases; both were fixed with regression tests and rechecked. Exact Grandir portal links resolve nursery notices; generic Famly links and lookalike hosts do not assert a child or nursery.
+
 ## Configuration
 
 `GRANDIR_SESSION_ENCRYPTION_KEY` must be a canonical base64-encoded, cryptographically random 32-byte production secret. Do not rotate it without an explicit reconnect/migration plan. `CRON_SECRET` and `CALENDAR_INBOUND_FAMILY_ID` scope the existing household scheduler.

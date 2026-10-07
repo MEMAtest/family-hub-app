@@ -70,8 +70,9 @@ export async function readGrandirIdentity(token: string): Promise<GrandirIdentit
   return parsed.data;
 }
 
-export async function readGrandirFeed(token: string, cursor?: string): Promise<GrandirFeedItem[]> {
-  const response = await request('/api/feed/feed/feed', token, { heightTarget: '3500', ...(cursor ? { cursor } : {}) });
+export async function readGrandirFeed(token: string, cursor?: string, olderThan?: string): Promise<GrandirFeedItem[]> {
+  const response = await request('/api/feed/feed/feed', token, { heightTarget: '3500', ...(cursor ? { cursor } : {}),
+    ...(olderThan ? { olderThan } : {}) });
   const parsed = z.object({ feedItems: z.array(feedItemSchema).max(200) }).safeParse(response);
   if (!parsed.success) throw new GrandirConnectionError('PROVIDER_UNAVAILABLE', 'Grandir notices could not be verified.');
   return parsed.data.feedItems;

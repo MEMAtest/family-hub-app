@@ -19,6 +19,7 @@ import { addDays, expandEvents } from '@/utils/recurrence';
 import { expandTasks } from '@/utils/tasks';
 import { isAdultSchoolEvent, recurringSourceDateWarning, schoolEventTitle, schoolEventAction } from '@/utils/schoolEventPresentation';
 import { schoolSavedEventAttendance, type SchoolDraft, type SchoolSourceEvidence } from '@/utils/schoolSources';
+import type { NurseryNoticeSummary } from '@/utils/nurseryNoticeSummary';
 
 interface CalendarCopilotPanelProps {
   events: CalendarEvent[];
@@ -47,6 +48,10 @@ interface CalendarInboxItem {
   schoolSource?: SchoolSourceEvidence | null;
   sourceDate?: string | null;
   originalPortalUrl?: string | null;
+  nurserySummary?: NurseryNoticeSummary | null;
+  nurseryChildId?: string | null;
+  nurseryAssignmentWarning?: string | null;
+  preparationTask?: { id: string; dueDate: string; completed: boolean } | null;
   duplicateCount: number;
   conflictCount: number;
   parsedDrafts: SchoolDraft[];
@@ -66,6 +71,9 @@ interface CalendarAttachment {
 }
 
 const inboxItemSummary = (item: CalendarInboxItem) => {
+  if (item.preparationTask) return item.preparationTask.completed ? 'Preparation done' : `Added to tasks · due ${item.preparationTask.dueDate}`;
+  if (item.nurserySummary) return ({ preparation: 'Things to bring / preparation', routine: 'Recurring nursery routine',
+    event: 'Nursery date', reference: 'Learning & nursery update', content_pending: 'Original content needs checking' })[item.nurserySummary.kind];
   if (item.status === 'content_required') return 'Open the original update or add its content';
   if (item.status === 'no_events') return 'No dated events found';
   if (item.status === 'needs_ocr') return 'Attachment needs a text check';
@@ -190,6 +198,9 @@ const CalendarCopilotPanel = ({
   const [routineTime, setRoutineTime] = useState('15:30');
   const [routinePersonId, setRoutinePersonId] = useState(people.find(isChildProfile)?.id || people[0]?.id || '');
   const [routineSaving, setRoutineSaving] = useState(false);
+  const [inboxSourceFilter, setInboxSourceFilter] = useState('all');
+  const [nurseryDueDate, setNurseryDueDate] = useState('');
+  const [nurseryTaskSaving, setNurseryTaskSaving] = useState(false);
   const [importSourceType, setImportSourceType] = useState('pasted-text');
   const [importSourceName, setImportSourceName] = useState<string | null>(null);
 
@@ -209,6 +220,11 @@ const CalendarCopilotPanel = ({
     [inboxItems]
   );
   const referenceInboxItems = inboxItems.filter((item) => !pendingInboxItems.includes(item));
+  const sourceMatches = (item: CalendarInboxItem) => inboxSourceFilter === 'all' ||
+    (inboxSourceFilter === 'nursery' ? item.schoolSource?.institution === 'grandir' : item.schoolSource?.institution !== 'grandir');
+  const visiblePendingItems = pendingInboxItems.filter(sourceMatches);
+  const visibleReferenceItems = referenceInboxItems.filter(sourceMatches);
+  const activeNurseryItem = inboxItems.find(item => item.id === activeInboxItemId && item.nurserySummary);
   const personNameById = useMemo(
     () => new Map(people.map((person) => [person.id, person.name])),
     [people]
@@ -397,6 +413,7 @@ const CalendarCopilotPanel = ({
     setDocumentAttachments(item.attachments ?? []);
     setSelectedDraftIds(new Set(drafts.filter((draft) => draft.importStatus === 'ready' && draft.person && draftIsImportable(draft)).map((draft) => draft.importId)));
     setActiveInboxItemId(item.id);
+    setNurseryDueDate('');
     setImportError(null);
     setImportSuccess(item.autoCreated > 0 ? `${item.autoCreated} already added to your calendar.` : null);
   };
@@ -441,6 +458,24 @@ const CalendarCopilotPanel = ({
     } finally {
       setImporting(false);
     }
+  };
+
+  const addNurseryPreparation = async () => {
+    if (!activeFamilyId || !activeNurseryItem || !nurseryDueDate) return;
+    setNurseryTaskSaving(true);
+    setImportError(null);
+    try {
+      const response = await fetch(`/api/families/${activeFamilyId}/calendar-intake/inbox`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'add-nursery-task', intakeId: activeNurseryItem.id, dueDate: nurseryDueDate }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || 'Could not add nursery preparation.');
+      await loadInbox();
+      await onEventsImported?.();
+      setImportSuccess('Nursery preparation added to tasks.');
+    } catch (error) { setImportError(error instanceof Error ? error.message : 'Could not add nursery preparation.'); }
+    finally { setNurseryTaskSaving(false); }
   };
 
   const runAssistant = async (commandOverride?: string) => {
@@ -1039,19 +1074,29 @@ const CalendarCopilotPanel = ({
           <p className="mt-2 font-medium text-emerald-700 dark:text-emerald-300">{!gmailConnected && gmailEmail
             ? 'Saved updates remain available. Reconnect Gmail to resume new email checks.'
             : 'Confirmed dates are added automatically. Only unresolved details need review.'}</p>
-          {pendingInboxItems.length > 0 && (
+          <label className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs font-medium">
+            Updates for
+            <select aria-label="Filter school and nursery updates" value={inboxSourceFilter} onChange={event => setInboxSourceFilter(event.target.value)}
+              className="min-h-11 max-w-full rounded-md border border-gray-200 bg-white px-3 text-gray-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100">
+              <option value="all">School & nursery ({inboxItems.length})</option>
+              <option value="school">School ({inboxItems.filter(item => item.schoolSource?.institution !== 'grandir').length})</option>
+              <option value="nursery">Nursery ({inboxItems.filter(item => item.schoolSource?.institution === 'grandir').length})</option>
+            </select>
+          </label>
+          {visiblePendingItems.length > 0 && (
             <div className="mt-3 space-y-2">
-              <p className="font-semibold">Needs your decision · {pendingInboxItems.length} update{pendingInboxItems.length === 1 ? '' : 's'}</p>
-              {pendingInboxItems.map((item) => (
+              <p className="font-semibold">Needs your decision · {visiblePendingItems.length} update{visiblePendingItems.length === 1 ? '' : 's'}</p>
+              {visiblePendingItems.map((item) => (
                 <button
                   key={item.id}
                   type="button"
                   onClick={() => void reviewInboxItem(item)}
-                  className="flex min-h-12 w-full items-center justify-between gap-3 border-b border-gray-100 py-2 text-left hover:text-purple-700 dark:border-slate-800 dark:hover:text-purple-300"
+                  className={`flex min-h-12 w-full items-center justify-between gap-3 border-b border-gray-100 border-l-2 py-2 pl-2 text-left dark:border-b-slate-800 ${item.nurserySummary ? 'border-l-sky-500 hover:text-sky-700' : 'border-l-purple-400 hover:text-purple-700'}`}
                 >
                   <span className="min-w-0">
-                    <span className="block truncate font-semibold">{item.subject || item.sender || 'Forwarded email'}</span>
+                    <span className="block break-words font-semibold">{item.nurserySummary?.title || item.subject || item.sender || 'Forwarded email'}</span>
                     <span className="block break-words text-[11px] text-gray-500 dark:text-slate-400">{item.schoolSource?.institutionName || 'Source institution to confirm'}</span>
+                    {item.nurseryChildId && <span className="block text-[11px] font-semibold text-sky-700 dark:text-sky-300">{personNameById.get(item.nurseryChildId) || 'Child to confirm'} · Nursery</span>}
                     <span className="block text-[11px] opacity-75">
                       {inboxItemSummary(item)}
                     </span>
@@ -1061,11 +1106,11 @@ const CalendarCopilotPanel = ({
               ))}
             </div>
           )}
-          {!inboxLoading && !inboxError && pendingInboxItems.length === 0 && <p className="mt-3 flex items-center gap-2 text-gray-600 dark:text-slate-300"><CheckCircle2 className="h-4 w-4 text-emerald-600" /> No decisions waiting.</p>}
-          {referenceInboxItems.length > 0 && <details className="mt-3">
-            <summary className="min-h-9 cursor-pointer py-2 font-medium">Added & reference updates · {referenceInboxItems.length}</summary>
-            {referenceInboxItems.map((item) => <button key={item.id} type="button" onClick={() => void reviewInboxItem(item)} className="flex min-h-12 w-full items-center justify-between gap-3 border-b border-gray-100 py-2 text-left dark:border-slate-800">
-              <span className="min-w-0"><span className="block font-medium">{item.subject || 'School update'}</span><span className="block text-[11px] text-gray-500 dark:text-slate-400">{item.status === 'no_events' ? 'Saved for reference · no calendar action' : inboxItemSummary(item)}</span></span><span className="text-purple-700 dark:text-purple-300">Open</span>
+          {!inboxLoading && !inboxError && visiblePendingItems.length === 0 && <p className="mt-3 flex items-center gap-2 text-gray-600 dark:text-slate-300"><CheckCircle2 className="h-4 w-4 text-emerald-600" /> No decisions waiting.</p>}
+          {visibleReferenceItems.length > 0 && <details className="mt-3">
+            <summary className="min-h-11 cursor-pointer py-2 font-medium">Added & reference updates · {visibleReferenceItems.length}</summary>
+            {visibleReferenceItems.map((item) => <button key={item.id} type="button" onClick={() => void reviewInboxItem(item)} className="flex min-h-12 w-full items-center justify-between gap-3 border-b border-gray-100 py-2 text-left dark:border-slate-800">
+              <span className="min-w-0"><span className="block break-words font-medium">{item.nurserySummary?.title || item.subject || 'School update'}</span><span className="block text-[11px] text-gray-500 dark:text-slate-400">{item.nurserySummary ? inboxItemSummary(item) : item.status === 'no_events' ? 'Saved for reference · no calendar action' : inboxItemSummary(item)}</span></span><span className="text-purple-700 dark:text-purple-300">Open</span>
             </button>)}
           </details>}
         </div>
@@ -1085,15 +1130,43 @@ const CalendarCopilotPanel = ({
           return item ? <div className="mb-3 border-l-2 border-teal-500 pl-3 text-xs text-gray-600 dark:text-slate-300">
             <p className="font-semibold">{item.schoolSource?.institutionName || documentSummary?.issuer || 'Source institution to confirm'}</p>
             <p className="break-words">From {item.sender || 'Sender unknown'} · Received {new Date(item.receivedAt).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/London' })}</p>
-            {item.sourceDate && <p>Source date: {item.sourceDate}</p>}
+            {item.sourceDate && <p>Source date: {Number.isFinite(Date.parse(item.sourceDate)) ? new Date(item.sourceDate).toLocaleDateString('en-GB', { dateStyle: 'medium', timeZone: 'Europe/London' }) : item.sourceDate}</p>}
             {item.originalPortalUrl && <p><a href={item.originalPortalUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sky-700"><ExternalLink className="h-3 w-3" />Original nursery post</a></p>}
-            {item.status === 'content_required' && <p className="mt-1 font-semibold">What you need to do: open the original nursery update and add its text or document. Portal access has not been verified.</p>}
+            {item.status === 'content_required' && <p className="mt-1 font-semibold">What you need to do: open the original update and add its text or document. The full content has not been read.</p>}
             {item.schoolSource?.links.map((link) => <a key={link} href={link} target="_blank" rel="noreferrer" className="mt-1 mr-3 inline-flex items-center gap-1 text-teal-700"><ExternalLink className="h-3 w-3" />Open source</a>)}
             {(item.schoolSource?.institution === 'grandir' || item.status === 'content_required') && <p className="mt-1">
-              Grandir portal access pending. <a href="https://www.app.grandiruk.com/" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-teal-700"><ExternalLink className="h-3 w-3" />Official sign-in</a>
+              <a href="https://www.app.grandiruk.com/" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-teal-700"><ExternalLink className="h-3 w-3" />Open nursery portal</a>
             </p>}
           </div> : null;
         })()}
+        {activeNurseryItem?.nurserySummary && <section aria-label="Nursery notice summary" className="mb-4 border-l-2 border-sky-500 bg-sky-50 px-3 py-3 text-sm dark:bg-sky-950/30">
+          <p className="text-xs font-semibold text-sky-700 dark:text-sky-300">{activeNurseryItem.nurseryChildId ? personNameById.get(activeNurseryItem.nurseryChildId) || 'Child to confirm' : 'Child to confirm'} · {inboxItemSummary(activeNurseryItem)}</p>
+          <h4 className="mt-1 break-words font-semibold">{activeNurseryItem.nurserySummary.title}</h4>
+          {activeNurseryItem.nurseryAssignmentWarning && <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">{activeNurseryItem.nurseryAssignmentWarning}</p>}
+          <p className="mt-2 break-words text-gray-700 dark:text-slate-200">{activeNurseryItem.nurserySummary.purpose}</p>
+          {activeNurseryItem.nurserySummary.timing && <p className="mt-2 text-xs"><strong>When:</strong> {activeNurseryItem.nurserySummary.timing} (from the original notice)</p>}
+          {activeNurseryItem.nurserySummary.actions.length > 0 && <div className="mt-3">
+            <p className="text-xs font-semibold">What to do</p>
+            <ul className="mt-1 list-disc space-y-1 pl-4">{activeNurseryItem.nurserySummary.actions.map((action, index) => <li key={index} className="break-words">{action}</li>)}</ul>
+          </div>}
+          {activeNurseryItem.nurserySummary.kind === 'reference' && <p className="mt-2 text-xs text-gray-500 dark:text-slate-400">Saved as an update, not a future event.</p>}
+          {activeNurseryItem.nurserySummary.kind === 'event' && !activeNurseryItem.autoCreated && !importDrafts.length && <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">A calendar date could not be confirmed. Check the original notice before adding this event.</p>}
+          {activeNurseryItem.nurserySummary.kind === 'preparation' && !activeNurseryItem.preparationTask && <div className="mt-3 flex flex-wrap items-end gap-2">
+            <label className="text-xs font-medium">Prepare by<input aria-label="Nursery preparation due date" type="date" value={nurseryDueDate}
+              min={new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/London' })} onChange={event => setNurseryDueDate(event.target.value)}
+              className="mt-1 block min-h-11 w-full rounded-md border border-gray-200 bg-white px-3 dark:border-slate-700 dark:bg-slate-950" /></label>
+            <button type="button" onClick={() => void addNurseryPreparation()} disabled={nurseryTaskSaving || !nurseryDueDate || !activeNurseryItem.nurseryChildId}
+              className="inline-flex min-h-11 items-center gap-2 rounded-md bg-sky-700 px-3 text-xs font-semibold text-white disabled:opacity-50">
+              {nurseryTaskSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarPlus className="h-4 w-4" />} Add preparation task</button>
+          </div>}
+          {activeNurseryItem.nurserySummary.kind === 'routine' && extractRoutineWeekdays(activeNurseryItem.nurserySummary.purpose).length > 0 && <button type="button" onClick={() => {
+            setRoutineToSchedule({ label: activeNurseryItem.nurserySummary!.title, detail: activeNurseryItem.nurserySummary!.purpose });
+            setRoutinePersonId(activeNurseryItem.nurseryChildId || '');
+            setRoutineTime('');
+            setDocumentSummary({ issuer: activeNurseryItem.schoolSource?.institutionName || 'Grandir nursery', issueDate: null,
+              documentLabel: 'Nursery routine', subjects: [], routines: [] });
+          }} className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-md border border-sky-300 bg-white px-3 text-xs font-semibold text-sky-700 dark:bg-slate-950"><CalendarPlus className="h-4 w-4" /> Schedule routine</button>}
+        </section>}
         {(!activeInboxItemId || ['content_required', 'needs_ocr'].includes(inboxItems.find((item) => item.id === activeInboxItemId)?.status || '')) && <>
         <textarea
           value={importText}
@@ -1238,7 +1311,7 @@ const CalendarCopilotPanel = ({
                 </div>
                 <div className="mt-2 flex justify-end gap-2">
                   <button type="button" onClick={() => setRoutineToSchedule(null)} className="rounded-md px-2 py-1 text-xs font-semibold text-gray-600 dark:text-slate-300">Cancel</button>
-                  <button type="button" onClick={() => void scheduleRoutine()} disabled={routineSaving || !routinePersonId} className="rounded-md bg-[#147c72] px-2 py-1 text-xs font-semibold text-white disabled:opacity-50">
+                  <button type="button" onClick={() => void scheduleRoutine()} disabled={routineSaving || !routinePersonId || !routineTime} className="rounded-md bg-[#147c72] px-2 py-1 text-xs font-semibold text-white disabled:opacity-50">
                     {routineSaving ? 'Adding...' : 'Add weekly routine'}
                   </button>
                 </div>
@@ -1329,7 +1402,7 @@ const CalendarCopilotPanel = ({
         )}
           </div>
           <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-gray-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-900">
-            <p className="text-xs text-gray-500 dark:text-slate-400">{selectedDrafts.length > 0 ? `${selectedDrafts.length} selected` : 'Nothing selected for import'}</p>
+            <p className="text-xs text-gray-500 dark:text-slate-400">{selectedDrafts.length > 0 ? `${selectedDrafts.length} selected` : activeNurseryItem ? inboxItemSummary(activeNurseryItem) : 'Nothing selected for import'}</p>
             {importDrafts.length > 0 ? <button type="button" onClick={() => void importSelectedDrafts()} disabled={selectedDrafts.length === 0 || importing || assignmentSaving || importLoading} className="inline-flex min-h-11 items-center gap-2 rounded-md bg-[#147c72] px-4 text-sm font-semibold text-white disabled:opacity-50">{importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />} Import {selectedDrafts.length}</button> : <button type="button" onClick={() => setIntakeOpen(false)} disabled={importLoading || importing} className="min-h-11 rounded-md bg-[#147c72] px-4 text-sm font-semibold text-white disabled:opacity-50">Done</button>}
           </div>
         </DialogPanel>

@@ -19,7 +19,7 @@ import { useCalendarReminderLink } from '@/hooks/useCalendarReminderLink';
 import WorkStatusManager from '@/components/calendar/WorkStatusManager';
 
 export const CalendarView = () => {
-  const { events, tasks, refreshEvents, openEditForm, openCreateForm, createEvent, createTask, updateEvent, deleteEvent,
+  const { events, tasks, refreshEvents, refreshTasks, openEditForm, openCreateForm, createEvent, createTask, updateEvent, deleteEvent,
     openTemplateManager, openConflictSettings, toggleTaskComplete } = useCalendarContext();
   const { members } = useFamilyContext();
   const { currentDate, setCurrentDate } = useAppView();
@@ -60,6 +60,7 @@ export const CalendarView = () => {
   const handleEventsSync = useCallback(async (importedEvents: CalendarEvent[]) => {
     for (const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, ...draft } of importedEvents) await createEvent(draft);
   }, [createEvent]);
+  const refreshPlanning = useCallback(async () => { await refreshEvents(); await refreshTasks(); }, [refreshEvents, refreshTasks]);
   const saveQuickEvent = async (event: React.FormEvent) => {
     event.preventDefault();
     if (saving || !title.trim() || !people.length) return;
@@ -93,7 +94,7 @@ export const CalendarView = () => {
     {eventEditor.loading && <p role="status" className="px-4 py-2 text-sm">Loading current event details...</p>}
     {eventEditor.error && <div role="alert" className="flex items-center gap-3 px-4 py-2 text-sm text-amber-800 dark:text-amber-200"><span>{eventEditor.error}</span><button onClick={eventEditor.retry} className="min-h-11 underline">Retry</button></div>}
     {showImport && <section ref={importRef} className="scroll-mt-4 border-t border-gray-200 dark:border-slate-800" aria-label="School inbox and import">
-      <CalendarCopilotPanel events={events} tasks={tasks} people={people} currentDate={currentDate} createEvent={createEvent} createTask={createTask} onOpenCalendar={() => setCurrentDate(currentDate)} onEventsImported={refreshEvents} onInboxChanged={(count, emails) => { setPendingReview(count); setPendingReviewEmails(emails); }} />
+      <CalendarCopilotPanel events={events} tasks={tasks} people={people} currentDate={currentDate} createEvent={createEvent} createTask={createTask} onOpenCalendar={() => setCurrentDate(currentDate)} onEventsImported={refreshPlanning} onInboxChanged={(count, emails) => { setPendingReview(count); setPendingReviewEmails(emails); }} />
     </section>}
     <div className="grid min-w-0 gap-5 px-3 py-4 sm:px-5 xl:grid-cols-[minmax(0,1fr)_300px]">
       <div className="min-w-0 overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-slate-800 dark:bg-slate-900">

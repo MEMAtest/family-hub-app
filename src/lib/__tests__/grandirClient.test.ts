@@ -37,4 +37,12 @@ describe('read-only Grandir transport', () => {
     expect(grandirPostUrl('post-1')).toBe('https://www.app.grandiruk.com/#/account/post/post-1');
     expect(() => grandirPostUrl('../../evil?token=x')).toThrow();
   });
+  it('uses the observed paging pair without changing provider origin', async () => {
+    respond({ feedItems: [] });
+    await readGrandirFeed('test', 'post-1', '2026-10-07T12:00:00.000Z');
+    const url = (global.fetch as jest.Mock).mock.calls[0][0] as URL;
+    expect(url.origin).toBe('https://www.app.grandiruk.com');
+    expect(url.searchParams.get('cursor')).toBe('post-1');
+    expect(url.searchParams.get('olderThan')).toBe('2026-10-07T12:00:00.000Z');
+  });
 });

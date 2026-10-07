@@ -3,6 +3,7 @@ jest.mock('@/lib/prisma', () => ({ __esModule: true, default: {
   familyDocument: { findUnique: jest.fn() },
   calendarEmailIntake: { findFirst: jest.fn(), findMany: jest.fn(), aggregate: jest.fn(), updateMany: jest.fn() },
   calendarEvent: { findMany: jest.fn() },
+  calendarTask: { findMany: jest.fn() },
 } }));
 jest.mock('@/lib/auth-utils', () => ({ requireFamilyAccess: (handler: unknown) => handler }));
 jest.mock('@/lib/gmailCalendarServer', () => ({ gmailForwardingAddress: jest.fn() }));
@@ -11,9 +12,11 @@ jest.mock('next/server', () => ({ NextResponse: { json: (body: unknown, init?: {
 import prisma from '@/lib/prisma';
 import { GET, PATCH, POST } from './route';
 import * as ingestion from '@/lib/calendarEmailIngestion';
+import * as nurseryPreparation from '@/lib/nurseryPreparation';
 const context = { params: Promise.resolve({ familyId: 'family-id' }) };
 const auth = { familyMemberId: 'parent-id' };
-const request = (body: unknown) => ({ json: async () => body });
+const request = (body: unknown) => ({ json: async () => body, nextUrl: { origin: 'https://family.example' },
+  headers: new Headers({ origin: 'https://family.example', 'content-type': 'application/json' }) });
 const draft = { importId: 'photo', sourceEventKey: 'photo-key', title: 'Photographs', person: 'askia', date: '2026-10-07', source: 'School photographs' };
 const intake = { id: 'intake-id', familyId: 'family-id', status: 'review_required', needsReview: 2, createdEventIds: ['already-imported'],
   parsedDrafts: [draft], metadata: {}, updatedAt: new Date('2026-10-06') };
@@ -25,7 +28,42 @@ describe('calendar intake decisions', () => {
     (prisma.calendarEmailIntake.findFirst as jest.Mock).mockImplementation(async () => ({ ...intake, parsedDrafts: [{ ...draft }] }));
     (prisma.calendarEmailIntake.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
     (prisma.calendarEvent.findMany as jest.Mock).mockResolvedValue([{ id: 'created-now', personId: 'askia', title: 'Photographs', eventDate: new Date('2026-10-07') }]);
+    (prisma.calendarTask.findMany as jest.Mock).mockResolvedValue([]);
     (prisma.familyMember.findMany as jest.Mock).mockResolvedValue([{ id: 'amari', role: 'Child', name: 'Amari' }, { id: 'askia', role: 'Child', name: 'Askia' }]);
+  });
+  it('shows Askia nursery preparation separately and reconciles a saved task without a GET write', async () => {
+    const row = { ...intake, status: 'no_events', subject: 'Grandir nursery update', sender: 'Grandir',
+      text: 'Grandir nursery: Test nursery\nNext week is Book of the Week. Please bring a favourite book.',
+      parsedDrafts: [], createdEventIds: [], receivedAt: new Date('2026-10-06'), attachments: [],
+      metadata: { grandirPortal: { postId: 'post-1' } } };
+    (prisma.calendarEmailIntake.findMany as jest.Mock).mockResolvedValue([row]);
+    (prisma.calendarEvent.findMany as jest.Mock).mockResolvedValue([]);
+    const response = await (GET as any)({}, context);
+    expect(response.body).toMatchObject({ pendingReviewCount: 1, intakes: [expect.objectContaining({
+      nurseryChildId: 'askia', actionRequired: true,
+      nurserySummary: expect.objectContaining({ kind: 'preparation', title: 'Book of the Week' }),
+      originalPortalUrl: 'https://www.app.grandiruk.com/#/account/post/post-1' })] });
+    (prisma.calendarTask.findMany as jest.Mock).mockResolvedValue([{ id: nurseryPreparation.nurseryPreparationTaskId('family-id', 'intake-id'),
+      dueDate: new Date('2026-10-12'), completedAt: new Date('2026-10-08') }]);
+    expect((await (GET as any)({}, context)).body).toMatchObject({ pendingReviewCount: 0,
+      intakes: [expect.objectContaining({ actionRequired: false, preparationTask: expect.objectContaining({ completed: true, dueDate: '2026-10-12' }) })] });
+    expect(prisma.calendarEmailIntake.updateMany).not.toHaveBeenCalled();
+    row.metadata.grandirPortal = { postId: 'post-1', childMemberId: 'amari' } as any;
+    expect((await (GET as any)({}, context)).body.intakes[0]).toMatchObject({ nurseryChildId: null,
+      nurseryAssignmentWarning: expect.any(String) });
+  });
+  it('routes preparation saves through the authorized family and rejects extra caller assignments', async () => {
+    const save = jest.spyOn(nurseryPreparation, 'saveNurseryPreparation').mockResolvedValue({ taskId: 'task', dueDate: '2026-10-12', completed: false });
+    try {
+      const body = { action: 'add-nursery-task', intakeId: 'intake-id', dueDate: '2026-10-12' };
+      expect((await (POST as any)(request(body), context, auth)).body).toMatchObject({ taskId: 'task' });
+      expect(save).toHaveBeenCalledWith('family-id', 'intake-id', '2026-10-12');
+      const foreign = request(body); foreign.headers.set('origin', 'https://other.example');
+      expect((await (POST as any)(foreign, context, auth)).status).toBe(403);
+      expect((await (POST as any)(request({ ...body, childMemberId: 'other' }), context, auth)).status).toBe(400);
+      save.mockRejectedValue(new nurseryPreparation.NurseryPreparationError(409, 'Choose a child.'));
+      expect((await (POST as any)(request(body), context, auth)).status).toBe(409);
+    } finally { save.mockRestore(); }
   });
   it('accepts only the explicit single-intake processing request and uses the authorized family', async () => {
     const process = jest.spyOn(ingestion, 'autoProcessSavedCalendarIntake').mockResolvedValue({ intakeId: 'intake-id', newlyCreatedCount: 1 } as any);

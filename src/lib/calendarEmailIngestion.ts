@@ -297,7 +297,8 @@ export const ingestCalendarEmailPayload = async (
   payload: any,
   options: { familyId?: string; eventSource?: string; authenticatedSchoolSender?: boolean; reviewOnly?: boolean;
     verifiedGrandirMemberId?: string; referenceOnly?: boolean;
-    grandirPortal?: { postId: string; bodyHash: string; sourceUrl: string; nurseryName: string } } = {},
+    grandirPortal?: { postId: string; bodyHash: string; sourceUrl: string; nurseryName: string; hasAttachments?: boolean };
+    contentPending?: boolean; nurserySummary?: import('@/utils/nurseryNoticeSummary').NurseryNoticeSummary } = {},
 ): Promise<CalendarEmailIngestionResult> => {
   const data = payloadData(payload);
   const recipients = recipientsFromValue(data?.to || data?.recipient || data?.recipients);
@@ -443,10 +444,12 @@ export const ingestCalendarEmailPayload = async (
     defaultPersonId: isAuthenticatedSchoolEmail
       ? ''
       : people[0]?.id,
-    today: new Date(),
+    today: options.eventSource === 'grandir-parent-portal' && typeof data?.sourceDate === 'string' &&
+      Number.isFinite(Date.parse(data.sourceDate)) ? new Date(data.sourceDate) : new Date(),
     referenceOnly: options.eventSource === 'grandir-parent-portal' && options.referenceOnly === true,
   });
   const drafts = prepared.drafts;
+  if (options.eventSource === 'grandir-parent-portal' && options.contentPending) prepared.source.contentRequired = true;
   const verifiedNursery = options.eventSource === 'grandir-parent-portal' && Boolean(options.verifiedGrandirMemberId && options.grandirPortal) &&
     prepared.source.institution === 'grandir' && people.some(member => member.id === options.verifiedGrandirMemberId && isChildProfile(member)) &&
     drafts.every(draft => draft.person === options.verifiedGrandirMemberId && draft.schoolAssignment?.sourceKey === 'grandir');
@@ -483,6 +486,7 @@ export const ingestCalendarEmailPayload = async (
           options.authenticatedSchoolSender && options.eventSource === 'gmail-school-email'
         ),
         documentSummary: prepared.metadata.documentSummary,
+        ...(options.nurserySummary && options.eventSource === 'grandir-parent-portal' ? { nurserySummary: options.nurserySummary } : {}),
         ...(options.eventSource === 'grandir-parent-portal' && options.verifiedGrandirMemberId && options.grandirPortal ? {
           grandirPortal: { ...options.grandirPortal, childMemberId: options.verifiedGrandirMemberId, verifiedAt: new Date().toISOString() },
         } : {}),
@@ -522,7 +526,7 @@ export const ingestCalendarEmailPayload = async (
   const googleExportErrors = await exportCalendarEvents(family.id, createdEvents);
 
   const state = calendarIntakeState({ id: intake.id, familyId: family.id,
-    status: prepared.source.contentRequired ? 'content_required' : 'processing' }, drafts, createdEvents,
+    status: prepared.source.contentRequired ? 'content_required' : 'processing', metadata: intake.metadata }, drafts, createdEvents,
     (draft) => !reviewOnly && isHighConfidenceAutoCreate(draft, options));
   const { needsReview, duplicateCount, conflictCount, status } = state;
 

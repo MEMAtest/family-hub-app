@@ -57,11 +57,15 @@ export const calendarIntakeState = (intake: { id: string; familyId: string; stat
   const contentAction = !dismissed && ['content_required', 'needs_ocr'].includes(intake.status);
   const outstandingDraftCount = outstandingDrafts.length;
   const pendingAutoCreate = outstandingDrafts.filter((draft) => draft.autoProcessEligible).length;
-  const actionRequired = contentAction || outstandingDraftCount > 0;
+  const nurseryKind = schoolMetadata(schoolMetadata(intake.metadata).nurserySummary).kind;
+  const unresolvedNurseryDate = nurseryKind === 'event' && !drafts.length && !createdEventIds.length;
+  const nurseryAction = !dismissed && (['preparation', 'routine'].includes(String(nurseryKind)) || unresolvedNurseryDate) &&
+    !schoolMetadata(intake.metadata).nurseryPreparationSaved;
+  const actionRequired = contentAction || nurseryAction || outstandingDraftCount > 0;
   const conflictCount = outstandingDrafts.filter((draft) => draft.importStatus === 'conflict').length;
-  const needsReview = contentAction ? Math.max(1, outstandingDraftCount) : outstandingDraftCount;
+  const needsReview = contentAction || nurseryAction ? Math.max(1, outstandingDraftCount) : outstandingDraftCount;
   const status = dismissed ? intake.status : contentAction ? intake.status :
-    outstandingDraftCount ? createdEventIds.length ? 'partial_review' : 'review_required' :
+    outstandingDraftCount || nurseryAction ? createdEventIds.length ? 'partial_review' : 'review_required' :
       createdEventIds.length ? 'auto_created' : drafts.length ? 'reviewed' : 'no_events';
   return { status, parsedDrafts, allParsedDrafts: parsedDrafts, importedDrafts, outstandingDrafts,
     referenceDrafts: parsedDrafts.filter((draft) => draft.disposition !== 'outstanding'),
