@@ -29,6 +29,15 @@ const decodeCodePoint = (value: number) =>
     ? String.fromCodePoint(value)
     : '';
 
+export function nurseryPreviewSummary(body: string, hasAttachments = false): NurseryNoticeSummary {
+  const text = cleanText(body);
+  const quoted = text.match(/posted on your Grandir UK wall:\s*["\u201c]([\s\S]+?)["\u201d]/i)?.[1] || '';
+  const preview = quoted ? summarizeNurseryNotice(quoted, hasAttachments) : null;
+  return { kind: 'content_pending', title: preview ? `Preview: ${preview.title}` : 'Nursery notice preview',
+    purpose: quoted ? cap(quoted, 220) : 'This email contains a nursery preview, not the complete post.',
+    actions: ['Open the original nursery post to check the full request and dates.'], timing: null, hasAttachments };
+}
+
 const cap = (text: string, limit = 180) => text.length <= limit ? text : `${text.slice(0, limit - 3).trimEnd()}...`;
 
 const timingFrom = (text: string) => {

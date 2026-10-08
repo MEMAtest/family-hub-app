@@ -5,7 +5,7 @@ import type { FamilyReminderMetadata, TravelReminderContext } from './familyRemi
 
 export type ReminderMember = { id: string; name: string; role?: string; ageGroup?: string };
 export type ReminderEvent = CalendarEvent & { metadata?: FamilyReminderMetadata };
-export type ReminderPurpose = 'preparation' | 'coverage';
+export type ReminderPurpose = 'preparation' | 'coverage' | 'bins';
 export type ReminderIntent = {
   id: string; stateId: string; eventId: string; occurrence: string;
   recipientPersonId: string; recipientName: string; purpose: ReminderPurpose;
@@ -69,6 +69,7 @@ export const reminderOccurrenceEvent = (event: ReminderEvent): ReminderEvent => 
 export const reminderFingerprint = (event: ReminderEvent) => createHash('sha256').update(JSON.stringify({
   travel: travelContext(event), person: event.person, date: event.date, status: event.status ?? 'confirmed',
   enabled: event.metadata?.reminderPreferences?.enabled,
+  ...(event.metadata?.binCollection ? { binCollection: event.metadata.binCollection } : {}),
 })).digest('hex');
 const outstanding = (items: TravelReminderContext['preparation']) =>
   (items ?? []).filter((item) => item.status !== 'done' && item.status !== 'not_needed');
@@ -104,6 +105,16 @@ export const travelReminderPurposes = (event: ReminderEvent, members: ReminderMe
   return requests;
 };
 
+export const eventReminderPurposes = (event: ReminderEvent, members: ReminderMember[]) => {
+  const bins = event.metadata?.binCollection;
+  if (!bins) return travelReminderPurposes(event, members);
+  if (!bins.verified || !parseDateKey(bins.date) || bins.date !== event.date || !bins.services?.length ||
+      event.status === 'cancelled' || event.metadata?.status === 'cancelled' || event.metadata?.reminderPreferences?.enabled === false) return [];
+  return members.filter(member => /parent|adult/i.test(member.role || '') || /adult/i.test(member.ageGroup || '')).map(recipient => ({
+    recipient, purpose: 'bins' as ReminderPurpose, message: `Put out: ${bins.services.join('; ')}. Council collection is ${bins.date}; no collection time is specified.`,
+  }));
+};
+
 export const planFamilyReminders = (
   familyId: string, events: ReminderEvent[], members: ReminderMember[], now: Date,
   exceptions: RecurrenceException[] = [],
@@ -116,6 +127,23 @@ export const planFamilyReminders = (
   const occurrenceEvents = events.map(reminderOccurrenceEvent);
   for (const occurrence of expandEvents(occurrenceEvents, today, addDays(today, 1), exceptions)) {
     const event = { ...occurrence.event, ...occurrence.overrides } as ReminderEvent;
+    const bins = event.metadata?.binCollection;
+    if (bins) {
+      // Catch up a missed evening dispatcher tick until midnight, never after collection starts.
+      const dueAt = wallTimeInstant(today, '20:00');
+      const expiresAt = wallTimeInstant(occurrence.date, '00:00');
+      if (occurrence.date !== addDays(today, 1) || !dueAt || !expiresAt || now < dueAt || now >= expiresAt) continue;
+      for (const request of eventReminderPurposes(event, members)) {
+        const parts = [familyId, event.id, occurrence.date, request.recipient.id, request.purpose];
+        const fingerprint = reminderFingerprint(events.find(item => item.id === event.id)!);
+        const phase = `${today}-20`;
+        intents.push({ id: reminderRecordId('intent', [...parts, phase, fingerprint]), stateId: reminderRecordId('state', parts),
+          eventId: event.id, occurrence: occurrence.date, recipientPersonId: request.recipient.id, recipientName: request.recipient.name,
+          purpose: 'bins', phase, title: 'Bins tomorrow: put them out tonight', message: request.message, dueAt, expiresAt,
+          push: event.metadata?.reminderPreferences?.push !== false, fingerprint });
+      }
+      continue;
+    }
     const travel = travelContext(event);
     if (!travel) continue;
     const departureDate = occurrence.isRecurring ? occurrence.date : travel.departureDate ?? occurrence.date;

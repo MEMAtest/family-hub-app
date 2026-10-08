@@ -67,6 +67,33 @@ it('does not recreate reminders after purpose completion', async () => {
   records.set(intent.stateId, { metadata: { resolution: 'done' } });
   expect(await reserveReminderIntent('family', intent, now)).toBe(false);
 });
+it('persists separate bin completion, deduplicates repeated ticks and suppresses only the completing parent', async () => {
+  const binTime = new Date('2026-10-08T19:00:00Z');
+  const binDb = { ...dbEvent, id: 'bins', eventDate: new Date('2026-10-09'), eventTime: new Date('2026-10-09'),
+    metadata: { binCollection: { date: '2026-10-09', services: ['Food waste'], sourceUrl: 'https://council.example/calendar', verified: true } } };
+  (prisma.calendarEvent.findMany as jest.Mock).mockResolvedValue([binDb]);
+  (prisma.calendarEvent.findFirst as jest.Mock).mockResolvedValue(binDb);
+  expect((await runFamilyReminderSweep('family', binTime, false)).created).toBe(2);
+  expect((await runFamilyReminderSweep('family', binTime, false)).created).toBe(0);
+  const angela = [...records.values()].find(record => record.recipientPersonId === 'angela');
+  expect(angela.actions[0].label).toBe('View collection');
+  await applyFamilyReminderAction('family', 'angela', angela.id, 'done', undefined, binTime);
+  expect((await runFamilyReminderSweep('family', binTime, false)).created).toBe(0);
+  expect([...records.values()].find(record => record.recipientPersonId === 'ade').actionRequired).toBe(true);
+});
+it('holds unverified bin sends and resumes after a successful council check', async () => {
+  const binTime = new Date('2026-10-08T19:00:00Z');
+  const binDb = { ...dbEvent, id: 'bins', eventDate: new Date('2026-10-09'), eventTime: new Date('2026-10-09'),
+    metadata: { binCollection: { date: '2026-10-09', services: ['Food waste'], sourceUrl: 'https://council.example/calendar', verified: true } } };
+  (prisma.calendarEvent.findMany as jest.Mock).mockResolvedValue([binDb]);
+  await runFamilyReminderSweep('family', binTime, false);
+  binDb.metadata.binCollection.verified = false;
+  await runFamilyReminderSweep('family', binTime);
+  expect(sendMemberPushNotification).not.toHaveBeenCalled();
+  binDb.metadata.binCollection.verified = true;
+  expect((await runFamilyReminderSweep('family', binTime)).pushAccepted).toBe(2);
+  expect((await runFamilyReminderSweep('family', binTime)).pushAccepted).toBe(0);
+});
 it('short-circuits normal duplicate ticks before attempting an insert', async () => {
   await reserveReminderIntent('family', intent, now);
   await reserveReminderIntent('family', intent, now);

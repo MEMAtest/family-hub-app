@@ -21,6 +21,7 @@ export type FamilyReminderMetadata = {
   reminders?: Array<{ id: string; type: string; time: number; enabled: boolean }>;
   reminderPreferences?: { enabled?: boolean; push?: boolean };
   travel?: TravelReminderContext;
+  binCollection?: { date: string; services: string[]; sourceUrl: string; verified: boolean };
 };
 export type FamilyReminderAction = 'done' | 'not_needed' | 'snooze' | 'details' | 'cover';
 export const FAMILY_REMINDER_SOURCE = 'family-reminder-planner';

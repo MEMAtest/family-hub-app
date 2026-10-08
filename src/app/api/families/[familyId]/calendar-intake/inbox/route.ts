@@ -13,7 +13,7 @@ import { calendarIntakeState } from '@/lib/calendarIntakeState';
 import { autoProcessSavedCalendarIntake, isHighConfidenceAutoCreate, SavedIntakeProcessingError } from '@/lib/calendarEmailIngestion';
 import { isStewartFlemingSender } from '@/utils/schoolEmail';
 import { grandirPostUrl, grandirOriginalPostLink } from '@/lib/grandirClient';
-import { summarizeNurseryNotice } from '@/utils/nurseryNoticeSummary';
+import { summarizeNurseryNotice, nurseryPreviewSummary } from '@/utils/nurseryNoticeSummary';
 import { nurseryPreparationTaskId, saveNurseryPreparation, NurseryPreparationError } from '@/lib/nurseryPreparation';
 
 const reviewStatuses = ['processing', 'review_required', 'partial_review', 'no_events', 'needs_ocr', 'content_required'];
@@ -93,16 +93,13 @@ export const GET = requireFamilyAccess(async (_request: NextRequest, context) =>
       const accountNotice = nurserySummary?.title === 'Parent account security notice';
       const nurseryEmailPreview = /\bposted on your Grandir UK wall\b/i.test(intake.text || intake.normalizedText || '');
       if (nurserySummary && !accountNotice && (resolved.source.contentRequired || nurseryEmailPreview)) {
-        nurserySummary = { ...nurserySummary, kind: 'content_pending',
-          title: 'Nursery notice preview',
-          purpose: 'This notification contains a preview. The full nursery post has not been read.',
-          actions: ['Open the original nursery post to check its dates and preparation.'], timing: null };
+        nurserySummary = nurseryPreviewSummary(intake.text || intake.normalizedText || '', nurserySummary.hasAttachments);
       }
       const preparationTask = nurseryTasks.find(task => task.id === nurseryPreparationTaskId(familyId, intake.id));
       const mappedNurseryChildId = rules.sources.find(source => source.key === 'grandir')?.memberIds.length === 1
         ? rules.sources.find(source => source.key === 'grandir')?.memberIds[0] : null;
       const verifiedChildId = schoolMetadata(metadata.grandirPortal).childMemberId;
-      const nurseryChildId = typeof verifiedChildId === 'string' && verifiedChildId !== mappedNurseryChildId
+      const nurseryChildId = !nurserySummary || typeof verifiedChildId === 'string' && verifiedChildId !== mappedNurseryChildId
         ? null : mappedNurseryChildId;
       const nurseryStatus = accountNotice && !drafts.length ? 'no_events' :
         nurserySummary?.kind === 'content_pending' ? 'content_required' : intake.status;

@@ -42,6 +42,49 @@ const openSchoolInbox = async (page: Page) => {
   await page.getByRole('button', { name: 'School inbox & quick plan', exact: true }).click();
 };
 
+test('phone calendar shows verified bins tomorrow without opening Property or the inbox and survives reload', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.clock.install({ time: new Date('2026-10-08T19:00:00Z') });
+  await page.addInitScript(skipSetupWizard);
+  const state = { documentRequestBody: '', eventPosts: [] as unknown[], gmailSyncs: 0 };
+  await stubFamilyApis(page, state);
+  await page.route('**/api/families/*/bin-collections', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({
+    status: 'connected', checkedAt: '2026-10-08T19:00:00Z', sourceUrl: 'https://recyclingservices.bromley.gov.uk/waste/3670007',
+    collections: [{ date: '2026-10-09', services: ['Food waste', 'Mixed recycling (cans, plastics and glass)'] }],
+  }) }));
+  await page.goto('/?view=calendar');
+  const strip = page.getByRole('region', { name: 'Bin collections', exact: true });
+  await expect(strip.getByRole('heading', { name: 'Bins tomorrow', exact: true })).toBeVisible();
+  await expect(strip).toContainText('Food waste + Mixed recycling (cans, plastics and glass)');
+  await expect(strip.getByRole('link', { name: 'Council collection calendar' })).toHaveAttribute('href', 'https://recyclingservices.bromley.gov.uk/waste/3670007');
+  expect((await strip.boundingBox())!.y).toBeLessThan(400);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: 'output/playwright/bins-phone-rehearsal-20261008.png' });
+  await page.reload();
+  await expect(strip.getByRole('heading', { name: 'Bins tomorrow', exact: true })).toBeVisible();
+  expect(state.eventPosts).toHaveLength(0);
+});
+
+test('council failures expose retry rather than a guessed collection date on desktop', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.addInitScript(skipSetupWizard);
+  const state = { documentRequestBody: '', eventPosts: [] as unknown[], gmailSyncs: 0 };
+  await stubFamilyApis(page, state);
+  let attempts = 0;
+  await page.route('**/api/families/*/bin-collections', route => {
+    attempts += 1;
+    return route.fulfill({ status: attempts === 1 ? 503 : 200, contentType: 'application/json', body: JSON.stringify(attempts === 1
+      ? { status: 'unavailable', collections: [] } : { status: 'connected', collections: [{ date: '2099-10-09', services: ['Paper and cardboard'] }] }) });
+  });
+  await page.goto('/?view=calendar');
+  const strip = page.getByRole('region', { name: 'Bin collections', exact: true });
+  await expect(strip.getByRole('heading', { name: 'Bin collections unavailable' })).toBeVisible();
+  await strip.getByRole('button', { name: 'Retry bin collections' }).click();
+  await expect(strip).toContainText('Paper and cardboard');
+  await expect(strip.getByRole('heading', { name: 'Next bin collection' })).toBeVisible();
+  expect(attempts).toBe(2);
+});
+
 test('Grandir connection verifies Askia, requires consent, survives reload and reconnects on a phone', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.addInitScript(skipSetupWizard);

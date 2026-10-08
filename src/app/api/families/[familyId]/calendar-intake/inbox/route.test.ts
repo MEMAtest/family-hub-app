@@ -87,10 +87,18 @@ describe('calendar intake decisions', () => {
     });
     expect(response.body.intakes.find((row: any) => row.id === 'wall-preview')).toMatchObject({
       status: 'content_required', actionRequired: true,
-      nurserySummary: expect.objectContaining({ title: 'Nursery notice preview', kind: 'content_pending' }),
+      nurserySummary: expect.objectContaining({ title: 'Preview: Book of the Week', kind: 'content_pending', timing: null }),
     });
     expect(response.body.intakes.find((row: any) => row.id === 'dismissed')).toMatchObject({ status: 'reviewed', actionRequired: false });
     expect(prisma.calendarEmailIntake.updateMany).not.toHaveBeenCalled();
+  });
+  it('does not label Stewart Fleming school messages as Askia nursery messages', async () => {
+    const row = { ...intake, sender: 'office@stewartfleming.bromley.sch.uk', subject: 'School photographs',
+      text: 'Stewart Fleming Primary School. Individual photographs on 7 October 2026.', attachments: [] };
+    (prisma.calendarEmailIntake.findMany as jest.Mock).mockResolvedValue([row]);
+    (prisma.calendarEvent.findMany as jest.Mock).mockResolvedValue([]);
+    expect((await (GET as any)({}, context)).body.intakes[0]).toMatchObject({ nurserySummary: null, nurseryChildId: null,
+      schoolSource: { institution: 'stewart-fleming' } });
   });
   it('accepts only the explicit single-intake processing request and uses the authorized family', async () => {
     const process = jest.spyOn(ingestion, 'autoProcessSavedCalendarIntake').mockResolvedValue({ intakeId: 'intake-id', newlyCreatedCount: 1 } as any);

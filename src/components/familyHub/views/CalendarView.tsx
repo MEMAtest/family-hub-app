@@ -17,6 +17,7 @@ import toast from 'react-hot-toast';
 import { hasUnspecifiedEventTime } from '@/utils/eventSemantics';
 import { useCalendarReminderLink } from '@/hooks/useCalendarReminderLink';
 import WorkStatusManager from '@/components/calendar/WorkStatusManager';
+import { BinCollectionStrip } from '@/components/calendar/BinCollectionStrip';
 
 export const CalendarView = () => {
   const { events, tasks, refreshEvents, refreshTasks, openEditForm, openCreateForm, createEvent, createTask, updateEvent, deleteEvent,
@@ -87,6 +88,7 @@ export const CalendarView = () => {
         <button type="button" onClick={openConflictSettings} title="Conflict rules" aria-label="Conflict rules" className="min-h-10 rounded-md border border-gray-200 p-2.5 dark:border-slate-700"><Settings className="h-4 w-4" /></button>
       </div>
     </header>
+    <BinCollectionStrip familyId={familyId} onSynced={refreshEvents} />
     {dateWarnings.length > 0 && <section aria-label="School dates to confirm" className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-200"><details>
       <summary className="cursor-pointer py-1 font-medium">{dateWarnings.length} school date{dateWarnings.length === 1 ? '' : 's'} to confirm</summary>
       {dateWarnings.map((event) => <button key={event.id} onClick={() => eventEditor.open(event)} className="block min-h-10 w-full text-left"><strong>{event.title}: check school date</strong><span className="mt-1 block text-xs">{recurringSourceDateWarning(event)} Held from the calendar until confirmed.</span></button>)}

@@ -125,3 +125,29 @@ describe('wall time conversion', () => {
     expect(wallTimeInstant('2026-10-08', '09:00', 'Asia/Kathmandu')?.toISOString()).toBe('2026-10-08T03:15:00.000Z');
   });
 });
+
+describe('bin collection reminders', () => {
+  const bins = (): ReminderEvent => ({ ...trip(), id: 'bins', date: '2026-10-09', title: 'Council bins',
+    metadata: { binCollection: { date: '2026-10-09', services: ['Food waste', 'Mixed recycling'], sourceUrl: 'https://recyclingservices.bromley.gov.uk/waste/3670007', verified: true } } });
+  it('targets parents independently at 20 London, with no made-up collection time', () => {
+    const result = plan(bins(), '2026-10-08T19:00:00Z');
+    expect(result.map(item => [item.recipientPersonId, item.purpose])).toEqual([['angela', 'bins'], ['ade', 'bins']]);
+    expect(result[0].message).toContain('Food waste; Mixed recycling');
+    expect(result[0].expiresAt.toISOString()).toBe('2026-10-08T23:00:00.000Z');
+    expect(result[0].id).toBe(plan(bins(), '2026-10-08T21:30:00Z')[0].id);
+    expect(plan(bins(), '2026-10-08T18:59:00Z')).toHaveLength(0);
+    expect(plan(bins(), '2026-10-08T23:00:00Z')).toHaveLength(0);
+  });
+  it('never reminds children, cancelled events or unverified schedules', () => {
+    expect(planFamilyReminders('family', [bins()], [...members, { id: 'askia', name: 'Askia', role: 'Child' }], new Date('2026-10-08T19:00:00Z'))).toHaveLength(2);
+    const unverified = bins(); unverified.metadata!.binCollection!.verified = false;
+    expect(plan(unverified, '2026-10-08T19:00:00Z')).toHaveLength(0);
+    const cancelled = bins(); cancelled.status = 'cancelled';
+    expect(plan(cancelled, '2026-10-08T19:00:00Z')).toHaveLength(0);
+  });
+  it('keeps the 20 London slot across the autumn clock change', () => {
+    const event = bins(); event.date = '2026-10-26'; event.metadata!.binCollection!.date = event.date;
+    const result = plan(event, '2026-10-25T20:00:00Z');
+    expect(result[0].dueAt.toISOString()).toBe('2026-10-25T20:00:00.000Z');
+  });
+});

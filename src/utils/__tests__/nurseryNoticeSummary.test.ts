@@ -1,4 +1,15 @@
-import { summarizeNurseryNotice } from '../nurseryNoticeSummary';
+import { summarizeNurseryNotice, nurseryPreviewSummary } from '../nurseryNoticeSummary';
+
+test('uses the quoted nursery topic without claiming to have read the full post or confirming a date', () => {
+  const summary = nurseryPreviewSummary('Hi parent. A teacher posted on your Grandir UK wall: "Next week is Book of the Week. Please bring a favourite book..." Open the app.');
+  expect(summary).toMatchObject({ title: 'Preview: Book of the Week', kind: 'content_pending', timing: null });
+  expect(summary.purpose).toContain('Please bring a favourite book...');
+  expect(summary.actions).toEqual(['Open the original nursery post to check the full request and dates.']);
+});
+test('decodes nursery HTML previews but leaves missing content explicitly pending', () => {
+  expect(nurseryPreviewSummary('<p>posted on your Grandir UK wall: &quot;Today we enjoyed painting...&quot;</p>').title).toContain('Today we enjoyed painting');
+  expect(nurseryPreviewSummary('View a new Grandir post.')).toMatchObject({ title: 'Nursery notice preview', kind: 'content_pending', timing: null });
+});
 
 test('keeps parent login security messages out of nursery activities', () => {
   const summary = summarizeNurseryNotice('Grandir noticed you logged in using a device. Verification code: private-example.');

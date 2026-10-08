@@ -3,7 +3,7 @@ import prisma from '@/lib/prisma';
 import { toCalendarEventResponse } from '@/lib/calendarEventMapping';
 import { sendMemberPushNotification } from '@/lib/webPush';
 import { FAMILY_REMINDER_SOURCE, type FamilyReminderAction } from './familyReminderContract';
-import { londonDate, londonParts, planFamilyReminders, reminderFingerprint, reminderOccurrenceEvent, travelReminderPurposes, type ReminderEvent, type ReminderIntent } from './familyReminderPlanner';
+import { londonDate, londonParts, planFamilyReminders, reminderFingerprint, reminderOccurrenceEvent, eventReminderPurposes, type ReminderEvent, type ReminderIntent } from './familyReminderPlanner';
 import { expandEvents, type RecurrenceException } from '@/utils/recurrence';
 
 export const reminderObject = (value: unknown): Record<string, any> =>
@@ -13,7 +13,7 @@ const unresolved = (state: Record<string, any>) => !['done', 'not_needed', 'cove
 const metadataMatch = (metadata: unknown) => ({ equals: metadata as Prisma.InputJsonValue });
 
 const actionsFor = (intent: ReminderIntent) => [
-  { id: 'details', label: 'Complete details', type: 'primary', action: 'reminder_details' },
+  { id: 'details', label: intent.purpose === 'bins' ? 'View collection' : 'Complete details', type: 'primary', action: 'reminder_details' },
   ...(intent.purpose === 'coverage' ? [{ id: 'cover', label: 'Confirm cover', type: 'primary', action: 'reminder_cover' }] : []),
   { id: 'done', label: 'Done', type: 'secondary', action: 'reminder_done' },
   { id: 'not_needed', label: 'Not needed', type: 'secondary', action: 'reminder_not_needed' },
@@ -80,10 +80,11 @@ export const runFamilyReminderSweep = async (familyId: string, now = new Date(),
     const state = await prisma.notification.findUnique({ where: { id: metadata.stateId }, select: { metadata: true } });
     const stateMetadata = reminderObject(state?.metadata);
     const event = events.find((item) => item.id === record.relatedEventId);
+    if (event?.metadata?.binCollection?.verified === false && record.expiresAt && record.expiresAt > now && unresolved(stateMetadata)) continue;
     const occurrence = event && expandEvents([reminderOccurrenceEvent(event)], metadata.occurrence, metadata.occurrence, exceptions)
       .find((item) => item.date === metadata.occurrence);
     const currentEvent = event && occurrence ? { ...event, ...occurrence.overrides } as ReminderEvent : undefined;
-    const relevant = currentEvent && reminderFingerprint(event!) === metadata.fingerprint && travelReminderPurposes(currentEvent, members).some((request) =>
+    const relevant = currentEvent && reminderFingerprint(event!) === metadata.fingerprint && eventReminderPurposes(currentEvent, members).some((request) =>
       request.purpose === metadata.purpose && request.recipient.id === record.recipientPersonId);
     if (!record.expiresAt || record.expiresAt <= now || !relevant || !unresolved(stateMetadata)) {
       await prisma.notification.updateMany({ where: { id: record.id, metadata: metadataMatch(record.metadata) },
@@ -157,7 +158,7 @@ export const applyFamilyReminderAction = async (
         const metadata = reminderObject(record.metadata);
         const event = record.relatedEventId && await tx.calendarEvent.findFirst({ where: { id: record.relatedEventId, familyId }, include: { exceptions: true } });
         if (!event || reminderObject(event.metadata).status === 'cancelled' || reminderObject(event.metadata).reminderPreferences?.enabled === false) {
-          throw new ReminderActionError('The trip is cancelled or reminders are disabled.', 409);
+          throw new ReminderActionError('The event is cancelled or reminders are disabled.', 409);
         }
         const members = await tx.familyMember.findMany({ where: { familyId } });
         const mappedEvent = toCalendarEventResponse(event) as ReminderEvent;
@@ -165,9 +166,9 @@ export const applyFamilyReminderAction = async (
           type: exception.type as RecurrenceException['type'], overrides: exception.overrides as RecurrenceException['overrides'] }));
         const occurrence = expandEvents([reminderOccurrenceEvent(mappedEvent)], metadata.occurrence, metadata.occurrence, exceptions)
           .find((item) => item.date === metadata.occurrence);
-        if (!occurrence || reminderFingerprint(mappedEvent) !== metadata.fingerprint || !travelReminderPurposes({ ...mappedEvent, ...occurrence.overrides } as ReminderEvent, members)
+        if (!occurrence || reminderFingerprint(mappedEvent) !== metadata.fingerprint || !eventReminderPurposes({ ...mappedEvent, ...occurrence.overrides } as ReminderEvent, members)
           .some((request) => request.recipient.id === personId && request.purpose === metadata.purpose)) {
-          throw new ReminderActionError('The trip or preparation has changed. Refresh your reminders.', 409);
+          throw new ReminderActionError('The event or preparation has changed. Refresh your reminders.', 409);
         }
         if (action === 'cover' && metadata.purpose !== 'coverage') throw new ReminderActionError('This is not a coverage reminder.', 400);
         if (action === 'details') return { url: metadata.url, resolution: null };
