@@ -52,6 +52,7 @@ import { DEFAULT_DASHBOARD_PREFERENCES, useFamilyStore } from '@/store/familySto
 import { useNotifications } from '@/contexts/NotificationContext';
 import { addDays, expandEvents } from '@/utils/recurrence';
 import { formatDateForInput } from '@/utils/formatDate';
+import { HomeIntelligencePanel } from '@/components/home/HomeIntelligencePanel';
 
 type FeedItem = {
   id: string;
@@ -568,6 +569,8 @@ export const DashboardView = () => {
           </div>
         </div>
       </div>
+
+      <HomeIntelligencePanel />
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>

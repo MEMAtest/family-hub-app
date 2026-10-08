@@ -27,6 +27,12 @@ test('desktop daily flow is compact, navigable and review-first', async ({ page 
 
   const overview = page.getByRole('heading', { name: 'Omosanya family overview' });
   await expect(overview).toBeVisible();
+  const homeIntelligence = page.getByRole('region', { name: 'Home intelligence' });
+  await expect(homeIntelligence.getByRole('heading', { name: 'Needs attention' })).toBeVisible();
+  await expect(homeIntelligence.getByRole('tab', { name: 'School & nursery' })).toBeVisible();
+  await expect(homeIntelligence.getByRole('tab', { name: 'Bills' })).toBeVisible();
+  await expect(homeIntelligence.getByRole('tab', { name: 'Home', exact: true })).toBeVisible();
+  await expect(homeIntelligence.getByRole('tab', { name: 'Changes' })).toBeVisible();
   await expect(page.getByText('Quests', { exact: true })).toHaveCount(0);
   await expectNoHorizontalOverflow(page);
 
@@ -131,6 +137,7 @@ for (const viewport of [
     await waitForHub(page);
 
     await expect(page.getByRole('heading', { name: 'Omosanya family overview' })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Home intelligence' })).toBeVisible();
     await expect(page.getByRole('navigation', { name: 'Primary mobile navigation' })).toBeVisible();
     await expectNoHorizontalOverflow(page);
 

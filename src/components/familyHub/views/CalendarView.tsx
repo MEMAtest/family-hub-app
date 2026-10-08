@@ -18,13 +18,15 @@ import { hasUnspecifiedEventTime } from '@/utils/eventSemantics';
 import { useCalendarReminderLink } from '@/hooks/useCalendarReminderLink';
 import WorkStatusManager from '@/components/calendar/WorkStatusManager';
 import { BinCollectionStrip } from '@/components/calendar/BinCollectionStrip';
+import { useSearchParams } from 'next/navigation';
 
 export const CalendarView = () => {
+  const searchParams = useSearchParams();
   const { events, tasks, refreshEvents, refreshTasks, openEditForm, openCreateForm, createEvent, createTask, updateEvent, deleteEvent,
     openTemplateManager, openConflictSettings, toggleTaskComplete } = useCalendarContext();
   const { members } = useFamilyContext();
   const { currentDate, setCurrentDate } = useAppView();
-  const [showImport, setShowImport] = useState(false);
+  const [showImport, setShowImport] = useState(() => searchParams.get('homeFocus') === 'school');
   const [title, setTitle] = useState('');
   const [personId, setPersonId] = useState('');
   const [date, setDate] = useState('');

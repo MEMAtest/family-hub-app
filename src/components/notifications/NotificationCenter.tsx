@@ -228,6 +228,11 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
         await markAsRead(notification.id);
         onClose();
         break;
+      case 'view_home_intelligence':
+        setView('dashboard');
+        await markAsRead(notification.id);
+        onClose();
+        break;
       case 'view_brain_node': {
         const { projectId, url } = action.data || {};
         if (projectId) {
