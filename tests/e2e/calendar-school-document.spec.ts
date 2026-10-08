@@ -47,7 +47,13 @@ test('phone calendar shows verified bins tomorrow without opening Property or th
   await page.clock.install({ time: new Date('2026-10-08T19:00:00Z') });
   await page.addInitScript(skipSetupWizard);
   const state = { documentRequestBody: '', eventPosts: [] as unknown[], gmailSyncs: 0 };
-  await stubFamilyApis(page, state);
+  await stubFamilyApis(page, state, { calendarEvents: [
+    { id: 'bin-occurrence', personId: member.id, title: 'Bins: Food waste + Mixed recycling', eventDate: '2026-10-09T00:00:00Z',
+      eventTime: '2026-10-09T00:00:00Z', durationMinutes: 0, eventType: 'other', recurringPattern: 'none', isRecurring: false,
+      metadata: { calendarTiming: { status: 'unknown' }, binCollection: { verified: true } } },
+    { id: 'existing-trip', personId: member.id, title: 'Existing trip', eventDate: '2026-10-08T00:00:00Z',
+      eventTime: '2026-10-08T06:00:00Z', durationMinutes: 2880, eventType: 'personal', recurringPattern: 'none', isRecurring: false },
+  ] });
   await page.route('**/api/families/*/bin-collections', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({
     status: 'connected', checkedAt: '2026-10-08T19:00:00Z', sourceUrl: 'https://recyclingservices.bromley.gov.uk/waste/3670007',
     collections: [{ date: '2026-10-09', services: ['Food waste', 'Mixed recycling (cans, plastics and glass)'] }],
@@ -60,6 +66,9 @@ test('phone calendar shows verified bins tomorrow without opening Property or th
   expect((await strip.boundingBox())!.y).toBeLessThan(400);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: 'output/playwright/bins-phone-rehearsal-20261008.png' });
+  await page.getByRole('button', { name: 'Friday 9 October', exact: true }).click();
+  await expect(page.getByText('Competing events', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /^Bins: Food waste.*Household/ })).toBeVisible();
   await page.reload();
   await expect(strip.getByRole('heading', { name: 'Bins tomorrow', exact: true })).toBeVisible();
   expect(state.eventPosts).toHaveLength(0);

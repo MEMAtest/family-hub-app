@@ -20,6 +20,12 @@ const event = (overrides: Partial<CalendarEvent>): CalendarEvent => ({
 });
 
 describe('calendar same-day conflict grouping', () => {
+  it('does not invent an all-day clash for date-only council bins or source dates with unknown times', () => {
+    expect(getSameDayConflictGroups([
+      event({ id: 'bins', time: '00:00', duration: 1440, metadata: { calendarTiming: { status: 'unknown' }, binCollection: { verified: true } } }),
+      event({ id: 'trip', time: '06:00', duration: 1000 }),
+    ], '2026-08-08')).toEqual([]);
+  });
   it('groups events whose time windows overlap on the selected day', () => {
     const groups = getSameDayConflictGroups([
       event({ id: 'a', title: 'Birthday party', time: '14:00', duration: 120 }),
