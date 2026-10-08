@@ -1,6 +1,7 @@
 import type { CalendarEvent, CalendarTask } from '@/types/calendar.types';
 import type { PropertyTask } from '@/types/property.types';
 import { hasUnspecifiedEventTime } from '@/utils/eventSemantics';
+import { displayEventTitle } from '@/utils/schoolEventPresentation';
 
 export type HomeIntelligenceArea = 'school' | 'bills' | 'maintenance';
 export type HomeIntelligenceKind = 'action' | 'exception';
@@ -114,6 +115,13 @@ const isServiceExpense = (expense: BudgetExpenseInput) =>
 const isSchoolTask = (task: CalendarTask) => task.taskType === 'homework' || task.taskType === 'reading' ||
   task.taskType === 'practice' || SCHOOL_TASK_PATTERN.test(`${task.subject || ''} ${task.title}`);
 
+const schoolEventNeedsTime = (event: CalendarEvent) => {
+  if (!hasUnspecifiedEventTime(event)) return false;
+  const title = displayEventTitle(event);
+  if (/\b(?:deadline|booking(?:s)? close|closes?|all day|holiday|break|non-uniform day|dress-up day)\b/i.test(title)) return false;
+  return /\b(?:meeting|appointment|lesson|club|practice|training|performance|concert|workshop|parents? evening)\b/i.test(title);
+};
+
 const buildSchoolSignals = ({ today, tasks, events, nurseryNotices, members }: {
   today: string;
   tasks: CalendarTask[];
@@ -152,14 +160,15 @@ const buildSchoolSignals = ({ today, tasks, events, nurseryNotices, members }: {
   events.filter((event) => event.date >= today && event.date <= eventEnd).forEach((event) => {
     const schoolEvent = event.type === 'education' || event.source === 'gmail-school-email';
     if (!schoolEvent) return;
+    const title = displayEventTitle(event);
     if (event.status === 'cancelled') {
       signals.push({ id: `school-change:${event.id}`, area: 'school', kind: 'exception', status: 'changed',
-        title: `${event.title} was cancelled`, summary: 'Review transport, childcare and any preparation linked to this event.',
+        title: `${title} was cancelled`, summary: 'Review transport, childcare and any preparation linked to this event.',
         sourceLabel: 'Calendar change', ownerLabel: ownerName(event.person, members), dueDate: event.date,
         destination: 'calendar', urgency: 1 });
-    } else if (hasUnspecifiedEventTime(event)) {
+    } else if (schoolEventNeedsTime(event)) {
       signals.push({ id: `school-time:${event.id}`, area: 'school', kind: 'exception', status: 'needs_detail',
-        title: `${event.title}: time needed`, summary: 'The date is saved but the source did not confirm a time.',
+        title: `${title}: time needed`, summary: 'The date is saved but the source did not confirm a time.',
         sourceLabel: event.source === 'gmail-school-email' ? 'School email' : 'Calendar', ownerLabel: ownerName(event.person, members),
         dueDate: event.date, destination: 'calendar', urgency: daysFrom(today, event.date) <= 2 ? 1 : 2 });
     }

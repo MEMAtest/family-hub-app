@@ -16,6 +16,7 @@ test('school headings stay short without removing source instructions', () => {
   expect(schoolEventTitle("African Storytelling Assembly The Children Will Enjoy A Special Assembly Titled 'Come An")).toBe('African storytelling assembly');
   expect(schoolEventTitle('Individual And Sibling Photographs. All Children Should Wear Their Full School Uniform')).toBe('Individual and sibling photographs');
   expect(schoolEventTitle('Everyone Is Welcome To Join Our PTA AGM')).toBe('PTA AGM');
+  expect(schoolEventTitle('Group) Will Be Announced')).toBe('Nursery group to be announced');
   expect(schoolEventTitle('Football club')).toBe('Football club');
   expect(schoolEventLocation('school. Come along to have your say on fundraising')).toBe('School');
   expect(schoolEventLocation("St Michael's Church")).toBe("St Michael's Church");

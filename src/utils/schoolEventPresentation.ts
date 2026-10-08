@@ -4,6 +4,7 @@ const schoolTitles: Array<[RegExp, string]> = [
   [/\bAfrican storytelling assembly\b/i, 'African storytelling assembly'],
   [/\bindividual and sibling photographs?\b/i, 'Individual and sibling photographs'],
   [/\bPTA AGM\b/i, 'PTA AGM'],
+  [/\bgroup\)?\s+will be announced\b/i, 'Nursery group to be announced'],
 ];
 
 export const schoolEventTitle = (title: string) =>
