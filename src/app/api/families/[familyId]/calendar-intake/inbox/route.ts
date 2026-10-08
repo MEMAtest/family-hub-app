@@ -18,6 +18,18 @@ import { nurseryPreparationTaskId, saveNurseryPreparation, NurseryPreparationErr
 
 const reviewStatuses = ['processing', 'review_required', 'partial_review', 'no_events', 'needs_ocr', 'content_required'];
 
+const storedGrandirPostId = (intake: { metadata?: unknown }) => {
+  const postId = schoolMetadata(schoolMetadata(intake.metadata).grandirPortal).postId;
+  return typeof postId === 'string' && /^[a-zA-Z0-9_-]{1,100}$/.test(postId) ? postId : null;
+};
+
+const linkedGrandirPostId = (intake: { metadata?: unknown; text?: string | null; html?: string | null }) => {
+  const stored = storedGrandirPostId(intake);
+  if (stored) return stored;
+  const url = grandirOriginalPostLink(`${intake.text || ''}\n${intake.html || ''}`);
+  return url?.match(/#\/account\/post\/([a-zA-Z0-9_-]{1,100})$/)?.[1] || null;
+};
+
 const summaryFromMetadata = (value: unknown): SchoolDocumentSummary | null => {
   if (!value || typeof value !== 'object') return null;
   const summary = (value as { documentSummary?: unknown }).documentSummary;
@@ -70,13 +82,20 @@ export const GET = requireFamilyAccess(async (_request: NextRequest, context) =>
         },
       },
     });
+    const allIntakes = [...intakes, ...pending];
+    const portalPostIds = new Set(allIntakes.map(storedGrandirPostId).filter((id): id is string => Boolean(id)));
+    const supersededNurseryPreviewIds = new Set(allIntakes.flatMap((intake) => {
+      if (storedGrandirPostId(intake)) return [];
+      const linkedPostId = linkedGrandirPostId(intake);
+      return linkedPostId && portalPostIds.has(linkedPostId) ? [intake.id] : [];
+    }));
     const members = await prisma.familyMember.findMany({ where: { familyId } });
     const { rules } = await loadSchoolRules(familyId, members);
-    const intakeIds = Array.from(new Set([...intakes, ...pending].map((intake) => intake.id)));
+    const intakeIds = Array.from(new Set(allIntakes.map((intake) => intake.id)));
     const savedEvents = intakeIds.length ? await prisma.calendarEvent.findMany({
       where: { familyId, sourceId: { in: intakeIds } },
     }) : [];
-    const nurseryIntakeIds = [...intakes, ...pending].filter(intake =>
+    const nurseryIntakeIds = allIntakes.filter(intake =>
       resolveStoredSchoolDrafts(intake, rules, members).source.institution === 'grandir').map(intake => intake.id);
     const nurseryTasks = nurseryIntakeIds.length ? await prisma.calendarTask.findMany({
       where: { familyId, id: { in: nurseryIntakeIds.map(id => nurseryPreparationTaskId(familyId, id)) } },
@@ -112,16 +131,18 @@ export const GET = requireFamilyAccess(async (_request: NextRequest, context) =>
       return { state, resolved, nurserySummary, nurseryChildId, preparationTask };
     };
     const pendingEntries = pending.map((intake) => ({ intake, ...stateFor(intake) }))
-      .filter(({ state }) => state.actionRequired);
+      .filter(({ intake, state }) => state.actionRequired && !supersededNurseryPreviewIds.has(intake.id));
     const recentIds = new Set(intakes.map((intake) => intake.id));
     // The reference window must never hide a decision included in the header count.
-    const visibleIntakes = [...intakes, ...pendingEntries.filter(({ intake }) => !recentIds.has(intake.id))
+    const visibleIntakes = [...intakes.filter((intake) => !supersededNurseryPreviewIds.has(intake.id)),
+      ...pendingEntries.filter(({ intake }) => !recentIds.has(intake.id))
       .map(({ intake }) => intake)].sort((a, b) =>
       new Date(b.receivedAt || 0).getTime() - new Date(a.receivedAt || 0).getTime());
 
     return NextResponse.json({
       pendingReviewCount: pendingEntries.reduce((sum, { state }) => sum + state.needsReview, 0),
       pendingReviewEmailCount: pendingEntries.length,
+      supersededNurseryPreviewCount: supersededNurseryPreviewIds.size,
       forwardingAddress,
       gmail: {
         connected: Boolean(gmailConnection?.enabled),

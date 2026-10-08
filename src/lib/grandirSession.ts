@@ -8,11 +8,10 @@ import { isChildProfile } from '@/utils/schoolEventPresentation';
 import { type SchoolMember } from '@/utils/schoolSources';
 
 export const GRANDIR_SESSION_KEY = 'integrations.grandir.private-session';
-const RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 
 export type GrandirSession = {
   schemaVersion: 1; enabled: boolean; sealedToken: string; ownerMemberId: string; parentEmail: string;
-  childMemberId: string; providerChildId: string; nurseryName: string; connectedAt: string; expiresAt: string;
+  childMemberId: string; providerChildId: string; nurseryName: string; connectedAt: string; expiresAt: string | null;
   lastSyncAt: string | null; lastError: string | null;
   changedNotices?: Array<{ title: string; sourceUrl: string }>;
 };
@@ -25,7 +24,7 @@ const sessionSchema = z.object({
   schemaVersion: z.literal(1), enabled: z.boolean(), sealedToken: z.string().max(8192),
   ownerMemberId: z.string().min(1), parentEmail: z.string().email(), childMemberId: z.string().min(1),
   providerChildId: z.string().min(1), nurseryName: z.string().min(1).max(500),
-  connectedAt: z.string().datetime(), expiresAt: z.string().datetime(),
+  connectedAt: z.string().datetime(), expiresAt: z.string().datetime().nullable(),
   lastSyncAt: z.string().datetime().nullable(), lastError: z.string().max(100).nullable(),
   changedNotices: z.array(z.object({ title: z.string().max(300), sourceUrl: z.string().regex(/^https:\/\/www\.app\.grandiruk\.com\/#\/account\/post\/[a-zA-Z0-9_-]{1,100}$/) })).max(40).optional(),
 }).refine(value => !value.enabled || Boolean(value.sealedToken));
@@ -82,7 +81,7 @@ export const loadGrandirSession = async (familyId: string) => {
 export async function grandirStatus(familyId: string): Promise<GrandirStatus> {
   const { session } = await loadGrandirSession(familyId);
   const configured = grandirStorageConfigured();
-  const connected = Boolean(configured && session?.enabled && Date.parse(session.expiresAt) > Date.now());
+  const connected = Boolean(configured && session?.enabled);
   const member = session ? await prisma.familyMember.findFirst({ where: { familyId, id: session.childMemberId }, select: { name: true } }) : null;
   return { configured, connected, needsReconnect: Boolean(session && !connected), childName: member?.name || null,
     nurseryName: session?.nurseryName || null, parentEmail: session?.parentEmail || null,
@@ -98,7 +97,7 @@ export async function connectGrandirSession(familyId: string, ownerMemberId: str
   const verified = verifyGrandirParent(await readGrandirIdentity(token), parentEmail, members,
     rules.sources.find(source => source.key === 'grandir')?.memberIds || []);
   const session: GrandirSession = { schemaVersion: 1, enabled: true, sealedToken, ownerMemberId, parentEmail,
-    ...verified, connectedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + RETENTION_MS).toISOString(),
+    ...verified, connectedAt: new Date().toISOString(), expiresAt: null,
     lastSyncAt: null, lastError: null };
   await prisma.familyDocument.upsert({ where: { familyId_key: { familyId, key: GRANDIR_SESSION_KEY } },
     create: { familyId, key: GRANDIR_SESSION_KEY, data: session as unknown as Prisma.InputJsonValue, updatedBy: ownerMemberId },

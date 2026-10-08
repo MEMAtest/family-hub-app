@@ -115,7 +115,7 @@ export function GrandirConnection({ familyId, onChanged }: { familyId: string | 
                 onChange={event => { setParentSession(event.target.value); setPassword(''); }} disabled={busy}
                 className="mt-1 block min-h-11 w-full rounded-md border border-gray-300 px-3 dark:bg-slate-800" /></label></details>
             <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={consent} onChange={event => setConsent(event.target.checked)} disabled={busy} className="mt-1 h-4 w-4" />
-              Allow automatic read-only nursery intake. Retain an encrypted parent session for up to 30 days; never save my password.</label>
+              Allow automatic read-only nursery intake. Keep the encrypted parent session until Grandir ends it or I disconnect; never save my password.</label>
             {error && <p role="alert" className="text-sm text-amber-700">{error}</p>}
             <button type="submit" disabled={busy || !consent || (!parentSession && (!email || !password))}
               className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md bg-sky-700 px-3 font-semibold text-white disabled:opacity-50">

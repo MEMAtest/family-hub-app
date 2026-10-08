@@ -177,6 +177,7 @@ const CalendarCopilotPanel = ({
   const [gmailConnected, setGmailConnected] = useState(false);
   const [gmailEmail, setGmailEmail] = useState<string | null>(null);
   const [gmailLastSyncAt, setGmailLastSyncAt] = useState<string | null>(null);
+  const [supersededNurseryPreviewCount, setSupersededNurseryPreviewCount] = useState(0);
   const [whatsappConfigured, setWhatsappConfigured] = useState(false);
   const [whatsappDeliveryTrackingConfigured, setWhatsappDeliveryTrackingConfigured] = useState(false);
   const [whatsappConsent, setWhatsappConsent] = useState('not_configured');
@@ -308,6 +309,7 @@ const CalendarCopilotPanel = ({
       setGmailConnected(Boolean(payload.gmail?.connected));
       setGmailEmail(payload.gmail?.googleUserEmail ?? null);
       setGmailLastSyncAt(payload.gmail?.lastSyncAt ?? null);
+      setSupersededNurseryPreviewCount(Number(payload.supersededNurseryPreviewCount) || 0);
       setWhatsappConfigured(Boolean(payload.whatsappConfigured));
       setWhatsappDeliveryTrackingConfigured(Boolean(payload.whatsappDeliveryTrackingConfigured));
       setWhatsappConsent(payload.whatsappConsent || 'not_configured');
@@ -1075,6 +1077,9 @@ const CalendarCopilotPanel = ({
           <p className="mt-2 font-medium text-emerald-700 dark:text-emerald-300">{!gmailConnected && gmailEmail
             ? 'Saved updates remain available. Reconnect Gmail to resume new email checks.'
             : 'Confirmed dates are added automatically. Only unresolved details need review.'}</p>
+          {supersededNurseryPreviewCount > 0 && <p className="mt-1 text-[11px] text-sky-700 dark:text-sky-300">
+            {supersededNurseryPreviewCount} email preview{supersededNurseryPreviewCount === 1 ? '' : 's'} replaced by verified full Grandir post{supersededNurseryPreviewCount === 1 ? '' : 's'}.
+          </p>}
           <label className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs font-medium">
             Updates for
             <select aria-label="Filter school and nursery updates" value={inboxSourceFilter} onChange={event => setInboxSourceFilter(event.target.value)}

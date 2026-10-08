@@ -98,7 +98,7 @@ test('Grandir connection verifies Askia, requires consent, survives reload and r
   await page.setViewportSize({ width: 390, height: 844 });
   await page.addInitScript(skipSetupWizard);
   const state = { documentRequestBody: '', eventPosts: [] as unknown[], gmailSyncs: 0 };
-  await stubFamilyApis(page, state);
+  await stubFamilyApis(page, state, { supersededNurseryPreviewCount: 4 });
   let connected = false;
   let needsReconnect = false;
   let syncs = 0;
@@ -123,6 +123,7 @@ test('Grandir connection verifies Askia, requires consent, survives reload and r
     } else await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ processed: 2, autoCreated: 0, needsReview: 0, duplicates: 0, changedNotices: [] }) });
   });
   await openSchoolInbox(page);
+  await expect(page.getByText('4 email previews replaced by verified full Grandir posts.', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Connect Grandir', exact: true }).click();
   const dialog = page.getByRole('dialog');
   await expect(dialog).toBeVisible();
@@ -189,7 +190,8 @@ const stubFamilyApis = async (
     inboxPatches?: Record<string, unknown>[];
     autoProcessRequests?: Record<string, unknown>[];
   },
-  options: { gmailConnected?: boolean; inboxItems?: unknown[]; calendarEvents?: unknown[] } = {},
+  options: { gmailConnected?: boolean; inboxItems?: unknown[]; calendarEvents?: unknown[];
+    supersededNurseryPreviewCount?: number } = {},
 ) => {
   let inboxItems = options.inboxItems || [];
 
@@ -346,6 +348,7 @@ const stubFamilyApis = async (
           whatsappConfigured: true,
           whatsappDeliveryTrackingConfigured: true,
           whatsappConsent: 'opted_in',
+          supersededNurseryPreviewCount: options.supersededNurseryPreviewCount || 0,
           pendingReviewEmailCount: inboxItems.filter((item: any) => item.needsReview > 0).length,
           intakes: inboxItems,
         }),

@@ -92,6 +92,20 @@ describe('calendar intake decisions', () => {
     expect(response.body.intakes.find((row: any) => row.id === 'dismissed')).toMatchObject({ status: 'reviewed', actionRequired: false });
     expect(prisma.calendarEmailIntake.updateMany).not.toHaveBeenCalled();
   });
+  it('replaces an email preview with its verified full portal post', async () => {
+    const base = { ...intake, status: 'no_events', sender: 'Grandir', parsedDrafts: [], createdEventIds: [],
+      attachments: [], receivedAt: new Date('2026-10-08'), subject: 'Grandir nursery update' };
+    const preview = { ...base, id: 'email-preview',
+      text: 'Open https://www.app.grandiruk.com/#/account/post/post-1 to read the full update.' };
+    const portal = { ...base, id: 'portal-post', text: 'Grandir nursery: Test nursery\nToday we enjoyed painting.',
+      metadata: { grandirPortal: { postId: 'post-1', childMemberId: 'askia' } } };
+    (prisma.calendarEmailIntake.findMany as jest.Mock).mockResolvedValue([preview, portal]);
+    (prisma.calendarEvent.findMany as jest.Mock).mockResolvedValue([]);
+    const response = await (GET as any)({}, context);
+    expect(response.body).toMatchObject({ pendingReviewCount: 0, pendingReviewEmailCount: 0,
+      supersededNurseryPreviewCount: 1 });
+    expect(response.body.intakes.map((row: any) => row.id)).toEqual(['portal-post']);
+  });
   it('does not label Stewart Fleming school messages as Askia nursery messages', async () => {
     const row = { ...intake, sender: 'office@stewartfleming.bromley.sch.uk', subject: 'School photographs',
       text: 'Stewart Fleming Primary School. Individual photographs on 7 October 2026.', attachments: [] };

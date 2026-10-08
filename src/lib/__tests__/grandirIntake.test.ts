@@ -35,6 +35,15 @@ describe('Grandir intake', () => {
     (loadGrandirSession as jest.Mock).mockResolvedValue({ row: null, session: null });
     expect((await syncGrandirIntake('family')).skipped).toBeTruthy(); expect(readGrandirIdentity).not.toHaveBeenCalled();
   });
+  it('does not impose a Family Hub expiry on a provider session that still verifies', async () => {
+    (loadGrandirSession as jest.Mock).mockResolvedValue({ row: { version: 2 },
+      session: { ...session, expiresAt: '2026-10-06T12:00:00.000Z' } });
+    expect(await syncGrandirIntake('family')).toMatchObject({ processed: 1 });
+    expect(readGrandirIdentity).toHaveBeenCalledWith('opaque-test-session');
+    expect(updateGrandirSession).toHaveBeenCalledWith('family', 2, expect.objectContaining({
+      enabled: true, expiresAt: null, sealedToken: 'encrypted',
+    }));
+  });
   it('revokes intake when the connecting parent leaves the household', async () => {
     (prisma.familyMember.findMany as jest.Mock).mockResolvedValue([]);
     await expect(syncGrandirIntake('family')).rejects.toMatchObject({ code: 'ACCOUNT_MISMATCH' });

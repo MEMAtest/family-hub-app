@@ -19,10 +19,6 @@ export async function syncGrandirIntake(familyId: string): Promise<GrandirSyncRe
   const { row, session } = await loadGrandirSession(familyId);
   const result: GrandirSyncResult = { processed: 0, autoCreated: 0, needsReview: 0, duplicates: 0, changedNotices: [] };
   if (!session?.enabled || !row) return { ...result, skipped: 'Grandir is not connected' };
-  if (Date.parse(session.expiresAt) <= Date.now()) {
-    await updateGrandirSession(familyId, row.version, { ...session, enabled: false, sealedToken: '', lastError: 'RECONNECT_REQUIRED' });
-    throw new GrandirConnectionError('RECONNECT_REQUIRED', 'Grandir needs reconnection. Sign in again.');
-  }
   try {
     const token = openGrandirToken(familyId, session.sealedToken);
     const members = await prisma.familyMember.findMany({ where: { familyId } });
@@ -93,7 +89,7 @@ export async function syncGrandirIntake(familyId: string): Promise<GrandirSyncRe
       result.duplicates += intake.body.duplicate ? 1 : 0;
     }
     await updateGrandirSession(familyId, row.version, { ...session, nurseryName: verified.nurseryName,
-      lastSyncAt: new Date().toISOString(), changedNotices: result.changedNotices,
+      expiresAt: null, lastSyncAt: new Date().toISOString(), changedNotices: result.changedNotices,
       lastError: result.changedNotices.length ? 'NOTICE_CHANGED' : null });
     return result;
   } catch (error) {

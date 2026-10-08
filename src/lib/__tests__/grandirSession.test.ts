@@ -44,13 +44,13 @@ describe('private Grandir session', () => {
     (prisma.familyDocument.findUnique as jest.Mock).mockResolvedValue({ data: { ...session, enabled: 'false' } });
     expect((await loadGrandirSession('family')).session).toBeNull();
   });
-  it('never exposes a token or ciphertext in status and reports expiration', async () => {
+  it('never exposes a token or ciphertext and keeps access until the provider revokes it', async () => {
     (prisma.familyDocument.findUnique as jest.Mock).mockResolvedValue({ data: session });
     (prisma.familyMember.findFirst as jest.Mock).mockResolvedValue({ name: 'Askia' });
     const status = await grandirStatus('family'); expect(status.connected).toBe(true);
     expect(JSON.stringify(status)).not.toContain(session.sealedToken);
     (prisma.familyDocument.findUnique as jest.Mock).mockResolvedValue({ data: { ...session, expiresAt: '2026-10-06T12:00:00.000Z' } });
-    expect(await grandirStatus('family')).toMatchObject({ connected: false, needsReconnect: true });
+    expect(await grandirStatus('family')).toMatchObject({ connected: true, needsReconnect: false });
   });
   it('drops the secret on disconnect and refuses a concurrent overwrite', async () => {
     (prisma.familyDocument.findUnique as jest.Mock).mockResolvedValue({ version: 2, data: session });
