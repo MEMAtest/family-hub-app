@@ -2,6 +2,7 @@ import { createHash } from 'crypto';
 import type { CalendarEvent } from '@/types/calendar.types';
 import { addDays, expandEvents, isRecurringEvent, parseDateKey, type RecurrenceException } from '@/utils/recurrence';
 import type { FamilyReminderMetadata, TravelReminderContext } from './familyReminderContract';
+import { binReminderMessage, binReminderTitle } from '@/utils/binCollectionPresentation';
 
 export type ReminderMember = { id: string; name: string; role?: string; ageGroup?: string };
 export type ReminderEvent = CalendarEvent & { metadata?: FamilyReminderMetadata };
@@ -111,7 +112,7 @@ export const eventReminderPurposes = (event: ReminderEvent, members: ReminderMem
   if (!bins.verified || !parseDateKey(bins.date) || bins.date !== event.date || !bins.services?.length ||
       event.status === 'cancelled' || event.metadata?.status === 'cancelled' || event.metadata?.reminderPreferences?.enabled === false) return [];
   return members.filter(member => /parent|adult/i.test(member.role || '') || /adult/i.test(member.ageGroup || '')).map(recipient => ({
-    recipient, purpose: 'bins' as ReminderPurpose, message: `Put out: ${bins.services.join('; ')}. Council collection is ${bins.date}; no collection time is specified.`,
+    recipient, purpose: 'bins' as ReminderPurpose, message: binReminderMessage(bins.date, bins.services),
   }));
 };
 
@@ -131,7 +132,8 @@ export const planFamilyReminders = (
     if (bins) {
       // Catch up a missed evening dispatcher tick until midnight, never after collection starts.
       const dueAt = wallTimeInstant(today, '20:00');
-      const expiresAt = wallTimeInstant(occurrence.date, '00:00');
+      // Keep the in-app prompt useful on collection morning without inventing a pickup time.
+      const expiresAt = wallTimeInstant(occurrence.date, '12:00');
       if (occurrence.date !== addDays(today, 1) || !dueAt || !expiresAt || now < dueAt || now >= expiresAt) continue;
       for (const request of eventReminderPurposes(event, members)) {
         const parts = [familyId, event.id, occurrence.date, request.recipient.id, request.purpose];
@@ -139,7 +141,7 @@ export const planFamilyReminders = (
         const phase = `${today}-20`;
         intents.push({ id: reminderRecordId('intent', [...parts, phase, fingerprint]), stateId: reminderRecordId('state', parts),
           eventId: event.id, occurrence: occurrence.date, recipientPersonId: request.recipient.id, recipientName: request.recipient.name,
-          purpose: 'bins', phase, title: 'Bins tomorrow: put them out tonight', message: request.message, dueAt, expiresAt,
+          purpose: 'bins', phase, title: binReminderTitle(bins.services), message: request.message, dueAt, expiresAt,
           push: event.metadata?.reminderPreferences?.push !== false, fingerprint });
       }
       continue;

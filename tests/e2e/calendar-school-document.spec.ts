@@ -56,12 +56,19 @@ test('phone calendar shows verified bins tomorrow without opening Property or th
   ] });
   await page.route('**/api/families/*/bin-collections', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({
     status: 'connected', checkedAt: '2026-10-08T19:00:00Z', sourceUrl: 'https://recyclingservices.bromley.gov.uk/waste/3670007',
-    collections: [{ date: '2026-10-09', services: ['Food waste', 'Mixed recycling (cans, plastics and glass)'] }],
+    providerName: 'Bromley Council', collections: [
+      { date: '2026-10-09', services: ['Food waste', 'Mixed recycling (cans, plastics and glass)'] },
+      { date: '2026-10-16', services: ['Food waste', 'Paper and cardboard', 'Non-recyclable refuse'] },
+    ],
   }) }));
   await page.goto('/?view=calendar');
   const strip = page.getByRole('region', { name: 'Bin collections', exact: true });
-  await expect(strip.getByRole('heading', { name: 'Bins tomorrow', exact: true })).toBeVisible();
-  await expect(strip).toContainText('Food waste + Mixed recycling (cans, plastics and glass)');
+  await expect(strip.getByRole('heading', { name: 'Bins tonight', exact: true })).toBeVisible();
+  await expect(strip).toContainText('food waste + mixed recycling');
+  await expect(strip).toContainText('Put these out tonight for collection tomorrow.');
+  await expect(strip).toContainText('Smart reminder for each parent at 20:00');
+  await expect(strip).toContainText('Following: Friday 16 October | food waste + paper and cardboard + non-recyclable refuse');
+  await expect(strip).toContainText('Checked automatically with Bromley Council');
   await expect(strip.getByRole('link', { name: 'Council collection calendar' })).toHaveAttribute('href', 'https://recyclingservices.bromley.gov.uk/waste/3670007');
   expect((await strip.boundingBox())!.y).toBeLessThan(400);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -70,7 +77,7 @@ test('phone calendar shows verified bins tomorrow without opening Property or th
   await expect(page.getByText('Competing events', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: /^Bins: Food waste.*Household/ })).toBeVisible();
   await page.reload();
-  await expect(strip.getByRole('heading', { name: 'Bins tomorrow', exact: true })).toBeVisible();
+  await expect(strip.getByRole('heading', { name: 'Bins tonight', exact: true })).toBeVisible();
   expect(state.eventPosts).toHaveLength(0);
 });
 
@@ -89,8 +96,8 @@ test('council failures expose retry rather than a guessed collection date on des
   const strip = page.getByRole('region', { name: 'Bin collections', exact: true });
   await expect(strip.getByRole('heading', { name: 'Bin collections unavailable' })).toBeVisible();
   await strip.getByRole('button', { name: 'Retry bin collections' }).click();
-  await expect(strip).toContainText('Paper and cardboard');
-  await expect(strip.getByRole('heading', { name: 'Next bin collection' })).toBeVisible();
+  await expect(strip).toContainText('paper and cardboard');
+  await expect(strip.getByRole('heading', { name: 'Next bins' })).toBeVisible();
   expect(attempts).toBe(2);
 });
 

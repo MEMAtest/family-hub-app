@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { ExternalLink, RefreshCw, Trash2 } from 'lucide-react';
+import { CheckCircle2, ExternalLink, RefreshCw, Trash2 } from 'lucide-react';
 import { addDays } from '@/utils/recurrence';
 import type { BinSnapshot } from '@/lib/binCollections';
+import { binCollectionDateLabel, binServiceSummary } from '@/utils/binCollectionPresentation';
 
 const todayInLondon = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 export function BinCollectionStrip({ familyId, onSynced }: { familyId?: string | null; onSynced?: () => Promise<void> }) {
@@ -30,15 +31,30 @@ export function BinCollectionStrip({ familyId, onSynced }: { familyId?: string |
     return () => controller.abort();
   }, [familyId, retry, today]);
   if (!familyId || (!snapshot && !loading)) return null;
-  const collection = snapshot?.collections.find(item => item.date >= today);
-  const label = collection?.date === today ? 'Bins today' : collection?.date === addDays(today, 1) ? 'Bins tomorrow' : 'Next bin collection';
+  const collectionIndex = snapshot?.collections.findIndex(item => item.date >= today) ?? -1;
+  const collection = collectionIndex >= 0 ? snapshot?.collections[collectionIndex] : undefined;
+  const following = collectionIndex >= 0 ? snapshot?.collections[collectionIndex + 1] : undefined;
+  const tomorrow = addDays(today, 1);
+  const label = collection?.date === today ? 'Bins today' : collection?.date === tomorrow ? 'Bins tonight' : 'Next bins';
+  const instruction = collection?.date === today ? 'Collection is today. The council does not publish a collection time.' :
+    collection?.date === tomorrow ? 'Put these out tonight for collection tomorrow.' : collection
+      ? `Put these out on ${new Intl.DateTimeFormat('en-GB', { weekday: 'long', timeZone: 'Europe/London' }).format(new Date(`${addDays(collection.date, -1)}T12:00:00Z`))} evening.` : '';
+  const checked = snapshot?.checkedAt ? new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/London' }).format(new Date(snapshot.checkedAt)) : null;
+  const providerName = snapshot?.providerName || (snapshot?.sourceUrl?.startsWith('https://recyclingservices.bromley.gov.uk/') ? 'Bromley Council' : 'the council');
   return <section aria-label="Bin collections" className="flex min-w-0 flex-wrap items-start gap-3 border-b border-teal-200 bg-teal-50 px-4 py-3 text-teal-950 dark:border-teal-900 dark:bg-teal-950 dark:text-teal-100 sm:px-6">
     <Trash2 className="mt-0.5 h-5 w-5 shrink-0 text-teal-700 dark:text-teal-300" />
     <div className="min-w-0 flex-1 text-sm">
       <h3 className="font-semibold">{loading ? 'Checking bin collections...' : snapshot?.status === 'connected' && collection ? label : 'Bin collections unavailable'}</h3>
       {!loading && snapshot?.status === 'connected' && collection ? <>
-        <p className="mt-1">{collection.services.join(' + ')}</p>
-        <p className="mt-1 text-xs text-teal-800 dark:text-teal-200">{new Intl.DateTimeFormat('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date(`${collection.date}T12:00:00Z`))} · Put out the evening before · Parent reminders at 20:00 London</p>
+        <p className="mt-1 font-medium capitalize">{binServiceSummary(collection.services)}</p>
+        <p className="mt-1 text-xs text-teal-800 dark:text-teal-200">{instruction}</p>
+        <p className="mt-1 text-xs text-teal-800 dark:text-teal-200">{binCollectionDateLabel(collection.date)} | Smart reminder for each parent at 20:00</p>
+        {following && <p className="mt-2 border-t border-teal-200 pt-2 text-xs dark:border-teal-800">
+          <span className="font-medium">Following:</span> {binCollectionDateLabel(following.date)} | <span className="capitalize">{binServiceSummary(following.services)}</span>
+        </p>}
+        <p className="mt-2 flex items-center gap-1 text-[11px] text-teal-700 dark:text-teal-300"><CheckCircle2 className="h-3.5 w-3.5" />
+          Checked automatically with {providerName}{checked ? ` on ${checked}` : ''}
+        </p>
       </> : !loading && <p className="mt-1">{snapshot?.error || 'No upcoming council dates were found.'}</p>}
     </div>
     {snapshot?.sourceUrl && <a href={snapshot.sourceUrl} target="_blank" rel="noreferrer" title="Council collection calendar" aria-label="Council collection calendar" className="inline-flex min-h-10 items-center gap-1 text-xs underline"><ExternalLink className="h-4 w-4" />Council</a>}

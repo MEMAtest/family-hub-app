@@ -77,6 +77,9 @@ it('persists separate bin completion, deduplicates repeated ticks and suppresses
   expect((await runFamilyReminderSweep('family', binTime, false)).created).toBe(0);
   const angela = [...records.values()].find(record => record.recipientPersonId === 'angela');
   expect(angela.actions[0].label).toBe('View collection');
+  expect(angela.actions.map((action: any) => action.label)).toEqual([
+    'View collection', 'Bins are out', 'Skip this collection', 'Snooze',
+  ]);
   await applyFamilyReminderAction('family', 'angela', angela.id, 'done', undefined, binTime);
   expect((await runFamilyReminderSweep('family', binTime, false)).created).toBe(0);
   expect([...records.values()].find(record => record.recipientPersonId === 'ade').actionRequired).toBe(true);

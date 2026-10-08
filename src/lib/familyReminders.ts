@@ -15,8 +15,8 @@ const metadataMatch = (metadata: unknown) => ({ equals: metadata as Prisma.Input
 const actionsFor = (intent: ReminderIntent) => [
   { id: 'details', label: intent.purpose === 'bins' ? 'View collection' : 'Complete details', type: 'primary', action: 'reminder_details' },
   ...(intent.purpose === 'coverage' ? [{ id: 'cover', label: 'Confirm cover', type: 'primary', action: 'reminder_cover' }] : []),
-  { id: 'done', label: 'Done', type: 'secondary', action: 'reminder_done' },
-  { id: 'not_needed', label: 'Not needed', type: 'secondary', action: 'reminder_not_needed' },
+  { id: 'done', label: intent.purpose === 'bins' ? 'Bins are out' : 'Done', type: 'secondary', action: 'reminder_done' },
+  { id: 'not_needed', label: intent.purpose === 'bins' ? 'Skip this collection' : 'Not needed', type: 'secondary', action: 'reminder_not_needed' },
   { id: 'snooze', label: 'Snooze', type: 'secondary', action: 'reminder_snooze' },
 ];
 

@@ -9,7 +9,7 @@ const KEY = 'integrations.bins.snapshot';
 const CACHE_MS = 6 * 60 * 60_000;
 const RETRY_MS = 15 * 60_000;
 export type BinSnapshot = { status: 'connected' | 'unavailable' | 'not_configured'; collections: BinCollection[];
-  checkedAt?: string; sourceUrl?: string; error?: string };
+  checkedAt?: string; sourceUrl?: string; providerName?: string; error?: string };
 
 export async function syncBinCollections(familyId: string, now = new Date()): Promise<BinSnapshot> {
   const profile = await prisma.familyDocument.findUnique({ where: { familyId_key: { familyId, key: 'property.profile' } } });
@@ -51,7 +51,8 @@ export async function syncBinCollections(familyId: string, now = new Date()): Pr
   const parents = await prisma.familyMember.findMany({ where: { familyId }, orderBy: { id: 'asc' } });
   const adults = parents.filter(member => /parent|adult/i.test(member.role || '') || /adult/i.test(member.ageGroup || ''));
   if (!adults.length) return { status: 'not_configured', collections: [], error: 'A parent profile is needed for household reminders.' };
-  const snapshot = { status: 'connected' as const, collections, sourceUrl, checkedAt: now.toISOString() };
+  const snapshot = { status: 'connected' as const, collections, sourceUrl,
+    providerName: 'Bromley Council', checkedAt: now.toISOString() };
   await prisma.$transaction(async db => {
     for (const collection of collections) {
       const id = `council-bins-${createHash('sha256').update(JSON.stringify([familyId, propertyId, collection.date])).digest('hex')}`;

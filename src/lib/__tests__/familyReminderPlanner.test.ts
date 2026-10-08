@@ -132,8 +132,9 @@ describe('bin collection reminders', () => {
   it('targets parents independently at 20 London, with no made-up collection time', () => {
     const result = plan(bins(), '2026-10-08T19:00:00Z');
     expect(result.map(item => [item.recipientPersonId, item.purpose])).toEqual([['angela', 'bins'], ['ade', 'bins']]);
-    expect(result[0].message).toContain('Food waste; Mixed recycling');
-    expect(result[0].expiresAt.toISOString()).toBe('2026-10-08T23:00:00.000Z');
+    expect(result[0].title).toBe('Bins tonight: food waste + mixed recycling');
+    expect(result[0].message).toContain('Put out Food waste and Mixed recycling');
+    expect(result[0].expiresAt.toISOString()).toBe('2026-10-09T11:00:00.000Z');
     expect(result[0].id).toBe(plan(bins(), '2026-10-08T21:30:00Z')[0].id);
     expect(plan(bins(), '2026-10-08T18:59:00Z')).toHaveLength(0);
     expect(plan(bins(), '2026-10-08T23:00:00Z')).toHaveLength(0);
