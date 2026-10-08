@@ -46,14 +46,17 @@ export const HomeIntelligencePanel = ({ defaultFilter = 'all', compact = false }
     if (!familyId) return;
     setLoadingInbox(true);
     setInboxUnavailable(false);
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 8000);
     try {
-      const response = await fetch(`/api/families/${familyId}/calendar-intake/inbox`);
+      const response = await fetch(`/api/families/${familyId}/calendar-intake/inbox`, { signal: controller.signal });
       if (!response.ok) throw new Error('School inbox unavailable');
       const payload = await response.json();
       setNurseryNotices(Array.isArray(payload.intakes) ? payload.intakes.filter((item: NurseryNoticeInput) => item.nurserySummary) : []);
     } catch {
       setInboxUnavailable(true);
     } finally {
+      window.clearTimeout(timeout);
       setLoadingInbox(false);
     }
   }, [familyId]);
