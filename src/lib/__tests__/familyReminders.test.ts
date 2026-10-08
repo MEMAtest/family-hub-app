@@ -102,6 +102,24 @@ it('short-circuits normal duplicate ticks before attempting an insert', async ()
   await reserveReminderIntent('family', intent, now);
   expect(prisma.notification.create).toHaveBeenCalledTimes(1);
 });
+it('refreshes active reminder copy and actions without recreating or resending it', async () => {
+  const binTime = new Date('2026-10-08T19:00:00Z');
+  const binEvent = { ...uiEvent, id: 'bins', date: '2026-10-09',
+    metadata: { binCollection: { date: '2026-10-09', services: ['Food waste', 'Mixed recycling'], verified: true } } } as ReminderEvent;
+  const binIntent = planFamilyReminders('family', [binEvent], members, binTime)[0];
+  records.set(binIntent.id, { id: binIntent.id, familyId: 'family', actionRequired: true,
+    title: 'Bins tomorrow', message: 'Old copy', expiresAt: new Date('2026-10-08T23:00:00Z'),
+    metadata: { source: 'family-reminder-planner', pushStatus: 'accepted' } });
+  expect(await reserveReminderIntent('family', binIntent, binTime)).toBe(false);
+  expect(records.get(binIntent.id)).toMatchObject({
+    title: 'Bins tonight: food waste + mixed recycling',
+    expiresAt: new Date('2026-10-09T11:00:00Z'),
+    actions: expect.arrayContaining([expect.objectContaining({ label: 'Bins are out' })]),
+    metadata: expect.objectContaining({ pushStatus: 'accepted' }),
+  });
+  expect(prisma.notification.create).not.toHaveBeenCalled();
+  expect(sendMemberPushNotification).not.toHaveBeenCalled();
+});
 it('sends at most once per recipient across repeated sweeps and does not claim delivery', async () => {
   const first = await runFamilyReminderSweep('family', now);
   const second = await runFamilyReminderSweep('family', now);

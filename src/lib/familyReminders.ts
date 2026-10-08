@@ -21,8 +21,20 @@ const actionsFor = (intent: ReminderIntent) => [
 ];
 
 export const reserveReminderIntent = async (familyId: string, intent: ReminderIntent, now: Date) => {
+  // Refresh active copy and actions in place without generating another notification or push.
+  const existingIntent = await prisma.notification.findUnique({ where: { id: intent.id } });
+  if (existingIntent) {
+    const metadata = reminderObject(existingIntent.metadata);
+    if (existingIntent.actionRequired && metadata.source === FAMILY_REMINDER_SOURCE) {
+      await prisma.notification.updateMany({ where: { id: intent.id, metadata: metadataMatch(existingIntent.metadata) }, data: {
+        title: intent.title, message: intent.message, actions: actionsFor(intent), expiresAt: intent.expiresAt,
+        metadata: json({ ...metadata, dueAt: intent.dueAt.toISOString(), fingerprint: intent.fingerprint,
+          url: `/?view=calendar&event=${encodeURIComponent(intent.eventId)}` }),
+      } });
+    }
+    return false;
+  }
   // Avoid expected unique-constraint errors on every cron tick; the create still arbitrates races.
-  if (await prisma.notification.findUnique({ where: { id: intent.id }, select: { id: true } })) return false;
   const state = await prisma.notification.findUnique({ where: { id: intent.stateId }, select: { metadata: true } });
   const stateMetadata = reminderObject(state?.metadata);
   if (!unresolved(stateMetadata)) return false;
