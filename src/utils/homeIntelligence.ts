@@ -144,6 +144,9 @@ const buildSchoolSignals = ({ today, tasks, events, nurseryNotices, members }: {
     const summary = notice.nurserySummary;
     if (!summary || summary.title === 'Parent account security notice' || notice.preparationTask?.completed) return;
     if (summary.kind === 'content_pending' || notice.status === 'content_required') {
+      const previewText = `${summary.title} ${summary.purpose} ${summary.actions.join(' ')}`;
+      const hasPreparationRequest = /\b(?:bring|pack|wear|return|label|prepare|complete|submit|permission|consent|book by|respond by|must|need to)\b/i.test(previewText);
+      if (!notice.actionRequired || !hasPreparationRequest) return;
       signals.push({ id: `nursery-content:${notice.id}`, area: 'school', kind: 'exception', status: 'needs_detail',
         title: summary.title, summary: summary.actions[0] || 'Open the original nursery post so dates and required items can be confirmed.',
         sourceLabel: 'Grandir nursery', ownerLabel: ownerName(notice.nurseryChildId, members, 'Askia'),

@@ -28,8 +28,8 @@ it('combines nursery preparation, school tasks and changed school events', () =>
   const signals = buildHomeIntelligenceSignals({ today, members, tasks: [task()], events: [
     event({ id: 'cancelled', status: 'cancelled' }),
     event({ id: 'time', title: 'Parents Evening', metadata: { calendarTiming: { status: 'unknown' } } }),
-  ], nurseryNotices: [{ id: 'notice', status: 'content_required', nurseryChildId: 'askia',
-    nurserySummary: { kind: 'content_pending', title: 'Nursery notice preview', purpose: 'Preview only', actions: ['Open the full post.'] } }] });
+  ], nurseryNotices: [{ id: 'notice', status: 'content_required', actionRequired: true, nurseryChildId: 'askia',
+    nurserySummary: { kind: 'content_pending', title: 'Please bring a family photo', purpose: 'Please bring it tomorrow.', actions: ['Open the full post.'] } }] });
   expect(signals.map((signal) => signal.id)).toEqual(expect.arrayContaining([
     'school-task:task-1', 'school-change:cancelled', 'school-time:time', 'nursery-content:notice',
   ]));
@@ -44,6 +44,13 @@ it('does not turn all-day school days or booking deadlines into missing-time ale
   ];
   const signals = buildHomeIntelligenceSignals({ today, events });
   expect(signals.map((signal) => signal.id)).toEqual(['school-time:parent-meeting']);
+});
+
+it('keeps ordinary nursery observations in the nursery feed instead of the attention list', () => {
+  const signals = buildHomeIntelligenceSignals({ today, nurseryNotices: [{ id: 'social', status: 'content_required', actionRequired: true,
+    nurseryChildId: 'askia', nurserySummary: { kind: 'content_pending', title: 'Preview: Askia explored a new toy',
+      purpose: 'Askia enjoyed taking turns and exploring the activity.', actions: ['Open the original post.'] } }] });
+  expect(signals).toEqual([]);
 });
 
 it('flags incomplete service details, due bills and amounts above plan', () => {
