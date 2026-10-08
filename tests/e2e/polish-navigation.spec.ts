@@ -79,6 +79,25 @@ test('startup reuses the authenticated household bootstrap', async ({ page }) =>
   expect(redundantFamilyRequests).toBe(0);
 });
 
+test('school attention opens the expanded school inbox', async ({ page }) => {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const dueDate = tomorrow.toISOString().slice(0, 10);
+  await page.addInitScript((date) => {
+    localStorage.setItem('familyHubTasks', JSON.stringify([{ id: 'task-school-prep', title: 'Bring PE kit',
+      assignees: [], assignedDate: date, dueDate: date, taskType: 'homework', subject: 'School', priority: 'medium',
+      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }]));
+  }, dueDate);
+
+  await page.goto('/');
+  await waitForHub(page);
+  const intelligence = page.getByRole('region', { name: 'Home intelligence' });
+  await intelligence.getByRole('button', { name: 'Review school & nursery' }).click();
+  await expect(page).toHaveURL(/homeFocus=school.*view=calendar|view=calendar.*homeFocus=school/);
+  await expect(page.getByRole('region', { name: 'School inbox and import' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /School inbox & quick plan/ })).toHaveAttribute('aria-expanded', 'true');
+});
+
 test('iPhone month shows same-day events before any tap', async ({ page }) => {
   const nextMonth = new Date();
   nextMonth.setMonth(nextMonth.getMonth() + 1, 6);

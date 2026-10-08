@@ -58,6 +58,12 @@ export const CalendarView = () => {
     } catch { setPendingReview(null); setPendingReviewEmails(null); }
   }, [familyId]);
   useEffect(() => { void loadReviewCount(); }, [loadReviewCount]);
+  const schoolFocus = searchParams.get('homeFocus') === 'school';
+  useEffect(() => {
+    if (!schoolFocus) return;
+    setShowImport(true);
+    requestAnimationFrame(() => importRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  }, [schoolFocus]);
   const openImport = () => { setShowImport((value) => !value); if (!showImport) requestAnimationFrame(() => importRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })); };
   const titleFor = (event: CalendarEvent) => event.source === 'gmail-school-email' ? schoolEventTitle(event.title) : event.title;
   const handleEventsSync = useCallback(async (importedEvents: CalendarEvent[]) => {
