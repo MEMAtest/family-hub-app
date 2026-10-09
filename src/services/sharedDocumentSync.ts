@@ -68,6 +68,7 @@ export class SharedDocumentSync {
   private cleanups: Array<() => void> = [];
   private problem: 'offline' | 'unavailable' | null = null;
   private hasPulled = false;
+  private initialBase: Partial<Record<SharedDocumentKey, unknown>> = {};
 
   constructor(
     private readonly familyId: string,
@@ -149,8 +150,9 @@ export class SharedDocumentSync {
 
   async start() {
     this.loadMeta();
-    await this.pull();
-    if (this.stopped) return;
+    for (const key of KEYS) {
+      this.initialBase[key] = JSON.parse(JSON.stringify(this.read(key)));
+    }
 
     this.cleanups.push(
       this.store.subscribe((state, previous) => {
@@ -161,6 +163,9 @@ export class SharedDocumentSync {
         }
       })
     );
+
+    await this.pull();
+    if (this.stopped) return;
 
     if (typeof window !== 'undefined') {
       const onFocus = () => { void this.pull(); };
@@ -239,13 +244,15 @@ export class SharedDocumentSync {
       this.reconcile(key, server.data, server.version);
     }
     this.hasPulled = true;
+    this.initialBase = {};
     this.saveMeta();
   }
 
   // Merge the server copy into the store; returns true if the server still needs our changes.
   private reconcile(key: SharedDocumentKey, serverData: unknown, serverVersion: number) {
     const local = this.read(key);
-    const merged = this.merge(key, this.meta[key]?.base ?? null, local, serverData);
+    const base = this.meta[key]?.base ?? this.initialBase[key] ?? null;
+    const merged = this.merge(key, base, local, serverData);
     if (!sameValue(merged, local)) this.apply(key, merged);
     this.meta[key] = { version: serverVersion, base: serverData };
     if (sameValue(merged, serverData)) {

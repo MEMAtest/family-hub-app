@@ -104,6 +104,41 @@ describe('SharedDocumentSync between two devices', () => {
     expect(b.store.getState().propertyTasks).toEqual([{ id: 'seed-1', title: 'Edited on phone A' }]);
   });
 
+  test('keeps an edit made while the first server pull is still pending', async () => {
+    const server = createServer();
+    const first = device(server, { digestPreferences: { kidsIdeas: true, extraRecipients: [] } });
+    await first.sync.start();
+    await first.sync.flush();
+
+    let releasePull!: () => void;
+    let reportPullStarted!: () => void;
+    const pullStarted = new Promise<void>((resolve) => { reportPullStarted = resolve; });
+    const holdPull = new Promise<void>((resolve) => { releasePull = resolve; });
+    let held = false;
+    const delayedFetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      if ((!init?.method || init.method === 'GET') && !held) {
+        held = true;
+        reportPullStarted();
+        await holdPull;
+      }
+      return server.fetchImpl(input, init);
+    }) as typeof fetch;
+    const store = createDeviceStore({ digestPreferences: { kidsIdeas: true, extraRecipients: [] } });
+    const memory = new Map<string, string>();
+    const storage = { getItem: (key: string) => memory.get(key) ?? null, setItem: (key: string, value: string) => { memory.set(key, value); } };
+    const sync = new SharedDocumentSync('family-1', store as any, delayedFetch, storage);
+    syncs.push(sync);
+
+    const starting = sync.start();
+    await pullStarted;
+    store.setState({ digestPreferences: { kidsIdeas: true, extraRecipients: ['grandma@example.com'] } });
+    releasePull();
+    await starting;
+    await sync.flush();
+
+    expect(server.rows.get('digest.preferences')!.data).toEqual({ kidsIdeas: true, extraRecipients: ['grandma@example.com'] });
+  });
+
   test('a saved bathroom tile plan and its source photo reach a second device unchanged', async () => {
     const server = createServer();
     const source = 'data:image/jpeg;base64,/9j/2Q==';
