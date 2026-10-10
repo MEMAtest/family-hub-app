@@ -39,7 +39,18 @@ async function fetchStockLine(productUrl: string) {
  * Under load the page is sometimes served without that line, so try once more before giving up.
  */
 async function readStonewaterStock(productUrl: string) {
-  return (await fetchStockLine(productUrl)) ?? fetchStockLine(productUrl);
+  const line = (await fetchStockLine(productUrl)) ?? (await fetchStockLine(productUrl));
+  if (line) return line;
+  // Stonewater drops the stock line when a product can no longer be bought; the product feed says so.
+  try {
+    const response = await fetch(`${productUrl}.js`, { headers: { 'User-Agent': USER_AGENT }, signal: AbortSignal.timeout(10000), cache: 'no-store' });
+    if (!response.ok) return null;
+    const product = await response.json() as { variants?: Array<{ available?: boolean }> };
+    if (product.variants?.length && product.variants.every((variant) => variant.available === false)) return 'Out of stock: not currently available to buy';
+  } catch {
+    // Fall through to "not shown".
+  }
+  return null;
 }
 
 /** Runs `task` over `items` with at most `limit` in flight, so a search does not hammer the supplier. */
