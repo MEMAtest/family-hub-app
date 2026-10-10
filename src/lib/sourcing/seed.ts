@@ -1240,7 +1240,7 @@ export const bathroomSourcingSeed: ProjectSourcing = {
         "shower-tray"
       ],
       "name": "Fairford 1000 X 800mm Rectangular Shower Tray",
-      "size": "1000 × 800mm · rectangular",
+      "size": "1000 × 800mm · rectangular · waste included",
       "url": "https://www.stonewaterbathrooms.com/products/fairford-1000-x-800mm-rectangular-shower-tray",
       "imageUrl": "https://cdn.shopify.com/s/files/1/0742/2895/7450/files/0-9801.jpg?v=1787666793",
       "gallery": [
@@ -1255,13 +1255,15 @@ export const bathroomSourcingSeed: ProjectSourcing = {
       "specs": {
         "Length": "1000mm",
         "Width": "800mm",
-        "Guarantee": "25 years"
+        "Guarantee": "25 years (waste: 1 year)",
+        "Waste": "90mm Hi-Flow, included"
       },
       "dimensions": {},
       "components": [
-        "shower-tray"
+        "shower-tray",
+        "waste"
       ],
-      "note": "Waste sold separately; add the 90mm fast-flow waste.",
+      "note": "90mm Hi-Flow waste included (Stonewater gives it a 1-year warranty); no separate waste needed.",
       "topPick": true,
       "description": "The Fairford 1000 x 800mm Rectangular Shower Tray is a UK-manufactured product combining modern design with functionality, making it a suitable option for bathroom upgrades. Its low-profile design ensures compatibility with various enclosures while adding an elegant touch to any space. It features a 90mm Hi-Flow Waste system that efficiently manages water flow at 32 litres per minute, preventing waterlogging and ensuring proper drainage.",
       "lastChecked": "2026-09-30T23:20:18+00:00"
