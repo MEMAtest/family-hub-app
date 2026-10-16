@@ -1,26 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
 import prisma from '@/lib/prisma';
 import { requireFamilyAccess } from '@/lib/auth-utils';
 import { contractorResponse, writeContractorMetadata } from '@/lib/contractors/contractorStorage';
-
-const createContractorSchema = z.object({
-  id: z.string().min(1).optional(),
-  name: z.string().min(1),
-  company: z.string().optional().nullable(),
-  phone: z.string().optional().nullable(),
-  email: z.union([z.string().email(), z.literal('')]).optional().nullable(),
-  address: z.string().optional().nullable(),
-  specialty: z.string().min(1),
-  notes: z.string().optional().nullable(),
-  rating: z.number().int().min(0).max(5).optional().nullable(),
-  website: z.union([z.string().url(), z.literal('')]).optional().nullable(),
-  imageUrl: z.union([z.string().url(), z.literal('')]).optional().nullable(),
-  serviceArea: z.string().max(300).optional().nullable(),
-  companyNumber: z.string().max(30).optional().nullable(),
-  status: z.string().max(40).optional().nullable(),
-  profile: z.record(z.unknown()).optional().nullable(),
-});
+import { createContractorSchema, isSameOriginRequest, readBoundedJson, RequestBodyError } from '@/lib/contractors/contractorValidation';
+import { z } from 'zod';
 
 export const GET = requireFamilyAccess(async (request: NextRequest, context, _authUser) => {
   try {
@@ -63,9 +46,12 @@ export const GET = requireFamilyAccess(async (request: NextRequest, context, _au
 });
 
 export const POST = requireFamilyAccess(async (request: NextRequest, context, _authUser) => {
+  if (!isSameOriginRequest(request)) {
+    return NextResponse.json({ error: 'Use Family Hub to save contractors.' }, { status: 403 });
+  }
   try {
     const { familyId } = await context.params;
-    const raw = await request.json();
+    const raw = await readBoundedJson(request);
     const body = createContractorSchema.parse(raw);
 
     const data = {
@@ -102,7 +88,7 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context, _a
 
     return NextResponse.json(contractorResponse(contractor), { status: 201 });
   } catch (error) {
-    if (error instanceof z.ZodError) {
+    if (error instanceof z.ZodError || error instanceof RequestBodyError) {
       return NextResponse.json({ error: 'Invalid contractor payload' }, { status: 400 });
     }
     console.error('Error creating contractor:', error);

@@ -36,6 +36,15 @@ interface ContractorContextValue {
 
 const ContractorContext = createContext<ContractorContextValue | undefined>(undefined);
 
+const responseError = async (response: Response, fallback: string) => {
+  try {
+    const payload = await response.json() as { error?: string };
+    return new Error(payload.error || fallback);
+  } catch {
+    return new Error(fallback);
+  }
+};
+
 export const ContractorProvider = ({ children }: PropsWithChildren) => {
   const contractors = useFamilyStore((state) => state.contractors);
   const contractorAppointments = useFamilyStore((state) => state.contractorAppointments);
@@ -85,28 +94,25 @@ export const ContractorProvider = ({ children }: PropsWithChildren) => {
       updatedAt: now,
     };
     addContractorStore(contractor);
-    if (familyId) {
-      try {
-        const response = await fetch(`/api/families/${familyId}/contractors`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(contractor),
-        });
-
-        if (response.ok) {
-          const saved = await response.json();
-          updateContractorStore(contractor.id, saved);
-          return { ...contractor, ...saved };
-        }
-      } catch (error) {
-        console.warn('Failed to persist contractor (offline mode):', error);
-      }
+    if (!familyId) return contractor;
+    try {
+      const response = await fetch(`/api/families/${familyId}/contractors`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(contractor),
+      });
+      if (!response.ok) throw await responseError(response, 'Failed to save contractor.');
+      const saved = await response.json();
+      updateContractorStore(contractor.id, saved);
+      return { ...contractor, ...saved };
+    } catch (error) {
+      deleteContractorStore(contractor.id);
+      throw error instanceof Error ? error : new Error('Failed to save contractor.');
     }
-
-    return contractor;
-  }, [addContractorStore, familyId, updateContractorStore]);
+  }, [addContractorStore, deleteContractorStore, familyId, updateContractorStore]);
 
   const updateContractor = useCallback(async (id: string, updates: Partial<Contractor>) => {
+    const previous = contractors.find((contractor) => contractor.id === id);
     updateContractorStore(id, updates);
     if (!familyId) return;
 
@@ -116,28 +122,30 @@ export const ContractorProvider = ({ children }: PropsWithChildren) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updates),
       });
-
-      if (response.ok) {
-        const saved = await response.json();
-        updateContractorStore(id, saved);
-      }
+      if (!response.ok) throw await responseError(response, 'Failed to update contractor.');
+      const saved = await response.json();
+      updateContractorStore(id, saved);
     } catch (error) {
-      console.warn('Failed to update contractor (offline mode):', error);
+      if (previous) updateContractorStore(id, previous);
+      throw error instanceof Error ? error : new Error('Failed to update contractor.');
     }
-  }, [familyId, updateContractorStore]);
+  }, [contractors, familyId, updateContractorStore]);
 
   const deleteContractor = useCallback(async (id: string) => {
+    const previous = contractors.find((contractor) => contractor.id === id);
     deleteContractorStore(id);
     if (!familyId) return;
 
     try {
-      await fetch(`/api/families/${familyId}/contractors/${id}`, {
+      const response = await fetch(`/api/families/${familyId}/contractors/${id}`, {
         method: 'DELETE',
       });
+      if (!response.ok) throw await responseError(response, 'Failed to remove contractor.');
     } catch (error) {
-      console.warn('Failed to delete contractor (offline mode):', error);
+      if (previous) addContractorStore(previous);
+      throw error instanceof Error ? error : new Error('Failed to remove contractor.');
     }
-  }, [deleteContractorStore, familyId]);
+  }, [addContractorStore, contractors, deleteContractorStore, familyId]);
 
   const createAppointment = useCallback(async (data: QuickAppointmentFormData): Promise<ContractorAppointment> => {
     const now = new Date().toISOString();

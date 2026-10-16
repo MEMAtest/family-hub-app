@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto';
-import { validatePublicProductUrl } from '@/lib/sourcing/publicProductImport';
+import { request as httpsRequest } from 'node:https';
+import type { LookupFunction } from 'node:net';
+import { resolvePublicProductUrl, validatePublicProductUrl } from '@/lib/sourcing/publicProductImport';
 import type {
   ContractorCandidate,
   ContractorEvidence,
@@ -115,6 +117,7 @@ function firstNumber(value: unknown): number | undefined {
 }
 
 async function readBoundedHtml(rawUrl: string, fetchImpl: typeof fetch = fetch) {
+  if (fetchImpl === fetch) return readPinnedBoundedHtml(rawUrl);
   let url = await validatePublicProductUrl(rawUrl);
   for (let redirects = 0; redirects <= 3; redirects += 1) {
     const response = await fetchImpl(url, {
@@ -151,6 +154,63 @@ async function readBoundedHtml(rawUrl: string, fetchImpl: typeof fetch = fetch) 
       await reader.cancel();
     }
     return { html: Buffer.concat(chunks).toString('utf8'), url: url.toString() };
+  }
+  throw new Error('That company page could not be read.');
+}
+
+async function requestPinnedHtml(url: URL, address: { address: string; family: number }) {
+  return new Promise<{ status: number; contentType: string; location: string; html: string }>((resolve, reject) => {
+    const lookup: LookupFunction = (_hostname, options, callback) => {
+      if (options.all) callback(null, [address]);
+      else callback(null, address.address, address.family);
+    };
+    const request = httpsRequest(url, {
+      method: 'GET',
+      lookup,
+      servername: url.hostname,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; FamilyHubTradeResearch/1.0)',
+        Accept: 'text/html,application/xhtml+xml',
+      },
+    }, (response) => {
+      const chunks: Buffer[] = [];
+      let size = 0;
+      response.on('data', (chunk: Buffer) => {
+        size += chunk.byteLength;
+        if (size > FETCH_LIMIT) {
+          response.destroy(new Error('That company page is too large to read safely.'));
+          return;
+        }
+        chunks.push(chunk);
+      });
+      response.on('error', reject);
+      response.on('end', () => resolve({
+        status: response.statusCode ?? 0,
+        contentType: String(response.headers['content-type'] ?? ''),
+        location: String(response.headers.location ?? ''),
+        html: Buffer.concat(chunks).toString('utf8'),
+      }));
+    });
+    request.setTimeout(FETCH_TIMEOUT, () => request.destroy(new Error('That company page took too long to read.')));
+    request.on('error', reject);
+    request.end();
+  });
+}
+
+async function readPinnedBoundedHtml(rawUrl: string) {
+  let target = rawUrl;
+  for (let redirects = 0; redirects <= 3; redirects += 1) {
+    const resolved = await resolvePublicProductUrl(target);
+    const response = await requestPinnedHtml(resolved.url, resolved.addresses[0]);
+    if ([301, 302, 303, 307, 308].includes(response.status)) {
+      if (!response.location || redirects === 3) throw new Error('That page redirects too many times.');
+      target = new URL(response.location, resolved.url).toString();
+      continue;
+    }
+    if (response.status < 200 || response.status >= 300 || !response.contentType.toLowerCase().includes('text/html')) {
+      throw new Error('That company page could not be read. You can still enter it manually.');
+    }
+    return { html: response.html, url: resolved.url.toString() };
   }
   throw new Error('That company page could not be read.');
 }

@@ -1,25 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
 import prisma from '@/lib/prisma';
 import { requireFamilyAccess } from '@/lib/auth-utils';
 import { contractorResponse, readContractorMetadata, writeContractorMetadata } from '@/lib/contractors/contractorStorage';
-
-const updateContractorSchema = z.object({
-  name: z.string().min(1).optional(),
-  company: z.string().min(1).optional().nullable(),
-  phone: z.string().min(1).optional().nullable(),
-  email: z.string().email().optional().nullable(),
-  address: z.string().min(1).optional().nullable(),
-  specialty: z.string().min(1).optional(),
-  notes: z.string().optional().nullable(),
-  rating: z.number().int().min(1).max(5).optional().nullable(),
-  website: z.string().url().optional().nullable(),
-  imageUrl: z.string().url().optional().nullable(),
-  serviceArea: z.string().max(300).optional().nullable(),
-  companyNumber: z.string().max(30).optional().nullable(),
-  status: z.string().max(40).optional(),
-  profile: z.record(z.unknown()).optional().nullable(),
-});
+import { isSameOriginRequest, readBoundedJson, RequestBodyError, updateContractorSchema } from '@/lib/contractors/contractorValidation';
+import { z } from 'zod';
 
 export const GET = requireFamilyAccess(async (_request: NextRequest, context, _authUser) => {
   try {
@@ -41,9 +25,12 @@ export const GET = requireFamilyAccess(async (_request: NextRequest, context, _a
 });
 
 export const PUT = requireFamilyAccess(async (request: NextRequest, context, _authUser) => {
+  if (!isSameOriginRequest(request)) {
+    return NextResponse.json({ error: 'Use Family Hub to update contractors.' }, { status: 403 });
+  }
   try {
     const { familyId, contractorId } = await context.params;
-    const raw = await request.json();
+    const raw = await readBoundedJson(request);
     const updates = updateContractorSchema.parse(raw);
     const existing = await prisma.contractor.findFirst({
       where: { id: contractorId, familyId },
@@ -78,7 +65,7 @@ export const PUT = requireFamilyAccess(async (request: NextRequest, context, _au
 
     return NextResponse.json(contractorResponse(contractor));
   } catch (error) {
-    if (error instanceof z.ZodError) {
+    if (error instanceof z.ZodError || error instanceof RequestBodyError) {
       return NextResponse.json({ error: 'Invalid contractor payload' }, { status: 400 });
     }
     console.error('Error updating contractor:', error);
@@ -86,7 +73,10 @@ export const PUT = requireFamilyAccess(async (request: NextRequest, context, _au
   }
 });
 
-export const DELETE = requireFamilyAccess(async (_request: NextRequest, context, _authUser) => {
+export const DELETE = requireFamilyAccess(async (request: NextRequest, context, _authUser) => {
+  if (!isSameOriginRequest(request)) {
+    return NextResponse.json({ error: 'Use Family Hub to remove contractors.' }, { status: 403 });
+  }
   try {
     const { familyId, contractorId } = await context.params;
 

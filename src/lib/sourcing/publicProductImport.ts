@@ -24,11 +24,15 @@ export function assertPublicProductUrl(raw: string) {
 }
 
 export async function validatePublicProductUrl(raw: string, lookupHost = lookup) {
+  return (await resolvePublicProductUrl(raw, lookupHost)).url;
+}
+
+export async function resolvePublicProductUrl(raw: string, lookupHost = lookup) {
   const url = assertPublicProductUrl(raw);
   const hostname = url.hostname.toLowerCase();
   const addresses = await lookupHost(hostname, { all: true, verbatim: true });
   if (!addresses.length || addresses.some(({ address }) => !publicAddress(address))) throw new Error('That product link does not resolve to a public website.');
-  return url;
+  return { url, addresses };
 }
 
 function metaValue(html: string, key: string) {
