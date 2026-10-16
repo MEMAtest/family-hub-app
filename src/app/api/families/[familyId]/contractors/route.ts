@@ -2,17 +2,24 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import prisma from '@/lib/prisma';
 import { requireFamilyAccess } from '@/lib/auth-utils';
+import { contractorResponse, writeContractorMetadata } from '@/lib/contractors/contractorStorage';
 
 const createContractorSchema = z.object({
   id: z.string().min(1).optional(),
   name: z.string().min(1),
-  company: z.string().min(1).optional(),
-  phone: z.string().min(1).optional(),
-  email: z.string().email().optional(),
-  address: z.string().min(1).optional(),
+  company: z.string().optional().nullable(),
+  phone: z.string().optional().nullable(),
+  email: z.union([z.string().email(), z.literal('')]).optional().nullable(),
+  address: z.string().optional().nullable(),
   specialty: z.string().min(1),
-  notes: z.string().optional(),
-  rating: z.number().int().min(1).max(5).optional(),
+  notes: z.string().optional().nullable(),
+  rating: z.number().int().min(0).max(5).optional().nullable(),
+  website: z.union([z.string().url(), z.literal('')]).optional().nullable(),
+  imageUrl: z.union([z.string().url(), z.literal('')]).optional().nullable(),
+  serviceArea: z.string().max(300).optional().nullable(),
+  companyNumber: z.string().max(30).optional().nullable(),
+  status: z.string().max(40).optional().nullable(),
+  profile: z.record(z.unknown()).optional().nullable(),
 });
 
 export const GET = requireFamilyAccess(async (request: NextRequest, context, _authUser) => {
@@ -27,12 +34,8 @@ export const GET = requireFamilyAccess(async (request: NextRequest, context, _au
       where.specialty = specialty;
     }
     if (q) {
-      where.OR = [
-        { name: { contains: q, mode: 'insensitive' } },
-        { company: { contains: q, mode: 'insensitive' } },
-        { email: { contains: q, mode: 'insensitive' } },
-        { phone: { contains: q, mode: 'insensitive' } },
-      ];
+      // Extended contractor fields are stored in the existing notes column for
+      // backwards-compatible deployments, so filter the household-sized list below.
     }
 
     const contractors = await prisma.contractor.findMany({
@@ -40,7 +43,19 @@ export const GET = requireFamilyAccess(async (request: NextRequest, context, _au
       orderBy: [{ name: 'asc' }],
     });
 
-    return NextResponse.json(contractors);
+    const responses = contractors.map(contractorResponse);
+    const query = q?.toLowerCase();
+    return NextResponse.json(query
+      ? responses.filter((contractor) => [
+          contractor.name,
+          contractor.company,
+          contractor.email,
+          contractor.phone,
+          contractor.website,
+          contractor.serviceArea,
+          contractor.companyNumber,
+        ].some((value) => value?.toLowerCase().includes(query)))
+      : responses);
   } catch (error) {
     console.error('Error fetching contractors:', error);
     return NextResponse.json({ error: 'Failed to fetch contractors' }, { status: 500 });
@@ -56,27 +71,36 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context, _a
     const data = {
       familyId,
       name: body.name,
-      company: body.company,
-      phone: body.phone,
-      email: body.email,
-      address: body.address,
+      company: body.company || null,
+      phone: body.phone || null,
+      email: body.email || null,
+      address: body.address || null,
       specialty: body.specialty,
-      notes: body.notes,
-      rating: body.rating,
+      notes: writeContractorMetadata({
+        notes: body.notes,
+        website: body.website,
+        imageUrl: body.imageUrl,
+        serviceArea: body.serviceArea,
+        companyNumber: body.companyNumber,
+        status: body.status,
+        profile: body.profile,
+      }),
+      rating: body.rating || null,
     };
-    const contractor = body.id
-      ? await prisma.contractor.upsert({
-          where: { id: body.id },
-          update: {},
-          create: { id: body.id, ...data },
-        })
-      : await prisma.contractor.create({ data });
-
-    if (contractor.familyId !== familyId) {
-      return NextResponse.json({ error: 'Contractor id is already in use' }, { status: 409 });
+    let contractor;
+    if (body.id) {
+      const existing = await prisma.contractor.findUnique({ where: { id: body.id }, select: { familyId: true } });
+      if (existing && existing.familyId !== familyId) {
+        return NextResponse.json({ error: 'Contractor id is already in use' }, { status: 409 });
+      }
+      contractor = existing
+        ? await prisma.contractor.update({ where: { id: body.id }, data })
+        : await prisma.contractor.create({ data: { id: body.id, ...data } });
+    } else {
+      contractor = await prisma.contractor.create({ data });
     }
 
-    return NextResponse.json(contractor, { status: 201 });
+    return NextResponse.json(contractorResponse(contractor), { status: 201 });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: 'Invalid contractor payload' }, { status: 400 });

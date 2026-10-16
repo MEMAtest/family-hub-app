@@ -10,8 +10,89 @@ export interface Contractor {
   specialty: ContractorSpecialty;
   notes?: string;
   rating?: 1 | 2 | 3 | 4 | 5;
+  website?: string;
+  imageUrl?: string;
+  serviceArea?: string;
+  companyNumber?: string;
+  status?: ContractorStatus;
+  profile?: ContractorProfile;
   createdAt: string;
   updatedAt: string;
+}
+
+export type ContractorStatus =
+  | 'candidate'
+  | 'contacted'
+  | 'visit_booked'
+  | 'quoted'
+  | 'shortlisted'
+  | 'selected'
+  | 'completed'
+  | 'rejected';
+
+export const CONTRACTOR_STATUSES: { value: ContractorStatus; label: string }[] = [
+  { value: 'candidate', label: 'Considering' },
+  { value: 'contacted', label: 'Contacted' },
+  { value: 'visit_booked', label: 'Visit booked' },
+  { value: 'quoted', label: 'Quoted' },
+  { value: 'shortlisted', label: 'Shortlisted' },
+  { value: 'selected', label: 'Selected' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'rejected', label: 'Not proceeding' },
+];
+
+export type ContractorEvidenceKind =
+  | 'website'
+  | 'google'
+  | 'companies_house'
+  | 'checkatrade'
+  | 'trustpilot'
+  | 'community'
+  | 'manual';
+
+export interface ContractorEvidence {
+  kind: ContractorEvidenceKind;
+  title: string;
+  url: string;
+  summary?: string;
+  rating?: number;
+  reviewCount?: number;
+  sourceDate?: string;
+  fetchedAt: string;
+}
+
+export type ContractorCheckState = 'confirmed' | 'needs_check' | 'not_applicable';
+
+export interface ContractorProfile {
+  summary?: string;
+  companyStatus?: string;
+  projectIds?: string[];
+  evidence?: ContractorEvidence[];
+  previousWork?: { title: string; url: string }[];
+  checks?: Record<string, ContractorCheckState>;
+  reviewThemes?: string[];
+  lastEnrichedAt?: string;
+}
+
+export interface ContractorCandidate {
+  candidateId: string;
+  name: string;
+  company?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  website?: string;
+  imageUrl?: string;
+  serviceArea?: string;
+  companyNumber?: string;
+  companyStatus?: string;
+  specialty: ContractorSpecialty;
+  summary?: string;
+  rating?: number;
+  reviewCount?: number;
+  previousWork?: { title: string; url: string }[];
+  evidence: ContractorEvidence[];
+  matchReason?: string;
 }
 
 export type ContractorSpecialty =

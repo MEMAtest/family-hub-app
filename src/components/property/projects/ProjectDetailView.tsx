@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { ArrowLeft, MoreHorizontal, Bath, ShowerHead, LayoutDashboard, Mail, Users, FileText, Calendar, Bell, CheckSquare, Settings, Edit2, Plus, CalendarPlus, Phone, Building2, UserPlus, Upload, BarChart3, PieChart, Download, FileSpreadsheet, FileJson, Printer, ShoppingBasket } from 'lucide-react';
+import { ArrowLeft, MoreHorizontal, Bath, ShowerHead, LayoutDashboard, Mail, Users, FileText, Calendar, Bell, CheckSquare, Settings, Edit2, Plus, CalendarPlus, Phone, Building2, UserPlus, Upload, BarChart3, PieChart, Download, FileSpreadsheet, FileJson, Printer, ShoppingBasket, Search } from 'lucide-react';
 import { ProjectEmailInbox } from './ProjectEmailInbox';
 import PDFQuoteExtractor from '@/components/projects/PDFQuoteExtractor';
 import QuoteCostBreakdownChart from '@/components/projects/charts/QuoteCostBreakdownChart';
@@ -233,6 +233,12 @@ export const ProjectDetailView = ({
   const people = useFamilyStore((state) => state.people);
   const familyId = useFamilyStore((state) => state.databaseStatus.familyId);
   const contractors = useFamilyStore((state) => state.contractors);
+  const projectContractors = useMemo(() => {
+    const linkedQuoteIds = new Set((project.quotes || []).map((quote) => quote.contractorId).filter(Boolean));
+    return contractors.filter((contractor) =>
+      contractor.profile?.projectIds?.includes(project.id) || linkedQuoteIds.has(contractor.id)
+    );
+  }, [contractors, project.id, project.quotes]);
   const addContractor = useFamilyStore((state) => state.addContractor);
   const [validPersonId, setValidPersonId] = useState<string | null>(null);
 
@@ -425,7 +431,7 @@ export const ProjectDetailView = ({
     { id: 'visits', label: 'Visits', icon: Calendar, count: project.scheduledVisits?.length || 0 },
     { id: 'followups', label: 'Follow-ups', icon: Bell, count: project.followUps?.length || 0 },
     { id: 'tasks', label: 'Tasks', icon: CheckSquare, count: project.tasks?.length || 0 },
-    { id: 'contractors', label: 'Contractors', icon: Building2, count: contractors.length },
+    { id: 'contractors', label: 'Contractors', icon: Building2, count: projectContractors.length },
   ];
   const primaryTabs = tabs.filter((tab) => bathroom ? ['overview', 'main-bathroom', 'shower-room', 'materials', 'documents'].includes(tab.id) : ['emails', 'quotes', 'materials'].includes(tab.id));
   const secondaryTabs = tabs.filter((tab) => !primaryTabs.includes(tab));
@@ -1857,23 +1863,32 @@ export const ProjectDetailView = ({
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="font-medium text-gray-900 dark:text-slate-100">
-                Contractors ({contractors.length})
+                Contractors ({projectContractors.length})
               </h3>
+              {!isReadOnly && (
+                <a
+                  href={`/?view=contractors&projectId=${encodeURIComponent(project.id)}`}
+                  className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-teal-700 px-4 text-sm font-medium text-white hover:bg-teal-800"
+                >
+                  <Search className="h-4 w-4" />
+                  Find or add contractor
+                </a>
+              )}
             </div>
 
-            {contractors.length === 0 ? (
+            {projectContractors.length === 0 ? (
               <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-8 text-center dark:border-slate-700 dark:bg-slate-800/50">
                 <Building2 className="mx-auto h-10 w-10 text-gray-400 dark:text-slate-500" />
                 <p className="mt-2 text-sm text-gray-500 dark:text-slate-400">
                   No contractors yet
                 </p>
                 <p className="mt-1 text-xs text-gray-400 dark:text-slate-500">
-                  Add contacts from emails to build your contractor list
+                  Find a company by name or paste a link, then save it to this project.
                 </p>
               </div>
             ) : (
               <div className="grid gap-3 sm:grid-cols-2">
-                {contractors.map((contractor) => (
+                {projectContractors.map((contractor) => (
                   <div
                     key={contractor.id}
                     className="rounded-lg border border-gray-200 p-4 dark:border-slate-700"

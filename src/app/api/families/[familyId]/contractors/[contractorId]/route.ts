@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import prisma from '@/lib/prisma';
 import { requireFamilyAccess } from '@/lib/auth-utils';
+import { contractorResponse, readContractorMetadata, writeContractorMetadata } from '@/lib/contractors/contractorStorage';
 
 const updateContractorSchema = z.object({
   name: z.string().min(1).optional(),
@@ -12,6 +13,12 @@ const updateContractorSchema = z.object({
   specialty: z.string().min(1).optional(),
   notes: z.string().optional().nullable(),
   rating: z.number().int().min(1).max(5).optional().nullable(),
+  website: z.string().url().optional().nullable(),
+  imageUrl: z.string().url().optional().nullable(),
+  serviceArea: z.string().max(300).optional().nullable(),
+  companyNumber: z.string().max(30).optional().nullable(),
+  status: z.string().max(40).optional(),
+  profile: z.record(z.unknown()).optional().nullable(),
 });
 
 export const GET = requireFamilyAccess(async (_request: NextRequest, context, _authUser) => {
@@ -26,7 +33,7 @@ export const GET = requireFamilyAccess(async (_request: NextRequest, context, _a
       return NextResponse.json({ error: 'Contractor not found' }, { status: 404 });
     }
 
-    return NextResponse.json(contractor);
+    return NextResponse.json(contractorResponse(contractor));
   } catch (error) {
     console.error('Error fetching contractor:', error);
     return NextResponse.json({ error: 'Failed to fetch contractor' }, { status: 500 });
@@ -38,22 +45,38 @@ export const PUT = requireFamilyAccess(async (request: NextRequest, context, _au
     const { familyId, contractorId } = await context.params;
     const raw = await request.json();
     const updates = updateContractorSchema.parse(raw);
-
     const existing = await prisma.contractor.findFirst({
       where: { id: contractorId, familyId },
-      select: { id: true },
     });
 
     if (!existing) {
       return NextResponse.json({ error: 'Contractor not found' }, { status: 404 });
     }
 
+    const currentMetadata = readContractorMetadata(existing.notes);
+    const extendedUpdates = {
+      notes: updates.notes,
+      website: updates.website,
+      imageUrl: updates.imageUrl,
+      serviceArea: updates.serviceArea,
+      companyNumber: updates.companyNumber,
+      status: updates.status,
+      profile: updates.profile,
+    };
+    const metadata = Object.fromEntries(Object.entries(extendedUpdates).map(([key, value]) => [
+      key,
+      value === undefined ? currentMetadata[key as keyof typeof currentMetadata] : value,
+    ]));
+    const { website, imageUrl, serviceArea, companyNumber, status, profile, ...scalarUpdates } = updates;
     const contractor = await prisma.contractor.update({
       where: { id: contractorId },
-      data: updates,
+      data: {
+        ...scalarUpdates,
+        notes: writeContractorMetadata(metadata),
+      },
     });
 
-    return NextResponse.json(contractor);
+    return NextResponse.json(contractorResponse(contractor));
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: 'Invalid contractor payload' }, { status: 400 });
