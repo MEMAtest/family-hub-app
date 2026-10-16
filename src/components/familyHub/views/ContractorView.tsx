@@ -176,7 +176,7 @@ export const ContractorView = () => {
     if (!lookup.trim() || !familyId) return;
     setSearching(true); setSearchError(''); setResults([]); setProviders({});
     try {
-      const response = await fetch(`/api/families/${familyId}/contractors/discover`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(mode === 'link' ? { url: lookup.trim() } : { query: lookup.trim(), location: location.trim(), specialty: lookupSpecialty }) });
+      const response = await fetch(`/api/families/${familyId}/contractors/discover`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(mode === 'link' ? { url: lookup.trim(), specialty: lookupSpecialty } : { query: lookup.trim(), location: location.trim(), specialty: lookupSpecialty }) });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || 'Search failed.');
       setResults(payload.candidates ?? []); setProviders(payload.providers ?? {});
