@@ -26,9 +26,9 @@ export const PropertyMetricCard = ({
   return (
     <div
       onClick={onClick}
-      className={`rounded-xl border border-gray-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900 ${
+      className={`min-h-24 rounded-lg border border-slate-200 bg-white p-3.5 shadow-sm dark:border-slate-800 dark:bg-slate-900 ${
         isClickable
-          ? 'cursor-pointer hover:border-blue-300 hover:shadow-md hover:bg-gray-50 dark:hover:border-blue-500/50 dark:hover:bg-slate-800 transition-all'
+          ? 'cursor-pointer transition hover:border-blue-300 hover:bg-blue-50/40 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:hover:border-blue-500/50 dark:hover:bg-slate-800'
           : ''
       }`}
       role={isClickable ? 'button' : undefined}
@@ -40,14 +40,16 @@ export const PropertyMetricCard = ({
         }
       } : undefined}
     >
-      <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
           {label}
         </p>
-        <Icon className={`h-4 w-4 ${iconColor}`} />
+        <span className="flex h-7 w-7 items-center justify-center rounded-md bg-slate-50 dark:bg-slate-800">
+          <Icon className={`h-4 w-4 ${iconColor}`} />
+        </span>
       </div>
-      <p className="mt-2 text-2xl font-semibold text-gray-900 dark:text-slate-100">{value}</p>
-      <p className="text-xs text-gray-500 dark:text-slate-400">{subtitle}</p>
+      <p className="mt-1.5 text-2xl font-semibold text-slate-950 dark:text-white">{value}</p>
+      <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{subtitle}</p>
     </div>
   );
 };

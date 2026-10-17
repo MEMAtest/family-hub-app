@@ -11,7 +11,7 @@ import { formatDate } from '@/utils/formatDate';
 const Property3DViewer = dynamic(() => import('../Property3DViewer'), {
   ssr: false,
   loading: () => (
-    <div className="w-full h-[500px] flex items-center justify-center bg-slate-100 dark:bg-slate-900 rounded-xl">
+    <div className="flex h-[500px] w-full items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-900">
       <div className="text-center">
         <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto"></div>
         <p className="mt-3 text-sm text-slate-600 dark:text-slate-400">Loading 3D viewer...</p>
@@ -102,17 +102,17 @@ export const PropertyDigitalTwinTab = ({
     : null;
 
   return (
-    <div className="space-y-6">
-      <div className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
+    <div className="space-y-4">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(260px,.6fr)]">
         {/* Digital Twin Viewer */}
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-5">
           <div className="flex items-center justify-between">
             <PropertySectionHeader
               title={viewMode === '3d' ? 'Digital Twin (3D Model)' : 'Digital Twin (2D Map)'}
               subtitle="Tap a room or element to view details"
               icon={viewMode === '3d' ? Box : Grid3X3}
             />
-            <div className="flex items-center gap-1 rounded-lg border border-gray-200 p-1 dark:border-slate-700">
+            <div className="flex items-center gap-1 rounded-md border border-slate-200 p-1 dark:border-slate-700">
               <button
                 onClick={() => setViewMode('2d')}
                 className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition ${
@@ -151,7 +151,7 @@ export const PropertyDigitalTwinTab = ({
                 {floors.map(([floor, floorComponents]) => (
                   <div
                     key={floor}
-                    className="rounded-xl border border-gray-200 p-3 dark:border-slate-800"
+                    className="rounded-lg border border-slate-200 p-3 dark:border-slate-800"
                   >
                     <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">
                       {floorLabels[floor] || floor}
@@ -183,10 +183,10 @@ export const PropertyDigitalTwinTab = ({
               </div>
             )}
           </div>
-        </div>
+        </section>
 
         {/* Component Snapshot Panel */}
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <aside className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-5">
           <PropertySectionHeader
             title="Component Snapshot"
             subtitle="Last repair, next due, evidence"
@@ -249,7 +249,7 @@ export const PropertyDigitalTwinTab = ({
               </div>
             )}
           </div>
-        </div>
+        </aside>
       </div>
     </div>
   );

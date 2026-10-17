@@ -59,7 +59,7 @@ export const TaskStatusPieChart = ({ tasks, height = 300, onSegmentClick }: Task
 
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <PieChart margin={{ top: 30, right: 80, bottom: 30, left: 80 }}>
+      <PieChart margin={{ top: 10, right: 10, bottom: 24, left: 10 }}>
         <Pie
           data={data}
           cx="50%"
@@ -68,8 +68,8 @@ export const TaskStatusPieChart = ({ tasks, height = 300, onSegmentClick }: Task
           outerRadius={55}
           paddingAngle={2}
           dataKey="value"
-          labelLine={true}
-          label={({ name, percent }: Record<string, unknown>) => `${name} ${((percent as number) * 100).toFixed(0)}%`}
+          labelLine={false}
+          label={false}
           onClick={handleClick as never}
           style={{ cursor: onSegmentClick ? 'pointer' : 'default', fontSize: '10px' }}
         >

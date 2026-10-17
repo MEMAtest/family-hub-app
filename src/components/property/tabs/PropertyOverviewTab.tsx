@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import Image from 'next/image';
 import {
   ClipboardList,
   Clock,
@@ -10,6 +11,9 @@ import {
   Plus,
   FileUp,
   Download,
+  CalendarDays,
+  Home,
+  MapPin,
 } from 'lucide-react';
 import { PropertyMetricCard } from '../common/PropertyMetricCard';
 import { PropertySectionHeader } from '../common/PropertySectionHeader';
@@ -119,6 +123,21 @@ export const PropertyOverviewTab = ({
     return taskAttachments + logAttachments + baselineDocs;
   }, [tasks, profile.documents]);
 
+  const completedTasks = useMemo(
+    () => tasks.filter((task) => task.status === 'completed').length,
+    [tasks]
+  );
+
+  const propertyType = profile.propertyType === 'T'
+    ? 'Terraced house'
+    : profile.propertyType === 'S'
+      ? 'Semi-detached house'
+      : profile.propertyType === 'D'
+        ? 'Detached house'
+        : profile.propertyType === 'F'
+          ? 'Flat'
+          : 'Home';
+
   const recentWorkLogs = useMemo(() => {
     const allLogs = tasks.flatMap((task) =>
       task.workLogs.map((log) => ({
@@ -158,9 +177,29 @@ export const PropertyOverviewTab = ({
   };
 
   return (
-    <div className="space-y-6">
-      {/* Metric Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+    <div className="space-y-4">
+      <section className="relative min-h-[220px] overflow-hidden rounded-lg bg-slate-900 sm:min-h-[260px]">
+        {/* The real property image is the primary signal for this workspace. */}
+        <Image
+          src="/assets/property/tremaine/21front.jpg"
+          alt="Front of 21 Tremaine Road"
+          fill
+          sizes="(min-width: 1280px) 70vw, 100vw"
+          className="object-cover"
+          priority
+        />
+        <div className="absolute inset-0 bg-gradient-to-r from-slate-950/90 via-slate-950/45 to-transparent" />
+        <div className="relative flex min-h-[220px] max-w-xl flex-col justify-end p-5 text-white sm:min-h-[260px] sm:p-7">
+          <span className="mb-3 flex h-9 w-9 items-center justify-center rounded-md bg-white/15 backdrop-blur-sm">
+            <Home className="h-4 w-4" />
+          </span>
+          <h2 className="text-2xl font-semibold sm:text-3xl">21 Tremaine Road</h2>
+          <p className="mt-1 flex items-center gap-1.5 text-sm text-white/85"><MapPin className="h-4 w-4" />{profile.address.replace('21 Tremaine Road, ', '')}</p>
+          <p className="mt-1 text-xs text-white/70">{propertyType} · Purchased {profile.purchaseDate ? formatDate(profile.purchaseDate) : 'date not recorded'}</p>
+        </div>
+      </section>
+
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-5">
         <PropertyMetricCard
           label="Outstanding"
           value={outstandingTasks.length}
@@ -203,98 +242,70 @@ export const PropertyOverviewTab = ({
         />
       </div>
 
-      {/* Quick Actions */}
-      {!isReadOnly && (
-        <div className="flex flex-wrap gap-3">
-          <button
-            onClick={onAddTask}
-            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
-          >
-            <Plus className="h-4 w-4" />
-            Add Task
-          </button>
-          <button
-            onClick={onImportSurvey}
-            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 transition-colors"
-          >
-            <FileUp className="h-4 w-4" />
-            Import Survey PDF
-          </button>
-          <button
-            onClick={onExport}
-            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 transition-colors"
-          >
-            <Download className="h-4 w-4" />
-            Export
-          </button>
-        </div>
-      )}
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_270px]">
+        <div className="space-y-4">
+          <div className="grid gap-4 lg:grid-cols-2">
+            <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+              <PropertySectionHeader title="Task status" subtitle={`${completedTasks} of ${tasks.length} marked complete`} />
+              <div className="mt-2">
+                <TaskStatusPieChart tasks={tasks} height={230} />
+              </div>
+            </section>
 
-      {/* Charts Row */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-          <PropertySectionHeader
-            title="Task Status"
-            subtitle="Distribution by status"
-          />
-          <div className="mt-4">
-            <TaskStatusPieChart tasks={tasks} height={280} />
+            <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+              <PropertySectionHeader title="Priority breakdown" subtitle="Work grouped by urgency" />
+              <div className="mt-2">
+                <TaskPriorityBarChart tasks={tasks} height={230} />
+              </div>
+            </section>
           </div>
-        </div>
 
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-          <PropertySectionHeader
-            title="Priority Breakdown"
-            subtitle="Tasks by urgency level"
-          />
-          <div className="mt-4">
-            <TaskPriorityBarChart tasks={tasks} height={280} />
-          </div>
-        </div>
-      </div>
-
-      {/* Recent Activity */}
-      <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-        <PropertySectionHeader
-          title="Recent Activity"
-          subtitle="Latest work completed"
-        />
-        <div className="mt-4">
-          {recentWorkLogs.length === 0 ? (
-            <p className="text-sm text-gray-500 dark:text-slate-400">
-              No work logged yet
-            </p>
-          ) : (
-            <div className="space-y-3">
-              {recentWorkLogs.map((log) => (
-                <div
-                  key={log.id}
-                  className="flex items-start justify-between rounded-lg border border-gray-100 p-3 dark:border-slate-800"
-                >
+          <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <PropertySectionHeader title="Recent activity" subtitle="Evidence and completed work" />
+            <div className="mt-3 divide-y divide-slate-100 dark:divide-slate-800">
+              {recentWorkLogs.length === 0 ? (
+                <div className="flex items-center gap-3 py-3">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-md bg-blue-50 text-blue-700"><FileText className="h-4 w-4" /></span>
                   <div>
-                    <p className="text-sm font-medium text-gray-900 dark:text-slate-100">
-                      {log.taskTitle}
-                    </p>
-                    <p className="text-xs text-gray-500 dark:text-slate-400">
-                      {log.completedBy && `Completed by ${log.completedBy} • `}
-                      {formatDate(log.completedDate)}
-                    </p>
-                    {log.notes && (
-                      <p className="mt-1 text-xs text-gray-600 dark:text-slate-300">
-                        {log.notes}
-                      </p>
-                    )}
+                    <p className="text-sm font-medium text-slate-900 dark:text-white">Building survey added</p>
+                    <p className="text-xs text-slate-500">The source document is available in Documents; no completed work has been logged yet.</p>
                   </div>
-                  {log.cost > 0 && (
-                    <span className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
-                      {currencyFormatter.format(log.cost)}
-                    </span>
-                  )}
+                </div>
+              ) : recentWorkLogs.map((log) => (
+                <div key={log.id} className="flex items-start justify-between gap-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium text-slate-900 dark:text-white">{log.taskTitle}</p>
+                    <p className="text-xs text-slate-500">{log.completedBy && `Completed by ${log.completedBy} · `}{formatDate(log.completedDate)}</p>
+                    {log.notes && <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">{log.notes}</p>}
+                  </div>
+                  {log.cost > 0 && <span className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">{currencyFormatter.format(log.cost)}</span>}
                 </div>
               ))}
             </div>
-          )}
+          </section>
         </div>
+
+        <aside className="space-y-4">
+          {!isReadOnly && (
+            <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+              <h3 className="text-sm font-semibold text-slate-950 dark:text-white">Quick actions</h3>
+              <div className="mt-3 grid gap-2">
+                <button onClick={onAddTask} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md bg-blue-600 px-3 text-sm font-medium text-white hover:bg-blue-700"><Plus className="h-4 w-4" />Add task</button>
+                <button onClick={onImportSurvey} className="inline-flex min-h-10 items-center gap-2 rounded-md border border-slate-200 px-3 text-left text-sm font-medium text-slate-700 hover:border-blue-300 hover:bg-blue-50 dark:border-slate-700 dark:text-slate-200"><FileUp className="h-4 w-4 text-blue-600" />Import survey PDF</button>
+                <button onClick={onExport} className="inline-flex min-h-10 items-center gap-2 rounded-md border border-slate-200 px-3 text-left text-sm font-medium text-slate-700 hover:border-blue-300 hover:bg-blue-50 dark:border-slate-700 dark:text-slate-200"><Download className="h-4 w-4 text-blue-600" />Export property data</button>
+              </div>
+            </section>
+          )}
+
+          <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <h3 className="text-sm font-semibold text-slate-950 dark:text-white">Property record</h3>
+            <dl className="mt-3 space-y-3 text-xs">
+              <div className="flex items-center gap-3"><Home className="h-4 w-4 text-blue-600" /><div><dt className="text-slate-500">Type</dt><dd className="font-medium text-slate-900 dark:text-white">{propertyType}</dd></div></div>
+              <div className="flex items-center gap-3"><CalendarDays className="h-4 w-4 text-emerald-600" /><div><dt className="text-slate-500">Purchased</dt><dd className="font-medium text-slate-900 dark:text-white">{profile.purchaseDate ? formatDate(profile.purchaseDate) : 'Not recorded'}</dd></div></div>
+              <div className="flex items-center gap-3"><FileText className="h-4 w-4 text-violet-600" /><div><dt className="text-slate-500">Documents</dt><dd className="font-medium text-slate-900 dark:text-white">{profile.documents.length} saved</dd></div></div>
+            </dl>
+          </section>
+        </aside>
       </div>
 
       {/* Metric Detail Modal */}

@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { X, Shield, Eye, Home } from 'lucide-react';
+import { X, Shield, Eye, Home, MapPin } from 'lucide-react';
 import { useFamilyStore } from '@/store/familyStore';
 import { createId } from '@/utils/id';
 import { formatDateForInput } from '@/utils/formatDate';
@@ -18,6 +18,15 @@ import { PropertyAwarenessTab } from './tabs/PropertyAwarenessTab';
 import type { PropertyTask, PropertyTaskStatus, PropertyDocument } from '@/types/property.types';
 
 const propertyTabs = new Set<PropertyTabId>(['overview', 'issues', 'tasks', 'projects', 'digital-twin', 'analytics', 'awareness']);
+const propertyTabCopy: Record<PropertyTabId, { title: string; subtitle: string }> = {
+  overview: { title: 'Property overview', subtitle: 'The current position at 21 Tremaine Road' },
+  issues: { title: 'Issues', subtitle: 'Defects, risks and evidence that need attention' },
+  tasks: { title: 'Survey plan', subtitle: 'Turn the building survey into clear work and contractor decisions' },
+  projects: { title: 'Projects', subtitle: 'Plan improvements, quotes, products and delivery' },
+  'digital-twin': { title: 'Digital Twin', subtitle: 'Explore the property, components and related work' },
+  analytics: { title: 'Property analytics', subtitle: 'Track value, costs and completion over time' },
+  awareness: { title: 'Local awareness', subtitle: 'Planning, council and neighbourhood signals' },
+};
 
 // Modal Shell Component
 const ModalShell = ({
@@ -135,6 +144,9 @@ export const PropertyDashboard = () => {
 
   const isOwnerView = propertyRole === 'owner' && !shareMode;
   const isReadOnly = !isOwnerView;
+  const shortAddress = propertyProfile.address.split(',')[0] || propertyProfile.propertyName;
+  const postcode = propertyProfile.address.match(/([A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2})/i)?.[1] ?? 'SE20 7UA';
+  const activeCopy = propertyTabCopy[activeTab];
 
   // Filter tasks for share mode
   const visibleTasks = useMemo(() => {
@@ -250,69 +262,73 @@ export const PropertyDashboard = () => {
   };
 
   return (
-    <div className="space-y-4 sm:space-y-6 p-3 sm:p-4 lg:p-6">
-      {/* Header */}
-      <section className={focusedProject ? 'border-b border-gray-200 py-2 dark:border-slate-800' : 'rounded-lg border border-gray-200 bg-white p-4 sm:p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900'}>
-        <div className={`flex gap-3 sm:gap-4 ${focusedProject ? 'flex-wrap items-center justify-between' : 'flex-col sm:flex-row sm:items-center sm:justify-between'}`}>
-          <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-            <div className={focusedProject ? 'hidden' : 'rounded-lg bg-blue-50 p-2.5 sm:p-3 text-blue-600 dark:bg-blue-500/20 dark:text-blue-200 flex-shrink-0'}>
-              <Home className="h-5 w-5 sm:h-6 sm:w-6" />
+    <div className="p-2 sm:p-4 lg:p-5">
+      <div className={`overflow-hidden border border-slate-200 bg-slate-50 shadow-sm dark:border-slate-800 dark:bg-slate-950 ${focusedProject ? 'rounded-lg' : 'rounded-lg xl:grid xl:grid-cols-[164px_minmax(0,1fr)]'}`}>
+        {!focusedProject && (
+          <aside className="hidden border-r border-slate-200 bg-white px-3 py-5 dark:border-slate-800 dark:bg-slate-900 xl:block">
+            <div className="mb-6 px-2">
+              <div className="flex h-9 w-9 items-center justify-center rounded-md bg-slate-900 text-white dark:bg-blue-600">
+                <Home className="h-4 w-4" />
+              </div>
+              <p className="mt-2 text-xs font-bold text-slate-900 dark:text-white">{postcode}</p>
+              <p className="mt-0.5 truncate text-[11px] text-slate-500" title={shortAddress}>{shortAddress}</p>
             </div>
-            <div className="min-w-0 flex-1">
-              {focusedProject ? <button type="button" onClick={() => setActiveTab('overview')} className="inline-flex min-h-10 items-center gap-2 text-sm font-medium text-emerald-700 dark:text-emerald-300"><Home className="h-4 w-4" />Property</button> : <h1 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-slate-100 truncate">{propertyProfile.propertyName}</h1>}
-              <p className={focusedProject ? 'hidden' : 'text-xs sm:text-sm text-gray-500 dark:text-slate-400 truncate'}>
-                {propertyProfile.address}
-              </p>
+            <PropertyTabNavigation activeTab={activeTab} onTabChange={setActiveTab} variant="vertical" />
+          </aside>
+        )}
+
+        <main className="min-w-0">
+          <section className={`border-b border-slate-200 bg-white px-4 py-4 dark:border-slate-800 dark:bg-slate-900 sm:px-5 ${focusedProject ? 'py-2' : ''}`}>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                {focusedProject ? (
+                  <button type="button" onClick={() => setActiveTab('overview')} className="inline-flex min-h-10 items-center gap-2 text-sm font-medium text-blue-700 dark:text-blue-300"><Home className="h-4 w-4" />Property</button>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-2 text-xs font-medium text-slate-500 xl:hidden">
+                      <MapPin className="h-3.5 w-3.5" />{shortAddress} · {postcode}
+                    </div>
+                    <h1 className="mt-1 text-xl font-semibold text-slate-950 dark:text-white sm:text-2xl">{activeCopy.title}</h1>
+                    <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">{activeCopy.subtitle}</p>
+                  </>
+                )}
+              </div>
+
               {!shareMode && !focusedProject && (
-                <div className="mt-1">
+                <div className="flex flex-wrap items-center gap-2">
                   <SharedSyncBadge />
+                  <div className="flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 p-1 dark:border-slate-700 dark:bg-slate-800">
+                    <button
+                      onClick={() => setPropertyRole('owner')}
+                      className={`flex min-h-8 items-center gap-1.5 rounded px-2.5 text-xs font-medium transition ${propertyRole === 'owner' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-white dark:text-slate-300 dark:hover:bg-slate-700'}`}
+                    >
+                      <Shield className="h-3.5 w-3.5" />Owner
+                    </button>
+                    <button
+                      onClick={() => setPropertyRole('viewer')}
+                      className={`flex min-h-8 items-center gap-1.5 rounded px-2.5 text-xs font-medium transition ${propertyRole === 'viewer' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-white dark:text-slate-300 dark:hover:bg-slate-700'}`}
+                    >
+                      <Eye className="h-3.5 w-3.5" />Viewer
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
-          </div>
 
-          {/* Role Selector */}
-          {!shareMode && (
-            <div className="flex items-center gap-2 rounded-lg border border-gray-200 p-1 dark:border-slate-700">
-              <button
-                onClick={() => setPropertyRole('owner')}
-                className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition ${
-                  propertyRole === 'owner'
-                    ? 'bg-blue-600 text-white'
-                    : 'text-gray-600 hover:bg-gray-100 dark:text-slate-400 dark:hover:bg-slate-800'
-                }`}
-              >
-                <Shield className="h-3.5 w-3.5" />
-                Owner
-              </button>
-              <button
-                onClick={() => setPropertyRole('viewer')}
-                className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition ${
-                  propertyRole === 'viewer'
-                    ? 'bg-blue-600 text-white'
-                    : 'text-gray-600 hover:bg-gray-100 dark:text-slate-400 dark:hover:bg-slate-800'
-                }`}
-              >
-                <Eye className="h-3.5 w-3.5" />
-                Viewer
-              </button>
+            {shareMode && (
+              <div className="mt-3 rounded-md border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700 dark:border-blue-500/40 dark:bg-blue-500/20 dark:text-blue-100">
+                Shared task view - read only. All changes require owner access.
+              </div>
+            )}
+          </section>
+
+          {!focusedProject && (
+            <div className="xl:hidden">
+              <PropertyTabNavigation activeTab={activeTab} onTabChange={setActiveTab} />
             </div>
           )}
-        </div>
 
-        {shareMode && (
-          <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700 dark:border-blue-500/40 dark:bg-blue-500/20 dark:text-blue-100">
-            Shared task view - read only. All changes require owner access.
-          </div>
-        )}
-      </section>
-
-      {/* Tab Navigation */}
-      <div className={focusedProject ? 'min-w-0 bg-white dark:bg-slate-900' : 'rounded-lg border border-gray-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 overflow-hidden'}>
-        {!focusedProject && <PropertyTabNavigation activeTab={activeTab} onTabChange={setActiveTab} />}
-
-        {/* Tab Content */}
-        <div className={focusedProject ? 'min-w-0 p-2 sm:p-4' : 'p-3 sm:p-5'}>
+          <div className={focusedProject ? 'min-w-0 bg-white p-2 dark:bg-slate-900 sm:p-4' : 'min-w-0 p-3 sm:p-5'}>
           {activeTab === 'overview' && (
             <PropertyOverviewTab
               tasks={visibleTasks}
@@ -377,7 +393,8 @@ export const PropertyDashboard = () => {
           {activeTab === 'awareness' && (
             <PropertyAwarenessTab />
           )}
-        </div>
+          </div>
+        </main>
       </div>
 
       {/* Add Task Modal */}
