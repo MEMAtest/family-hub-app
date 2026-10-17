@@ -67,6 +67,7 @@ export interface ContractorProfile {
   summary?: string;
   companyStatus?: string;
   projectIds?: string[];
+  taskIds?: string[];
   evidence?: ContractorEvidence[];
   previousWork?: { title: string; url: string }[];
   checks?: Record<string, ContractorCheckState>;
@@ -101,6 +102,12 @@ export type ContractorSpecialty =
   | 'gas_engineer'
   | 'heating_engineer'
   | 'roofer'
+  | 'structural_engineer'
+  | 'damp_specialist'
+  | 'asbestos_surveyor'
+  | 'drainage_specialist'
+  | 'glazier'
+  | 'joiner'
   | 'builder'
   | 'decorator'
   | 'gardener'
@@ -119,6 +126,12 @@ export const CONTRACTOR_SPECIALTIES: { value: ContractorSpecialty; label: string
   { value: 'gas_engineer', label: 'Gas Engineer' },
   { value: 'heating_engineer', label: 'Heating Engineer' },
   { value: 'roofer', label: 'Roofer' },
+  { value: 'structural_engineer', label: 'Structural Engineer' },
+  { value: 'damp_specialist', label: 'Damp & Timber Specialist' },
+  { value: 'asbestos_surveyor', label: 'Asbestos Surveyor' },
+  { value: 'drainage_specialist', label: 'Drainage Specialist' },
+  { value: 'glazier', label: 'Glazing Contractor' },
+  { value: 'joiner', label: 'Joiner' },
   { value: 'builder', label: 'Builder' },
   { value: 'decorator', label: 'Decorator/Painter' },
   { value: 'gardener', label: 'Gardener' },

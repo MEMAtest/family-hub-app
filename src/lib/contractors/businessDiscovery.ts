@@ -41,6 +41,12 @@ const candidateId = (...parts: Array<string | undefined>) => createHash('sha256'
 export function inferContractorSpecialty(value: string): ContractorSpecialty {
   const text = value.toLowerCase();
   const rules: Array<[ContractorSpecialty, RegExp]> = [
+    ['structural_engineer', /structural engineer|structural survey/],
+    ['damp_specialist', /\bpca\b|damp (?:and|&) timber|timber specialist|woodworm/],
+    ['asbestos_surveyor', /asbestos survey|asbestos test|asbestos sampling/],
+    ['drainage_specialist', /drainage|cctv drain|drain survey/],
+    ['glazier', /glazier|glazing|safety glass|double glazed/],
+    ['joiner', /joiner|carpenter|fire door/],
     ['roofer', /roof|gutter|fascia|soffit|leadwork|chimney/],
     ['plumber', /plumb|bathroom|bath|shower|toilet|drain/],
     ['electrician', /electric|rewir|eicr|lighting/],

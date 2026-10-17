@@ -26,6 +26,22 @@ test('accepts bounded contractor profiles with HTTPS evidence', () => {
   expect(createContractorSchema.parse(validContractor)).toMatchObject(validContractor);
 });
 
+test('accepts survey specialist trades and preserves linked survey actions', () => {
+  const parsed = createContractorSchema.parse({
+    ...validContractor,
+    specialty: 'structural_engineer',
+    profile: {
+      ...validContractor.profile,
+      taskIds: ['task-tremaine-05'],
+    },
+  });
+
+  expect(parsed).toMatchObject({
+    specialty: 'structural_engineer',
+    profile: { taskIds: ['task-tremaine-05'] },
+  });
+});
+
 test.each([
   ['javascript:alert(1)', 'website'],
   ['data:text/html,unsafe', 'imageUrl'],

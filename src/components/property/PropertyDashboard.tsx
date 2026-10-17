@@ -17,6 +17,8 @@ import { PropertyAnalyticsTab } from './tabs/PropertyAnalyticsTab';
 import { PropertyAwarenessTab } from './tabs/PropertyAwarenessTab';
 import type { PropertyTask, PropertyTaskStatus, PropertyDocument } from '@/types/property.types';
 
+const propertyTabs = new Set<PropertyTabId>(['overview', 'issues', 'tasks', 'projects', 'digital-twin', 'analytics', 'awareness']);
+
 // Modal Shell Component
 const ModalShell = ({
   open,
@@ -83,12 +85,15 @@ export const PropertyDashboard = () => {
   const removeTaskFollowUp = useFamilyStore((state) => state.removeTaskFollowUp);
 
   // UI State
-  const [activeTab, updateActiveTab] = useState<PropertyTabId>(() => searchParams.get('tab') === 'projects' ? 'projects' : 'overview');
+  const [activeTab, updateActiveTab] = useState<PropertyTabId>(() => {
+    const requested = searchParams.get('tab') as PropertyTabId | null;
+    return requested && propertyTabs.has(requested) ? requested : 'overview';
+  });
   const setActiveTab = (tab: PropertyTabId) => {
     updateActiveTab(tab);
     const params = new URLSearchParams(searchParams.toString());
-    if (tab === 'projects') params.set('tab', 'projects');
-    else params.delete('tab');
+    if (tab === 'overview') params.delete('tab');
+    else params.set('tab', tab);
     router.replace(`?${params.toString()}`, { scroll: false });
   };
   const focusedProject = activeTab === 'projects' && propertyProjects.some((project) => project.id === activeProjectId);
@@ -331,6 +336,7 @@ export const PropertyDashboard = () => {
               onStatusChange={handleStatusChange}
               onAddTask={() => setShowAddTaskModal(true)}
               onImportSurvey={() => {/* TODO: Import survey handler */}}
+              propertyAddress={propertyProfile.address}
               isReadOnly={isReadOnly}
               onAddContact={addTaskContact}
               onUpdateContact={updateTaskContact}

@@ -16,6 +16,8 @@ const nullableText = (max: number) => z.string().trim().max(max).optional().null
 
 const specialtySchema = z.enum([
   'plumber', 'electrician', 'gas_engineer', 'heating_engineer', 'roofer', 'builder',
+  'structural_engineer', 'damp_specialist', 'asbestos_surveyor', 'drainage_specialist',
+  'glazier', 'joiner',
   'decorator', 'gardener', 'cleaner', 'locksmith', 'handyman', 'pest_control',
   'window_cleaner', 'carpet_cleaner', 'appliance_repair', 'other',
 ]);
@@ -40,6 +42,7 @@ const profileSchema = z.object({
   summary: z.string().trim().max(2000).optional(),
   companyStatus: z.string().trim().max(100).optional(),
   projectIds: z.array(z.string().trim().min(1).max(120)).max(50).optional(),
+  taskIds: z.array(z.string().trim().min(1).max(120)).max(100).optional(),
   evidence: z.array(evidenceSchema).max(50).optional(),
   previousWork: z.array(z.object({
     title: z.string().trim().max(200),

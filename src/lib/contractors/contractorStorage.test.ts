@@ -30,14 +30,22 @@ test('round trips extended contractor data through the existing notes column', (
     notes: 'Recommended by a neighbour',
     website: 'https://acme.example',
     status: 'shortlisted',
-    profile: { projectIds: ['project-1'], checks: { identity: 'confirmed' } },
+    profile: {
+      projectIds: ['project-1'],
+      taskIds: ['task-tremaine-05'],
+      checks: { identity: 'confirmed' },
+    },
   });
   expect(stored).toContain('__family_hub_contractor_v2__:');
   expect(contractorResponse({ ...contractor, notes: stored })).toMatchObject({
     notes: 'Recommended by a neighbour',
     website: 'https://acme.example',
     status: 'shortlisted',
-    profile: { projectIds: ['project-1'], checks: { identity: 'confirmed' } },
+    profile: {
+      projectIds: ['project-1'],
+      taskIds: ['task-tremaine-05'],
+      checks: { identity: 'confirmed' },
+    },
   });
 });
 

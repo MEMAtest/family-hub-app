@@ -14,7 +14,7 @@ interface PropertyTab {
 const tabs: PropertyTab[] = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
   { id: 'issues', label: 'Issues', icon: MessageSquareWarning },
-  { id: 'tasks', label: 'Tasks', icon: ClipboardList },
+  { id: 'tasks', label: 'Survey plan', icon: ClipboardList },
   { id: 'projects', label: 'Projects', icon: FolderKanban },
   { id: 'digital-twin', label: 'Digital Twin', icon: Box },
   { id: 'analytics', label: 'Analytics', icon: BarChart3 },

@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { Plus, FileUp } from 'lucide-react';
 import { TaskFilters, type GroupByOption } from '../tasks/TaskFilters';
 import { CollapsibleTaskGroup } from '../tasks/CollapsibleTaskGroup';
+import { SurveyActionPlan } from '../tasks/SurveyActionPlan';
 import type {
   PropertyTask,
   PropertyTaskStatus,
@@ -54,6 +55,7 @@ interface PropertyTasksTabProps {
   onStatusChange: (taskId: string, status: PropertyTaskStatus) => void;
   onAddTask: () => void;
   onImportSurvey: () => void;
+  propertyAddress?: string;
   isReadOnly?: boolean;
   // CRM Actions
   onAddContact?: (taskId: string, contact: TaskContact) => void;
@@ -77,6 +79,7 @@ export const PropertyTasksTab = ({
   onStatusChange,
   onAddTask,
   onImportSurvey,
+  propertyAddress,
   isReadOnly = false,
   onAddContact,
   onUpdateContact,
@@ -176,11 +179,27 @@ export const PropertyTasksTab = ({
 
   return (
     <div className="space-y-6">
+      <SurveyActionPlan
+        tasks={tasks}
+        propertyAddress={propertyAddress}
+        isReadOnly={isReadOnly}
+        onStatusChange={onStatusChange}
+      />
+
+      <details className="overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+        <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 marker:hidden sm:px-5">
+          <div>
+            <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">Full task register</p>
+            <p className="text-xs text-gray-500">Search every survey, maintenance and owner action</p>
+          </div>
+          <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-600 dark:bg-slate-800 dark:text-slate-300">{tasks.length}</span>
+        </summary>
+        <div className="space-y-6 border-t border-gray-200 p-4 dark:border-slate-800 sm:p-5">
       {/* Header with Actions */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-100">
-            Task Register
+            All task records
           </h2>
           <p className="text-sm text-gray-500 dark:text-slate-400">
             {filteredTasks.length} of {tasks.length} tasks
@@ -269,6 +288,8 @@ export const PropertyTasksTab = ({
           )}
         </div>
       )}
+        </div>
+      </details>
     </div>
   );
 };

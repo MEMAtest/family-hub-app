@@ -16,6 +16,8 @@ test('infers practical household trade categories', () => {
   expect(inferContractorSpecialty('South London guttering and roof repairs')).toBe('roofer');
   expect(inferContractorSpecialty('Bathroom plumbing and shower installation')).toBe('plumber');
   expect(inferContractorSpecialty('Property maintenance and odd jobs')).toBe('handyman');
+  expect(inferContractorSpecialty('Independent PCA damp and timber survey')).toBe('damp_specialist');
+  expect(inferContractorSpecialty('CCTV drain survey and drainage repairs')).toBe('drainage_specialist');
 });
 
 test('reads a public company page into a source-linked candidate', async () => {
