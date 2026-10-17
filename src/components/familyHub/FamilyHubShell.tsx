@@ -85,6 +85,7 @@ export const FamilyHubShell = () => {
   const databaseStatus = useFamilyStore((state) => state.databaseStatus);
   const [familyName, setFamilyName] = useState('Family');
   const searchParams = useSearchParams();
+  const appliedViewParam = useRef(false);
   const mainRef = useRef<HTMLElement | null>(null);
   const [showBackToTop, setShowBackToTop] = useState(false);
 
@@ -159,8 +160,12 @@ export const FamilyHubShell = () => {
   }, [databaseStatus.familyId]);
 
   useEffect(() => {
-    const viewParam = searchParams.get('view') || 'dashboard';
-    if (viewParam !== currentView) setView(viewParam);
+    if (appliedViewParam.current) return;
+    const viewParam = searchParams.get('view');
+    if (viewParam && viewParam !== currentView) {
+      setView(viewParam);
+    }
+    appliedViewParam.current = true;
   }, [currentView, searchParams, setView]);
 
   useEffect(() => {
