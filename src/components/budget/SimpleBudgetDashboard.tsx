@@ -38,6 +38,7 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { filterExpenses, filterIncome } from '@/utils/budgetFilters';
 import toast from 'react-hot-toast';
 import type { SavingsGoal } from '@/types/budget.types';
+import { plannedForMonth } from '@/lib/budget/plannedMonth';
 
 interface CategoryData {
   name: string;
@@ -206,25 +207,17 @@ const SimpleBudgetDashboard: React.FC = () => {
         let incomeItems: any[] = [];
         let expenseItems: any[] = [];
 
-        const hasStoreBudget = Boolean(budgetData && (budgetData.income || budgetData.expenses));
-
-        if (hasStoreBudget) {
-          console.log('Using budget data from store');
-
-          incomeItems = [
-            ...Object.values(budgetData?.income?.monthly || {}),
-            ...(budgetData?.income?.oneTime || [])
-          ];
-
-          expenseItems = [
-            ...Object.values(budgetData?.expenses?.recurringMonthly || {}),
-            ...(budgetData?.expenses?.oneTimeSpends || [])
-          ];
-        } else {
-          console.log('Fetching budget data from API');
+        try {
+          console.log('Fetching authoritative budget data from API');
           const [incomeData, expenseData] = await Promise.all([
-            fetch(`/api/families/${familyId}/budget/income`).then((res) => res.json()),
-            fetch(`/api/families/${familyId}/budget/expenses`).then((res) => res.json()),
+            fetch(`/api/families/${familyId}/budget/income`, { cache: 'no-store' }).then((res) => {
+              if (!res.ok) throw new Error(`Income request failed (${res.status})`);
+              return res.json();
+            }),
+            fetch(`/api/families/${familyId}/budget/expenses`, { cache: 'no-store' }).then((res) => {
+              if (!res.ok) throw new Error(`Expense request failed (${res.status})`);
+              return res.json();
+            }),
           ]);
 
           if (Array.isArray(incomeData)) {
@@ -236,6 +229,16 @@ const SimpleBudgetDashboard: React.FC = () => {
             expenseItems = expenseData;
             console.log('Loaded expenses from API:', expenseData.length, 'items');
           }
+        } catch (apiError) {
+          console.warn('Budget API unavailable; using the last device snapshot.', apiError);
+          incomeItems = [
+            ...Object.values(budgetData?.income?.monthly || {}),
+            ...(budgetData?.income?.oneTime || [])
+          ];
+          expenseItems = [
+            ...Object.values(budgetData?.expenses?.recurringMonthly || {}),
+            ...(budgetData?.expenses?.oneTimeSpends || [])
+          ];
         }
 
         if (incomeItems.length || expenseItems.length) {
@@ -317,68 +320,8 @@ const SimpleBudgetDashboard: React.FC = () => {
     void reloadSavingsGoals();
   }, [reloadBudgetCategories, reloadSavingsGoals]);
 
-  const matchesMonthYear = useCallback((item: any, month: number, year: number) => {
-    if (!item || typeof item !== 'object') {
-      return false;
-    }
-
-    // For recurring items, check if target month falls within the recurring date range
-    if ((item as any).isRecurring) {
-      const targetStart = new Date(year, month - 1, 1); // First day of target month
-      const targetEnd = new Date(year, month, 0); // Last day of target month
-
-      // Determine the start date for the recurring item
-      const startDate = item.recurringStartDate
-        ? new Date(item.recurringStartDate)
-        : item.createdAt
-          ? new Date(item.createdAt)
-          : targetStart;
-
-      if (Number.isNaN(startDate.getTime())) {
-        return false;
-      }
-
-      // Check if the target month is before the start date
-      if (targetEnd < startDate) {
-        return false; // Target month is before the recurring period starts
-      }
-
-      // Determine the end date for the recurring item
-      if (item.recurringEndDate) {
-        const endDate = new Date(item.recurringEndDate);
-        if (Number.isNaN(endDate.getTime())) {
-          return false;
-        }
-        // Check if the target month is after the end date
-        if (targetStart > endDate) {
-          return false; // Target month is after the recurring period ends
-        }
-      }
-
-      // Apply frequency logic
-      const frequency = item.recurringFrequency || 'monthly';
-
-      if (frequency === 'weekly') {
-        // For weekly, include if the selected month is within the range
-        // (weekly items appear in every month they're active)
-        return true;
-      } else if (frequency === 'monthly') {
-        // For monthly, include if the selected month is within the range
-        return true;
-      } else if (frequency === 'yearly') {
-        // For yearly, only include if the target month matches the start month
-        return (month - 1) === startDate.getMonth();
-      }
-
-      return true; // Default: include the item
-    }
-
-    // For one-time items, match the exact month/year using paymentDate
-    if (!item.paymentDate && !item.createdAt) return false;
-    const dateToCheck = new Date(item.paymentDate || item.createdAt);
-    if (Number.isNaN(dateToCheck.getTime())) return false;
-    return dateToCheck.getMonth() + 1 === month && dateToCheck.getFullYear() === year;
-  }, []);
+  const matchesMonthYear = useCallback((item: any, month: number, year: number) =>
+    Boolean(item && typeof item === 'object' && plannedForMonth(item, `${year}-${String(month).padStart(2, '0')}`)), []);
 
   // Helper function to filter items by selected month/year (must be before useMemo hooks)
   const filterByMonth = useCallback(

@@ -82,4 +82,12 @@ test('maps Google Places ratings to evidence without copying review text', async
   const result = await searchGooglePlaces({ query: 'Acme', location: 'SE20', specialty: 'roofer' }, 'test-key', fetchImpl);
   expect(result[0]).toMatchObject({ name: 'Acme Roofing', rating: 4.7, reviewCount: 82, specialty: 'roofer' });
   expect(result[0].evidence[0]).toMatchObject({ kind: 'google', rating: 4.7, reviewCount: 82 });
+  expect(fetchImpl).toHaveBeenCalledWith('https://places.googleapis.com/v1/places:searchText', expect.objectContaining({
+    method: 'POST',
+    headers: expect.objectContaining({
+      'X-Goog-Api-Key': 'test-key',
+      'X-Goog-FieldMask': expect.stringContaining('places.userRatingCount'),
+    }),
+    body: JSON.stringify({ textQuery: 'Acme roofer SE20', pageSize: 6, languageCode: 'en', regionCode: 'GB' }),
+  }));
 });

@@ -1,31 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireFamilyAccess } from '@/lib/auth-utils';
+import { monthRangeUtc, plannedForMonth } from '@/lib/budget/plannedMonth';
+import { quoteReferenceSpend, selectedSpend } from '@/lib/sourcing/spend';
+import type { ProjectSourcing } from '@/types/sourcing.types';
 
-const asMonthRange = (value: string | null) => {
-  const match = value?.match(/^(\d{4})-(\d{2})$/);
-  const date = match ? new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, 1)) : new Date();
-  const start = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
-  const end = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 1));
-  return { start, end, key: start.toISOString().slice(0, 7) };
-};
-
-const isInMonth = (value: Date | null, start: Date, end: Date) =>
-  Boolean(value && value >= start && value < end);
-
-const plannedForMonth = (item: { isRecurring: boolean; paymentDate: Date | null; recurringStartDate?: Date | null; recurringEndDate?: Date | null }, start: Date, end: Date) => {
-  if (!item.isRecurring) return isInMonth(item.paymentDate, start, end);
-  if (item.recurringStartDate && item.recurringStartDate >= end) return false;
-  if (item.recurringEndDate && item.recurringEndDate < start) return false;
-  return true;
+const sourcingFrom = (value: unknown): ProjectSourcing | null => {
+  if (!value || typeof value !== 'object') return null;
+  const sourcing = value as Partial<ProjectSourcing>;
+  return Array.isArray(sourcing.requirements) && Array.isArray(sourcing.products) && Array.isArray(sourcing.basket)
+    ? sourcing as ProjectSourcing
+    : null;
 };
 
 export const GET = requireFamilyAccess(async (request: NextRequest, context) => {
   try {
     const { familyId } = await context.params;
-    const { start, end, key } = asMonthRange(new URL(request.url).searchParams.get('month'));
-    const [accounts, transactions, income, expenses, imports] = await Promise.all([
-      prisma.budgetAccount.findMany({ where: { familyId, active: true }, orderBy: { name: 'asc' } }),
+    const { start, end, key } = monthRangeUtc(new URL(request.url).searchParams.get('month') ?? '');
+    const [accounts, transactions, income, expenses, imports, projectDocument] = await Promise.all([
+      prisma.budgetAccount.findMany({
+        where: { familyId, active: true },
+        orderBy: { name: 'asc' },
+        include: {
+          _count: { select: { imports: true, transactions: true } },
+          imports: { orderBy: { createdAt: 'desc' }, take: 1, select: { createdAt: true, statementEnd: true } },
+        },
+      }),
       prisma.budgetTransaction.findMany({
         where: { familyId, transactionDate: { gte: start, lt: end } },
         include: { account: { select: { id: true, name: true } } },
@@ -36,6 +36,10 @@ export const GET = requireFamilyAccess(async (request: NextRequest, context) => 
       prisma.statementImport.findMany({
         where: { familyId, statementStart: { gte: start, lt: end } },
         select: { accountId: true, openingBalance: true, closingBalance: true, statementStart: true, statementEnd: true },
+      }),
+      prisma.familyDocument.findUnique({
+        where: { familyId_key: { familyId, key: 'property.projects' } },
+        select: { data: true, updatedAt: true },
       }),
     ]);
 
@@ -57,11 +61,28 @@ export const GET = requireFamilyAccess(async (request: NextRequest, context) => 
       }, {});
 
     const plannedIncome = income
-      .filter((item) => plannedForMonth(item, start, end))
+      .filter((item) => plannedForMonth(item, key))
       .reduce((total, item) => total + item.amount, 0);
     const plannedExpenses = expenses
-      .filter((item) => plannedForMonth(item, start, end))
+      .filter((item) => plannedForMonth(item, key))
       .reduce((total, item) => total + item.amount, 0);
+
+    const projects = (Array.isArray(projectDocument?.data) ? projectDocument.data : []).flatMap((value) => {
+      if (!value || typeof value !== 'object') return [];
+      const project = value as Record<string, unknown>;
+      const sourcing = sourcingFrom(project.sourcing);
+      const spend = sourcing ? selectedSpend(sourcing) : null;
+      const quote = sourcing ? quoteReferenceSpend(sourcing) : null;
+      return [{
+        id: String(project.id ?? ''),
+        title: String(project.title ?? 'Property project'),
+        status: String(project.status ?? 'planning'),
+        selectedCost: spend ? spend.totalPence / 100 : 0,
+        unknownCostItems: spend?.unknown ?? 0,
+        quoteReference: quote?.totalPence === undefined ? null : quote.totalPence / 100,
+        actualSpend: typeof project.actualSpend === 'number' ? project.actualSpend : null,
+      }];
+    });
 
     const reconciliations = accounts.map((account) => {
       const accountTransactions = transactions.filter((transaction) => transaction.accountId === account.id);
@@ -94,7 +115,20 @@ export const GET = requireFamilyAccess(async (request: NextRequest, context) => 
         transferMovement: transfers,
         plannedIncome,
         plannedExpenses,
-        forecastNet: actualIncome - actualSpend + plannedIncome - plannedExpenses,
+        forecastNet: plannedIncome || plannedExpenses ? plannedIncome - plannedExpenses : actualIncome - actualSpend,
+      },
+      connections: {
+        planned: { incomeItems: income.length, expenseItems: expenses.length },
+        accounts: accounts.map((account) => ({
+          id: account.id,
+          name: account.name,
+          institution: account.institution,
+          importCount: account._count.imports,
+          transactionCount: account._count.transactions,
+          lastImportAt: account.imports[0]?.createdAt ?? null,
+          statementThrough: account.imports[0]?.statementEnd ?? null,
+        })),
+        property: { projects, updatedAt: projectDocument?.updatedAt ?? null },
       },
       categorySpend: Object.entries(byCategory).map(([category, amount]) => ({ category, amount })),
       reconciliations,
