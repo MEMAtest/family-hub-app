@@ -79,9 +79,22 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context, _a
       if (existing && existing.familyId !== familyId) {
         return NextResponse.json({ error: 'Contractor id is already in use' }, { status: 409 });
       }
-      contractor = existing
-        ? await prisma.contractor.update({ where: { id: body.id }, data })
-        : await prisma.contractor.create({ data: { id: body.id, ...data } });
+      if (existing) {
+        contractor = await prisma.contractor.update({ where: { id: body.id }, data });
+      } else {
+        try {
+          contractor = await prisma.contractor.create({ data: { id: body.id, ...data } });
+        } catch (error) {
+          // Treat a repeated client POST as an idempotent save. A concurrent row
+          // belonging to another household must never be updated.
+          if ((error as { code?: string }).code !== 'P2002') throw error;
+          const concurrent = await prisma.contractor.findUnique({ where: { id: body.id }, select: { familyId: true } });
+          if (!concurrent || concurrent.familyId !== familyId) {
+            return NextResponse.json({ error: 'Contractor id is already in use' }, { status: 409 });
+          }
+          contractor = await prisma.contractor.update({ where: { id: body.id }, data });
+        }
+      }
     } else {
       contractor = await prisma.contractor.create({ data });
     }

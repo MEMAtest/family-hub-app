@@ -263,7 +263,7 @@ export const PropertyDashboard = () => {
 
   return (
     <div className="p-2 sm:p-4 lg:p-5">
-      <div className={`overflow-hidden border border-slate-200 bg-slate-50 shadow-sm dark:border-slate-800 dark:bg-slate-950 ${focusedProject ? 'rounded-lg' : 'rounded-lg xl:grid xl:grid-cols-[164px_minmax(0,1fr)]'}`}>
+      <div className={`overflow-clip border border-slate-200 bg-slate-50 shadow-sm dark:border-slate-800 dark:bg-slate-950 ${focusedProject ? 'rounded-lg' : 'rounded-lg xl:grid xl:grid-cols-[164px_minmax(0,1fr)]'}`}>
         {!focusedProject && (
           <aside className="hidden border-r border-slate-200 bg-white px-3 py-5 dark:border-slate-800 dark:bg-slate-900 xl:block">
             <div className="mb-6 px-2">
@@ -277,7 +277,7 @@ export const PropertyDashboard = () => {
           </aside>
         )}
 
-        <main className="min-w-0">
+        <div className="min-w-0">
           <section className={`border-b border-slate-200 bg-white px-4 py-4 dark:border-slate-800 dark:bg-slate-900 sm:px-5 ${focusedProject ? 'py-2' : ''}`}>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0">
@@ -394,7 +394,7 @@ export const PropertyDashboard = () => {
             <PropertyAwarenessTab />
           )}
           </div>
-        </main>
+        </div>
       </div>
 
       {/* Add Task Modal */}

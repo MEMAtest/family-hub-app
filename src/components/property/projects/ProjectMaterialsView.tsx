@@ -111,7 +111,7 @@ export default function ProjectMaterialsView({ project, onUpdateProject, isReadO
   const pendingPlanningProduct = useRef<SourcedProduct>();
   const [plannerOpen, setPlannerOpen] = useState(false);
   const pendingPlannerOpen = useRef(false);
-  const plannerRef = useRef<HTMLDivElement>(null);
+  const plannerRef = useRef<HTMLDetailsElement>(null);
 
   useEffect(() => {
     setRoomId(selectedRoomId ?? null);
@@ -431,7 +431,7 @@ export default function ProjectMaterialsView({ project, onUpdateProject, isReadO
       {requirement && !tiles && <details className="border-b border-gray-200"><summary className="min-h-11 cursor-pointer text-sm text-gray-600">Measurements & room fit</summary><FixtureFitPanel key={requirement.id} requirement={requirement} disabled={isReadOnly} onSaveSpace={(space) => save(saveFixtureSpace(latest.current, requirement.id, space))} /></details>}
       {requirement && <details className="border-b border-gray-200 pb-3"><summary className="min-h-11 cursor-pointer text-sm font-medium">Choice history ({sourcing.choiceHistory?.filter((item) => item.requirementId === requirement.id).length ?? 0})</summary><ul className="space-y-2 text-xs text-gray-600">{sourcing.choiceHistory?.filter((item) => item.requirementId === requirement.id).slice().reverse().map((item) => <li key={item.id} className="break-words">{new Date(item.at).toLocaleString('en-GB')} · {item.selected.name} · {money.format(item.selected.price)}{item.replaced.length ? ` · Replaced: ${item.replaced.map((old) => old.name).join(', ')}` : ' · Selected'}</li>)}</ul></details>}
 
-      {tiles && requirement && <details open={plannerOpen || !!planningProduct} onToggle={(event) => setPlannerOpen(event.currentTarget.open)} className="scroll-mt-24"><summary className="min-h-11 cursor-pointer text-sm text-gray-600">Tile measurements & plan</summary><div ref={plannerRef} className="scroll-mt-24"><TilePlanner key={requirement.id} sourcing={sourcing} requirement={requirement} isReadOnly={isReadOnly} candidate={planningProduct} onSave={saveTileSourcing} /></div></details>}
+      {tiles && requirement && <details ref={plannerRef} open={plannerOpen || !!planningProduct} onToggle={(event) => setPlannerOpen(event.currentTarget.open)} className="scroll-mt-24"><summary className="min-h-11 cursor-pointer text-sm text-gray-600">Tile measurements & plan</summary><div><TilePlanner key={requirement.id} sourcing={sourcing} requirement={requirement} isReadOnly={isReadOnly} candidate={planningProduct} onSave={saveTileSourcing} /></div></details>}
 
       {basket}
       {detailPanel}
