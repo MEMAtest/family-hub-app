@@ -4,6 +4,7 @@ import { requireFamilyAccess } from '@/lib/auth-utils';
 import { monthRangeUtc, plannedForMonth } from '@/lib/budget/plannedMonth';
 import { quoteReferenceSpend, selectedSpend } from '@/lib/sourcing/spend';
 import type { ProjectSourcing } from '@/types/sourcing.types';
+import { deduplicateRecurringItems } from '@/utils/budgetMonthFilter';
 
 const sourcingFrom = (value: unknown): ProjectSourcing | null => {
   if (!value || typeof value !== 'object') return null;
@@ -60,10 +61,12 @@ export const GET = requireFamilyAccess(async (request: NextRequest, context) => 
         return groups;
       }, {});
 
-    const plannedIncome = income
+    const canonicalIncome = deduplicateRecurringItems(income);
+    const canonicalExpenses = deduplicateRecurringItems(expenses);
+    const plannedIncome = canonicalIncome
       .filter((item) => plannedForMonth(item, key))
       .reduce((total, item) => total + item.amount, 0);
-    const plannedExpenses = expenses
+    const plannedExpenses = canonicalExpenses
       .filter((item) => plannedForMonth(item, key))
       .reduce((total, item) => total + item.amount, 0);
 
@@ -118,7 +121,7 @@ export const GET = requireFamilyAccess(async (request: NextRequest, context) => 
         forecastNet: plannedIncome || plannedExpenses ? plannedIncome - plannedExpenses : actualIncome - actualSpend,
       },
       connections: {
-        planned: { incomeItems: income.length, expenseItems: expenses.length },
+        planned: { incomeItems: canonicalIncome.length, expenseItems: canonicalExpenses.length },
         accounts: accounts.map((account) => ({
           id: account.id,
           name: account.name,
