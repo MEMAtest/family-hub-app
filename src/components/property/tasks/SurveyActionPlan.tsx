@@ -148,7 +148,7 @@ export const SurveyActionPlan = ({
               className="min-h-11 w-full rounded-md border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
             />
           </div>
-          <div className="flex gap-2 overflow-x-auto pb-1 lg:pb-0" aria-label="Survey action filters">
+          <div className="scrollbar-hide flex gap-2 overflow-x-auto pb-1 lg:pb-0" aria-label="Survey action filters">
             {filters.map((filter) => (
               <button
                 key={filter.id}
