@@ -1,8 +1,9 @@
 'use client';
 
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls, Html, PerspectiveCamera } from '@react-three/drei';
+import { ContactShadows, OrbitControls, Html, PerspectiveCamera } from '@react-three/drei';
 import { Suspense, useEffect, useMemo, useState } from 'react';
+import { useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { PropertyComponent, PropertyTask } from '@/types/property.types';
 
@@ -11,18 +12,19 @@ interface Property3DViewerProps {
   tasks: PropertyTask[];
   selectedComponent: string | null;
   onSelectComponent: (componentId: string | null) => void;
+  focusFloor?: string;
 }
 
 const HOUSE = {
-  width: 6.6,
-  depth: 6.2,
+  width: 4.8,
+  depth: 8.8,
   height: 8.4,
   roofHeight: 2.3,
 };
 
 const COLORS = {
   render: '#F5F2EA',
-  brick: '#A87853',
+  brick: '#D8D2C8',
   trim: '#F9F9F9',
   roof: '#7F3B2A',
   door: '#6B7D82',
@@ -31,7 +33,6 @@ const COLORS = {
   glass: '#CFE3F6',
   gutter: '#2F3A3E',
   chimney: '#7B5238',
-  ground: '#1F2937',
   hedge: '#2F6B3D',
 };
 
@@ -40,50 +41,6 @@ const STATUS_COLORS = {
   urgent: '#EF4444',
   outstanding: '#F59E0B',
   ok: '#22C55E',
-};
-
-const FACADE_TEXTURE = {
-  url: '/assets/property/tremaine/front.jpg',
-  repeat: [1, 1] as const,
-  offset: [0, 0] as const,
-  rotation: 0,
-  center: [0.5, 0.5] as const,
-};
-
-const useFacadeTexture = () => {
-  const [texture, setTexture] = useState<THREE.Texture | null>(null);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    let isMounted = true;
-    const loader = new THREE.TextureLoader();
-
-    loader.load(
-      FACADE_TEXTURE.url,
-      (loaded) => {
-        if (!isMounted) return;
-        loaded.colorSpace = THREE.SRGBColorSpace;
-        loaded.wrapS = THREE.ClampToEdgeWrapping;
-        loaded.wrapT = THREE.ClampToEdgeWrapping;
-        loaded.repeat.set(...FACADE_TEXTURE.repeat);
-        loaded.offset.set(...FACADE_TEXTURE.offset);
-        loaded.rotation = FACADE_TEXTURE.rotation;
-        loaded.center.set(...FACADE_TEXTURE.center);
-        loaded.anisotropy = 4;
-        setTexture(loaded);
-      },
-      undefined,
-      () => {
-        if (isMounted) setTexture(null);
-      }
-    );
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
-  return texture;
 };
 
 function getComponentStats(componentId: string, tasks: PropertyTask[]) {
@@ -203,7 +160,7 @@ function InteractiveMesh({
 function HouseWindows({ baseZ }: { baseZ: number }) {
   return (
     <group>
-      {/* Upper floor windows */}
+      {/* Second-floor windows */}
       {[-1.2, 1.2].map((x) => (
         <group key={`top-window-${x}`} position={[x, 6.6, baseZ]}>
           <mesh>
@@ -217,7 +174,7 @@ function HouseWindows({ baseZ }: { baseZ: number }) {
         </group>
       ))}
 
-      {/* First floor windows */}
+      {/* First-floor windows */}
       {[-1.5, 1.5].map((x) => (
         <group key={`mid-window-${x}`} position={[x, 4.2, baseZ]}>
           <mesh>
@@ -235,24 +192,22 @@ function HouseWindows({ baseZ }: { baseZ: number }) {
 }
 
 function BayWindow({ baseZ }: { baseZ: number }) {
-  const bayGeometry = useMemo(
-    () => new THREE.CylinderGeometry(1.2, 1.2, 1.25, 24, 1, false, Math.PI / 2, Math.PI),
-    []
-  );
-
   return (
-    <group position={[-1.1, 1.2, baseZ + 0.6]} rotation={[0, Math.PI, 0]}>
-      <mesh geometry={bayGeometry} castShadow receiveShadow>
+    <group position={[-1.05, 1.35, baseZ + 0.34]}>
+      <mesh castShadow receiveShadow>
+        <boxGeometry args={[2.15, 2.55, 0.72]} />
         <meshStandardMaterial color={COLORS.render} />
       </mesh>
-      <mesh position={[0, 0.9, 0.05]}>
-        <boxGeometry args={[2, 0.35, 0.7]} />
+      <mesh position={[0, 1.42, 0]} rotation={[0.08, 0, 0]} castShadow>
+        <boxGeometry args={[2.4, 0.22, 0.96]} />
         <meshStandardMaterial color={COLORS.canopy} />
       </mesh>
-      <mesh position={[0, 0, 0.05]}>
-        <planeGeometry args={[1.8, 0.9]} />
-        <meshStandardMaterial color={COLORS.glass} transparent opacity={0.6} />
-      </mesh>
+      {[-0.66, 0, 0.66].map((x) => (
+        <mesh key={x} position={[x, 0.1, 0.38]}>
+          <boxGeometry args={[0.54, 1.72, 0.05]} />
+          <meshStandardMaterial color={COLORS.glass} roughness={0.25} />
+        </mesh>
+      ))}
     </group>
   );
 }
@@ -357,14 +312,99 @@ function GroundScene() {
     <group>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.05, 0]} receiveShadow>
         <planeGeometry args={[30, 30]} />
-        <meshStandardMaterial color={COLORS.ground} opacity={0.7} transparent />
+        <meshStandardMaterial color="#CBD5E1" />
       </mesh>
-      <mesh position={[-6, 0.4, 2]}>
-        <boxGeometry args={[4, 0.8, 3]} />
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, -8]} receiveShadow>
+        <planeGeometry args={[HOUSE.width - 0.8, 6.5]} />
+        <meshStandardMaterial color="#68865F" />
+      </mesh>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[1.25, 0.02, 7]} receiveShadow>
+        <planeGeometry args={[0.9, 5]} />
+        <meshStandardMaterial color="#4B5563" />
+      </mesh>
+      <mesh position={[-2.1, 0.55, 6.4]}>
+        <boxGeometry args={[0.45, 1.1, 3.6]} />
         <meshStandardMaterial color={COLORS.hedge} />
       </mesh>
     </group>
   );
+}
+
+const floorHeight: Record<string, number> = {
+  cellar: -0.9,
+  ground: 1.15,
+  first: 4.05,
+  second: 6.35,
+  roof: 8.8,
+  exterior: 3.8,
+};
+
+function FocusedFloor({ floor }: { floor: string }) {
+  const height = floorHeight[floor];
+  if (height === undefined || floor === 'roof' || floor === 'exterior') return null;
+  return (
+    <group position={[0, height, 0]}>
+      <mesh receiveShadow castShadow>
+        <boxGeometry args={[HOUSE.width - 0.35, 0.08, HOUSE.depth - 0.35]} />
+        <meshStandardMaterial color="#D8E5E2" roughness={0.9} />
+      </mesh>
+      {/* Perimeter and party walls make this read as a floor-plan cutaway. */}
+      <mesh position={[-2.2, 0.9, 0]} castShadow>
+        <boxGeometry args={[0.14, 1.8, HOUSE.depth - 0.35]} />
+        <meshStandardMaterial color="#F8FAFC" roughness={0.9} />
+      </mesh>
+      <mesh position={[2.2, 0.9, 0]} castShadow>
+        <boxGeometry args={[0.14, 1.8, HOUSE.depth - 0.35]} />
+        <meshStandardMaterial color="#F8FAFC" roughness={0.9} />
+      </mesh>
+      <mesh position={[0, 1.15, -4.2]} castShadow>
+        <boxGeometry args={[4.5, 2.3, 0.14]} />
+        <meshStandardMaterial color="#F8FAFC" roughness={0.9} />
+      </mesh>
+      <mesh position={[0, 0.25, 4.2]} castShadow>
+        <boxGeometry args={[4.5, 0.5, 0.14]} />
+        <meshStandardMaterial color="#F8FAFC" roughness={0.9} />
+      </mesh>
+      <mesh position={[0, 0.78, 0]}>
+        <boxGeometry args={[0.1, 1.55, HOUSE.depth - 0.6]} />
+        <meshStandardMaterial color="#FFFFFF" />
+      </mesh>
+      <mesh position={[-1.15, 0.78, 0.2]}>
+        <boxGeometry args={[2.1, 1.55, 0.1]} />
+        <meshStandardMaterial color="#FFFFFF" />
+      </mesh>
+      <mesh position={[-1.15, 0.1, 2.1]}>
+        <boxGeometry args={[2.1, 0.06, 3.7]} />
+        <meshStandardMaterial color="#C7E4DD" />
+      </mesh>
+      <mesh position={[1.15, 0.1, 2.1]}>
+        <boxGeometry args={[2.1, 0.06, 3.7]} />
+        <meshStandardMaterial color="#D6E3F4" />
+      </mesh>
+      <mesh position={[0, 0.1, -2.1]}>
+        <boxGeometry args={[4.25, 0.06, 3.7]} />
+        <meshStandardMaterial color="#E8E0F2" />
+      </mesh>
+    </group>
+  );
+}
+
+function CameraRig({ focusFloor }: { focusFloor: string }) {
+  const { camera, size } = useThree();
+
+  useEffect(() => {
+    const cutaway = !['all', 'exterior', 'roof'].includes(focusFloor);
+    const targetY = cutaway ? (floorHeight[focusFloor] ?? 3.8) + 0.4 : 4.2;
+    const narrow = size.width / size.height < 0.85;
+    const destination = cutaway
+      ? new THREE.Vector3(narrow ? 6.4 : 7.4, targetY + 8.8, narrow ? 14 : 10.8)
+      : new THREE.Vector3(narrow ? 5.6 : 7.2, 7.2, narrow ? 22.5 : 17.5);
+    camera.position.copy(destination);
+    camera.lookAt(0, targetY, 0);
+    camera.updateProjectionMatrix();
+  }, [camera, focusFloor, size.height, size.width]);
+
+  return null;
 }
 
 function LoadingFallback() {
@@ -383,9 +423,9 @@ export default function Property3DViewer({
   tasks,
   selectedComponent,
   onSelectComponent,
+  focusFloor = 'all',
 }: Property3DViewerProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
-  const facadeTexture = useFacadeTexture();
 
   const componentStats = useMemo(() => {
     const stats = new Map<string, { total: number; outstanding: number; urgent: number }>();
@@ -407,6 +447,13 @@ export default function Property3DViewer({
   const handleSelect = (id: string) => {
     onSelectComponent(selectedComponent === id ? null : id);
   };
+  const componentFloor = useMemo(() => new Map(components.map((component) => [component.id, component.floor])), [components]);
+  const showComponent = (id: string) => {
+    const floor = componentFloor.get(id);
+    if (focusFloor === 'all') return floor === 'exterior' || floor === 'roof';
+    return floor === focusFloor;
+  };
+  const isCutaway = !['all', 'exterior', 'roof'].includes(focusFloor);
 
   const baseZ = HOUSE.depth / 2 + 0.02;
   const chimneyGeometry = useMemo(() => new THREE.BoxGeometry(0.7, 1.8, 0.7), []);
@@ -415,24 +462,12 @@ export default function Property3DViewer({
   const windowsHitboxGeometry = useMemo(() => new THREE.BoxGeometry(4.8, 4.8, 0.2), []);
   const doorHitboxGeometry = useMemo(() => new THREE.BoxGeometry(1.2, 2.4, 0.2), []);
 
-  const facadeMaterial = facadeTexture
-    ? {
-        map: facadeTexture,
-        color: '#ffffff',
-        roughness: 0.88,
-        metalness: 0.05,
-      }
-    : {
-        color: COLORS.render,
-        roughness: 0.9,
-        metalness: 0.05,
-      };
-
   return (
-    <div className="relative w-full h-[500px] rounded-xl overflow-hidden bg-gradient-to-b from-slate-100 to-slate-200 dark:from-slate-900 dark:to-slate-800">
+    <div className="relative h-[420px] w-full overflow-hidden rounded-lg bg-slate-200 dark:bg-slate-950 sm:h-[500px]">
       <Suspense fallback={<LoadingFallback />}> 
         <Canvas shadows>
-          <PerspectiveCamera makeDefault position={[12, 8, 12]} fov={45} />
+          <PerspectiveCamera makeDefault position={[7.2, 7.2, 17.5]} fov={42} />
+          <CameraRig focusFloor={focusFloor} />
           <ambientLight intensity={0.6} />
           <directionalLight
             position={[12, 16, 8]}
@@ -445,25 +480,32 @@ export default function Property3DViewer({
           <GroundScene />
 
           {/* Main house body */}
-          <mesh position={[0, HOUSE.height / 2, 0]} castShadow receiveShadow>
+          <mesh visible={!isCutaway} position={[0, HOUSE.height / 2, 0]} castShadow receiveShadow>
             <boxGeometry args={[HOUSE.width, HOUSE.height, HOUSE.depth]} />
-            <meshStandardMaterial color={COLORS.brick} />
+            <meshStandardMaterial color="#B7A58E" roughness={0.95} />
           </mesh>
-          <mesh position={[0, HOUSE.height / 2, HOUSE.depth / 2 + 0.01]}>
+          <mesh visible={!isCutaway} position={[0, HOUSE.height / 2, HOUSE.depth / 2 + 0.01]}>
             <planeGeometry args={[HOUSE.width - 0.3, HOUSE.height - 0.4]} />
-            <meshStandardMaterial {...facadeMaterial} />
+            <meshStandardMaterial color={COLORS.render} roughness={0.9} />
           </mesh>
+          {!isCutaway && [2.75, 5.45].map((y) => (
+            <mesh key={y} position={[0, y, HOUSE.depth / 2 + 0.06]}>
+              <boxGeometry args={[HOUSE.width - 0.16, 0.11, 0.1]} />
+              <meshStandardMaterial color="#D7D1C8" />
+            </mesh>
+          ))}
+          <FocusedFloor floor={focusFloor} />
 
           {/* Roof + gutters + chimney */}
-          <Roof
+          {showComponent('roof-main') && <Roof
             stats={getStats('roof-main')}
             selectedComponent={selectedComponent}
             hoveredId={hoveredId}
             setHoveredId={setHoveredId}
             onSelect={handleSelect}
-          />
+          />}
 
-          <InteractiveMesh
+          {showComponent('chimney') && <InteractiveMesh
             id="chimney"
             label={getLabel('chimney')}
             stats={getStats('chimney')}
@@ -474,9 +516,9 @@ export default function Property3DViewer({
             setHoveredId={setHoveredId}
             onSelect={handleSelect}
             position={[1.6, HOUSE.height + 1.3, -1]}
-          />
+          />}
 
-          <InteractiveMesh
+          {showComponent('gutters') && <InteractiveMesh
             id="gutters"
             label={getLabel('gutters')}
             stats={getStats('gutters')}
@@ -488,9 +530,9 @@ export default function Property3DViewer({
             onSelect={handleSelect}
             position={[0, HOUSE.height - 0.1, HOUSE.depth / 2 + 0.15]}
             badgeOffset={0.3}
-          />
+          />}
 
-          <InteractiveMesh
+          {showComponent('roof-parapet') && <InteractiveMesh
             id="roof-parapet"
             label={getLabel('roof-parapet')}
             stats={getStats('roof-parapet')}
@@ -502,15 +544,15 @@ export default function Property3DViewer({
             onSelect={handleSelect}
             position={[0, HOUSE.height - 0.45, HOUSE.depth / 2 - 0.05]}
             badgeOffset={0.3}
-          />
+          />}
 
           {/* Facade details */}
-          <BayWindow baseZ={baseZ} />
-          <Doorway baseZ={baseZ} />
-          <HouseWindows baseZ={baseZ} />
+          {!isCutaway && <BayWindow baseZ={baseZ} />}
+          {!isCutaway && <Doorway baseZ={baseZ} />}
+          {!isCutaway && <HouseWindows baseZ={baseZ} />}
 
           {/* Window hitbox for tasks */}
-          <InteractiveMesh
+          {showComponent('windows') && <InteractiveMesh
             id="windows"
             label={getLabel('windows')}
             stats={getStats('windows')}
@@ -524,9 +566,9 @@ export default function Property3DViewer({
             onSelect={handleSelect}
             position={[0, 5.2, HOUSE.depth / 2 + 0.12]}
             badgeOffset={2.4}
-          />
+          />}
 
-          <InteractiveMesh
+          {showComponent('doors') && <InteractiveMesh
             id="doors"
             label={getLabel('doors')}
             stats={getStats('doors')}
@@ -540,10 +582,10 @@ export default function Property3DViewer({
             onSelect={handleSelect}
             position={[1.6, 1.2, HOUSE.depth / 2 + 0.12]}
             badgeOffset={1.4}
-          />
+          />}
 
           {/* Interior hotspots */}
-          <UtilityHotspot
+          {showComponent('cellar') && <UtilityHotspot
             id="cellar"
             label={getLabel('cellar')}
             position={[-1.5, -1.2, 0]}
@@ -552,8 +594,8 @@ export default function Property3DViewer({
             hoveredId={hoveredId}
             setHoveredId={setHoveredId}
             onSelect={handleSelect}
-          />
-          <UtilityHotspot
+          />}
+          {showComponent('kitchen') && <UtilityHotspot
             id="kitchen"
             label={getLabel('kitchen')}
             position={[-1.2, 1.2, -1.6]}
@@ -562,8 +604,8 @@ export default function Property3DViewer({
             hoveredId={hoveredId}
             setHoveredId={setHoveredId}
             onSelect={handleSelect}
-          />
-          <UtilityHotspot
+          />}
+          {showComponent('bathroom') && <UtilityHotspot
             id="bathroom"
             label={getLabel('bathroom')}
             position={[1.2, 4.1, -1.4]}
@@ -572,8 +614,8 @@ export default function Property3DViewer({
             hoveredId={hoveredId}
             setHoveredId={setHoveredId}
             onSelect={handleSelect}
-          />
-          <UtilityHotspot
+          />}
+          {showComponent('bedroom-front-2') && <UtilityHotspot
             id="bedroom-front-2"
             label={getLabel('bedroom-front-2')}
             position={[-1.2, 6.4, 1.4]}
@@ -582,8 +624,8 @@ export default function Property3DViewer({
             hoveredId={hoveredId}
             setHoveredId={setHoveredId}
             onSelect={handleSelect}
-          />
-          <UtilityHotspot
+          />}
+          {showComponent('bedroom-rear-2') && <UtilityHotspot
             id="bedroom-rear-2"
             label={getLabel('bedroom-rear-2')}
             position={[1.2, 6.4, -1.6]}
@@ -592,8 +634,8 @@ export default function Property3DViewer({
             hoveredId={hoveredId}
             setHoveredId={setHoveredId}
             onSelect={handleSelect}
-          />
-          <UtilityHotspot
+          />}
+          {showComponent('electrics') && <UtilityHotspot
             id="electrics"
             label={getLabel('electrics')}
             position={[-2.2, 1.2, -0.2]}
@@ -602,8 +644,8 @@ export default function Property3DViewer({
             hoveredId={hoveredId}
             setHoveredId={setHoveredId}
             onSelect={handleSelect}
-          />
-          <UtilityHotspot
+          />}
+          {showComponent('heating') && <UtilityHotspot
             id="heating"
             label={getLabel('heating')}
             position={[2.2, 1.2, -0.2]}
@@ -612,8 +654,8 @@ export default function Property3DViewer({
             hoveredId={hoveredId}
             setHoveredId={setHoveredId}
             onSelect={handleSelect}
-          />
-          <UtilityHotspot
+          />}
+          {showComponent('plumbing') && <UtilityHotspot
             id="plumbing"
             label={getLabel('plumbing')}
             position={[0, 1.2, -2.2]}
@@ -622,8 +664,8 @@ export default function Property3DViewer({
             hoveredId={hoveredId}
             setHoveredId={setHoveredId}
             onSelect={handleSelect}
-          />
-          <UtilityHotspot
+          />}
+          {showComponent('fire-safety') && <UtilityHotspot
             id="fire-safety"
             label={getLabel('fire-safety')}
             position={[0, 4.1, 0]}
@@ -632,8 +674,8 @@ export default function Property3DViewer({
             hoveredId={hoveredId}
             setHoveredId={setHoveredId}
             onSelect={handleSelect}
-          />
-          <UtilityHotspot
+          />}
+          {showComponent('drainage') && <UtilityHotspot
             id="drainage"
             label={getLabel('drainage')}
             position={[2.6, 0.6, HOUSE.depth / 2 + 0.8]}
@@ -642,7 +684,9 @@ export default function Property3DViewer({
             hoveredId={hoveredId}
             setHoveredId={setHoveredId}
             onSelect={handleSelect}
-          />
+          />}
+
+          <ContactShadows position={[0, 0.02, 0]} opacity={0.28} scale={18} blur={2.4} far={18} />
 
           <OrbitControls
             enablePan
@@ -651,13 +695,14 @@ export default function Property3DViewer({
             minDistance={8}
             maxDistance={28}
             maxPolarAngle={Math.PI / 2}
+            target={[0, focusFloor === 'all' ? 4.2 : (floorHeight[focusFloor] ?? 4) + 0.4, 0]}
           />
         </Canvas>
       </Suspense>
 
-      <div className="absolute bottom-4 left-4 bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm rounded-lg p-3 shadow-lg">
-        <div className="text-xs font-semibold text-slate-700 dark:text-slate-200 mb-2">Task Status</div>
-        <div className="space-y-1.5">
+      <div className="absolute bottom-2 left-2 right-2 rounded-md bg-white/92 p-2 shadow-lg backdrop-blur-sm dark:bg-slate-800/92 sm:bottom-4 sm:left-4 sm:right-auto sm:p-3">
+        <div className="mb-2 hidden text-xs font-semibold text-slate-700 dark:text-slate-200 sm:block">Task Status</div>
+        <div className="flex flex-wrap gap-x-3 gap-y-1.5 sm:block sm:space-y-1.5">
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 rounded-full bg-red-500"></div>
             <span className="text-xs text-slate-600 dark:text-slate-300">Urgent tasks</span>
@@ -671,26 +716,8 @@ export default function Property3DViewer({
             <span className="text-xs text-slate-600 dark:text-slate-300">All complete</span>
           </div>
         </div>
-        <div className="mt-3 pt-2 border-t border-slate-200 dark:border-slate-600">
-          <div className="text-xs text-slate-500 dark:text-slate-400">
-            Click a highlighted element to filter tasks
-          </div>
-        </div>
       </div>
 
-      <div className="absolute top-4 right-4 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-lg px-3 py-2 text-xs text-slate-600 dark:text-slate-300">
-        <div className="flex items-center gap-2">
-          <span>Drag to rotate</span>
-          <span className="text-slate-400">|</span>
-          <span>Scroll to zoom</span>
-        </div>
-      </div>
-
-      {!facadeTexture && (
-        <div className="absolute top-4 left-4 max-w-[220px] rounded-lg bg-amber-50/90 px-3 py-2 text-xs text-amber-800 shadow-sm">
-          Add `public/assets/property/tremaine/front.jpg` to texture the facade.
-        </div>
-      )}
     </div>
   );
 }

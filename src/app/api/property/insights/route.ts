@@ -73,7 +73,7 @@ export async function GET(request: NextRequest) {
         links: [
           {
             label: 'Verify Bromley planning',
-            url: `https://pa.bromley.gov.uk/online-applications/search.do?action=simple&searchType=Application&postcode=${encodedPostcode}`,
+            url: 'https://www.bromley.gov.uk/planningaccess',
           },
         ],
       },

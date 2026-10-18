@@ -8,7 +8,7 @@ import {
 
 const createdAt = '2024-01-16T12:00:00Z';
 const BROMLEY_PLANNING_SEARCH_URL =
-  'https://pa.bromley.gov.uk/online-applications/search.do?action=simple&searchType=Application&postcode=SE20%207UA';
+  'https://www.bromley.gov.uk/planningaccess';
 
 export const tremaineRoadBaseline: PropertyBaseline = {
   propertyName: 'Tremaine Improvements',

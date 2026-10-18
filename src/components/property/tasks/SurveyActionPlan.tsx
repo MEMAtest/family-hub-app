@@ -17,8 +17,10 @@ import {
 } from 'lucide-react';
 import {
   contractorSpecialtyForTask,
+  linkedSurveyTasks,
   orderedSurveyTasks,
   surveyActionLane,
+  surveyExplanation,
   surveyPlanSummary,
   surveyWorkPackages,
   type SurveyActionLane,
@@ -37,6 +39,13 @@ const laneContent: Record<SurveyActionLane, { label: string; className: string }
   verify_work: { label: 'Check proof', className: 'bg-violet-50 text-violet-700 dark:bg-violet-500/15 dark:text-violet-200' },
   plan_next: { label: 'Plan next', className: 'bg-amber-50 text-amber-700 dark:bg-amber-500/15 dark:text-amber-200' },
   complete: { label: 'Complete', className: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-200' },
+};
+
+const riskContent = {
+  critical: 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-500/10 dark:text-rose-200',
+  prevent_damage: 'border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-800 dark:bg-orange-500/10 dark:text-orange-200',
+  maintenance: 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-500/10 dark:text-blue-200',
+  cosmetic: 'border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300',
 };
 
 type LaneFilter = 'all' | SurveyActionLane;
@@ -121,7 +130,7 @@ export const SurveyActionPlan = ({
           </div>
         </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
           {filters.slice(1).map((filter) => (
             <button
               key={filter.id}
@@ -133,6 +142,11 @@ export const SurveyActionPlan = ({
               <p className="mt-1 text-2xl font-semibold text-slate-950 dark:text-white">{filter.count}</p>
             </button>
           ))}
+          <div className="col-span-2 min-h-20 rounded-md border border-emerald-200 bg-emerald-50 p-3 sm:col-span-1 dark:border-emerald-800 dark:bg-emerald-500/10">
+            <p className="text-xs font-medium text-emerald-700 dark:text-emerald-200">Likely remaining spend</p>
+            <p className="mt-1 text-lg font-semibold text-slate-950 dark:text-white">{money.format(summary.remainingCostMin)}–{money.format(summary.remainingCostMax)}</p>
+            <p className="text-[11px] text-slate-500">App estimates · {summary.unpriced ? `${summary.unpriced} unpriced` : 'all priced'}</p>
+          </div>
         </div>
       </div>
 
@@ -171,6 +185,8 @@ export const SurveyActionPlan = ({
           {visible.map((task) => {
             const lane = surveyActionLane(task);
             const presentation = laneContent[lane];
+            const explanation = surveyExplanation(task);
+            const linked = linkedSurveyTasks(task, tasks);
             const startStatus: PropertyTaskStatus = task.status === 'verify' ? 'completed' : 'in_progress';
             const specialty = contractorSpecialtyForTask(task);
             return (
@@ -181,9 +197,27 @@ export const SurveyActionPlan = ({
                       <span className={`rounded px-2 py-1 text-[11px] font-semibold ${presentation.className}`}>{presentation.label}</span>
                       <span className="text-xs text-slate-500">{task.pageReference || 'Survey reference'}</span>
                     </div>
+                    <span className={`mt-2 inline-flex rounded border px-2 py-1 text-[11px] font-semibold ${riskContent[explanation.risk]}`}>{explanation.riskLabel}</span>
                     <h3 className="mt-2 text-sm font-semibold leading-5 text-slate-950 dark:text-white">{task.title}</h3>
-                    <p className="mt-1 text-xs font-semibold text-slate-500">Survey finding</p>
-                    <p className="mt-0.5 text-xs leading-5 text-slate-600 dark:text-slate-300">{task.surveyEvidence || task.impact}</p>
+                    <dl className="mt-2 grid gap-2 text-xs leading-5 sm:grid-cols-2">
+                      <div>
+                        <dt className="font-semibold text-slate-500">What it means</dt>
+                        <dd className="text-slate-700 dark:text-slate-200">{explanation.meaning}</dd>
+                      </div>
+                      <div>
+                        <dt className="font-semibold text-slate-500">How to resolve it</dt>
+                        <dd className="text-slate-700 dark:text-slate-200">{explanation.resolution}</dd>
+                      </div>
+                    </dl>
+                    <details className="mt-2 text-xs text-slate-500">
+                      <summary className="min-h-8 cursor-pointer py-1 font-medium text-blue-700 dark:text-blue-300">Read survey evidence</summary>
+                      <p className="border-l-2 border-slate-200 pl-3 leading-5 dark:border-slate-700">{task.surveyEvidence || task.impact}</p>
+                    </details>
+                    {linked.length > 0 && (
+                      <p className="mt-2 text-[11px] leading-4 text-slate-500">
+                        Linked finding{linked.length === 1 ? '' : 's'}: {linked.map((item) => item.category).filter((value, index, all) => all.indexOf(value) === index).join(', ')}
+                      </p>
+                    )}
                   </div>
                   <div className="text-xs text-slate-600 dark:text-slate-300">
                     <span className="mb-1 block font-semibold text-slate-500 lg:hidden">Trade</span>

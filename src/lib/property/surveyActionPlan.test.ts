@@ -3,6 +3,8 @@ import {
   canonicalSurveyTasks,
   contractorSpecialtyForTask,
   orderedSurveyTasks,
+  linkedSurveyTasks,
+  surveyExplanation,
   surveyPlanSummary,
   surveyWorkPackages,
 } from './surveyActionPlan';
@@ -11,7 +13,7 @@ describe('survey action plan', () => {
   test('folds noisy PDF extracts into the curated Tremaine Road task register', () => {
     const summary = surveyPlanSummary(tremaineRoadTasks);
 
-    expect(summary).toEqual({
+    expect(summary).toMatchObject({
       total: 20,
       complete: 4,
       actNow: 6,
@@ -19,6 +21,8 @@ describe('survey action plan', () => {
       planNext: 7,
       foldedExtracts: 21,
     });
+    expect(summary.remainingCostMin).toBeGreaterThan(0);
+    expect(summary.remainingCostMax).toBeGreaterThan(summary.remainingCostMin);
     expect(canonicalSurveyTasks(tremaineRoadTasks)).toHaveLength(20);
   });
 
@@ -48,5 +52,15 @@ describe('survey action plan', () => {
     expect(contractorSpecialtyForTask(tremaineRoadTasks.find((task) => task.id === 'task-tremaine-05')!)).toBe('structural_engineer');
     expect(contractorSpecialtyForTask(tremaineRoadTasks.find((task) => task.id === 'task-tremaine-06')!)).toBe('damp_specialist');
     expect(contractorSpecialtyForTask(tremaineRoadTasks.find((task) => task.id === 'task-tremaine-10')!)).toBe('drainage_specialist');
+  });
+
+  test('turns technical findings into plain-English decisions and links related work', () => {
+    const roof = tremaineRoadTasks.find((task) => task.id === 'task-tremaine-03')!;
+    const explanation = surveyExplanation(roof);
+
+    expect(explanation.risk).toBe('prevent_damage');
+    expect(explanation.meaning).toMatch(/water/i);
+    expect(explanation.resolution).toMatch(/roofer/i);
+    expect(linkedSurveyTasks(roof, tremaineRoadTasks).some((task) => task.id === 'task-tremaine-04')).toBe(true);
   });
 });

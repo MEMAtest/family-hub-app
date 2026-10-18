@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
-import { Box, Grid3X3 } from 'lucide-react';
+import { AlertTriangle, Box, CheckCircle2, Grid3X3, PoundSterling } from 'lucide-react';
 import { PropertySectionHeader } from '../common/PropertySectionHeader';
 import type { PropertyTask, PropertyComponent } from '@/types/property.types';
 import { formatDate } from '@/utils/formatDate';
@@ -43,6 +43,7 @@ export const PropertyDigitalTwinTab = ({
   onSelectComponent,
 }: PropertyDigitalTwinTabProps) => {
   const [viewMode, setViewMode] = useState<'2d' | '3d'>('3d');
+  const [focusFloor, setFocusFloor] = useState('all');
 
   // Group components by floor
   const floors = useMemo(() => {
@@ -100,16 +101,30 @@ export const PropertyDigitalTwinTab = ({
   const selectedStats = selectedComponent
     ? componentStats.get(selectedComponent)
     : null;
+  const selectedTasks = useMemo(
+    () => selectedComponent
+      ? tasks.filter((task) => task.components?.includes(selectedComponent))
+      : [],
+    [selectedComponent, tasks]
+  );
+  const selectedEstimate = selectedTasks
+    .filter((task) => task.status !== 'completed' && task.defaultCostRange)
+    .reduce((total, task) => ({
+      min: total.min + (task.defaultCostRange?.min ?? 0),
+      max: total.max + (task.defaultCostRange?.max ?? 0),
+    }), { min: 0, max: 0 });
+  const money = new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 0 });
+  const floorOptions = ['all', 'exterior', 'roof', 'second', 'first', 'ground', 'cellar'];
 
   return (
-    <div className="space-y-4">
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(260px,.6fr)]">
+    <div className="min-w-0 space-y-4">
+      <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(260px,.6fr)]">
         {/* Digital Twin Viewer */}
-        <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-5">
-          <div className="flex items-center justify-between">
+        <section className="min-w-0 rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <PropertySectionHeader
-              title={viewMode === '3d' ? 'Digital Twin (3D Model)' : 'Digital Twin (2D Map)'}
-              subtitle="Tap a room or element to view details"
+              title={viewMode === '3d' ? '21 Tremaine Road model' : 'Tremaine component map'}
+              subtitle="Photo-referenced exterior with survey findings mapped to building elements"
               icon={viewMode === '3d' ? Box : Grid3X3}
             />
             <div className="flex items-center gap-1 rounded-md border border-slate-200 p-1 dark:border-slate-700">
@@ -138,17 +153,29 @@ export const PropertyDigitalTwinTab = ({
             </div>
           </div>
 
-          <div className="mt-4">
+          <div className="scrollbar-hide mt-4 flex gap-1 overflow-x-auto border-b border-slate-200 pb-3 dark:border-slate-700" aria-label="Model floor">
+            {floorOptions.map((floor) => {
+              const count = floor === 'all' ? components.length : components.filter((component) => component.floor === floor).length;
+              return (
+                <button key={floor} type="button" onClick={() => setFocusFloor(floor)} className={`min-h-9 shrink-0 rounded-md px-3 text-xs font-semibold ${focusFloor === floor ? 'bg-slate-900 text-white dark:bg-blue-600' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'}`}>
+                  {floor === 'all' ? 'Whole house' : floorLabels[floor] || floor} <span className="opacity-65">{count}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="mt-4 min-w-0">
             {viewMode === '3d' ? (
               <Property3DViewer
                 components={components}
                 tasks={tasks}
                 selectedComponent={selectedComponent}
                 onSelectComponent={onSelectComponent}
+                focusFloor={focusFloor}
               />
             ) : (
               <div className="grid gap-4 sm:grid-cols-2">
-                {floors.map(([floor, floorComponents]) => (
+                {floors.filter(([floor]) => focusFloor === 'all' || floor === focusFloor).map(([floor, floorComponents]) => (
                   <div
                     key={floor}
                     className="rounded-lg border border-slate-200 p-3 dark:border-slate-800"
@@ -186,10 +213,10 @@ export const PropertyDigitalTwinTab = ({
         </section>
 
         {/* Component Snapshot Panel */}
-        <aside className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-5">
+        <aside className="min-w-0 rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-5">
           <PropertySectionHeader
-            title="Component Snapshot"
-            subtitle="Last repair, next due, evidence"
+            title="Selected element"
+            subtitle="Condition, actions and likely cost"
           />
           <div className="mt-4 space-y-4">
             {selectedComponentData ? (
@@ -202,8 +229,8 @@ export const PropertyDigitalTwinTab = ({
                     {floorLabels[selectedComponentData.floor] || selectedComponentData.floor}
                   </p>
                 </div>
-                <div className="grid gap-3">
-                  <div className="rounded-lg border border-gray-200 p-3 text-sm text-gray-600 dark:border-slate-800 dark:text-slate-300">
+                <div className="grid gap-px overflow-hidden rounded-md border border-slate-200 bg-slate-200 dark:border-slate-700 dark:bg-slate-700">
+                  <div className="bg-white p-3 text-sm text-gray-600 dark:bg-slate-900 dark:text-slate-300">
                     <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">
                       Last repair
                     </p>
@@ -213,7 +240,7 @@ export const PropertyDigitalTwinTab = ({
                         : 'No repairs logged'}
                     </p>
                   </div>
-                  <div className="rounded-lg border border-gray-200 p-3 text-sm text-gray-600 dark:border-slate-800 dark:text-slate-300">
+                  <div className="bg-white p-3 text-sm text-gray-600 dark:bg-slate-900 dark:text-slate-300">
                     <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">
                       Next due
                     </p>
@@ -223,7 +250,7 @@ export const PropertyDigitalTwinTab = ({
                         : 'Not scheduled'}
                     </p>
                   </div>
-                  <div className="rounded-lg border border-gray-200 p-3 text-sm text-gray-600 dark:border-slate-800 dark:text-slate-300">
+                  <div className="bg-white p-3 text-sm text-gray-600 dark:bg-slate-900 dark:text-slate-300">
                     <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">
                       Evidence
                     </p>
@@ -233,12 +260,26 @@ export const PropertyDigitalTwinTab = ({
                         : 'No evidence yet'}
                     </p>
                   </div>
-                  <div className="rounded-lg border border-gray-200 p-3 text-sm text-gray-600 dark:border-slate-800 dark:text-slate-300">
+                  <div className="bg-white p-3 text-sm text-gray-600 dark:bg-slate-900 dark:text-slate-300">
                     <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">
                       Related tasks
                     </p>
                     <p>{selectedStats?.taskCount || 0} tasks</p>
                   </div>
+                </div>
+                {selectedEstimate.max > 0 && (
+                  <div className="flex items-start gap-2 rounded-md bg-emerald-50 p-3 text-sm text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-200">
+                    <PoundSterling className="mt-0.5 h-4 w-4 shrink-0" />
+                    <div><p className="font-semibold">{money.format(selectedEstimate.min)}–{money.format(selectedEstimate.max)}</p><p className="text-xs opacity-80">Likely remaining app estimate for this element</p></div>
+                  </div>
+                )}
+                <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {selectedTasks.slice(0, 5).map((task) => (
+                    <div key={task.id} className="flex items-start gap-2 py-3 text-xs">
+                      {task.status === 'completed' ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" /> : <AlertTriangle className={`mt-0.5 h-4 w-4 shrink-0 ${task.priority === 'urgent' ? 'text-rose-600' : 'text-amber-500'}`} />}
+                      <div><p className="font-semibold text-slate-900 dark:text-white">{task.title}</p><p className="mt-1 text-slate-500">{task.status === 'completed' ? 'Recorded complete' : task.status === 'verify' ? 'Needs completion evidence' : task.timeframe}</p></div>
+                    </div>
+                  ))}
                 </div>
               </>
             ) : (
@@ -249,6 +290,9 @@ export const PropertyDigitalTwinTab = ({
               </div>
             )}
           </div>
+          <p className="mt-4 border-t border-slate-200 pt-3 text-xs leading-5 text-slate-500 dark:border-slate-700">
+            Model basis: front and rear property photos plus the survey component map. Room positions are indicative until measured floor plans are added.
+          </p>
         </aside>
       </div>
     </div>

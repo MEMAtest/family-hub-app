@@ -2,7 +2,20 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
   getPropertyValuation,
   toPropertyValueEntry,
+  type PricePaidRecord,
 } from '@/services/propertyValuationService';
+
+const serializeSale = (sale: PricePaidRecord) => ({
+  transactionId: sale.transactionId,
+  sourceUrl: sale.sourceUrl,
+  address: [sale.paon, sale.street, sale.town, sale.postcode]
+    .filter(Boolean)
+    .join(', '),
+  price: sale.price,
+  date: sale.date,
+  propertyType: sale.propertyType,
+  newBuild: sale.newBuild,
+});
 
 /**
  * GET /api/property/valuation
@@ -81,21 +94,15 @@ export async function GET(request: NextRequest) {
             medianPrice: result.areaStats.medianPrice,
             transactions: result.areaStats.transactions,
             priceRange: result.areaStats.priceRange,
+            lowestSale: serializeSale(result.areaStats.lowestSale),
+            highestSale: serializeSale(result.areaStats.highestSale),
             period: result.areaStats.period,
             scope: result.areaStatsScope,
           }
         : null,
       estimatedValue: result.estimatedValue,
       estimateBreakdown: result.estimateBreakdown,
-      comparableSales: result.comparables.map((sale) => ({
-        address: [sale.paon, sale.street, sale.town, sale.postcode]
-          .filter(Boolean)
-          .join(', '),
-        price: sale.price,
-        date: sale.date,
-        propertyType: sale.propertyType,
-        newBuild: sale.newBuild,
-      })),
+      comparableSales: result.comparables.map(serializeSale),
       comparableScope: result.comparableScope,
       streetsUsed: result.streetsUsed,
       valueEntry,

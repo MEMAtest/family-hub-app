@@ -1,228 +1,196 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-/**
- * GET /api/property/council-news
- *
- * Fetches local council news and updates for a given postcode area.
- * Sources:
- * - Bromley Council website
- * - Planning portal
- * - Roadworks notifications
- *
- * Query params:
- * - postcode: Required. UK postcode (e.g., "SE20 7UA")
- * - categories: Optional. Comma-separated list of categories to filter
- */
+type CouncilCategory = 'planning' | 'roadworks' | 'events' | 'services' | 'general';
 
 interface CouncilNewsItem {
   id: string;
   title: string;
   summary: string;
   date: string;
-  category: 'planning' | 'roadworks' | 'events' | 'services' | 'general';
+  category: CouncilCategory;
   url?: string;
   priority: 'low' | 'medium' | 'high';
   source: string;
+  reference?: string;
+  address?: string;
+  status?: string;
+  distanceMetres?: number;
+  sourceUpdatedAt?: string;
 }
 
-// Bromley Council RSS/API endpoints
-const BROMLEY_SOURCES = {
-  news: 'https://www.bromley.gov.uk/news',
-  planning: 'https://pa.bromley.gov.uk/online-applications/',
-  roadworks: 'https://one.network/',
+interface PlanningApplicationSource {
+  id: string;
+  lpa_app_no?: string;
+  valid_date?: string;
+  decision_date?: string;
+  last_updated?: string;
+  application_type?: string;
+  site_number?: string;
+  street_name?: string;
+  postcode?: string;
+  description?: string;
+  status?: string;
+  decision?: string;
+  centroid?: { lat: number | string; lon: number | string };
+}
+
+const BROMLEY_REGISTER_URL = 'https://www.bromley.gov.uk/planningaccess';
+const LONDON_PLANNING_API = 'https://planningdata.london.gov.uk/api-guest/applications/_search';
+const LONDON_PLANNING_HEADER = 'be2rmRnt&';
+
+const isoDate = (value?: string) => {
+  if (!value) return '';
+  const match = value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (match) return `${match[3]}-${match[2]}-${match[1]}`;
+  const timestamp = new Date(value).getTime();
+  return Number.isNaN(timestamp) ? '' : new Date(timestamp).toISOString().slice(0, 10);
 };
 
-/**
- * Fetch planning applications near a postcode
- * Note: In production, this would use the Planning Portal API
- */
-async function fetchPlanningNews(postcode: string): Promise<CouncilNewsItem[]> {
-  // The Planning Portal doesn't have a simple public API
-  // In production, you'd use their API or scrape the results page
-  // For now, return placeholder data based on the postcode
+const distanceMetres = (from: { lat: number; lon: number }, to?: PlanningApplicationSource['centroid']) => {
+  if (!to) return undefined;
+  const lat = Number(to.lat);
+  const lon = Number(to.lon);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return undefined;
+  const radius = 6_371_000;
+  const radians = (degrees: number) => degrees * Math.PI / 180;
+  const dLat = radians(lat - from.lat);
+  const dLon = radians(lon - from.lon);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(radians(from.lat)) * Math.cos(radians(lat)) * Math.sin(dLon / 2) ** 2;
+  return Math.round(radius * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+};
 
-  const postcodeArea = postcode.split(' ')[0];
+const statusExplanation = (application: PlanningApplicationSource) => {
+  const status = application.status || application.decision || 'Status not supplied';
+  if (/under consideration|pending/i.test(status)) return 'The council has not recorded a decision yet. Open the register if you want to review or comment.';
+  if (/approved|granted|not required|no objection/i.test(status)) return 'The council has allowed this proposal or confirmed that formal permission is not required.';
+  if (/refused|dismissed/i.test(status)) return 'The council did not allow this proposal in its recorded form.';
+  if (/withdrawn|lapsed/i.test(status)) return 'This proposal is not currently progressing under this application.';
+  return `Council status: ${status}.`;
+};
 
-  // Mock data - in production, fetch from planning portal
-  return [
-    {
-      id: `planning-${postcodeArea}-1`,
-      title: `Planning Applications in ${postcodeArea}`,
-      summary: `View current planning applications within 500m of ${postcode}. Check for extensions, new builds, and change of use applications that may affect your area.`,
-      date: new Date().toISOString().split('T')[0],
-      category: 'planning',
-      url: `${BROMLEY_SOURCES.planning}search.do?action=simple&searchType=Application&postcode=${encodeURIComponent(postcode)}`,
-      priority: 'medium',
-      source: 'Bromley Planning Portal',
+const applicationAddress = (application: PlanningApplicationSource) =>
+  [application.site_number, application.street_name, application.postcode].filter(Boolean).join(' ') || 'Address not supplied';
+
+const toPlanningNewsItem = (
+  application: PlanningApplicationSource,
+  propertyLocation: { lat: number; lon: number }
+): CouncilNewsItem => {
+  const address = applicationAddress(application);
+  const distance = distanceMetres(propertyLocation, application.centroid);
+  const description = (application.description || 'The council record does not include a description.').replace(/\s+/g, ' ').trim();
+  return {
+    id: application.id,
+    title: `${address}: ${application.application_type || 'Planning application'}`,
+    summary: `${description}${/[.!?]$/.test(description) ? '' : '.'} ${statusExplanation(application)}`,
+    date: isoDate(application.valid_date) || isoDate(application.last_updated) || new Date().toISOString().slice(0, 10),
+    category: 'planning',
+    url: BROMLEY_REGISTER_URL,
+    priority: /under consideration|pending/i.test(application.status || '') && (distance ?? 10_000) <= 500 ? 'high' : 'medium',
+    source: 'London Planning Datahub',
+    reference: application.lpa_app_no,
+    address,
+    status: application.status || application.decision,
+    distanceMetres: distance,
+    sourceUpdatedAt: application.last_updated,
+  };
+};
+
+const geocodePostcode = async (postcode: string) => {
+  const response = await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent(postcode.replace(/\s/g, ''))}`, {
+    next: { revalidate: 86_400 },
+  });
+  if (!response.ok) throw new Error('Postcode location lookup failed');
+  const payload = await response.json();
+  const latitude = Number(payload?.result?.latitude);
+  const longitude = Number(payload?.result?.longitude);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) throw new Error('Postcode location unavailable');
+  return { lat: latitude, lon: longitude };
+};
+
+const fetchPlanningApplications = async (postcode: string): Promise<{ items: CouncilNewsItem[]; latestSourceUpdate: string | null }> => {
+  const location = await geocodePostcode(postcode);
+  const year = new Date().getUTCFullYear() % 100;
+  const yearFilters = [year, year - 1, year - 2].map((value) => ({ regexp: { lpa_app_no: `${String(value).padStart(2, '0')}.*` } }));
+  const response = await fetch(LONDON_PLANNING_API, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-API-AllowRequest': LONDON_PLANNING_HEADER,
     },
-  ];
-}
-
-/**
- * Fetch roadworks information near a postcode
- * Uses the one.network API (national roadworks data)
- */
-async function fetchRoadworksNews(postcode: string): Promise<CouncilNewsItem[]> {
-  // one.network provides roadworks data
-  // In production, use their API with postcode lookup
-
-  return [
-    {
-      id: `roadworks-${postcode.replace(/\s/g, '')}-1`,
-      title: 'Check Local Roadworks',
-      summary: `View planned and current roadworks in the ${postcode} area. Includes utility works, resurfacing, and traffic management information.`,
-      date: new Date().toISOString().split('T')[0],
-      category: 'roadworks',
-      url: `${BROMLEY_SOURCES.roadworks}?postcode=${encodeURIComponent(postcode)}`,
-      priority: 'medium',
-      source: 'one.network',
-    },
-  ];
-}
-
-/**
- * Fetch general council news
- * Note: Bromley Council doesn't have a public API for news
- * In production, you'd parse their RSS feed or scrape the news page
- */
-async function fetchCouncilNews(): Promise<CouncilNewsItem[]> {
-  // In production, fetch and parse Bromley Council RSS/news
-  // For now, return useful static links
-
-  return [
-    {
-      id: 'bromley-council-tax',
-      title: 'Council Tax Information',
-      summary: 'View your council tax band, payment options, and any discounts you may be eligible for.',
-      date: new Date().toISOString().split('T')[0],
-      category: 'services',
-      url: 'https://www.bromley.gov.uk/council-tax',
-      priority: 'low',
-      source: 'Bromley Council',
-    },
-    {
-      id: 'bromley-waste',
-      title: 'Waste Collection & Recycling',
-      summary: 'Check your bin collection days, report missed collections, and find recycling information.',
-      date: new Date().toISOString().split('T')[0],
-      category: 'services',
-      url: 'https://www.bromley.gov.uk/waste-recycling',
-      priority: 'low',
-      source: 'Bromley Council',
-    },
-    {
-      id: 'bromley-parking',
-      title: 'Parking Permits & Restrictions',
-      summary: 'Apply for resident parking permits, view parking zones, and check restrictions in your area.',
-      date: new Date().toISOString().split('T')[0],
-      category: 'services',
-      url: 'https://www.bromley.gov.uk/parking',
-      priority: 'low',
-      source: 'Bromley Council',
-    },
-  ];
-}
-
-/**
- * Fetch environment/flood alerts for an area
- */
-async function fetchEnvironmentAlerts(postcode: string): Promise<CouncilNewsItem[]> {
-  // Environment Agency flood alerts API
-  // In production, use: https://environment.data.gov.uk/flood-monitoring/
-
-  return [
-    {
-      id: 'env-flood-check',
-      title: 'Flood Risk Information',
-      summary: `Check flood risk and alerts for ${postcode}. View current warnings and long-term flood risk assessment.`,
-      date: new Date().toISOString().split('T')[0],
-      category: 'general',
-      url: `https://check-for-flooding.service.gov.uk/postcode?postcode=${encodeURIComponent(postcode)}`,
-      priority: 'medium',
-      source: 'Environment Agency',
-    },
-  ];
-}
+    body: JSON.stringify({
+      size: 250,
+      query: {
+        bool: {
+          must: [
+            { term: { 'lpa_name.raw': 'Bromley' } },
+            { geo_distance: { distance: '2km', centroid: location } },
+          ],
+          should: yearFilters,
+          minimum_should_match: 1,
+        },
+      },
+      _source: [
+        'id', 'lpa_app_no', 'valid_date', 'decision_date', 'last_updated', 'application_type',
+        'site_number', 'street_name', 'postcode', 'description', 'status', 'decision', 'centroid',
+      ],
+    }),
+    next: { revalidate: 21_600 },
+  });
+  if (!response.ok) throw new Error(`London Planning Datahub returned ${response.status}`);
+  const payload = await response.json();
+  const applications = ((payload?.hits?.hits || []) as Array<{ _source?: PlanningApplicationSource }>)
+    .map((hit) => hit._source)
+    .filter((item): item is PlanningApplicationSource => Boolean(item?.id));
+  const sorted = applications.sort((a, b) => (isoDate(b.valid_date) || '').localeCompare(isoDate(a.valid_date) || ''));
+  const sourceUpdates = applications.map((item) => item.last_updated || '').sort();
+  const latestSourceUpdate = sourceUpdates[sourceUpdates.length - 1] || null;
+  return {
+    items: sorted.slice(0, 8).map((item) => toPlanningNewsItem(item, location)),
+    latestSourceUpdate,
+  };
+};
 
 export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  const postcode = searchParams.get('postcode')?.trim();
+  const categories = searchParams.get('categories')?.split(',').map((item) => item.trim().toLowerCase());
+  if (!postcode) return NextResponse.json({ error: 'Postcode is required' }, { status: 400 });
+  if (!/^[A-Z]{1,2}[0-9][0-9A-Z]?\s?[0-9][A-Z]{2}$/i.test(postcode)) {
+    return NextResponse.json({ error: 'Invalid UK postcode format' }, { status: 400 });
+  }
+
   try {
-    const { searchParams } = new URL(request.url);
-    const postcode = searchParams.get('postcode');
-    const categoriesParam = searchParams.get('categories');
-
-    if (!postcode) {
-      return NextResponse.json(
-        { error: 'Postcode is required' },
-        { status: 400 }
-      );
-    }
-
-    // Validate UK postcode format
-    const postcodeRegex = /^[A-Z]{1,2}[0-9][0-9A-Z]?\s?[0-9][A-Z]{2}$/i;
-    if (!postcodeRegex.test(postcode.trim())) {
-      return NextResponse.json(
-        { error: 'Invalid UK postcode format' },
-        { status: 400 }
-      );
-    }
-
-    // Determine council based on postcode
-    // SE20 is in Bromley
-    const normalizedPostcode = postcode.toUpperCase();
-    const council = normalizedPostcode.startsWith('SE20') ||
-                    normalizedPostcode.startsWith('BR') ||
-                    normalizedPostcode.startsWith('SE') &&
-                    ['SE6', 'SE9', 'SE12', 'SE20', 'SE26'].some(p => normalizedPostcode.startsWith(p))
-      ? 'Bromley'
-      : 'Unknown';
-
-    // Fetch news from all sources in parallel
-    const [planningNews, roadworksNews, councilNews, envAlerts] = await Promise.all([
-      fetchPlanningNews(postcode),
-      fetchRoadworksNews(postcode),
-      fetchCouncilNews(),
-      fetchEnvironmentAlerts(postcode),
-    ]);
-
-    let allNews: CouncilNewsItem[] = [
-      ...planningNews,
-      ...roadworksNews,
-      ...councilNews,
-      ...envAlerts,
-    ];
-
-    // Filter by categories if specified
-    if (categoriesParam) {
-      const categories = categoriesParam.split(',').map(c => c.trim().toLowerCase());
-      allNews = allNews.filter(item => categories.includes(item.category));
-    }
-
-    // Sort by priority (high first) then date
-    allNews.sort((a, b) => {
-      const priorityOrder = { high: 0, medium: 1, low: 2 };
-      const priorityDiff = priorityOrder[a.priority] - priorityOrder[b.priority];
-      if (priorityDiff !== 0) return priorityDiff;
-      return new Date(b.date).getTime() - new Date(a.date).getTime();
-    });
-
+    const planning = await fetchPlanningApplications(postcode);
+    const news = categories?.length
+      ? planning.items.filter((item) => categories.includes(item.category))
+      : planning.items;
     return NextResponse.json({
       success: true,
-      postcode: normalizedPostcode,
-      council,
-      newsCount: allNews.length,
-      news: allNews,
-      sources: {
-        council: BROMLEY_SOURCES.news,
-        planning: BROMLEY_SOURCES.planning,
-        roadworks: BROMLEY_SOURCES.roadworks,
+      postcode: postcode.toUpperCase(),
+      council: 'Bromley',
+      newsCount: news.length,
+      news,
+      dataFreshness: {
+        latestSourceUpdate: planning.latestSourceUpdate,
+        checkedAt: new Date().toISOString(),
       },
-      lastUpdated: new Date().toISOString(),
+      sources: {
+        council: 'https://www.bromley.gov.uk',
+        planning: BROMLEY_REGISTER_URL,
+        data: 'https://planninglondondatahub.london.gov.uk/',
+      },
     });
   } catch (error) {
     console.error('Council news fetch error:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch council news' },
-      { status: 500 }
-    );
+    return NextResponse.json({
+      success: false,
+      postcode: postcode.toUpperCase(),
+      council: 'Bromley',
+      newsCount: 0,
+      news: [],
+      error: 'Verified planning applications are temporarily unavailable.',
+      sources: { planning: BROMLEY_REGISTER_URL },
+      lastUpdated: new Date().toISOString(),
+    }, { status: 502 });
   }
 }

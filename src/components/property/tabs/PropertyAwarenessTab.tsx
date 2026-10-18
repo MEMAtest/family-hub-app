@@ -29,6 +29,8 @@ import { useFamilyStore } from '@/store/familyStore';
 import { tremaineRoadValues } from '@/data/property/tremaineRoad';
 
 interface AreaSaleRecord {
+  transactionId: string;
+  sourceUrl: string;
   address: string;
   price: number;
   date: string;
@@ -41,6 +43,8 @@ interface AreaStatistics {
   medianPrice: number;
   transactions: number;
   priceRange: { min: number; max: number };
+  lowestSale?: AreaSaleRecord;
+  highestSale?: AreaSaleRecord;
   period: { from: string; to: string };
   scope?: 'property_type' | 'all';
 }
@@ -101,6 +105,11 @@ interface CouncilNewsItem {
   url?: string;
   priority: 'low' | 'medium' | 'high';
   source?: string;
+  reference?: string;
+  address?: string;
+  status?: string;
+  distanceMetres?: number;
+  sourceUpdatedAt?: string;
 }
 
 interface BinCollection {
@@ -218,6 +227,12 @@ const formatDate = (dateStr: string) => {
   });
 };
 
+const isOlderThanDays = (dateStr: string | null, days: number) => {
+  if (!dateStr) return false;
+  const timestamp = new Date(dateStr).getTime();
+  return Number.isFinite(timestamp) && Date.now() - timestamp > days * 86_400_000;
+};
+
 const calculateGrowthEstimate = (purchasePrice: number, purchaseDate: string): number | null => {
   const purchaseDateObj = new Date(purchaseDate);
   if (Number.isNaN(purchaseDateObj.getTime())) {
@@ -277,45 +292,6 @@ const getComparableScopeLabel = (scope?: ValuationData['comparableScope']) => {
       return 'Area-wide';
   }
 };
-
-// Mock council news - in production would come from Bromley Council API
-const mockCouncilNews: CouncilNewsItem[] = [
-  {
-    id: 'news-1',
-    title: 'Planning Application: Rear Extension at 45 Tremaine Road',
-    summary: 'Application for single-storey rear extension submitted. Public consultation open until 15 January 2025.',
-    date: '2024-12-20',
-    category: 'planning',
-    url: 'https://pa.bromley.gov.uk/online-applications/search.do?action=simple&searchType=Application&postcode=SE20%207UA',
-    priority: 'medium',
-  },
-  {
-    id: 'news-2',
-    title: 'Road Resurfacing: Tremaine Road & Surrounding Streets',
-    summary: 'Scheduled roadworks from 6-10 January 2025. Expect delays and limited parking during work hours.',
-    date: '2024-12-18',
-    category: 'roadworks',
-    priority: 'high',
-  },
-  {
-    id: 'news-3',
-    title: 'Council Tax 2025/26 Consultation',
-    summary: 'Bromley Council seeking views on proposed council tax rates for the upcoming financial year.',
-    date: '2024-12-15',
-    category: 'services',
-    url: 'https://www.bromley.gov.uk/consultations',
-    priority: 'low',
-  },
-  {
-    id: 'news-4',
-    title: 'New Recycling Collection Schedule for SE20',
-    summary: 'Changes to recycling collection days starting February 2025. Check your new collection day online.',
-    date: '2024-12-10',
-    category: 'services',
-    url: 'https://www.bromley.gov.uk/waste',
-    priority: 'medium',
-  },
-];
 
 const StatCard = ({
   label,
@@ -420,6 +396,8 @@ export const PropertyAwarenessTab = () => {
 
   const [valuationData, setValuationData] = useState<ValuationData | null>(null);
   const [councilNews, setCouncilNews] = useState<CouncilNewsItem[]>([]);
+  const [councilSourceUpdated, setCouncilSourceUpdated] = useState<string | null>(null);
+  const [councilNewsError, setCouncilNewsError] = useState<string | null>(null);
   const [binCollections, setBinCollections] = useState<BinCollection[]>([]);
   const [insights, setInsights] = useState<PropertyInsight[]>([]);
   const [binCollectionMeta, setBinCollectionMeta] = useState<{
@@ -491,6 +469,7 @@ export const PropertyAwarenessTab = () => {
   const modelWarnings = estimateBreakdown?.model?.warnings ?? [];
   const modelCoverage = modelMeta?.coverage;
   const modelMetrics = modelMeta?.metrics;
+  const councilSourceIsStale = isOlderThanDays(councilSourceUpdated, 60);
 
   // Calculate value change
   const latestValue =
@@ -578,6 +557,7 @@ export const PropertyAwarenessTab = () => {
     }
 
     setIsLoadingNews(true);
+    setCouncilNewsError(null);
 
     try {
       const response = await fetch(`/api/property/council-news?postcode=${encodeURIComponent(formattedPostcode)}`);
@@ -588,9 +568,11 @@ export const PropertyAwarenessTab = () => {
 
       const data = await response.json();
       setCouncilNews(data.news || []);
+      setCouncilSourceUpdated(data.dataFreshness?.latestSourceUpdate || null);
     } catch (err) {
       console.error('Council news fetch error:', err);
-      // Don't show error for news - just use empty array
+      setCouncilNews([]);
+      setCouncilNewsError('Verified planning data could not be loaded. The official Bromley register is still available.');
     } finally {
       setIsLoadingNews(false);
     }
@@ -972,18 +954,24 @@ export const PropertyAwarenessTab = () => {
               </p>
               <p className="text-xs text-gray-500 dark:text-slate-400">Median Price</p>
             </div>
-            <div className="text-center p-3 rounded-lg bg-gray-50 dark:bg-slate-700">
-              <p className="text-2xl font-bold text-gray-900 dark:text-slate-100">
-                {formatCurrency(valuationData.areaStatistics.priceRange.min)}
-              </p>
-              <p className="text-xs text-gray-500 dark:text-slate-400">Lowest Sale</p>
-            </div>
-            <div className="text-center p-3 rounded-lg bg-gray-50 dark:bg-slate-700">
-              <p className="text-2xl font-bold text-gray-900 dark:text-slate-100">
-                {formatCurrency(valuationData.areaStatistics.priceRange.max)}
-              </p>
-              <p className="text-xs text-gray-500 dark:text-slate-400">Highest Sale</p>
-            </div>
+            {valuationData.areaStatistics.lowestSale?.sourceUrl ? (
+              <a href={valuationData.areaStatistics.lowestSale.sourceUrl} target="_blank" rel="noopener noreferrer" className="group p-3 text-center rounded-lg bg-gray-50 hover:bg-blue-50 dark:bg-slate-700 dark:hover:bg-slate-600">
+                <p className="text-2xl font-bold text-gray-900 dark:text-slate-100">{formatCurrency(valuationData.areaStatistics.priceRange.min)}</p>
+                <p className="inline-flex items-center gap-1 text-xs text-blue-700 dark:text-blue-300">Lowest sale <ExternalLink className="h-3 w-3" /></p>
+                <p className="mt-1 truncate text-[11px] text-slate-500" title={valuationData.areaStatistics.lowestSale.address}>{valuationData.areaStatistics.lowestSale.address}</p>
+              </a>
+            ) : (
+              <div className="text-center p-3 rounded-lg bg-gray-50 dark:bg-slate-700"><p className="text-2xl font-bold text-gray-900 dark:text-slate-100">{formatCurrency(valuationData.areaStatistics.priceRange.min)}</p><p className="text-xs text-gray-500 dark:text-slate-400">Lowest sale</p></div>
+            )}
+            {valuationData.areaStatistics.highestSale?.sourceUrl ? (
+              <a href={valuationData.areaStatistics.highestSale.sourceUrl} target="_blank" rel="noopener noreferrer" className="group p-3 text-center rounded-lg bg-gray-50 hover:bg-blue-50 dark:bg-slate-700 dark:hover:bg-slate-600">
+                <p className="text-2xl font-bold text-gray-900 dark:text-slate-100">{formatCurrency(valuationData.areaStatistics.priceRange.max)}</p>
+                <p className="inline-flex items-center gap-1 text-xs text-blue-700 dark:text-blue-300">Highest sale <ExternalLink className="h-3 w-3" /></p>
+                <p className="mt-1 truncate text-[11px] text-slate-500" title={valuationData.areaStatistics.highestSale.address}>{valuationData.areaStatistics.highestSale.address}</p>
+              </a>
+            ) : (
+              <div className="text-center p-3 rounded-lg bg-gray-50 dark:bg-slate-700"><p className="text-2xl font-bold text-gray-900 dark:text-slate-100">{formatCurrency(valuationData.areaStatistics.priceRange.max)}</p><p className="text-xs text-gray-500 dark:text-slate-400">Highest sale</p></div>
+            )}
           </div>
           <p className="mt-4 text-xs text-gray-500 dark:text-slate-400 text-center">
             Based on {valuationData.areaStatistics.transactions} transactions from{' '}
@@ -1024,10 +1012,10 @@ export const PropertyAwarenessTab = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-slate-700">
-                {valuationData.comparableSales.slice(0, 10).map((sale, idx) => (
-                  <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-slate-700">
+                {valuationData.comparableSales.slice(0, 10).map((sale) => (
+                  <tr key={sale.transactionId} className="hover:bg-gray-50 dark:hover:bg-slate-700">
                     <td className="px-3 py-2 text-sm text-gray-900 dark:text-slate-100">
-                      {sale.address}
+                      <a href={sale.sourceUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-blue-700 hover:underline dark:text-blue-300">{sale.address}<ExternalLink className="h-3 w-3 shrink-0" /></a>
                     </td>
                     <td className="px-3 py-2 text-sm font-medium text-gray-900 dark:text-slate-100">
                       {formatCurrency(sale.price)}
@@ -1049,22 +1037,28 @@ export const PropertyAwarenessTab = () => {
         </div>
       )}
 
-      {/* Bromley Council News */}
+      {/* Nearby planning applications */}
       <div className="rounded-xl border border-gray-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-800">
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-semibold text-gray-900 dark:text-slate-100 flex items-center gap-2">
             <Newspaper className="h-5 w-5 text-blue-600" />
-            Local Council Updates
+            Nearby planning applications
           </h3>
           <a
-            href="https://www.bromley.gov.uk"
+            href="https://www.bromley.gov.uk/planningaccess"
             target="_blank"
             rel="noopener noreferrer"
             className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
           >
-            Bromley Council <ExternalLink className="h-3 w-3" />
+            Live Bromley register <ExternalLink className="h-3 w-3" />
           </a>
         </div>
+
+        {councilSourceIsStale && (
+          <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-800 dark:border-amber-800 dark:bg-amber-500/10 dark:text-amber-200">
+            The shared London feed was last updated {formatDate(councilSourceUpdated as string)}. These are the latest verified records available there; use the live Bromley register for newer applications.
+          </div>
+        )}
 
         <div className="space-y-3">
           {isLoadingNews && (
@@ -1073,7 +1067,7 @@ export const PropertyAwarenessTab = () => {
               <span className="ml-2 text-sm text-gray-500">Loading council updates...</span>
             </div>
           )}
-          {!isLoadingNews && (councilNews.length > 0 ? councilNews : mockCouncilNews).map((item) => {
+          {!isLoadingNews && councilNews.map((item) => {
             const CategoryIcon = getCategoryIcon(item.category);
             return (
               <div
@@ -1106,6 +1100,12 @@ export const PropertyAwarenessTab = () => {
                     <p className="mt-1 text-sm text-gray-600 dark:text-slate-300">
                       {item.summary}
                     </p>
+                    <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-slate-500">
+                      {item.reference && <span className="rounded bg-white px-2 py-1 dark:bg-slate-800">Ref {item.reference}</span>}
+                      {item.status && <span className="rounded bg-white px-2 py-1 dark:bg-slate-800">{item.status}</span>}
+                      {typeof item.distanceMetres === 'number' && <span className="rounded bg-white px-2 py-1 dark:bg-slate-800">{item.distanceMetres < 1000 ? `${item.distanceMetres}m away` : `${(item.distanceMetres / 1000).toFixed(1)}km away`}</span>}
+                      {item.source && <span className="rounded bg-white px-2 py-1 dark:bg-slate-800">{item.source}</span>}
+                    </div>
                     {item.url && (
                       <a
                         href={item.url}
@@ -1121,13 +1121,18 @@ export const PropertyAwarenessTab = () => {
               </div>
             );
           })}
+          {!isLoadingNews && councilNews.length === 0 && (
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+              {councilNewsError || 'No verified local applications were returned. Use the Bromley register link above to search the official register directly.'}
+            </div>
+          )}
         </div>
 
         <p className="mt-4 text-xs text-gray-500 dark:text-slate-400 flex items-center gap-1">
           <Info className="h-3 w-3" />
           {councilNews.length > 0
-            ? 'Live council updates from Bromley Council and local sources.'
-            : 'Showing sample updates. Click Refresh Data for live council news.'}
+            ? `Planning applications are sourced from the official London Planning Datahub; each item includes its council reference.${councilSourceUpdated ? ` Source last updated ${formatDate(councilSourceUpdated)}.` : ''}`
+            : 'No sample or invented applications are shown.'}
         </p>
       </div>
 

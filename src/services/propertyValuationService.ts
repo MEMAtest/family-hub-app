@@ -17,8 +17,9 @@ const LAND_REGISTRY_PAGE_SIZE = 200;
 const COMPARABLE_MONTHS = 24;
 const ANNUAL_GROWTH_RATE = 0.04;
 
-interface PricePaidRecord {
+export interface PricePaidRecord {
   transactionId: string;
+  sourceUrl: string;
   price: number;
   date: string;
   postcode: string;
@@ -39,6 +40,8 @@ interface AreaValuationResult {
   medianPrice: number;
   transactions: number;
   priceRange: { min: number; max: number };
+  lowestSale: PricePaidRecord;
+  highestSale: PricePaidRecord;
   period: { from: string; to: string };
   comparables: PricePaidRecord[];
 }
@@ -125,6 +128,7 @@ const mapLandRegistryItem = (item: Record<string, unknown>): PricePaidRecord => 
 
   return {
     transactionId: transaction.split('/').pop() || '',
+    sourceUrl: String(item._about || transaction || '').replace(/^http:/, 'https:'),
     price: item.pricePaid as number || 0,
     date: transactionDate || new Date().toISOString().split('T')[0],
     postcode: addr?.postcode || '',
@@ -343,7 +347,12 @@ export function calculateAreaValuation(
     ? prices[mid]
     : (prices[mid - 1] + prices[mid]) / 2;
 
-  const dates = filtered.map(s => s.date).filter(Boolean).sort();
+  const dates = filtered
+    .map((sale) => ({ value: sale.date, timestamp: parseComparableDate(sale.date) }))
+    .filter((item) => item.timestamp > 0)
+    .sort((a, b) => a.timestamp - b.timestamp);
+  const lowestSale = filtered.reduce((lowest, sale) => sale.price < lowest.price ? sale : lowest, filtered[0]);
+  const highestSale = filtered.reduce((highest, sale) => sale.price > highest.price ? sale : highest, filtered[0]);
 
   return {
     averagePrice: Math.round(sum / prices.length),
@@ -353,9 +362,11 @@ export function calculateAreaValuation(
       min: prices[0],
       max: prices[prices.length - 1],
     },
+    lowestSale,
+    highestSale,
     period: {
-      from: dates[0] || new Date().toISOString().split('T')[0],
-      to: dates[dates.length - 1] || new Date().toISOString().split('T')[0],
+      from: dates[0]?.value || new Date().toISOString().split('T')[0],
+      to: dates[dates.length - 1]?.value || new Date().toISOString().split('T')[0],
     },
     comparables: filtered.slice(0, 10),
   };
