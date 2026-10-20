@@ -1,4 +1,5 @@
 export type PlannedBudgetItem = {
+  amount?: number | string | null;
   isRecurring?: boolean | null;
   recurringFrequency?: string | null;
   recurringStartDate?: Date | string | null;
@@ -44,3 +45,33 @@ export const plannedForMonth = (item: PlannedBudgetItem, monthKey: string) => {
 
   return true;
 };
+
+export const plannedOccurrencesForMonth = (item: PlannedBudgetItem, monthKey: string) => {
+  if (!plannedForMonth(item, monthKey)) return 0;
+  if (!item.isRecurring) return 1;
+
+  const frequency = item.recurringFrequency || 'monthly';
+  if (frequency !== 'weekly') return 1;
+
+  const { start, end } = monthRangeUtc(monthKey);
+  const anchor = asDate(item.recurringStartDate) ?? asDate(item.paymentDate) ?? asDate(item.createdAt);
+  if (!anchor) return 1;
+
+  const recurringEnd = asDate(item.recurringEndDate);
+  const rangeStart = anchor > start ? anchor : start;
+  const rangeEnd = recurringEnd && recurringEnd < end ? new Date(recurringEnd.getTime() + 1) : end;
+  if (rangeStart >= rangeEnd) return 0;
+
+  const weekMs = 7 * 24 * 60 * 60 * 1000;
+  const elapsed = Math.max(0, rangeStart.getTime() - anchor.getTime());
+  let occurrence = new Date(anchor.getTime() + Math.ceil(elapsed / weekMs) * weekMs);
+  let count = 0;
+  while (occurrence < rangeEnd) {
+    count += 1;
+    occurrence = new Date(occurrence.getTime() + weekMs);
+  }
+  return count;
+};
+
+export const plannedAmountForMonth = (item: PlannedBudgetItem, monthKey: string) =>
+  (Number(item.amount) || 0) * plannedOccurrencesForMonth(item, monthKey);

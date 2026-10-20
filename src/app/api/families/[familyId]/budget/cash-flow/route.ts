@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireFamilyAccess } from '@/lib/auth-utils';
-import { monthRangeUtc, plannedForMonth } from '@/lib/budget/plannedMonth';
+import { monthRangeUtc, plannedAmountForMonth, plannedForMonth } from '@/lib/budget/plannedMonth';
+import { partitionBudgetRecords } from '@/lib/budget/dataQuality';
 import { quoteReferenceSpend, selectedSpend } from '@/lib/sourcing/spend';
 import type { ProjectSourcing } from '@/types/sourcing.types';
 import { deduplicateRecurringItems } from '@/utils/budgetMonthFilter';
@@ -61,25 +62,29 @@ export const GET = requireFamilyAccess(async (request: NextRequest, context) => 
         return groups;
       }, {});
 
-    const canonicalIncome = deduplicateRecurringItems(income);
-    const canonicalExpenses = deduplicateRecurringItems(expenses);
+    const incomeQuality = partitionBudgetRecords(deduplicateRecurringItems(income));
+    const expenseQuality = partitionBudgetRecords(deduplicateRecurringItems(expenses));
+    const canonicalIncome = incomeQuality.operational;
+    const canonicalExpenses = expenseQuality.operational;
     const plannedIncome = canonicalIncome
       .filter((item) => plannedForMonth(item, key))
-      .reduce((total, item) => total + item.amount, 0);
+      .reduce((total, item) => total + plannedAmountForMonth(item, key), 0);
     const plannedExpenses = canonicalExpenses
       .filter((item) => plannedForMonth(item, key))
-      .reduce((total, item) => total + item.amount, 0);
+      .reduce((total, item) => total + plannedAmountForMonth(item, key), 0);
 
     const projects = (Array.isArray(projectDocument?.data) ? projectDocument.data : []).flatMap((value) => {
       if (!value || typeof value !== 'object') return [];
       const project = value as Record<string, unknown>;
+      const status = String(project.status ?? 'planning');
+      if (['cancelled', 'canceled', 'archived', 'rehearsal'].includes(status.toLowerCase())) return [];
       const sourcing = sourcingFrom(project.sourcing);
       const spend = sourcing ? selectedSpend(sourcing) : null;
       const quote = sourcing ? quoteReferenceSpend(sourcing) : null;
       return [{
         id: String(project.id ?? ''),
         title: String(project.title ?? 'Property project'),
-        status: String(project.status ?? 'planning'),
+        status,
         selectedCost: spend ? spend.totalPence / 100 : 0,
         unknownCostItems: spend?.unknown ?? 0,
         quoteReference: quote?.totalPence === undefined ? null : quote.totalPence / 100,
@@ -118,10 +123,16 @@ export const GET = requireFamilyAccess(async (request: NextRequest, context) => 
         transferMovement: transfers,
         plannedIncome,
         plannedExpenses,
-        forecastNet: plannedIncome || plannedExpenses ? plannedIncome - plannedExpenses : actualIncome - actualSpend,
+        plannedNet: plannedIncome - plannedExpenses,
+        forecastNet: null,
+        forecastStatus: 'unreconciled',
       },
       connections: {
-        planned: { incomeItems: canonicalIncome.length, expenseItems: canonicalExpenses.length },
+        planned: {
+          incomeItems: canonicalIncome.length,
+          expenseItems: canonicalExpenses.length,
+          excludedQaItems: incomeQuality.excludedQa.length + expenseQuality.excludedQa.length,
+        },
         accounts: accounts.map((account) => ({
           id: account.id,
           name: account.name,

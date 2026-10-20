@@ -52,8 +52,8 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context, _a
 
     if (validPersonId && validPersonId !== 'null' && validPersonId !== 'undefined') {
       // Check if the person exists
-      const personExists = await prisma.familyMember.findUnique({
-        where: { id: validPersonId }
+      const personExists = await prisma.familyMember.findFirst({
+        where: { id: validPersonId, familyId }
       });
 
       if (!personExists) {
@@ -95,7 +95,7 @@ export const PUT = requireFamilyAccess(async (request: NextRequest, context, _au
   try {
     const { familyId } = await context.params;
     const body = await request.json();
-    const { id, ...updateData } = body;
+    const { id } = body;
 
     if (!id) {
       return NextResponse.json(
@@ -113,15 +113,23 @@ export const PUT = requireFamilyAccess(async (request: NextRequest, context, _au
       return NextResponse.json({ error: 'Expense not found' }, { status: 404 });
     }
 
+    const validPerson = body.personId
+      ? await prisma.familyMember.findFirst({ where: { id: body.personId, familyId }, select: { id: true } })
+      : null;
+
     const expense = await prisma.budgetExpense.update({
       where: { id },
       data: {
-        ...updateData,
-        amount: updateData.amount ? parseFloat(updateData.amount) : undefined,
-        budgetLimit: updateData.budgetLimit ? parseFloat(updateData.budgetLimit) : undefined,
-        paymentDate: updateData.paymentDate ? new Date(updateData.paymentDate) : undefined,
-        recurringStartDate: updateData.recurringStartDate ? new Date(updateData.recurringStartDate) : undefined,
-        recurringEndDate: updateData.recurringEndDate ? new Date(updateData.recurringEndDate) : undefined
+        expenseName: typeof body.expenseName === 'string' ? body.expenseName : undefined,
+        amount: body.amount !== undefined ? parseFloat(body.amount) : undefined,
+        category: typeof body.category === 'string' ? body.category : undefined,
+        budgetLimit: body.budgetLimit !== undefined && body.budgetLimit !== null ? parseFloat(body.budgetLimit) : body.budgetLimit === null ? null : undefined,
+        isRecurring: typeof body.isRecurring === 'boolean' ? body.isRecurring : undefined,
+        recurringFrequency: body.recurringFrequency ?? undefined,
+        recurringStartDate: body.recurringStartDate ? new Date(body.recurringStartDate) : body.recurringStartDate === null ? null : undefined,
+        recurringEndDate: body.recurringEndDate ? new Date(body.recurringEndDate) : body.recurringEndDate === null ? null : undefined,
+        paymentDate: body.paymentDate ? new Date(body.paymentDate) : body.paymentDate === null ? null : undefined,
+        personId: body.personId === null ? null : validPerson?.id,
       }
     });
 

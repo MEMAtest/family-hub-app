@@ -24,6 +24,22 @@ class DatabaseService {
   private familyId: string | null = null;
   private syncEnabled = true;
 
+  private budgetStorageKey(kind: 'income' | 'expenses') {
+    const legacy = kind === 'income' ? 'budgetIncome' : 'budgetExpenses';
+    return this.familyId ? `${legacy}:${this.familyId}` : legacy;
+  }
+
+  private upsertLocalBudgetItem(kind: 'income' | 'expenses', item: any) {
+    if (typeof window === 'undefined') return;
+    const key = this.budgetStorageKey(kind);
+    const legacyKey = kind === 'income' ? 'budgetIncome' : 'budgetExpenses';
+    const current = JSON.parse(localStorage.getItem(key) || localStorage.getItem(legacyKey) || '[]');
+    const rows = Array.isArray(current) ? current : [];
+    const index = rows.findIndex((row: any) => row?.id === item?.id);
+    const next = index === -1 ? [...rows, item] : rows.map((row: any, rowIndex: number) => rowIndex === index ? { ...row, ...item } : row);
+    localStorage.setItem(key, JSON.stringify(next));
+  }
+
   private sleep(ms: number) {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
@@ -732,9 +748,7 @@ class DatabaseService {
       console.log('❌ NO DATABASE - saving income to localStorage only');
       // Just save to localStorage
       if (typeof window !== 'undefined') {
-        const incomes = JSON.parse(localStorage.getItem('budgetIncome') || '[]');
-        incomes.push(income);
-        localStorage.setItem('budgetIncome', JSON.stringify(incomes));
+        this.upsertLocalBudgetItem('income', income);
       }
       return income;
     }
@@ -749,6 +763,9 @@ class DatabaseService {
           isRecurring: income.isRecurring,
           paymentDate: income.paymentDate,
           personId: income.personId,
+          recurringFrequency: income.recurringFrequency,
+          recurringStartDate: income.recurringStartDate,
+          recurringEndDate: income.recurringEndDate,
         }),
       });
 
@@ -757,9 +774,7 @@ class DatabaseService {
 
         // Update localStorage as well
         if (typeof window !== 'undefined') {
-          const incomes = JSON.parse(localStorage.getItem('budgetIncome') || '[]');
-          incomes.push({ ...income, id: dbIncome.id });
-          localStorage.setItem('budgetIncome', JSON.stringify(incomes));
+          this.upsertLocalBudgetItem('income', { ...income, id: dbIncome.id });
         }
         return { ...income, id: dbIncome.id };
       }
@@ -767,9 +782,7 @@ class DatabaseService {
       console.error('Failed to save income to database:', error);
       // Fall back to localStorage
       if (typeof window !== 'undefined') {
-        const incomes = JSON.parse(localStorage.getItem('budgetIncome') || '[]');
-        incomes.push(income);
-        localStorage.setItem('budgetIncome', JSON.stringify(incomes));
+        this.upsertLocalBudgetItem('income', income);
       }
     }
     return income;
@@ -787,9 +800,7 @@ class DatabaseService {
       console.log('❌ NO DATABASE - saving expense to localStorage only');
       // Just save to localStorage
       if (typeof window !== 'undefined') {
-        const expenses = JSON.parse(localStorage.getItem('budgetExpenses') || '[]');
-        expenses.push(expense);
-        localStorage.setItem('budgetExpenses', JSON.stringify(expenses));
+        this.upsertLocalBudgetItem('expenses', expense);
       }
       return expense;
     }
@@ -805,6 +816,9 @@ class DatabaseService {
           isRecurring: expense.isRecurring,
           paymentDate: expense.paymentDate,
           personId: expense.personId,
+          recurringFrequency: expense.recurringFrequency,
+          recurringStartDate: expense.recurringStartDate,
+          recurringEndDate: expense.recurringEndDate,
         }),
       });
 
@@ -813,9 +827,7 @@ class DatabaseService {
 
         // Update localStorage as well
         if (typeof window !== 'undefined') {
-          const expenses = JSON.parse(localStorage.getItem('budgetExpenses') || '[]');
-          expenses.push({ ...expense, id: dbExpense.id });
-          localStorage.setItem('budgetExpenses', JSON.stringify(expenses));
+          this.upsertLocalBudgetItem('expenses', { ...expense, id: dbExpense.id });
         }
         return { ...expense, id: dbExpense.id };
       }
@@ -823,12 +835,44 @@ class DatabaseService {
       console.error('Failed to save expense to database:', error);
       // Fall back to localStorage
       if (typeof window !== 'undefined') {
-        const expenses = JSON.parse(localStorage.getItem('budgetExpenses') || '[]');
-        expenses.push(expense);
-        localStorage.setItem('budgetExpenses', JSON.stringify(expenses));
+        this.upsertLocalBudgetItem('expenses', expense);
       }
     }
     return expense;
+  }
+
+  async updateBudgetIncome(income: any): Promise<any | null> {
+    if (!income?.id) throw new Error('Income ID is required');
+    if (!this.familyId && typeof window !== 'undefined') {
+      this.familyId = localStorage.getItem('familyId');
+    }
+    if (!this.familyId || !this.syncEnabled) {
+      this.upsertLocalBudgetItem('income', income);
+      return income;
+    }
+    const updated = await this.fetchAPI(`${API_BASE}/${this.familyId}/budget/income`, {
+      method: 'PUT',
+      body: JSON.stringify(income),
+    });
+    if (updated?.id) this.upsertLocalBudgetItem('income', updated);
+    return updated;
+  }
+
+  async updateBudgetExpense(expense: any): Promise<any | null> {
+    if (!expense?.id) throw new Error('Expense ID is required');
+    if (!this.familyId && typeof window !== 'undefined') {
+      this.familyId = localStorage.getItem('familyId');
+    }
+    if (!this.familyId || !this.syncEnabled) {
+      this.upsertLocalBudgetItem('expenses', expense);
+      return expense;
+    }
+    const updated = await this.fetchAPI(`${API_BASE}/${this.familyId}/budget/expenses`, {
+      method: 'PUT',
+      body: JSON.stringify(expense),
+    });
+    if (updated?.id) this.upsertLocalBudgetItem('expenses', updated);
+    return updated;
   }
 
   // Check if database is connected

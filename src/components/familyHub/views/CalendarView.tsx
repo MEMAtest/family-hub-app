@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, ChevronUp, Import, Settings, LayoutGrid, Plus, CalendarDays, Loader2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, Import, Settings, LayoutGrid, Plus, CalendarDays, Loader2, MapPin, Sparkles, AlertTriangle, Clock3, UserRoundCheck } from 'lucide-react';
 import CalendarMain from '@/components/calendar/CalendarMain';
 import CalendarCopilotPanel from '@/components/calendar/CalendarCopilotPanel';
 import { useCalendarContext } from '@/contexts/familyHub/CalendarContext';
@@ -18,6 +18,9 @@ import { hasUnspecifiedEventTime } from '@/utils/eventSemantics';
 import { useCalendarReminderLink } from '@/hooks/useCalendarReminderLink';
 import WorkStatusManager from '@/components/calendar/WorkStatusManager';
 import { BinCollectionStrip } from '@/components/calendar/BinCollectionStrip';
+import { QuickPresenceDialog } from '@/components/calendar/QuickPresenceDialog';
+import { getScheduleHealthInsights } from '@/utils/scheduleHealth';
+import { addDays, expandEvents } from '@/utils/recurrence';
 import { useSearchParams } from 'next/navigation';
 
 export const CalendarView = () => {
@@ -36,6 +39,7 @@ export const CalendarView = () => {
   const [recurring, setRecurring] = useState<'none' | 'weekly'>('none');
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
+  const [showPresence, setShowPresence] = useState(false);
   const [pendingReview, setPendingReview] = useState<number | null>(null);
   const [pendingReviewEmails, setPendingReviewEmails] = useState<number | null>(null);
   const familyId = useFamilyStore((state) => state.databaseStatus.familyId);
@@ -44,7 +48,22 @@ export const CalendarView = () => {
   const [travelEvent, setTravelEvent] = useState<CalendarEvent | null>(null);
   const eventEditor = useCalendarReminderLink(events, setTravelEvent, openEditForm, familyId, false);
   const dateKey = formatDateForInput(currentDate);
+  const todayKey = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/London' }).format(new Date());
   const upcoming = useMemo(() => weeklyCalendarPriorities(events, tasks, dateKey), [events, tasks, dateKey]);
+  const upcomingEvents = useMemo(() => expandEvents(
+    events.filter((event) => event.status !== 'cancelled' && !recurringSourceDateWarning(event)),
+    dateKey,
+    addDays(dateKey, 6)
+  ).map((occurrence) => ({
+    ...occurrence.event,
+    date: occurrence.date,
+    time: occurrence.time,
+    duration: occurrence.duration,
+    endDate: occurrence.endDate,
+    occurrenceDate: occurrence.date,
+    seriesStartDate: occurrence.isRecurring ? occurrence.event.date : undefined,
+  })), [dateKey, events]);
+  const scheduleInsights = useMemo(() => getScheduleHealthInsights(upcomingEvents, people), [upcomingEvents, people]);
   const dateWarnings = events.filter((event) => recurringSourceDateWarning(event));
   const confirmedDateEvents = useMemo(() => events.filter((event) => !recurringSourceDateWarning(event)), [events]);
   const loadReviewCount = useCallback(async () => {
@@ -91,6 +110,7 @@ export const CalendarView = () => {
     <header className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 bg-white px-4 py-4 dark:border-slate-800 dark:bg-slate-900 sm:px-6">
       <h2 className="text-xl font-semibold sm:text-2xl">Family Calendar</h2>
       <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <button type="button" onClick={() => setShowPresence(true)} className="inline-flex min-h-10 items-center gap-2 rounded-md bg-[#147c72] px-3 text-sm font-semibold text-white"><MapPin className="h-4 w-4" />Where are you today?</button>
         <button type="button" onClick={openImport} aria-label="School inbox & quick plan" aria-describedby={pendingReview ? 'school-review-count' : undefined} aria-expanded={showImport} className="inline-flex min-h-10 flex-wrap items-center gap-2 rounded-md border border-gray-200 px-3 text-sm font-medium dark:border-slate-700"><Import className="h-4 w-4" />School inbox &amp; quick plan {pendingReview !== null && pendingReview > 0 && <span id="school-review-count" title={`${pendingReview} suggestions across ${pendingReviewEmails ?? 'active'} school email${pendingReviewEmails === 1 ? '' : 's'} need a decision; not added events`} className="rounded bg-amber-100 px-1.5 text-xs text-amber-900">Review {pendingReview}</span>}{showImport ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}</button>
         <button type="button" onClick={openTemplateManager} title="Event templates" aria-label="Event templates" className="min-h-10 rounded-md border border-gray-200 p-2.5 dark:border-slate-700"><LayoutGrid className="h-4 w-4" /></button>
         <button type="button" onClick={openConflictSettings} title="Conflict rules" aria-label="Conflict rules" className="min-h-10 rounded-md border border-gray-200 p-2.5 dark:border-slate-700"><Settings className="h-4 w-4" /></button>
@@ -113,7 +133,7 @@ export const CalendarView = () => {
           onTemplateManage={openTemplateManager} onConflictSettings={openConflictSettings} onEventsSync={handleEventsSync} />
       </div>
       <aside className="flex min-w-0 flex-col gap-5">
-        <section className="order-2 border-t border-gray-200 pt-5 dark:border-slate-800" aria-label="Quick add event">
+        <section className="order-3 border-t border-gray-200 pt-5 dark:border-slate-800" aria-label="Quick add event">
           <h3 className="mb-3 flex items-center gap-2 text-base font-semibold"><Plus className="h-5 w-5 text-[#147c72]" />Quick add</h3>
           <form onSubmit={saveQuickEvent} className="space-y-3">
             <label className="block text-xs font-medium">What's happening?<input required aria-label="Quick event title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Club, appointment or family plan" className={field} /></label>
@@ -137,11 +157,21 @@ export const CalendarView = () => {
           {upcoming.length ? <div className="divide-y divide-gray-200 dark:divide-slate-800">{upcoming.map((entry) => {
             if (entry.kind === 'task') { const item = entry.occurrence; return <label key={item.occurrenceId} className="flex min-h-11 items-start gap-3 py-3 text-sm"><input type="checkbox" aria-label={`Complete ${item.task.title} on ${item.assignedDate}`} checked={Boolean(item.completedAt)} onChange={() => { void toggleTaskComplete(item.task.id, undefined, item.isRecurring ? item.assignedDate : undefined).catch(() => toast.error('Could not update this reminder.')); }} className="mt-1 h-5 w-5 rounded border-gray-300 text-teal-700" /><span className="min-w-0"><strong className="block">{item.task.title}</strong><span className="mt-1 block text-xs text-gray-500">Due {new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }).format(new Date(`${item.dueDate}T12:00:00`))} · {item.task.assignees.map((id) => people.find((person) => person.id === id)?.name).filter(Boolean).join(', ') || 'Family'} · Reminder</span></span></label>; }
             const item = entry.occurrence;
-            const person = people.find((person) => person.id === item.event.person);
             return <button key={item.occurrenceId} type="button" onClick={() => eventEditor.open({ ...item.event, date: item.date, time: item.time, duration: item.duration, endDate: item.endDate, occurrenceDate: item.date, seriesStartDate: item.event.isRecurring ? item.event.date : undefined })} className="flex w-full items-start gap-3 py-3 text-left">
             <span className="w-11 shrink-0 text-center text-xs text-gray-500 dark:text-slate-400">{new Intl.DateTimeFormat('en-GB', { weekday: 'short' }).format(new Date(`${item.date}T12:00:00`))}<strong className="mt-1 block text-base text-gray-800 dark:text-slate-200">{item.date.slice(8)}</strong></span>
             <span className="min-w-0"><span className="block text-sm font-semibold">{titleFor(item.event)}</span><span className="mt-1 block text-xs text-gray-500 dark:text-slate-400">{hasUnspecifiedEventTime(item.event) ? 'All day' : item.time} · {eventPeopleLabel(item.event, members)}</span>{item.event.location && <span className="mt-1 block truncate text-xs text-gray-500">{item.event.source === 'gmail-school-email' ? schoolEventLocation(item.event.location) : item.event.location}</span>}</span>
           </button>; })}</div> : <p className="text-sm text-gray-500 dark:text-slate-400">No events or outstanding reminders in the next seven days.</p>}
+        </section>
+        <section className="order-2 border-t border-gray-200 pt-5 dark:border-slate-800" aria-label="Schedule check">
+          <div className="flex items-start justify-between gap-3">
+            <div><h3 className="flex items-center gap-2 text-base font-semibold"><Sparkles className="h-5 w-5 text-teal-600" />Schedule check</h3><p className="mt-1 text-xs text-gray-500 dark:text-slate-400">Rule-based check of saved events only. It does not invent plans.</p></div>
+            <span className="rounded bg-gray-100 px-2 py-1 text-[11px] font-medium text-gray-600 dark:bg-slate-800 dark:text-slate-300">Next 7 days</span>
+          </div>
+          {scheduleInsights.length ? <div className="mt-3 divide-y divide-gray-200 rounded-md border border-gray-200 dark:divide-slate-800 dark:border-slate-700">{scheduleInsights.slice(0, 5).map((insight) => {
+            const Icon = insight.kind === 'conflict' || insight.kind === 'coverage' ? AlertTriangle : insight.kind === 'time' ? Clock3 : UserRoundCheck;
+            const event = upcomingEvents.find((item) => item.id === insight.eventId);
+            return <button key={insight.id} type="button" onClick={() => event && eventEditor.open(event)} className="flex min-h-14 w-full items-start gap-3 px-3 py-3 text-left hover:bg-gray-50 dark:hover:bg-slate-800"><Icon className={`mt-0.5 h-4 w-4 shrink-0 ${insight.kind === 'conflict' || insight.kind === 'coverage' ? 'text-amber-600' : 'text-teal-600'}`} /><span className="min-w-0"><strong className="block text-sm">{insight.title}</strong><span className="mt-0.5 block text-xs text-gray-500 dark:text-slate-400">{insight.detail}</span></span></button>;
+          })}</div> : <p className="mt-3 rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">No clashes or missing details found in saved events this week.</p>}
         </section>
       </aside>
     </div>
@@ -150,5 +180,12 @@ export const CalendarView = () => {
         const result = await updateEvent(travelEvent.id, draft);
         if (result === 'conflict') throw new Error('Resolve the event conflict before saving travel details.');
       }} />}
+    {showPresence && <QuickPresenceDialog people={people} date={todayKey} onClose={() => setShowPresence(false)} onSave={async (draft) => {
+      const result = await createEvent(draft);
+      if (result.status === 'conflict') return 'conflict';
+      setCurrentDate(new Date(`${draft.date}T12:00:00`));
+      toast.success(`${people.find((person) => person.id === draft.person)?.name ?? 'Family member'} location added.`);
+      return 'created';
+    }} />}
   </div>;
 };

@@ -18,6 +18,7 @@ interface ImportRow {
   duplicate: boolean;
   bankCategory?: string;
   confidence?: number;
+  balance?: number;
 }
 
 interface StatementImportModalProps {
@@ -137,7 +138,6 @@ const StatementImportModal = ({
       const formData = new FormData();
       formData.append('file', file);
       formData.append('useAi', useAi ? 'true' : 'false');
-      formData.append('accountId', accountId);
 
       const response = await fetch(`/api/families/${familyId}/budget/statement-import`, {
         method: 'POST',
@@ -203,6 +203,7 @@ const StatementImportModal = ({
           duplicate,
           bankCategory: transaction.bankCategory,
           confidence: transaction.confidence,
+          balance: transaction.balance,
         };
       });
 
@@ -261,13 +262,40 @@ const StatementImportModal = ({
   };
 
   const handleImport = async () => {
-    if (rows.length === 0) return;
+    if (!familyId || !accountId || !parseResult?.preview) {
+      setError('Choose an account and parse a statement before importing.');
+      return;
+    }
+    const selectedRows = rows.filter((row) => row.include && row.importAs !== 'skip');
+    if (selectedRows.length === 0) {
+      setError('Select at least one reviewed transaction to import.');
+      return;
+    }
     setIsImporting(true);
     setError(null);
 
     try {
-      // Valid rows are saved as immutable actual transactions when the file is parsed.
-      // They are intentionally not converted into planned budget entries.
+      const response = await fetch(`/api/families/${familyId}/budget/statement-import`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'commit',
+          accountId,
+          ...parseResult.preview,
+          metadata: parseResult.metadata,
+          transactions: selectedRows.map((row) => ({
+            id: row.id,
+            date: row.date,
+            description: row.description,
+            amount: row.amount,
+            direction: row.importAs === 'income' ? 'credit' : 'debit',
+            category: row.category,
+            balance: row.balance,
+          })),
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'Failed to import reviewed transactions.');
       onImported([], []);
       handleClose();
     } catch (importError) {
@@ -301,7 +329,7 @@ const StatementImportModal = ({
             </div>
             <div>
               <h2 className="text-lg font-semibold text-gray-900">Import Statement</h2>
-              <p className="text-sm text-gray-500">Upload CSV, PDF, or Excel to update your budget automatically.</p>
+                  <p className="text-sm text-gray-500">Preview, review and then add selected rows to actual cash flow.</p>
             </div>
           </div>
           <button onClick={handleClose} className="rounded-md p-2 text-gray-500 hover:bg-gray-100">
@@ -359,14 +387,6 @@ const StatementImportModal = ({
             <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
               <AlertTriangle className="h-4 w-4" />
               {displayError}
-            </div>
-          )}
-
-          {parseResult && (parseResult as any).ledgerImport && (
-            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-              {(parseResult as any).ledgerImport.alreadyImported
-                ? 'This statement was already imported for this account.'
-                : `${(parseResult as any).ledgerImport.importedRows} valid transactions were added to actual cash flow. ${(parseResult as any).ledgerImport.duplicateRows || 0} duplicate rows were skipped.`}
             </div>
           )}
 
@@ -462,7 +482,7 @@ const StatementImportModal = ({
                   Clear all
                 </button>
                 <span className="ml-auto">
-                  Importing {totals.count} items • Income £{totals.incomeTotal.toFixed(2)} • Expenses £{totals.expenseTotal.toFixed(2)}
+                  Ready to add {totals.count} reviewed items • Income £{totals.incomeTotal.toFixed(2)} • Expenses £{totals.expenseTotal.toFixed(2)}
                 </span>
               </div>
 
@@ -566,11 +586,11 @@ const StatementImportModal = ({
           </button>
           <button
             onClick={handleImport}
-            disabled={rows.length === 0 || isImporting}
+            disabled={totals.count === 0 || isImporting}
             className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
           >
             {isImporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-            Done
+            Add reviewed transactions
           </button>
         </div>
       </div>

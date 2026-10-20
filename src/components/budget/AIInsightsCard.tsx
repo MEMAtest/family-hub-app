@@ -117,7 +117,7 @@ export const AIInsightsCard: React.FC<AIInsightsCardProps> = ({
         </div>
         <div className="flex-1">
           <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
-            Smart Spending Insights
+            Planned Spending Insights
             {data && (
               <span className="text-xs font-normal text-gray-600">
                 {data.monthName} • Family of {data.familySize}
@@ -128,7 +128,7 @@ export const AIInsightsCard: React.FC<AIInsightsCardProps> = ({
           {isLoading ? (
             <div className="flex items-center gap-2 text-sm text-gray-600 py-4">
               <Loader2 className="w-4 h-4 animate-spin" />
-              Analyzing your spending patterns...
+              Analyzing your household plan...
             </div>
           ) : insights ? (
             <>
@@ -139,21 +139,22 @@ export const AIInsightsCard: React.FC<AIInsightsCardProps> = ({
               {data && (
                 <div className="mt-4 grid grid-cols-3 gap-3">
                   <div className="bg-white bg-opacity-60 rounded-lg p-3 text-center">
-                    <p className="text-xs text-gray-600 mb-1">Income</p>
+                    <p className="text-xs text-gray-600 mb-1">Planned income</p>
                     <p className="font-bold text-green-700">£{data.totalIncome.toLocaleString()}</p>
                   </div>
                   <div className="bg-white bg-opacity-60 rounded-lg p-3 text-center">
-                    <p className="text-xs text-gray-600 mb-1">Expenses</p>
+                    <p className="text-xs text-gray-600 mb-1">Planned expenses</p>
                     <p className="font-bold text-red-700">£{data.totalExpenses.toLocaleString()}</p>
                   </div>
                   <div className="bg-white bg-opacity-60 rounded-lg p-3 text-center">
-                    <p className="text-xs text-gray-600 mb-1">Net</p>
+                    <p className="text-xs text-gray-600 mb-1">Plan balance</p>
                     <p className={`font-bold ${data.totalIncome - data.totalExpenses >= 0 ? 'text-green-700' : 'text-red-700'}`}>
                       £{(data.totalIncome - data.totalExpenses).toLocaleString()}
                     </p>
                   </div>
                 </div>
               )}
+              {data?.basis === 'planned' && <p className="mt-3 text-xs text-gray-600">These suggestions use planned entries, not imported bank transactions.</p>}
             </>
           ) : (
             <p className="text-sm text-gray-600">No insights available yet.</p>

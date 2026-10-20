@@ -2,7 +2,7 @@
  * Utility functions for filtering budget data by month/year
  * Handles recurring transactions properly
  */
-import { plannedForMonth } from '@/lib/budget/plannedMonth';
+import { plannedAmountForMonth, plannedForMonth } from '@/lib/budget/plannedMonth';
 
 interface BudgetItem {
   id: string;
@@ -13,6 +13,8 @@ interface BudgetItem {
   recurringEndDate?: string | Date | null;
   paymentDate?: string | Date | null;
   createdAt?: string | Date;
+  personId?: string | null;
+  category?: string | null;
 }
 
 /**
@@ -45,15 +47,16 @@ export function deduplicateRecurringItems<T extends BudgetItem & { incomeName?: 
     }
 
     const name = item.incomeName || item.expenseName || 'Unnamed';
-    if (!recurringGroups.has(name)) {
-      recurringGroups.set(name, []);
+    const identity = [name.trim().toLowerCase(), item.personId || 'household', item.category || 'uncategorised'].join('|');
+    if (!recurringGroups.has(identity)) {
+      recurringGroups.set(identity, []);
     }
-    recurringGroups.get(name)!.push(item);
+    recurringGroups.get(identity)!.push(item);
   });
 
   // For each group, keep only the most recently created item
   const deduplicatedRecurring: T[] = [];
-  recurringGroups.forEach((group, name) => {
+  recurringGroups.forEach((group) => {
     if (group.length === 1) {
       deduplicatedRecurring.push(group[0]);
     } else {
@@ -86,5 +89,6 @@ export function calculateMonthlyTotal<T extends BudgetItem & { incomeName?: stri
   const monthItems = filterBudgetItemsByMonth(deduplicated, month, year);
 
   // Sum the amounts
-  return monthItems.reduce((sum, item) => sum + Number(item.amount), 0);
+  const monthKey = `${year}-${String(month).padStart(2, '0')}`;
+  return monthItems.reduce((sum, item) => sum + plannedAmountForMonth(item, monthKey), 0);
 }

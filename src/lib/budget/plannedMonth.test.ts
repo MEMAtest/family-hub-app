@@ -1,4 +1,4 @@
-import { monthRangeUtc, plannedForMonth } from './plannedMonth';
+import { monthRangeUtc, plannedAmountForMonth, plannedForMonth, plannedOccurrencesForMonth } from './plannedMonth';
 
 describe('planned budget month selection', () => {
   test('uses an exact UTC month range', () => {
@@ -25,5 +25,31 @@ describe('planned budget month selection', () => {
     expect(plannedForMonth(ended, '2026-10')).toBe(false);
     expect(plannedForMonth(yearly, '2026-10')).toBe(true);
     expect(plannedForMonth(yearly, '2026-11')).toBe(false);
+  });
+});
+
+describe('planned weekly amounts', () => {
+  test('counts weekly occurrences anchored to the recurring start date', () => {
+    const weekly = {
+      amount: 25,
+      isRecurring: true,
+      recurringFrequency: 'weekly',
+      recurringStartDate: '2026-10-01T00:00:00.000Z',
+    };
+
+    expect(plannedOccurrencesForMonth(weekly, '2026-10')).toBe(5);
+    expect(plannedAmountForMonth(weekly, '2026-10')).toBe(125);
+  });
+
+  test('stops at the inclusive recurring end date', () => {
+    const weekly = {
+      amount: 10,
+      isRecurring: true,
+      recurringFrequency: 'weekly',
+      recurringStartDate: '2026-10-01T00:00:00.000Z',
+      recurringEndDate: '2026-10-15T00:00:00.000Z',
+    };
+
+    expect(plannedOccurrencesForMonth(weekly, '2026-10')).toBe(3);
   });
 });

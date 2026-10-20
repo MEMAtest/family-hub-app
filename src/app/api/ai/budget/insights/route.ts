@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { aiService } from '@/services/aiService';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth-utils';
+import { partitionBudgetRecords } from '@/lib/budget/dataQuality';
+import { plannedAmountForMonth } from '@/lib/budget/plannedMonth';
+import { deduplicateRecurringItems } from '@/utils/budgetMonthFilter';
 
 export const runtime = 'nodejs';
 
@@ -74,20 +77,8 @@ export const POST = requireAuth(async (req: NextRequest, _context, authUser) => 
       }
     });
 
-    // Deduplicate recurring income by name+category, keeping FIRST occurrence (by createdAt)
-    // This matches dashboard behavior which orders by createdAt desc and takes first
-    const seenIncome = new Map<string, typeof allIncome[0]>();
-    allIncome.forEach(item => {
-      if (item.isRecurring) {
-        const key = `${item.incomeName}_${item.category}`;
-        if (!seenIncome.has(key)) {
-          seenIncome.set(key, item);
-        }
-      } else {
-        seenIncome.set(item.id, item);
-      }
-    });
-    const income = Array.from(seenIncome.values());
+    const incomeQuality = partitionBudgetRecords(deduplicateRecurringItems(allIncome));
+    const income = incomeQuality.operational;
 
     // Fetch expenses - same logic
     const allExpenses = await prisma.budgetExpense.findMany({
@@ -126,33 +117,22 @@ export const POST = requireAuth(async (req: NextRequest, _context, authUser) => 
       }
     });
 
-    // Deduplicate recurring expenses by name+category, keeping FIRST occurrence
-    const seenExpenses = new Map<string, typeof allExpenses[0]>();
-    allExpenses.forEach(item => {
-      if (item.isRecurring) {
-        const key = `${item.expenseName}_${item.category}`;
-        if (!seenExpenses.has(key)) {
-          seenExpenses.set(key, item);
-        }
-      } else {
-        seenExpenses.set(item.id, item);
-      }
-    });
-    const expenses = Array.from(seenExpenses.values());
+    const expenseQuality = partitionBudgetRecords(deduplicateRecurringItems(allExpenses));
+    const expenses = expenseQuality.operational;
 
-    // Calculate totals
-    const totalIncome = income.reduce((sum, item) => sum + Number(item.amount), 0);
-    const totalExpenses = expenses.reduce((sum, item) => sum + Number(item.amount), 0);
+    const monthKey = `${targetYear}-${String(targetMonth).padStart(2, '0')}`;
+    const totalIncome = income.reduce((sum, item) => sum + plannedAmountForMonth(item, monthKey), 0);
+    const totalExpenses = expenses.reduce((sum, item) => sum + plannedAmountForMonth(item, monthKey), 0);
 
     // Group expenses by category
     const expensesByCategory = expenses.reduce((acc, expense) => {
       const existing = acc.find(item => item.category === expense.category);
       if (existing) {
-        existing.amount += Number(expense.amount);
+        existing.amount += plannedAmountForMonth(expense, monthKey);
       } else {
         acc.push({
           category: expense.category,
-          amount: Number(expense.amount),
+          amount: plannedAmountForMonth(expense, monthKey),
           budgetLimit: expense.budgetLimit ? Number(expense.budgetLimit) : undefined
         });
       }
@@ -195,7 +175,9 @@ export const POST = requireAuth(async (req: NextRequest, _context, authUser) => 
         totalExpenses,
         expensesByCategory,
         monthName,
-        familySize: family.members.length
+        familySize: family.members.length,
+        basis: 'planned',
+        excludedQaItems: incomeQuality.excludedQa.length + expenseQuality.excludedQa.length,
       }
     });
 

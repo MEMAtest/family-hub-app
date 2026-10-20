@@ -289,6 +289,54 @@ async function persistStatementImport({
 
 export const POST = requireFamilyAccess(async (request: NextRequest, _context, authUser) => {
   try {
+    if (request.headers.get('content-type')?.includes('application/json')) {
+      const body = await request.json();
+      if (body?.action !== 'commit') {
+        return NextResponse.json({ error: 'Unsupported statement action.' }, { status: 400 });
+      }
+
+      const accountId = typeof body.accountId === 'string' ? body.accountId : '';
+      const fileName = typeof body.fileName === 'string' ? body.fileName.trim() : '';
+      const contentHash = typeof body.contentHash === 'string' ? body.contentHash : '';
+      const sourceType = ['csv', 'pdf', 'xlsx'].includes(body.sourceType) ? body.sourceType as StatementTransaction['source'] : null;
+      const suppliedRows = Array.isArray(body.transactions) ? body.transactions.slice(0, 5000) : [];
+      if (!accountId || !fileName || !/^[a-f0-9]{64}$/i.test(contentHash) || !sourceType || suppliedRows.length === 0) {
+        return NextResponse.json({ error: 'A reviewed statement preview, account and selected rows are required.' }, { status: 400 });
+      }
+
+      const transactions: StatementTransaction[] = suppliedRows.map((row: Record<string, unknown>) => ({
+        id: typeof row.id === 'string' ? row.id : createId('statement'),
+        date: String(row.date ?? ''),
+        description: String(row.description ?? 'Statement item').trim(),
+        amount: Math.abs(Number(row.amount ?? 0)),
+        direction: normalizeDirection(typeof row.direction === 'string' ? row.direction : undefined, String(row.description ?? '')),
+        category: String(row.category ?? 'Other'),
+        balance: typeof row.balance === 'number' ? row.balance : undefined,
+        source: sourceType,
+      }));
+      const metadata = body.metadata && typeof body.metadata === 'object' ? body.metadata : {};
+      const result: StatementParseResult = {
+        success: true,
+        transactions,
+        warnings: [],
+        errors: [],
+        metadata: {
+          ...metadata,
+          sourceType,
+        },
+      };
+      const ledgerImport = await persistStatementImport({
+        familyId: authUser.familyId,
+        accountId,
+        fileName,
+        contentHash,
+        sourceType,
+        result,
+        importedById: authUser.dbUser.id,
+      });
+      return NextResponse.json({ success: true, ledgerImport });
+    }
+
     const formData = await request.formData();
     const file = formData.get('file');
     const useAi = formData.get('useAi') === 'true';
@@ -374,19 +422,12 @@ export const POST = requireFamilyAccess(async (request: NextRequest, _context, a
       );
     }
 
-    const accountId = formData.get('accountId');
-    if (typeof accountId === 'string' && accountId) {
-      const ledgerImport = await persistStatementImport({
-        familyId: authUser.familyId,
-        accountId,
-        fileName: file.name,
-        contentHash: createHash('sha256').update(buffer).digest('hex'),
-        sourceType: fileName.split('.').pop() || 'unknown',
-        result,
-        importedById: authUser.dbUser.id,
-      });
-      Object.assign(result, { ledgerImport });
-    }
+    const sourceType = fileName.endsWith('.pdf') ? 'pdf' : fileName.endsWith('.csv') ? 'csv' : 'xlsx';
+    result.preview = {
+      fileName: file.name,
+      contentHash: createHash('sha256').update(buffer).digest('hex'),
+      sourceType,
+    };
 
     console.log('📊 Statement import result:', {
       success: result?.success,

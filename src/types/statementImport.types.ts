@@ -32,4 +32,15 @@ export interface StatementParseResult {
   warnings: string[];
   errors: string[];
   metadata: StatementParseMetadata;
+  preview?: {
+    fileName: string;
+    contentHash: string;
+    sourceType: StatementSource;
+  };
+  ledgerImport?: {
+    id: string;
+    importedRows: number;
+    duplicateRows: number;
+    alreadyImported?: boolean;
+  };
 }

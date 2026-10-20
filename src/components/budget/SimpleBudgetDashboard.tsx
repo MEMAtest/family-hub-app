@@ -38,7 +38,8 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { filterExpenses, filterIncome } from '@/utils/budgetFilters';
 import toast from 'react-hot-toast';
 import type { SavingsGoal } from '@/types/budget.types';
-import { plannedForMonth } from '@/lib/budget/plannedMonth';
+import { plannedAmountForMonth, plannedForMonth } from '@/lib/budget/plannedMonth';
+import { partitionBudgetRecords } from '@/lib/budget/dataQuality';
 
 interface CategoryData {
   name: string;
@@ -96,6 +97,7 @@ const SimpleBudgetDashboard: React.FC = () => {
   const [showAdvancedReports, setShowAdvancedReports] = useState(false);
   const [showReceiptScanner, setShowReceiptScanner] = useState(false);
   const [showStatementImport, setShowStatementImport] = useState(false);
+  const [cashFlowRefreshKey, setCashFlowRefreshKey] = useState(0);
 
   // Edit mode states
   const [editingIncome, setEditingIncome] = useState<any>(null);
@@ -117,6 +119,7 @@ const SimpleBudgetDashboard: React.FC = () => {
   const [showAllExpenses, setShowAllExpenses] = useState(false);
 
   const handleStatementImported = useCallback((income: any[], expenses: any[]) => {
+    setCashFlowRefreshKey((current) => current + 1);
     if (income.length) {
       setIncomeList((prev) => [...prev, ...income]);
     }
@@ -186,12 +189,13 @@ const SimpleBudgetDashboard: React.FC = () => {
     try {
       const safeIncome = sanitizeBudgetItems(incomeItems);
       const safeExpenses = sanitizeBudgetItems(expenseItems);
-      window.localStorage.setItem('budgetIncome', JSON.stringify(safeIncome));
-      window.localStorage.setItem('budgetExpenses', JSON.stringify(safeExpenses));
+      const suffix = familyId ? `:${familyId}` : '';
+      window.localStorage.setItem(`budgetIncome${suffix}`, JSON.stringify(safeIncome));
+      window.localStorage.setItem(`budgetExpenses${suffix}`, JSON.stringify(safeExpenses));
     } catch (error) {
       console.warn('Failed to persist budget lists to localStorage', error);
     }
-  }, [sanitizeBudgetItems]);
+  }, [familyId, sanitizeBudgetItems]);
 
   // Load budget data from store
   useEffect(() => {
@@ -332,11 +336,14 @@ const SimpleBudgetDashboard: React.FC = () => {
   // Calculate all dashboard data from real income and expense lists filtered by selected month
   const dashboardData = useMemo(() => {
     // Filter lists by selected month/year
-    const filteredIncome = sanitizeBudgetItems(incomeList).filter(filterByMonth);
-    const filteredExpenses = sanitizeBudgetItems(expenseList).filter(filterByMonth);
+    const incomeQuality = partitionBudgetRecords(sanitizeBudgetItems(incomeList));
+    const expenseQuality = partitionBudgetRecords(sanitizeBudgetItems(expenseList));
+    const filteredIncome = incomeQuality.operational.filter(filterByMonth);
+    const filteredExpenses = expenseQuality.operational.filter(filterByMonth);
+    const monthKey = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
 
-    const totalIncome = filteredIncome.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
-    const totalExpenses = filteredExpenses.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+    const totalIncome = filteredIncome.reduce((sum, item) => sum + plannedAmountForMonth(item, monthKey), 0);
+    const totalExpenses = filteredExpenses.reduce((sum, item) => sum + plannedAmountForMonth(item, monthKey), 0);
     const netIncome = totalIncome - totalExpenses;
     const savingsRate = totalIncome > 0 ? ((netIncome / totalIncome) * 100) : 0;
 
@@ -344,7 +351,7 @@ const SimpleBudgetDashboard: React.FC = () => {
     const categoryMap: { [key: string]: number } = {};
     filteredExpenses.forEach(expense => {
       const category = expense.category || 'Other';
-      categoryMap[category] = (categoryMap[category] || 0) + (parseFloat(expense.amount) || 0);
+      categoryMap[category] = (categoryMap[category] || 0) + plannedAmountForMonth(expense, monthKey);
     });
 
     const categorySpending: CategoryData[] = Object.entries(categoryMap).map(([name, value], index) => ({
@@ -358,7 +365,7 @@ const SimpleBudgetDashboard: React.FC = () => {
     const incomeCategoryMap: { [key: string]: number } = {};
     filteredIncome.forEach(income => {
       const category = income.category || 'Other Income';
-      incomeCategoryMap[category] = (incomeCategoryMap[category] || 0) + (parseFloat(income.amount) || 0);
+      incomeCategoryMap[category] = (incomeCategoryMap[category] || 0) + plannedAmountForMonth(income, monthKey);
     });
 
     const incomeByCategory: CategoryData[] = Object.entries(incomeCategoryMap).map(([name, value], index) => ({
@@ -384,7 +391,8 @@ const SimpleBudgetDashboard: React.FC = () => {
       incomeByCategory,
       comparisonData,
       filteredIncome,
-      filteredExpenses
+      filteredExpenses,
+      excludedQaCount: incomeQuality.excludedQa.length + expenseQuality.excludedQa.length,
     };
   }, [incomeList, expenseList, selectedMonth, selectedYear, getColorForCategory, filterByMonth, sanitizeBudgetItems]);
 
@@ -400,19 +408,20 @@ const SimpleBudgetDashboard: React.FC = () => {
 
   const calculatorDefaults = useMemo(() => {
     const filteredExpenses = sanitizeBudgetItems(dashboardData?.filteredExpenses ?? []);
+    const monthKey = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
     const fixedCosts = filteredExpenses
       .filter((expense) => Boolean((expense as any).isRecurring))
-      .reduce((sum, expense) => sum + (parseFloat((expense as any).amount) || 0), 0);
+      .reduce((sum, expense) => sum + plannedAmountForMonth(expense, monthKey), 0);
     const variableSpend = filteredExpenses
       .filter((expense) => !Boolean((expense as any).isRecurring))
-      .reduce((sum, expense) => sum + (parseFloat((expense as any).amount) || 0), 0);
+      .reduce((sum, expense) => sum + plannedAmountForMonth(expense, monthKey), 0);
 
     return {
       totalIncome: dashboardData?.totalIncome ?? 0,
       fixedCosts,
       variableSpend,
     };
-  }, [dashboardData, sanitizeBudgetItems]);
+  }, [dashboardData, sanitizeBudgetItems, selectedMonth, selectedYear]);
 
   // Helper function for currency formatting (defined before useMemo hooks that use it)
   const formatCurrency = useCallback((amount: number) => {
@@ -425,8 +434,8 @@ const SimpleBudgetDashboard: React.FC = () => {
   // Calculate monthly trends for last 6 months
   const monthlyTrendsData = useMemo(() => {
     const trends = [];
-    const safeIncome = sanitizeBudgetItems(incomeList);
-    const safeExpenses = sanitizeBudgetItems(expenseList);
+    const safeIncome = partitionBudgetRecords(sanitizeBudgetItems(incomeList)).operational;
+    const safeExpenses = partitionBudgetRecords(sanitizeBudgetItems(expenseList)).operational;
 
     for (let i = 5; i >= 0; i--) {
       const date = new Date(selectedYear, selectedMonth - 1 - i, 1);
@@ -435,11 +444,11 @@ const SimpleBudgetDashboard: React.FC = () => {
 
       const monthIncome = safeIncome
         .filter((item) => matchesMonthYear(item, month, year))
-        .reduce((sum, item) => sum + (parseFloat((item as any).amount) || 0), 0);
+        .reduce((sum, item) => sum + plannedAmountForMonth(item, `${year}-${String(month).padStart(2, '0')}`), 0);
 
       const monthExpenses = safeExpenses
         .filter((item) => matchesMonthYear(item, month, year))
-        .reduce((sum, item) => sum + (parseFloat((item as any).amount) || 0), 0);
+        .reduce((sum, item) => sum + plannedAmountForMonth(item, `${year}-${String(month).padStart(2, '0')}`), 0);
 
       trends.push({
         month: `${date.toLocaleDateString('en-GB', { month: 'short' })} ${String(year).slice(-2)}`,
@@ -755,7 +764,13 @@ const SimpleBudgetDashboard: React.FC = () => {
         </div>
       )}
 
-      <ActualCashFlowPanel familyId={familyId} month={`${selectedYear}-${String(selectedMonth).padStart(2, '0')}`} />
+      <ActualCashFlowPanel familyId={familyId} month={`${selectedYear}-${String(selectedMonth).padStart(2, '0')}`} refreshKey={cashFlowRefreshKey} />
+
+      {dashboardData.excludedQaCount > 0 && (
+        <div className={`${isMobile ? 'mx-4' : ''} mb-4 border-y border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900`}>
+          {dashboardData.excludedQaCount} test or rehearsal {dashboardData.excludedQaCount === 1 ? 'row is' : 'rows are'} excluded from the household plan totals. The saved records have not been deleted.
+        </div>
+      )}
 
       <div className={`${isMobile ? 'px-4' : ''} mb-4`}>
         <div className="inline-flex rounded-lg border border-[#dde5e0] bg-white/80 p-1 dark:border-slate-800 dark:bg-slate-900/80">
@@ -807,7 +822,7 @@ const SimpleBudgetDashboard: React.FC = () => {
             <div>
               <p className={`font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wide ${
                 isMobile ? 'text-xs' : 'text-sm'
-              }`}>Total Income</p>
+              }`}>Planned Income</p>
               <p className={`font-light text-green-600 mt-2 ${
                 isMobile ? 'text-lg' : 'text-xl md:text-2xl lg:text-3xl'
               }`}>
@@ -830,7 +845,7 @@ const SimpleBudgetDashboard: React.FC = () => {
             <div>
               <p className={`font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wide ${
                 isMobile ? 'text-xs' : 'text-sm'
-              }`}>Total Expenses</p>
+              }`}>Planned Expenses</p>
               <p className={`font-light text-red-600 mt-2 ${
                 isMobile ? 'text-lg' : 'text-xl md:text-2xl lg:text-3xl'
               }`}>
@@ -853,7 +868,7 @@ const SimpleBudgetDashboard: React.FC = () => {
             <div>
               <p className={`font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wide ${
                 isMobile ? 'text-xs' : 'text-sm'
-              }`}>Net Income</p>
+              }`}>Plan Balance</p>
               <p className={`font-light mt-2 ${
                 dashboardData.netIncome >= 0 ? 'text-green-600' : 'text-red-600'
               } ${
@@ -878,7 +893,7 @@ const SimpleBudgetDashboard: React.FC = () => {
             <div>
               <p className={`font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wide ${
                 isMobile ? 'text-xs' : 'text-sm'
-              }`}>Savings Rate</p>
+              }`}>Planned Margin</p>
               <p className={`font-light mt-2 ${getHealthColor(dashboardData.savingsRate)} ${
                 isMobile ? 'text-lg' : 'text-xl md:text-2xl lg:text-3xl'
               }`}>
@@ -960,7 +975,7 @@ const SimpleBudgetDashboard: React.FC = () => {
         <h2 className={`font-medium text-gray-900 dark:text-slate-100 mb-6 ${
           isMobile ? 'text-base' : 'text-lg'
         }`}>
-          6-Month Trend
+          6-Month Plan Trend
         </h2>
         <div className={isMobile ? 'h-64' : 'h-80'}>
           <ResponsiveContainer width="100%" height="100%">
@@ -970,9 +985,9 @@ const SimpleBudgetDashboard: React.FC = () => {
               <YAxis tickFormatter={(value) => `£${(value / 1000).toFixed(0)}k`} />
               <Tooltip formatter={(value: number) => formatCurrency(value)} />
               <Legend />
-              <Line type="monotone" dataKey="income" stroke="#10B981" strokeWidth={2} name="Income" />
-              <Line type="monotone" dataKey="expenses" stroke="#EF4444" strokeWidth={2} name="Expenses" />
-              <Line type="monotone" dataKey="net" stroke="#3B82F6" strokeWidth={2} name="Net" />
+              <Line type="monotone" dataKey="income" stroke="#10B981" strokeWidth={2} name="Planned income" />
+              <Line type="monotone" dataKey="expenses" stroke="#EF4444" strokeWidth={2} name="Planned expenses" />
+              <Line type="monotone" dataKey="net" stroke="#3B82F6" strokeWidth={2} name="Plan balance" />
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -1001,7 +1016,7 @@ const SimpleBudgetDashboard: React.FC = () => {
           <h2 className={`font-medium text-gray-900 dark:text-slate-100 mb-6 ${
             isMobile ? 'text-base' : 'text-lg'
           }`}>
-            Income vs Expenses
+            Planned Income vs Expenses
           </h2>
           <div className={isMobile ? 'h-64' : 'h-80'}>
             <ResponsiveContainer width="100%" height="100%">
@@ -1020,8 +1035,8 @@ const SimpleBudgetDashboard: React.FC = () => {
             </ResponsiveContainer>
           </div>
           <div className="mt-4 text-sm text-gray-600 dark:text-slate-400">
-            <p><strong>Savings Rate:</strong> {dashboardData.savingsRate.toFixed(1)}% - This is calculated as (Net Income / Total Income) × 100</p>
-            <p className="mt-2"><strong>Net Income:</strong> Total Income (£{dashboardData.totalIncome.toLocaleString()}) - Total Expenses (£{dashboardData.totalExpenses.toLocaleString()}) = £{dashboardData.netIncome.toLocaleString()}</p>
+            <p><strong>Planned margin:</strong> {dashboardData.savingsRate.toFixed(1)}% of planned income remains after planned expenses. This is not actual savings.</p>
+            <p className="mt-2"><strong>Plan balance:</strong> Planned income (£{dashboardData.totalIncome.toLocaleString()}) - planned expenses (£{dashboardData.totalExpenses.toLocaleString()}) = £{dashboardData.netIncome.toLocaleString()}</p>
           </div>
         </div>
 
@@ -1435,7 +1450,7 @@ const SimpleBudgetDashboard: React.FC = () => {
             if (editingIncome) {
               // Update existing income
               console.log('Updating income:', { ...editingIncome, ...data });
-              const updatedIncome = await databaseService.saveBudgetIncome({ ...data, id: editingIncome.id });
+              const updatedIncome = await databaseService.updateBudgetIncome({ ...data, id: editingIncome.id });
 
               if (updatedIncome) {
                 console.log('Income updated successfully:', updatedIncome);
@@ -1478,7 +1493,7 @@ const SimpleBudgetDashboard: React.FC = () => {
             if (editingExpense) {
               // Update existing expense
               console.log('Updating expense:', { ...editingExpense, ...data });
-              const updatedExpense = await databaseService.saveBudgetExpense({ ...data, id: editingExpense.id });
+              const updatedExpense = await databaseService.updateBudgetExpense({ ...data, id: editingExpense.id });
 
               if (updatedExpense) {
                 console.log('Expense updated successfully:', updatedExpense);

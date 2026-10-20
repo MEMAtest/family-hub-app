@@ -2,7 +2,7 @@ import type { CalendarEvent, RecurringPattern } from '@/types/calendar.types';
 
 const RICH_RECURRENCE_PREFIX = 'kinboard:v1:';
 
-const richFields = ['workStatus', 'travel', 'reminders', 'reminderPreferences', 'attendees', 'priority', 'status', 'color'] as const;
+const richFields = ['workStatus', 'travel', 'reminders', 'reminderPreferences', 'attendees', 'priority', 'status', 'color', 'quickPresence'] as const;
 const objectRecord = (value: unknown): Record<string, unknown> =>
   value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 
