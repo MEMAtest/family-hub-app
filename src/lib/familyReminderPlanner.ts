@@ -15,6 +15,8 @@ export type ReminderIntent = {
 };
 export const reminderRecordId = (kind: string, parts: string[]) =>
   `family-reminder-${kind}-${createHash('sha256').update(JSON.stringify(parts)).digest('hex')}`;
+export const binCollectionStateId = (familyId: string, eventId: string, occurrence: string) =>
+  reminderRecordId('collection', [familyId, eventId, occurrence, 'bins']);
 export const londonParts = (now: Date) => Object.fromEntries(new Intl.DateTimeFormat('en-GB', {
   timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit',
   hour: '2-digit', minute: '2-digit', hourCycle: 'h23',

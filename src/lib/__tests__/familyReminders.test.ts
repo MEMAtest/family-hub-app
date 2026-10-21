@@ -6,7 +6,7 @@ jest.mock('@/lib/webPush', () => ({ sendMemberPushNotification: jest.fn() }));
 import prisma from '@/lib/prisma';
 import { sendMemberPushNotification } from '@/lib/webPush';
 import { reserveReminderIntent, runFamilyReminderSweep, applyFamilyReminderAction } from '@/lib/familyReminders';
-import { planFamilyReminders, type ReminderEvent } from '@/lib/familyReminderPlanner';
+import { binCollectionStateId, planFamilyReminders, type ReminderEvent } from '@/lib/familyReminderPlanner';
 
 const now = new Date('2026-10-07T07:00:00Z');
 const members = [{ id: 'angela', name: 'Angela', role: 'Parent', user: { neonAuthId: 'angela-auth' } },
@@ -67,7 +67,7 @@ it('does not recreate reminders after purpose completion', async () => {
   records.set(intent.stateId, { metadata: { resolution: 'done' } });
   expect(await reserveReminderIntent('family', intent, now)).toBe(false);
 });
-it('persists separate bin completion, deduplicates repeated ticks and suppresses only the completing parent', async () => {
+it('persists household bin completion, deduplicates ticks and suppresses both parents', async () => {
   const binTime = new Date('2026-10-08T19:00:00Z');
   const binDb = { ...dbEvent, id: 'bins', eventDate: new Date('2026-10-09'), eventTime: new Date('2026-10-09'),
     metadata: { binCollection: { date: '2026-10-09', services: ['Food waste'], sourceUrl: 'https://council.example/calendar', verified: true } } };
@@ -76,13 +76,50 @@ it('persists separate bin completion, deduplicates repeated ticks and suppresses
   expect((await runFamilyReminderSweep('family', binTime, false)).created).toBe(2);
   expect((await runFamilyReminderSweep('family', binTime, false)).created).toBe(0);
   const angela = [...records.values()].find(record => record.recipientPersonId === 'angela');
+  const future = { ...angela, id: 'future-collection', metadata: { ...angela.metadata, occurrence: '2026-10-16' } };
+  records.set(future.id, future);
   expect(angela.actions[0].label).toBe('View collection');
   expect(angela.actions.map((action: any) => action.label)).toEqual([
     'View collection', 'Bins are out', 'Skip this collection', 'Snooze',
   ]);
   await applyFamilyReminderAction('family', 'angela', angela.id, 'done', undefined, binTime);
-  expect((await runFamilyReminderSweep('family', binTime, false)).created).toBe(0);
-  expect([...records.values()].find(record => record.recipientPersonId === 'ade').actionRequired).toBe(true);
+  expect(records.get(binCollectionStateId('family', 'bins', '2026-10-09')).metadata).toMatchObject({
+    resolution: 'done', actionBy: 'angela',
+  });
+  expect([...records.values()].find(record => record.recipientPersonId === 'ade').actionRequired).toBe(false);
+  expect(future.actionRequired).toBe(true);
+  expect((await runFamilyReminderSweep('family', binTime)).created).toBe(0);
+  expect(sendMemberPushNotification).not.toHaveBeenCalled();
+});
+
+it('keeps bin snooze personal until either parent puts the bins out', async () => {
+  const binTime = new Date('2026-10-08T19:00:00Z');
+  const binDb = { ...dbEvent, id: 'bins', eventDate: new Date('2026-10-09'), eventTime: new Date('2026-10-09'),
+    metadata: { binCollection: { date: '2026-10-09', services: ['Food waste'], sourceUrl: 'https://council.example/calendar', verified: true } } };
+  (prisma.calendarEvent.findMany as jest.Mock).mockResolvedValue([binDb]);
+  (prisma.calendarEvent.findFirst as jest.Mock).mockResolvedValue(binDb);
+  await runFamilyReminderSweep('family', binTime, false);
+  const angela = [...records.values()].find(record => record.recipientPersonId === 'angela');
+  const ade = [...records.values()].find(record => record.recipientPersonId === 'ade');
+  await applyFamilyReminderAction('family', 'angela', angela.id, 'snooze', new Date('2026-10-08T21:00:00Z'), binTime);
+  expect(ade.actionRequired).toBe(true);
+  expect(ade.snoozedUntil).toBeUndefined();
+  await applyFamilyReminderAction('family', 'ade', ade.id, 'done', undefined, binTime);
+  expect(angela.actionRequired).toBe(false);
+  await runFamilyReminderSweep('family', new Date('2026-10-08T21:01:00Z'));
+  expect(sendMemberPushNotification).not.toHaveBeenCalled();
+});
+
+it('blocks a late reservation after household completion but not a later collection or another family', async () => {
+  const binEvent = { ...uiEvent, id: 'bins', date: '2026-10-09', metadata: {
+    binCollection: { date: '2026-10-09', services: ['Food waste'], sourceUrl: 'https://council.example', verified: true },
+  } } as ReminderEvent;
+  const binTime = new Date('2026-10-08T19:00:00Z');
+  const planned = planFamilyReminders('family', [binEvent], members, binTime);
+  records.set(binCollectionStateId('family', 'bins', binEvent.date), { metadata: { resolution: 'done' } });
+  for (const item of planned) expect(await reserveReminderIntent('family', item, binTime)).toBe(false);
+  expect(await reserveReminderIntent('another-family', { ...planned[1], id: 'another-intent' }, binTime)).toBe(true);
+  expect(await reserveReminderIntent('family', { ...planned[1], id: 'next-intent', stateId: 'next-state', occurrence: '2026-10-16' }, binTime)).toBe(true);
 });
 it('holds unverified bin sends and resumes after a successful council check', async () => {
   const binTime = new Date('2026-10-08T19:00:00Z');

@@ -1,17 +1,17 @@
 import { NextResponse } from 'next/server';
+import { createHash } from 'crypto';
 import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { requireFamilyAccess } from '@/lib/auth-utils';
-import { sendFamilyPushNotification } from '@/lib/webPush';
+import { sendMemberPushNotification } from '@/lib/webPush';
 import type { CalendarEvent } from '@/types/calendar.types';
 import { getCalendarEventIcon, getEventNotificationMetadata } from '@/utils/eventSemantics';
 import { toCalendarEventResponse } from '@/lib/calendarEventMapping';
 import { travelContext, type ReminderEvent } from '@/lib/familyReminderPlanner';
+import { isActionableNotification, londonNotificationDay } from '@/lib/notificationDelivery';
 
-const hasDedupeKey = (metadata: unknown, dedupeKey: string) => {
-  if (!metadata || typeof metadata !== 'object') return false;
-  return (metadata as { dedupeKey?: string }).dedupeKey === dedupeKey;
-};
+const receiptId = (familyId: string, personId: string, key: string) =>
+  `sweep-${createHash('sha256').update(JSON.stringify([familyId, personId, key])).digest('hex')}`;
 
 const eventDateTime = (event: { eventDate: Date; eventTime: Date }) => {
   const date = event.eventDate.toISOString().split('T')[0];
@@ -28,18 +28,22 @@ const describeWindow = (minutesUntil: number) => {
 const compactMetadata = (metadata: Record<string, unknown>): Prisma.InputJsonObject =>
   Object.fromEntries(Object.entries(metadata).filter(([, value]) => value !== undefined)) as Prisma.InputJsonObject;
 
-export const POST = requireFamilyAccess(async (_request, context) => {
+export const POST = requireFamilyAccess(async (_request, context, authUser) => {
   try {
     const { familyId } = await context.params;
+    const personId = authUser.familyMemberId;
+    if (!personId) return NextResponse.json({ created: 0, pushSent: 0 });
     const now = new Date();
+    const day = londonNotificationDay(now);
+    const today = new Date(`${day.key}T00:00:00Z`);
     const sevenDays = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
 
-    const [events, recentNotifications] = await Promise.all([
-      prisma.calendarEvent.findMany({
+    const events = await prisma.calendarEvent.findMany({
         where: {
           familyId,
+          personId,
           eventDate: {
-            gte: now,
+            gte: today,
             lte: sevenDays,
           },
         },
@@ -50,30 +54,15 @@ export const POST = requireFamilyAccess(async (_request, context) => {
         },
         orderBy: { eventDate: 'asc' },
         take: 50,
-      }),
-      prisma.notification.findMany({
-        where: {
-          familyId,
-          createdAt: {
-            gte: new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000),
-          },
-        },
-        select: { metadata: true },
-        take: 200,
-      }),
-    ]);
+      });
 
     let created = 0;
     let pushSent = 0;
-    const existingKeys = new Set<string>();
-    recentNotifications.forEach((notification) => {
-      const metadata = notification.metadata as { dedupeKey?: string } | null;
-      if (metadata?.dedupeKey) existingKeys.add(metadata.dedupeKey);
-    });
 
     for (const event of events) {
       // Travel has member-specific server intents; the old household sweep must not duplicate them.
-      if (travelContext(toCalendarEventResponse(event) as ReminderEvent)) continue;
+      const mappedEvent = toCalendarEventResponse(event);
+      if (travelContext(mappedEvent as ReminderEvent) || mappedEvent.status === 'cancelled') continue;
       const start = eventDateTime(event);
       const minutesUntil = Math.round((start.getTime() - now.getTime()) / 60_000);
       if (minutesUntil < 0) continue;
@@ -86,10 +75,15 @@ export const POST = requireFamilyAccess(async (_request, context) => {
       if (!shouldSend) continue;
 
       const window = describeWindow(minutesUntil);
-      const dedupeKey = `event-reminder:${event.id}:${window.key}`;
-      if (existingKeys.has(dedupeKey) || recentNotifications.some((notification) => hasDedupeKey(notification.metadata, dedupeKey))) {
-        continue;
-      }
+      const dedupeKey = `event-reminder:${event.id}:${start.toISOString()}:${window.key}`;
+      const id = receiptId(familyId, personId, dedupeKey);
+      const existing = await prisma.notification.findFirst({ where: { familyId,
+        OR: [{ id }, { AND: [
+          { OR: [{ recipientPersonId: personId }, { recipientPersonId: null }] },
+          { metadata: { path: ['dedupeKey'], equals: `event-reminder:${event.id}:${window.key}` } },
+        ] }],
+      } });
+      if (existing) continue;
 
       const title = `Upcoming: ${event.title}`;
       const message = `${event.title} is ${window.label}${event.person?.name ? ` for ${event.person.name}` : ''}.`;
@@ -106,9 +100,13 @@ export const POST = requireFamilyAccess(async (_request, context) => {
       };
       const eventIcon = getCalendarEventIcon(semanticEvent);
 
-      await prisma.notification.create({
+      try {
+        await prisma.notification.create({
         data: {
+          id,
           familyId,
+          recipientPersonId: personId,
+          expiresAt: start,
           type: 'reminder',
           title,
           message,
@@ -131,26 +129,44 @@ export const POST = requireFamilyAccess(async (_request, context) => {
             ...getEventNotificationMetadata(semanticEvent),
           }),
         },
-      });
+        });
+      } catch (error) {
+        if ((error as { code?: string }).code === 'P2002') continue;
+        throw error;
+      }
       created += 1;
-      existingKeys.add(dedupeKey);
+    }
 
-      const push = await sendFamilyPushNotification(familyId, {
-        title,
-        body: message,
-        tag: dedupeKey,
-        data: {
-          familyId,
-          eventId: event.id,
-          type: 'event-reminder',
-          url: eventUrl,
-        },
-        actions: [
-          { action: 'view', title: 'Open calendar' },
-          { action: 'snooze', title: 'Snooze 10m' },
-        ],
-      });
-      pushSent += push.sent;
+    // Launch sweeps fill the inbox silently. At most one daily catch-up may alert this recipient.
+    const unread = await prisma.notification.findMany({ where: { familyId, read: false, actionRequired: true,
+      type: { notIn: ['family_reminder_state', 'system'] },
+      OR: [{ recipientPersonId: null }, { recipientPersonId: personId }],
+      AND: [{ OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
+        { OR: [{ snoozedUntil: null }, { snoozedUntil: { lte: now } }] }],
+    }, orderBy: { timestamp: 'desc' }, take: 200 });
+    if (unread.some(item => isActionableNotification(item, now.getTime()))) {
+      const summaryId = receiptId(familyId, personId, `catchup:${day.key}`);
+      const title = 'Your family catch-up';
+      const message = 'You have updates to review in Family Hub.';
+      let claimed = false;
+      try {
+        await prisma.notification.create({ data: { id: summaryId, familyId, recipientPersonId: personId,
+          type: 'system', title, message, priority: 'low', category: 'event', read: false, actionRequired: false,
+          expiresAt: day.endsAt,
+          metadata: { source: 'notification-catchup', dedupeKey: summaryId, url: '/?view=calendar' },
+        } });
+        claimed = true;
+      } catch (error) {
+        if ((error as { code?: string }).code !== 'P2002') throw error;
+      }
+      if (claimed) {
+        const push = await sendMemberPushNotification(familyId, personId, { title, body: message, tag: summaryId,
+          data: { familyId, personId, notificationId: summaryId, url: '/?view=calendar',
+            expiresAt: new Date(now.getTime() + 15 * 60_000).toISOString() },
+          actions: [{ action: 'view', title: 'Open calendar' }],
+        });
+        pushSent = push.sent;
+      }
     }
 
     return NextResponse.json({ created, pushSent });

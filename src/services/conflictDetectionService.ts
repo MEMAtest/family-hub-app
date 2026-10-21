@@ -80,10 +80,14 @@ class ConflictDetectionService {
     people: Person[]
   ): DetectedConflict[] {
     const conflicts: DetectedConflict[] = [];
+    // Presence describes availability; the schedule check explains any pickup impact.
+    const isPresence = (event: CalendarEvent) => event.metadata?.quickPresence === true ||
+      event.type === 'work' && ['office', 'remote'].includes(event.workStatus?.type ?? '');
+    if (isPresence(newEvent)) return conflicts;
 
     // Filter events for the same person or family-wide events
     const relevantEvents = existingEvents.filter(event =>
-      event.id !== newEvent.id && (
+      event.id !== newEvent.id && !isPresence(event) && event.status !== 'cancelled' && (
         event.person === newEvent.person ||
         event.person === 'all' ||
         newEvent.person === 'all'

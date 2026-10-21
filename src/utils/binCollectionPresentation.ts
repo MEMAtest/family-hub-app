@@ -1,3 +1,12 @@
+import { addDays } from '@/utils/recurrence';
+
+export const binDateInLondon = (now = new Date()) => new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit',
+}).format(now);
+
+export const isBinCollectionActionable = (date: string, today: string) =>
+  date === today || date === addDays(today, 1);
+
 const shortService = (service: string) => {
   if (/mixed recycling/i.test(service)) return 'mixed recycling';
   if (/paper.*cardboard/i.test(service)) return 'paper and cardboard';

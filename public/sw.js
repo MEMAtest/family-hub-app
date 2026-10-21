@@ -179,53 +179,67 @@ async function limitCacheEntries(cache, maxEntries) {
   return limitCacheEntries(cache, maxEntries);
 }
 
-// Push notification event
+// Receipts survive worker restarts and closing an OS notification.
+function claimPushDelivery(key) {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open('family-hub-push-delivery', 1);
+    request.onupgradeneeded = () => request.result.createObjectStore('receipts', { keyPath: 'key' });
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const db = request.result;
+      const transaction = db.transaction('receipts', 'readwrite');
+      const store = transaction.objectStore('receipts');
+      let claimed = false;
+      const lookup = store.get(key);
+      lookup.onsuccess = () => {
+        if (lookup.result) return;
+        claimed = true;
+        store.put({ key, claimedAt: Date.now() });
+        const entries = store.getAll();
+        entries.onsuccess = () => {
+          entries.result.sort((a, b) => b.claimedAt - a.claimedAt).forEach((receipt, index) => {
+            if (index >= 2000 || receipt.claimedAt < Date.now() - 30 * 86400000) store.delete(receipt.key);
+          });
+        };
+      };
+      transaction.oncomplete = () => { db.close(); resolve(claimed); };
+      transaction.onabort = () => { db.close(); reject(transaction.error); };
+    };
+  });
+}
+
+async function deliverPush(notificationData) {
+  const data = notificationData.data || {};
+  const now = Date.now();
+  // Unstamped pre-calmness envelopes may be weeks of queued history.
+  if (!data.pushedAt || !(Date.parse(data.pushedAt) > now - 15 * 60000) ||
+      (data.expiresAt && !(Date.parse(data.expiresAt) > now))) return;
+  const occurrence = data.occurrenceId || data.scheduledFor || data.startsAt;
+  const deliveryId = data.deliveryId || (data.notificationId
+    ? JSON.stringify([data.notificationId, occurrence])
+    : JSON.stringify([notificationData.tag, occurrence || data.pushedAt]));
+  if (!notificationData.title || !deliveryId) return;
+  const key = JSON.stringify([data.familyId, data.personId, deliveryId]);
+  if (!await claimPushDelivery(key)) return;
+  await self.registration.showNotification(notificationData.title, {
+    body: notificationData.body,
+    icon: notificationData.icon || '/icon-192x192.png',
+    badge: notificationData.badge || '/icon-96x96.png',
+    tag: notificationData.tag,
+    requireInteraction: notificationData.requireInteraction === true,
+    renotify: false,
+    data,
+    actions: notificationData.actions || [{ action: 'view', title: 'Open' }],
+  });
+}
+
 self.addEventListener('push', (event) => {
-  console.log('Push notification received:', event);
-
-  let notificationData = {
-    title: 'Family Hub Reminder',
-    body: 'You have an upcoming event',
-    icon: '/icon.svg',
-    badge: '/icon.svg',
-    tag: 'family-hub-reminder',
-    requireInteraction: true,
-    data: {}
-  };
-
-  // Parse push data if available
-  if (event.data) {
-    try {
-      const pushData = event.data.json();
-      notificationData = { ...notificationData, ...pushData };
-    } catch (error) {
-      console.error('Error parsing push data:', error);
-    }
+  if (!event.data) return;
+  try {
+    event.waitUntil(deliverPush(event.data.json()).catch((error) => console.error('Push delivery failed:', error)));
+  } catch (error) {
+    console.error('Invalid push payload:', error);
   }
-
-  const promiseChain = self.registration.showNotification(
-    notificationData.title,
-    {
-      body: notificationData.body,
-      icon: notificationData.icon,
-      badge: notificationData.badge,
-      tag: notificationData.tag,
-      requireInteraction: notificationData.requireInteraction,
-      data: notificationData.data,
-      actions: notificationData.actions || [
-        {
-          action: 'view',
-          title: 'View Event'
-        },
-        {
-          action: 'snooze',
-          title: 'Snooze 10m'
-        }
-      ]
-    }
-  );
-
-  event.waitUntil(promiseChain);
 });
 
 // Notification click event

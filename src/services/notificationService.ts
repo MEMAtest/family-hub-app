@@ -12,14 +12,18 @@ import { getCalendarEventIcon, getEventNotificationMetadata } from '@/utils/even
 import conflictDetectionService, { DetectedConflict } from './conflictDetectionService';
 import { emailService } from './emailService';
 import { isFamilyReminder, type FamilyReminderAction } from '@/lib/familyReminderContract';
+import { isActionableNotification } from '@/lib/notificationDelivery';
 
-class FamilyHubNotificationService implements NotificationService {
+export class FamilyHubNotificationService implements NotificationService {
   private notifications: InAppNotification[] = [];
   private reminders: NotificationReminder[] = [];
   private settings: NotificationSettings;
   private familyId: string | null = null;
   private personId: string | null = null;
   private scopeVersion = 0;
+  private binding: Promise<void> = Promise.resolve();
+  private delivered = new Map<string, number>();
+  private activityTimeout?: ReturnType<typeof setTimeout>;
   private reminderTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
   private serviceWorkerRegistration?: ServiceWorkerRegistration;
   private pushSubscriptionInFlight: Promise<void> | null = null;
@@ -37,12 +41,20 @@ class FamilyHubNotificationService implements NotificationService {
     }
   }
 
-  async setFamilyId(familyId: string | null) {
+  setFamilyId(familyId: string | null): Promise<void> {
+    this.binding = this.bindFamily(familyId);
+    return this.binding;
+  }
+
+  private async bindFamily(familyId: string | null) {
     const version = ++this.scopeVersion;
     this.familyId = familyId;
     this.personId = null;
+    this.delivered.clear();
+    this.settings = this.getDefaultSettings();
     this.notifications = [];
     this.reminders = [];
+    clearTimeout(this.activityTimeout);
     this.reminderTimeouts.forEach(clearTimeout);
     this.reminderTimeouts.clear();
     this.snoozeTimeouts.forEach(clearTimeout);
@@ -69,21 +81,27 @@ class FamilyHubNotificationService implements NotificationService {
   }
 
   async syncFromDatabase(): Promise<void> {
-    if (!this.familyId) return;
+    await this.binding;
+    if (!this.familyId || !this.personId) return;
 
     const version = this.scopeVersion;
     try {
-      const response = await fetch(`/api/families/${this.familyId}/notifications?limit=100&offset=0`);
-      if (!response.ok) {
+      const url = `/api/families/${this.familyId}/notifications`;
+      const [response, actionableResponse] = await Promise.all([
+        fetch(`${url}?limit=100&offset=0`, { cache: 'no-store' }),
+        fetch(`${url}?actionable=true&limit=200&offset=0`, { cache: 'no-store' }),
+      ]);
+      if (!response.ok || !actionableResponse.ok) {
         return;
       }
 
-      const payload = await response.json();
+      const [payload, actionable] = await Promise.all([response.json(), actionableResponse.json()]);
       if (version !== this.scopeVersion) return;
-      const remote = Array.isArray(payload) ? payload : [];
+      const remote = [...(Array.isArray(payload) ? payload : []), ...(Array.isArray(actionable) ? actionable : [])];
 
       const remoteNotifications: InAppNotification[] = remote.map((n: any) => ({
         ...n,
+        metadata: { ...n.metadata, serverBacked: true },
         timestamp: new Date(n.timestamp),
         expiresAt: n.expiresAt ? new Date(n.expiresAt) : undefined,
         snoozedUntil: n.snoozedUntil ? new Date(n.snoozedUntil) : undefined,
@@ -93,16 +111,17 @@ class FamilyHubNotificationService implements NotificationService {
       const merged = new Map<string, InAppNotification>();
       remoteNotifications.forEach((n) => merged.set(n.id, n));
       this.notifications.forEach((n) => {
-        if (!merged.has(n.id) && !isFamilyReminder(n)) {
+        if (!merged.has(n.id) && !isFamilyReminder(n) && !n.metadata?.serverBacked) {
           merged.set(n.id, n);
         }
       });
 
       this.notifications = this.dedupeNotifications(Array.from(merged.values()))
         .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
-        .slice(0, 100);
+        .slice(0, 300);
 
       this.persistData();
+      this.normalizeSnoozes();
       this.notifySubscribers();
     } catch (error) {
       console.warn('Failed to sync notifications from database:', error);
@@ -113,6 +132,7 @@ class FamilyHubNotificationService implements NotificationService {
    * Initialize service worker for push notifications
    */
   private async initializeServiceWorker() {
+    if (!('serviceWorker' in navigator)) return;
     if (process.env.NODE_ENV !== 'production') {
       try {
         const registrations = await navigator.serviceWorker.getRegistrations();
@@ -138,6 +158,7 @@ class FamilyHubNotificationService implements NotificationService {
    */
   private loadPersistedData() {
     try {
+      this.delivered = new Map(JSON.parse(localStorage.getItem(this.storageKey('delivery-receipts')) || '[]'));
       const storedNotifications = localStorage.getItem(this.storageKey('notifications'));
       if (storedNotifications) {
         const parsedNotifications = JSON.parse(storedNotifications).map((n: any) => ({
@@ -194,6 +215,11 @@ class FamilyHubNotificationService implements NotificationService {
    */
   private persistData() {
     try {
+      if (!this.familyId || !this.personId) return;
+      // A bounded receipt ledger outlives inbox retention and dismissal.
+      const sharedReceipts: [string, number][] = JSON.parse(localStorage.getItem(this.storageKey('delivery-receipts')) || '[]');
+      this.delivered = new Map([...new Map([...sharedReceipts, ...this.delivered])].slice(-2000));
+      localStorage.setItem(this.storageKey('delivery-receipts'), JSON.stringify([...this.delivered]));
       localStorage.setItem(this.storageKey('notifications'), JSON.stringify(this.notifications));
       localStorage.setItem(this.storageKey('notification-settings'), JSON.stringify(this.settings));
       localStorage.setItem(this.storageKey('reminders'), JSON.stringify(this.reminders));
@@ -400,7 +426,34 @@ class FamilyHubNotificationService implements NotificationService {
    * Deliver browser push notification
    */
   private async deliverBrowserReminder(reminder: NotificationReminder) {
-    if (!this.checkPermission().granted || !reminder.metadata) return;
+    const version = this.scopeVersion;
+    const deliver = async () => {
+      if (version !== this.scopeVersion) return;
+      await this.deliverBrowserReminderOnce(reminder);
+    };
+    if (typeof navigator !== 'undefined' && navigator.locks?.request) {
+      await navigator.locks.request(`${this.storageKey('browser-delivery')}:${reminder.eventId}:${reminder.scheduledFor.toISOString()}`, deliver);
+    } else {
+      await deliver();
+    }
+  }
+
+  private async deliverBrowserReminderOnce(reminder: NotificationReminder) {
+    if (!this.settings.enabled || !this.settings.channels.browser || !this.personId ||
+        !this.checkPermission().granted || !reminder.metadata || reminder.status !== 'pending') return;
+    const deliveryKey = `browser:${reminder.eventId}:${reminder.scheduledFor.toISOString()}`;
+    try {
+      const sharedReceipts: [string, number][] = JSON.parse(localStorage.getItem(this.storageKey('delivery-receipts')) || '[]');
+      this.delivered = new Map([...this.delivered, ...sharedReceipts]);
+    } catch (error) {
+      console.warn('Unable to refresh shared delivery receipts:', error);
+    }
+    const startsAt = reminder.metadata.startsAt ? new Date(reminder.metadata.startsAt).getTime() : Infinity;
+    if (this.delivered.has(deliveryKey) || Date.now() - reminder.scheduledFor.getTime() > 5 * 60_000 || startsAt <= Date.now()) {
+      reminder.status = 'sent';
+      this.persistData();
+      return;
+    }
 
     // Check quiet hours
     if (this.isQuietHours()) {
@@ -409,13 +462,15 @@ class FamilyHubNotificationService implements NotificationService {
     }
 
     try {
+      this.delivered.set(deliveryKey, Date.now());
+      this.persistData();
       const notification = new Notification(reminder.metadata.title, {
         body: reminder.metadata.body,
         icon: reminder.metadata.icon || '/icons/calendar-icon.png',
         badge: reminder.metadata.badge || '/icons/badge-icon.png',
         tag: reminder.metadata.tag || `event-${reminder.eventId}`,
         data: reminder.metadata.data,
-        requireInteraction: true
+        requireInteraction: false
       });
 
       notification.onclick = () => {
@@ -507,6 +562,7 @@ class FamilyHubNotificationService implements NotificationService {
    * Show immediate in-app notification
    */
   async showNotification(notificationData: Omit<InAppNotification, 'id' | 'timestamp'>): Promise<InAppNotification> {
+    await this.binding;
     const metadata = notificationData.metadata;
     const dedupeKey = metadata?.dedupeKey;
     const metadataType = metadata?.type;
@@ -518,7 +574,7 @@ class FamilyHubNotificationService implements NotificationService {
         : null;
 
     if (dedupeKey || titleDedupeKey || (metadataType && metadataNodeId)) {
-      const existing = this.getActiveNotifications().find(
+      const existing = this.notifications.find(
         (notification) =>
           (dedupeKey && notification.metadata?.dedupeKey === dedupeKey) ||
           (titleDedupeKey && notification.type === 'system' && notification.title === notificationData.title) ||
@@ -536,8 +592,12 @@ class FamilyHubNotificationService implements NotificationService {
       id: this.generateId('notification'),
       timestamp: new Date(),
       ...notificationData,
-      read: false
+      read: notificationData.read
     };
+
+    const receiptKey = dedupeKey || titleDedupeKey || (metadataType && metadataNodeId ? `${metadataType}:${metadataNodeId}` : null);
+    if (!this.familyId || !this.personId || (receiptKey && this.delivered.has(receiptKey))) return notification;
+    if (receiptKey) this.delivered.set(receiptKey, Date.now());
 
     this.notifications.unshift(notification);
 
@@ -551,6 +611,7 @@ class FamilyHubNotificationService implements NotificationService {
 
     if (this.familyId) {
       // Best-effort persistence; localStorage remains the offline cache.
+      const version = this.scopeVersion;
       fetch(`/api/families/${this.familyId}/notifications`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -560,6 +621,17 @@ class FamilyHubNotificationService implements NotificationService {
           expiresAt: notification.expiresAt?.toISOString(),
           snoozedUntil: notification.snoozedUntil?.toISOString(),
         }),
+      }).then(async (response) => {
+        if (!response.ok) throw new Error(`Notification persistence failed: ${response.status}`);
+        const saved = await response.json();
+        if (version !== this.scopeVersion) return;
+        this.notifications = this.notifications.filter((item) => item.id !== notification.id && item.id !== saved.id);
+        this.notifications.unshift({ ...saved, timestamp: new Date(saved.timestamp),
+          expiresAt: saved.expiresAt ? new Date(saved.expiresAt) : undefined,
+          snoozedUntil: saved.snoozedUntil ? new Date(saved.snoozedUntil) : undefined,
+          metadata: { ...saved.metadata, serverBacked: true } });
+        this.persistData();
+        this.notifySubscribers();
       }).catch((error) => {
         console.warn('Failed to persist notification (offline mode):', error);
       });
@@ -615,6 +687,33 @@ class FamilyHubNotificationService implements NotificationService {
     return filtered;
   }
 
+  async getHistory(offset = 0): Promise<InAppNotification[]> {
+    await this.binding;
+    if (!this.familyId || !this.personId) return [];
+    const version = this.scopeVersion;
+    const response = await fetch(`/api/families/${this.familyId}/notifications?includeHistory=true&limit=100&offset=${offset}`, { cache: 'no-store' });
+    if (!response.ok) throw new Error('Unable to load notification history.');
+    const saved = await response.json();
+    if (version !== this.scopeVersion) return [];
+    return saved.map((n: any) => ({ ...n, timestamp: new Date(n.timestamp),
+      expiresAt: n.expiresAt ? new Date(n.expiresAt) : undefined,
+      snoozedUntil: n.snoozedUntil ? new Date(n.snoozedUntil) : undefined }));
+  }
+
+  async getDeviceDeliveryState(): Promise<{ connection: string; acceptance: string }> {
+    const acceptance = localStorage.getItem(this.storageKey('last-push-acceptance'));
+    const registration = typeof navigator !== 'undefined' && 'serviceWorker' in navigator
+      ? await navigator.serviceWorker.getRegistration('/sw.js') : undefined;
+    const subscription = await registration?.pushManager.getSubscription();
+    return { connection: !this.checkPermission().granted ? 'Permission not granted' :
+      subscription ? 'Browser subscribed; server connection unverified' : 'Not subscribed',
+    acceptance: acceptance ? `${new Date(acceptance).toLocaleString('en-GB')} (provider accepted; device receipt unverified)` : 'No acceptance recorded on this device' };
+  }
+
+  recordPushAcceptance(): void {
+    localStorage.setItem(this.storageKey('last-push-acceptance'), new Date().toISOString());
+  }
+
   /**
    * Mark notification as read
    */
@@ -642,7 +741,7 @@ class FamilyHubNotificationService implements NotificationService {
    * Mark all notifications as read
    */
   async markAllAsRead(): Promise<void> {
-    this.notifications.forEach(n => { if (n.metadata?.canAct !== false) n.read = true; });
+    this.getActiveNotifications().forEach(n => { if (n.metadata?.canAct !== false) n.read = true; });
     this.persistData();
     this.notifySubscribers();
 
@@ -688,6 +787,8 @@ class FamilyHubNotificationService implements NotificationService {
    */
   async snoozeNotification(notificationId: string, until: Date): Promise<void> {
     const notification = this.notifications.find(n => n.id === notificationId);
+    if (notification?.metadata?.canAct === false) throw new Error('Sign in as the named recipient.');
+    if (!Number.isFinite(until.getTime()) || until.getTime() <= Date.now()) throw new Error('Choose a future snooze time.');
     if (notification && isFamilyReminder(notification)) {
       await this.applyReminderAction(notificationId, 'snooze', until);
       return;
@@ -890,11 +991,18 @@ class FamilyHubNotificationService implements NotificationService {
   private notifySubscribers(): void {
     const activeNotifications = this.getActiveNotifications();
     this.subscribers.forEach(callback => callback([...activeNotifications]));
+    clearTimeout(this.activityTimeout);
+    const now = Date.now();
+    const nextBoundary = this.notifications.flatMap(n => [n.expiresAt?.getTime(), n.snoozedUntil?.getTime()])
+      .filter((time): time is number => time !== undefined && time > now).sort((a, b) => a - b)[0];
+    if (nextBoundary !== undefined) {
+      this.activityTimeout = setTimeout(() => this.notifySubscribers(), Math.min(nextBoundary - now, 2_147_483_647));
+    }
   }
 
   // Get unread count
   getUnreadCount(): number {
-    return this.getActiveNotifications().filter(n => !n.read).length;
+    return this.getActiveNotifications().filter(n => isActionableNotification(n)).length;
   }
 
   private scheduleSnoozeWakeup(notification: InAppNotification): void {
@@ -914,12 +1022,16 @@ class FamilyHubNotificationService implements NotificationService {
     const timeoutId = setTimeout(() => {
       const target = this.notifications.find(n => n.id === notification.id);
       if (target) {
+        if (target.snoozedUntil && target.snoozedUntil.getTime() > Date.now()) {
+          this.scheduleSnoozeWakeup(target);
+          return;
+        }
         target.snoozedUntil = undefined;
         this.persistData();
         this.notifySubscribers();
       }
       this.snoozeTimeouts.delete(notification.id);
-    }, delay);
+    }, Math.min(delay, 2_147_483_647));
 
     this.snoozeTimeouts.set(notification.id, timeoutId);
   }
@@ -969,8 +1081,14 @@ class FamilyHubNotificationService implements NotificationService {
   private getActiveNotifications(): InAppNotification[] {
     const now = Date.now();
     return this.notifications.filter(notification => (
-      !notification.snoozedUntil || notification.snoozedUntil.getTime() <= now
+      (!notification.expiresAt || notification.expiresAt.getTime() > now) &&
+      (!notification.snoozedUntil || notification.snoozedUntil.getTime() <= now) &&
+      (!notification.recipientPersonId || notification.recipientPersonId === this.personId || notification.metadata?.recipientClaimed === false)
     ));
+  }
+
+  refreshActiveNotifications(): void {
+    this.notifySubscribers();
   }
 
   /**

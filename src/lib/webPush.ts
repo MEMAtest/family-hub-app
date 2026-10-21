@@ -1,5 +1,7 @@
 import webpush from 'web-push';
+import { randomUUID } from 'crypto';
 import prisma from '@/lib/prisma';
+import { isInboxOnlyNotificationSource, londonNotificationDay } from '@/lib/notificationDelivery';
 
 type PushPayload = {
   title: string;
@@ -18,6 +20,7 @@ type PushSendResult = {
   inactive: number;
   configured?: boolean;
   subscriptions?: number;
+  suppressed?: 'inbox_only';
 };
 
 const subject = process.env.VAPID_SUBJECT || 'mailto:admin@familyhub.app';
@@ -41,20 +44,55 @@ export const sendFamilyPushNotification = async (
     return { sent: 0, failed: 0, inactive: 0, configured: false, subscriptions: 0 };
   }
 
+  let recipientPersonId = personId;
+  let expiresAt = payload.data?.expiresAt;
+  let occurrence = payload.data?.occurrenceId || payload.data?.scheduledFor || payload.data?.startsAt;
+  if (typeof payload.data?.notificationId === 'string') {
+    const notification = await prisma.notification.findFirst({ where: { id: payload.data.notificationId, familyId } });
+    const now = Date.now();
+    if (!notification || notification.read ||
+        (notification.expiresAt && notification.expiresAt.getTime() <= now) ||
+        (notification.snoozedUntil && notification.snoozedUntil.getTime() > now) ||
+        (notification.recipientPersonId && personId && notification.recipientPersonId !== personId)) {
+      return { sent: 0, failed: 0, inactive: 0, configured: true, subscriptions: 0 };
+    }
+    recipientPersonId = notification.recipientPersonId ?? personId;
+    expiresAt = notification.expiresAt?.toISOString() ?? expiresAt;
+    occurrence = occurrence || notification.snoozedUntil?.toISOString();
+    const metadata = notification.metadata as { source?: unknown } | null;
+    if (metadata?.source === 'home-intelligence' && !notification.expiresAt) {
+      const sourceTime = notification.timestamp || notification.createdAt;
+      const timestamp = sourceTime ? new Date(sourceTime) : null;
+      if (!timestamp || !Number.isFinite(timestamp.getTime())) {
+        return { sent: 0, failed: 0, inactive: 0, configured: true, subscriptions: 0 };
+      }
+      expiresAt = londonNotificationDay(timestamp).endsAt.toISOString();
+      if (Date.parse(String(expiresAt)) <= now) return { sent: 0, failed: 0, inactive: 0, configured: true, subscriptions: 0 };
+    }
+    if (isInboxOnlyNotificationSource(metadata?.source)) {
+      return { sent: 0, failed: 0, inactive: 0, configured: true, subscriptions: 0, suppressed: 'inbox_only' };
+    }
+  }
+
   const subscriptions = await prisma.pushSubscription.findMany({
     where: {
       familyId,
       isActive: true,
-      ...(personId ? { personId } : {}),
+      ...(recipientPersonId ? { personId: recipientPersonId } : {}),
     },
   });
 
   const results: PushSendResult = { sent: 0, failed: 0, inactive: 0, configured: true, subscriptions: subscriptions.length };
+  const deliveryId = payload.data?.deliveryId || (payload.data?.notificationId
+    ? JSON.stringify([payload.data.notificationId, occurrence])
+    : occurrence ? JSON.stringify([payload.tag, occurrence]) : randomUUID());
   const body = JSON.stringify({
     icon: '/icon-192x192.png',
     badge: '/icon-96x96.png',
-    requireInteraction: true,
+    requireInteraction: false,
     ...payload,
+    data: { ...payload.data, familyId, ...(recipientPersonId ? { personId: recipientPersonId } : {}),
+      expiresAt, deliveryId, pushedAt: new Date().toISOString() },
   });
 
   await Promise.all(
@@ -68,7 +106,8 @@ export const sendFamilyPushNotification = async (
               auth: subscription.auth,
             },
           },
-          body
+          body,
+          { TTL: 15 * 60, urgency: 'normal' }
         );
         results.sent += 1;
       } catch (error) {

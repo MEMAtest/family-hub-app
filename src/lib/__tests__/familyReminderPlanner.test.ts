@@ -1,4 +1,4 @@
-import { planFamilyReminders, wallTimeInstant, type ReminderEvent } from '@/lib/familyReminderPlanner';
+import { binCollectionStateId, planFamilyReminders, wallTimeInstant, type ReminderEvent } from '@/lib/familyReminderPlanner';
 
 const members = [
   { id: 'angela', name: 'Angela', role: 'Parent', ageGroup: 'Adult' },
@@ -129,6 +129,14 @@ describe('wall time conversion', () => {
 describe('bin collection reminders', () => {
   const bins = (): ReminderEvent => ({ ...trip(), id: 'bins', date: '2026-10-09', title: 'Council bins',
     metadata: { binCollection: { date: '2026-10-09', services: ['Food waste', 'Mixed recycling'], sourceUrl: 'https://recyclingservices.bromley.gov.uk/waste/3670007', verified: true } } });
+  it('keys shared completion by household collection, not recipient or reminder phase', () => {
+    const planned = plan(bins(), '2026-10-08T19:00:00Z');
+    expect(planned[0].stateId).not.toBe(planned[1].stateId);
+    expect(binCollectionStateId('family', planned[0].eventId, planned[0].occurrence))
+      .toBe(binCollectionStateId('family', planned[1].eventId, planned[1].occurrence));
+    expect(binCollectionStateId('family', 'bins', '2026-10-09'))
+      .not.toBe(binCollectionStateId('family', 'bins', '2026-10-16'));
+  });
   it('targets parents independently at 20 London, with no made-up collection time', () => {
     const result = plan(bins(), '2026-10-08T19:00:00Z');
     expect(result.map(item => [item.recipientPersonId, item.purpose])).toEqual([['angela', 'bins'], ['ade', 'bins']]);

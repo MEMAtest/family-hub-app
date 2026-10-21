@@ -16,6 +16,8 @@ import {
   Search,
   Send,
   Smartphone,
+  ChevronLeft,
+  ChevronRight,
   type LucideIcon
 } from 'lucide-react';
 import { useNotifications } from '@/contexts/NotificationContext';
@@ -25,6 +27,8 @@ import { InAppNotification } from '@/types/notification.types';
 import type { CalendarEvent } from '@/types/calendar.types';
 import WorkStatusManager from '@/components/calendar/WorkStatusManager';
 import { isFamilyReminder, type FamilyReminderAction } from '@/lib/familyReminderContract';
+import notificationService from '@/services/notificationService';
+import { isActionableNotification, londonNotificationDay } from '@/lib/notificationDelivery';
 
 interface NotificationCenterProps {
   isOpen: boolean;
@@ -54,7 +58,11 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
   const familyId = useFamilyStore((s) => s.databaseStatus.familyId);
   const { setView } = useAppView();
 
-  const [filter, setFilter] = useState<'all' | 'unread' | 'today'>('all');
+  const [filter, setFilter] = useState<'all' | 'unread' | 'today' | 'history'>('unread');
+  const [history, setHistory] = useState<InAppNotification[]>([]);
+  const [historyPage, setHistoryPage] = useState(0);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [deliveryState, setDeliveryState] = useState<{ connection: string; acceptance: string } | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [showSettings, setShowSettings] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -68,6 +76,27 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (!isOpen || filter !== 'history') return;
+    let active = true;
+    setHistory([]);
+    setHistoryLoading(true);
+    void notificationService.getHistory(historyPage * 100).then(items => {
+      if (active) setHistory(items);
+    }).catch(error => { if (active) setActionError(error.message); })
+      .finally(() => { if (active) setHistoryLoading(false); });
+    return () => { active = false; };
+  }, [isOpen, filter, historyPage, familyId]);
+
+  useEffect(() => {
+    if (!isOpen || !showSettings) return;
+    let active = true;
+    setDeliveryState(null);
+    void notificationService.getDeviceDeliveryState().then(state => { if (active) setDeliveryState(state); })
+      .catch(() => { if (active) setDeliveryState({ connection: 'Connection check unavailable', acceptance: 'Unknown' }); });
+    return () => { active = false; };
+  }, [isOpen, showSettings, pushStatus, familyId]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -89,7 +118,7 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
   }, [isOpen, onClose]);
 
   // Filter notifications based on current filter
-  const filteredNotifications = notifications.filter(notification => {
+  const filteredNotifications = (filter === 'history' ? history : notifications).filter(notification => {
     // Search filter
     if (searchTerm) {
       const searchLower = searchTerm.toLowerCase();
@@ -102,13 +131,20 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
     // Status filter
     switch (filter) {
       case 'unread':
-        return !notification.read;
+        return isActionableNotification(notification);
       case 'today':
         const today = new Date();
         return notification.timestamp.toDateString() === today.toDateString();
       default:
         return true;
     }
+  });
+
+  const historyGroups = new Map<string, InAppNotification[]>();
+  if (filter === 'history') filteredNotifications.forEach(notification => {
+    const source = notification.metadata?.source || notification.metadata?.type || notification.type;
+    const key = `${londonNotificationDay(notification.timestamp).key} · ${source}`;
+    historyGroups.set(key, [...(historyGroups.get(key) || []), notification]);
   });
 
   const getNotificationIconTone = (notification: InAppNotification) => {
@@ -316,6 +352,7 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
       }
 
       if (payload.sent > 0) {
+        notificationService.recordPushAcceptance();
         setPushStatus(`${payload.sent} push submission${payload.sent === 1 ? '' : 's'} accepted. Check your device; delivery is unverified.`);
       } else {
         setPushStatus('No device subscriptions yet. Enable push on your Android phone first.');
@@ -389,7 +426,7 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
               {/* Filters and Actions */}
               <div className="flex flex-wrap items-center gap-2">
                 <div className="flex flex-wrap gap-1">
-                  {(['all', 'unread', 'today'] as const).map((filterOption) => (
+                  {(['unread', 'all', 'today', 'history'] as const).map((filterOption) => (
                     <button
                       key={filterOption}
                       onClick={() => setFilter(filterOption)}
@@ -399,7 +436,7 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
                           : 'text-gray-600 hover:bg-gray-100 dark:text-slate-300 dark:hover:bg-slate-800'
                       }`}
                     >
-                      {filterOption.charAt(0).toUpperCase() + filterOption.slice(1)}
+                      {filterOption === 'unread' ? 'Actionable' : filterOption.charAt(0).toUpperCase() + filterOption.slice(1)}
                     </button>
                   ))}
                 </div>
@@ -421,6 +458,10 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
           {showSettings && (
             <div className="border-b border-gray-200 bg-gray-50 p-4 dark:border-slate-800 dark:bg-slate-950">
               <h3 className="mb-3 text-sm font-medium text-gray-900 dark:text-slate-100">Quick Settings</h3>
+              {deliveryState && <dl className="mb-3 space-y-1 text-xs text-gray-600 dark:text-slate-400">
+                <div><dt className="font-medium">This device</dt><dd>{deliveryState.connection}</dd></div>
+                <div><dt className="font-medium">Last test acceptance</dt><dd>{deliveryState.acceptance}</dd></div>
+              </dl>}
               <div className="space-y-2">
                 <label className="flex items-center">
                   <input
@@ -474,6 +515,13 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
 
           {/* Notifications List */}
           {actionError && <p role="alert" className="px-4 py-2 text-sm text-red-700">{actionError}</p>}
+          {filter === 'history' && <div className="flex items-center justify-between border-b px-4 py-2 text-xs">
+            <button title="Newer history" aria-label="Newer history" disabled={historyPage === 0 || historyLoading}
+              onClick={() => setHistoryPage(page => page - 1)} className="p-2 disabled:opacity-30"><ChevronLeft className="h-4 w-4" /></button>
+            <span>{historyLoading ? 'Loading history...' : `Page ${historyPage + 1}`}</span>
+            <button title="Older history" aria-label="Older history" disabled={history.length < 100 || historyLoading}
+              onClick={() => setHistoryPage(page => page + 1)} className="p-2 disabled:opacity-30"><ChevronRight className="h-4 w-4" /></button>
+          </div>}
           <div className="flex-1 overflow-y-auto bg-gray-50/70 dark:bg-[#0b1117]">
             {filteredNotifications.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-gray-500 dark:text-slate-400">
@@ -484,7 +532,16 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
               </div>
             ) : (
               <div className="space-y-2 p-3">
-                {filteredNotifications.map((notification) => (
+                {filter === 'history' ? [...historyGroups].map(([key, items]) => (
+                  <details key={key} className="border-b border-gray-200 py-2 dark:border-slate-700">
+                    <summary className="cursor-pointer break-words text-sm font-medium">{key} ({items.length})</summary>
+                    {items.map(item => <div key={item.id} className="space-y-1 border-t border-gray-200 py-3 text-sm dark:border-slate-700">
+                      <p className="break-words font-medium">{item.title}</p>
+                      <p className="break-words text-gray-600 dark:text-slate-300">{item.message}</p>
+                      <p className="text-xs text-gray-500">{item.timestamp.toLocaleString('en-GB')} · {item.read ? 'Read' : 'Unread'}</p>
+                    </div>)}
+                  </details>
+                )) : filteredNotifications.map((notification) => (
                   <div
                     key={notification.id}
                     className={`rounded-lg border border-l-4 p-4 shadow-sm transition-colors ${getNotificationColor(notification)} ${notification.read ? 'opacity-80' : 'opacity-100'}`}

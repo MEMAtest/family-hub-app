@@ -139,7 +139,21 @@ export const GET = requireFamilyAccess(async (_request: NextRequest, context) =>
       .map(({ intake }) => intake)].sort((a, b) =>
       new Date(b.receivedAt || 0).getTime() - new Date(a.receivedAt || 0).getTime());
 
+    const reviewReasons: Record<string, number> = {};
+    for (const { state } of pendingEntries) {
+      if (!state.outstandingDrafts.length) {
+        const reason = state.status === 'content_required' || state.status === 'needs_ocr' ? 'need source content' : 'need preparation details';
+        reviewReasons[reason] = (reviewReasons[reason] || 0) + state.needsReview;
+      }
+      for (const draft of state.outstandingDrafts) {
+        const reason = draft.importStatus === 'conflict' ? 'have conflicting dates or plans' : !draft.person ? 'need a family member' :
+          draft.blockedReason === 'time_requires_review' ? 'need a date or time check' :
+            draft.warnings?.length ? 'have source details to check' : 'need confirmation before adding';
+        reviewReasons[reason] = (reviewReasons[reason] || 0) + 1;
+      }
+    }
     return NextResponse.json({
+      reviewReasons,
       pendingReviewCount: pendingEntries.reduce((sum, { state }) => sum + state.needsReview, 0),
       pendingReviewEmailCount: pendingEntries.length,
       supersededNurseryPreviewCount: supersededNurseryPreviewIds.size,

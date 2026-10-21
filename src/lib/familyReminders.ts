@@ -3,7 +3,7 @@ import prisma from '@/lib/prisma';
 import { toCalendarEventResponse } from '@/lib/calendarEventMapping';
 import { sendMemberPushNotification } from '@/lib/webPush';
 import { FAMILY_REMINDER_SOURCE, type FamilyReminderAction } from './familyReminderContract';
-import { londonDate, londonParts, planFamilyReminders, reminderFingerprint, reminderOccurrenceEvent, eventReminderPurposes, type ReminderEvent, type ReminderIntent } from './familyReminderPlanner';
+import { binCollectionStateId, londonDate, londonParts, planFamilyReminders, reminderFingerprint, reminderOccurrenceEvent, eventReminderPurposes, type ReminderEvent, type ReminderIntent } from './familyReminderPlanner';
 import { expandEvents, type RecurrenceException } from '@/utils/recurrence';
 
 export const reminderObject = (value: unknown): Record<string, any> =>
@@ -21,6 +21,12 @@ const actionsFor = (intent: ReminderIntent) => [
 ];
 
 export const reserveReminderIntent = async (familyId: string, intent: ReminderIntent, now: Date) => {
+  if (intent.purpose === 'bins') {
+    const collection = await prisma.notification.findUnique({ where: {
+      id: binCollectionStateId(familyId, intent.eventId, intent.occurrence),
+    }, select: { metadata: true } });
+    if (!unresolved(reminderObject(collection?.metadata))) return false;
+  }
   // Refresh active copy and actions in place without generating another notification or push.
   const existingIntent = await prisma.notification.findUnique({ where: { id: intent.id } });
   if (existingIntent) {
@@ -91,6 +97,12 @@ export const runFamilyReminderSweep = async (familyId: string, now = new Date(),
     if (['resolved', 'expired', 'cancelled'].includes(metadata.intentStatus)) continue;
     const state = await prisma.notification.findUnique({ where: { id: metadata.stateId }, select: { metadata: true } });
     const stateMetadata = reminderObject(state?.metadata);
+    if (metadata.purpose === 'bins' && record.relatedEventId) {
+      const collection = await prisma.notification.findUnique({ where: {
+        id: binCollectionStateId(familyId, record.relatedEventId, metadata.occurrence),
+      }, select: { metadata: true } });
+      if (!unresolved(reminderObject(collection?.metadata))) stateMetadata.resolution = 'done';
+    }
     const event = events.find((item) => item.id === record.relatedEventId);
     if (event?.metadata?.binCollection?.verified === false && record.expiresAt && record.expiresAt > now && unresolved(stateMetadata)) continue;
     const occurrence = event && expandEvents([reminderOccurrenceEvent(event)], metadata.occurrence, metadata.occurrence, exceptions)
@@ -199,9 +211,23 @@ export const applyFamilyReminderAction = async (
             priority: 'low', read: true, actionRequired: false, metadata: stateMetadata },
           update: { metadata: stateMetadata },
         });
-        const siblings = await tx.notification.findMany({ where: { familyId, recipientPersonId: personId,
-          relatedEventId: record.relatedEventId, metadata: { path: ['stateId'], equals: metadata.stateId } } });
+        const collectionDone = metadata.purpose === 'bins' && action === 'done';
+        if (collectionDone) {
+          const id = binCollectionStateId(familyId, record.relatedEventId!, metadata.occurrence);
+          await tx.notification.upsert({ where: { id }, create: {
+            id, familyId, relatedEventId: record.relatedEventId, type: 'family_reminder_state', category: 'settings',
+            title: 'Household bins are out', message: 'done', priority: 'low', read: true, actionRequired: false,
+            metadata: stateMetadata,
+          }, update: { metadata: stateMetadata } });
+        }
+        const siblings = await tx.notification.findMany({ where: { familyId,
+          relatedEventId: record.relatedEventId,
+          ...(collectionDone ? { metadata: { path: ['source'], equals: FAMILY_REMINDER_SOURCE } }
+            : { recipientPersonId: personId, metadata: { path: ['stateId'], equals: metadata.stateId } }),
+        } });
         for (const sibling of siblings) {
+          const siblingMetadata = reminderObject(sibling.metadata);
+          if (collectionDone && (siblingMetadata.purpose !== 'bins' || siblingMetadata.occurrence !== metadata.occurrence)) continue;
           const wakeSelected = action === 'snooze' && sibling.id === notificationId;
           await tx.notification.update({ where: { id: sibling.id }, data: {
             ...(wakeSelected ? { snoozedUntil: until, read: false } : { read: true, actionRequired: false, expiresAt: now }),

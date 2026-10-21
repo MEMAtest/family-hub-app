@@ -106,7 +106,8 @@ export const DELETE = requireFamilyAccess(async (_request: NextRequest, context,
     if (!canActOnNotification(existing.recipientPersonId, authUser)) return NextResponse.json({ error: 'Sign in as the recipient.' }, { status: 403 });
     if (isFamilyReminder(existing)) return NextResponse.json({ error: 'Use Done or Not needed to resolve a reminder.' }, { status: 409 });
 
-    await prisma.notification.delete({ where: { id: notificationId } });
+    // Dismiss from the inbox without destroying the durable dedupe receipt.
+    await prisma.notification.update({ where: { id: notificationId }, data: { read: true, expiresAt: new Date() } });
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error deleting notification:', error);

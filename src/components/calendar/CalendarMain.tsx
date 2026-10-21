@@ -208,26 +208,13 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
     return peopleIds;
   })
 
-  // Update selectedPeople when people array changes (e.g., after members load)
+  const knownPeople = useRef(new Set(people.map(person => person.id)));
+  // Only new profiles join the selection; refreshes must retain explicit filters.
   useEffect(() => {
     if (people.length > 0) {
-      setSelectedPeople(prev => {
-        const currentPeopleIds = people.map(p => p.id);
-        // Add member-4 if not present
-        if (!currentPeopleIds.includes('member-4')) {
-          currentPeopleIds.push('member-4');
-        }
-        // Only update if there are new people not in the current selection
-        const newPeople = currentPeopleIds.filter(id => !prev.includes(id));
-        if (newPeople.length > 0) {
-          return [...prev, ...newPeople];
-        }
-        // If selectedPeople is empty but people has data, reset to include all
-        if (prev.length === 0 || (prev.length === 1 && prev[0] === 'member-4')) {
-          return currentPeopleIds;
-        }
-        return prev;
-      });
+      const added = people.map(person => person.id).filter(id => !knownPeople.current.has(id));
+      knownPeople.current = new Set(people.map(person => person.id));
+      if (added.length) setSelectedPeople(prev => [...new Set([...prev, ...added])]);
     }
   }, [people]);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([
@@ -499,18 +486,6 @@ const CalendarMain: React.FC<CalendarMainProps> = ({
       setAiScheduleLoading(false)
     }
   }
-
-  // Ensure all event person IDs are in selectedPeople (fallback for auto-generated IDs)
-  useEffect(() => {
-    if (events.length > 0 && selectedPeople.length > 0) {
-      const eventPersonIds = [...new Set(events.map(e => e.person).filter(Boolean))];
-      const missingPersonIds = eventPersonIds.filter(id => !selectedPeople.includes(id));
-      if (missingPersonIds.length > 0) {
-        console.log('📆 Adding missing event person IDs to selectedPeople:', missingPersonIds);
-        setSelectedPeople(prev => [...prev, ...missingPersonIds]);
-      }
-    }
-  }, [events, selectedPeople]);
 
   // Convert calendar events to Big Calendar format
   const bigCalendarEvents = useMemo((): BigCalendarEvent[] => {

@@ -6,8 +6,13 @@ export const POST = requireFamilyAccess(async (_request: NextRequest, context, a
   try {
     const { familyId } = await context.params;
 
+    const now = new Date();
     await prisma.notification.updateMany({
-      where: { familyId, read: false, OR: [{ recipientPersonId: null }, { recipientPersonId: authUser.familyMemberId }] },
+      where: { familyId, read: false, type: { not: 'family_reminder_state' },
+        OR: [{ recipientPersonId: null }, ...(authUser.familyMemberId ? [{ recipientPersonId: authUser.familyMemberId }] : [])],
+        AND: [ { OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
+          { OR: [{ snoozedUntil: null }, { snoozedUntil: { lte: now } }] } ],
+      },
       data: { read: true },
     });
 

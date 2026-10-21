@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { Building2, Home, MapPin, X } from 'lucide-react';
 import type { CalendarEvent, Person, WorkStatus } from '@/types/calendar.types';
+import type { PresencePlace } from '@/lib/calendarPreferences';
 import {
   durationMinutesBetween,
   presenceTimeRange,
@@ -14,6 +15,8 @@ type PlacePreset = 'office' | 'home' | 'other';
 type QuickPresenceDialogProps = {
   people: Person[];
   date: string;
+  lastPlace?: PresencePlace | null;
+  memberId?: string;
   onClose: () => void;
   onSave: (event: Omit<CalendarEvent, 'id' | 'createdAt' | 'updatedAt'>) => Promise<'created' | 'conflict'>;
 };
@@ -31,12 +34,12 @@ const durations: Array<{ id: Exclude<PresenceDurationPreset, 'custom'>; label: s
   { id: 'until-5', label: 'Until 5pm' },
 ];
 
-export function QuickPresenceDialog({ people, date, onClose, onSave }: QuickPresenceDialogProps) {
-  const defaultPerson = people.find((person) => person.ageGroup === 'Adult' || person.role === 'Parent') ?? people[0];
+export function QuickPresenceDialog({ people, date, lastPlace, memberId, onClose, onSave }: QuickPresenceDialogProps) {
+  const defaultPerson = people.find(person => person.id === memberId) ?? people.find((person) => person.ageGroup === 'Adult' || person.role === 'Parent') ?? people[0];
   const [personId, setPersonId] = useState(defaultPerson?.id ?? '');
   const [presenceDate, setPresenceDate] = useState(date);
-  const [place, setPlace] = useState<PlacePreset>('office');
-  const [customPlace, setCustomPlace] = useState('');
+  const [place, setPlace] = useState<PlacePreset>(lastPlace?.place ?? 'office');
+  const [customPlace, setCustomPlace] = useState(lastPlace?.customPlace ?? '');
   const [durationPreset, setDurationPreset] = useState<PresenceDurationPreset>('all-day');
   const initialRange = useMemo(() => presenceTimeRange('all-day'), []);
   const [start, setStart] = useState(initialRange.start);

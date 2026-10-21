@@ -9,6 +9,7 @@ import {
 } from '@/types/notification.types';
 import type { CalendarEvent } from '@/types/calendar.types';
 import notificationService from '@/services/notificationService';
+import { isActionableNotification } from '@/lib/notificationDelivery';
 import { useFamilyStore } from '@/store/familyStore';
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
@@ -66,7 +67,11 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
       setSettings(await notificationService.getSettings());
       if (isConnected && familyId) await notificationService.syncFromDatabase();
     });
-    const refresh = () => { if (active && isConnected && familyId) void notificationService.syncFromDatabase(); };
+    const refresh = () => {
+      if (!active) return;
+      notificationService.refreshActiveNotifications();
+      if (isConnected && familyId) void notificationService.syncFromDatabase();
+    };
     const interval = window.setInterval(refresh, 60_000);
     window.addEventListener('focus', refresh);
     return () => { active = false; clearInterval(interval); window.removeEventListener('focus', refresh); };
@@ -177,7 +182,7 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
     }
   }, []);
 
-  const unreadCount = notifications.filter(n => !n.read).length;
+  const unreadCount = notifications.filter(n => isActionableNotification(n)).length;
 
   const value: NotificationContextType = {
     notifications,

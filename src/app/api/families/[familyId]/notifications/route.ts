@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { createHash } from 'crypto';
 import prisma from '@/lib/prisma';
 import { requireFamilyAccess } from '@/lib/auth-utils';
-import { sendMemberPushNotification } from '@/lib/webPush';
 import { notificationVisibility } from '@/lib/notificationRecipients';
 import { FAMILY_REMINDER_SOURCE } from '@/lib/familyReminderContract';
 import { enrichSavedSchoolEventResponses } from '@/lib/schoolIntakeServer';
 import { presentSchoolNotification } from '@/lib/schoolNotificationPresentation';
+import { isActionableNotification } from '@/lib/notificationDelivery';
 
 const dateString = z.string().datetime();
 
@@ -62,12 +63,21 @@ export const GET = requireFamilyAccess(async (request: NextRequest, context, aut
 
     const visibility = await notificationVisibility(familyId, authUser);
     const now = new Date();
-    const where: Record<string, any> = { ...visibility.where, type: { not: 'family_reminder_state' }, AND: [
+    const where: Record<string, any> = { ...visibility.where, type: { not: 'family_reminder_state' }, AND: searchParams.get('includeHistory') === 'true' ? [] : [
       { OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
       { OR: [{ snoozedUntil: null }, { snoozedUntil: { lte: now } }] },
     ] };
     if (read === 'true') where.read = true;
-    if (read === 'false') where.read = false;
+    if (read === 'false') {
+      where.read = false;
+      where.AND.push({ OR: [{ recipientPersonId: null }, ...(authUser.familyMemberId ? [{ recipientPersonId: authUser.familyMemberId }] : [])] });
+    }
+    if (searchParams.get('actionable') === 'true') {
+      where.read = false;
+      where.actionRequired = true;
+      where.AND.push({ OR: [{ recipientPersonId: null }, ...(authUser.familyMemberId ? [{ recipientPersonId: authUser.familyMemberId }] : [])] });
+      where.AND.push({ OR: [{ expiresAt: { not: null } }, { timestamp: { gt: new Date(now.getTime() - 7 * 86_400_000) } }] });
+    }
     if (category) where.category = category;
     if (type) where.AND.push({ type });
 
@@ -87,7 +97,8 @@ export const GET = requireFamilyAccess(async (request: NextRequest, context, aut
     const schoolMembers = schoolEvents.length ? await prisma.familyMember.findMany({ where: { familyId } }) : [];
     const schoolEventsById = new Map(schoolEvents.map((event) => [event.id, event]));
 
-    return NextResponse.json(notifications.map((notification) => {
+    return NextResponse.json(notifications.filter(notification => searchParams.get('actionable') !== 'true' ||
+      isActionableNotification(notification, now.getTime())).map((notification) => {
       const unclaimed = visibility.unclaimed.find((member) => member.id === notification.recipientPersonId);
       const mapped = presentSchoolNotification(toClient(notification),
         schoolEventsById.get(notification.relatedEventId || ''), schoolMembers);
@@ -112,14 +123,27 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context, au
     }
 
     const body = createNotificationSchema.parse(raw);
+    if (!authUser.familyMemberId) return NextResponse.json({ error: 'A recipient member is required.' }, { status: 403 });
     if (body.id?.startsWith('family-reminder-') || body.type === 'family_reminder_state' ||
         [FAMILY_REMINDER_SOURCE, 'family-reminder-state'].includes(body.metadata?.source)) {
       return NextResponse.json({ error: 'Reminder records are managed by the server.' }, { status: 400 });
     }
 
-    const notification = await prisma.notification.create({
+    const dedupeKey = body.metadata?.dedupeKey ||
+      (body.metadata?.type && body.metadata?.nodeId ? `${body.metadata.type}:${body.metadata.nodeId}` : undefined) ||
+      (body.type === 'system' && body.title === 'Enable Notifications?' ? 'system-enable-browser-notifications' : undefined);
+    const id = dedupeKey ? `notice-${createHash('sha256').update(JSON.stringify([familyId, authUser.familyMemberId, dedupeKey])).digest('hex')}` : body.id;
+    // Keep legacy read/snoozed/dismissed records as receipts too. Never reactivate them on launch.
+    const existing = await prisma.notification.findFirst({ where: { familyId, recipientPersonId: authUser.familyMemberId,
+      OR: [...(id ? [{ id }] : []), ...(dedupeKey ? [{ metadata: { path: ['dedupeKey'], equals: dedupeKey } }] : [])],
+    } });
+    if (existing) return NextResponse.json(toClient(existing));
+
+    let notification;
+    try {
+      notification = await prisma.notification.create({
       data: {
-        ...(body.id ? { id: body.id } : {}),
+        ...(id ? { id } : {}),
         familyId,
         recipientPersonId: authUser.familyMemberId,
         type: body.type,
@@ -138,25 +162,16 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context, au
         snoozedUntil: body.snoozedUntil ? new Date(body.snoozedUntil) : undefined,
         metadata: body.metadata ?? undefined,
       },
-    });
+      });
+    } catch (error) {
+      if ((error as { code?: string }).code !== 'P2002' || !id) throw error;
+      const winner = await prisma.notification.findFirst({ where: { id, familyId, recipientPersonId: authUser.familyMemberId } });
+      if (!winner) throw error;
+      return NextResponse.json(toClient(winner));
+    }
 
-    const pushResult = await sendMemberPushNotification(familyId, authUser.familyMemberId, {
-      title: notification.title,
-      body: notification.message,
-      tag: `notification-${notification.id}`,
-      data: {
-        familyId,
-        notificationId: notification.id,
-        type: notification.type,
-        relatedEventId: notification.relatedEventId,
-        url: '/',
-      },
-      actions: [
-        { action: 'view', title: 'Open' },
-      ],
-    });
-
-    return NextResponse.json({ ...toClient(notification), push: pushResult }, { status: 201 });
+    // Client hydration discovers history as well as live changes; it is inbox-only.
+    return NextResponse.json(toClient(notification), { status: 201 });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: 'Invalid notification payload' }, { status: 400 });
