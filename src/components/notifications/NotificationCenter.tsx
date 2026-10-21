@@ -28,7 +28,7 @@ import type { CalendarEvent } from '@/types/calendar.types';
 import WorkStatusManager from '@/components/calendar/WorkStatusManager';
 import { isFamilyReminder, type FamilyReminderAction } from '@/lib/familyReminderContract';
 import notificationService from '@/services/notificationService';
-import { isActionableNotification, londonNotificationDay } from '@/lib/notificationDelivery';
+import { isActionableNotification } from '@/lib/notificationDelivery';
 
 interface NotificationCenterProps {
   isOpen: boolean;
@@ -141,9 +141,17 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
   });
 
   const historyGroups = new Map<string, InAppNotification[]>();
+  const historyLabels: Record<string, string> = {
+    'gmail-nursery-email': 'Nursery updates', 'grandir-parent-portal': 'Nursery updates',
+    'gmail-school-email': 'School updates', 'calendar-email': 'Imported dates',
+    'notification-sweep': 'Calendar reminders', 'notification-catchup': 'Catch-up summaries',
+    'home-intelligence': 'Household reminders', 'family-reminder-planner': 'Family reminders',
+    brain_overdue: 'Overdue tasks', reminder: 'Reminders', system: 'App updates',
+  };
   if (filter === 'history') filteredNotifications.forEach(notification => {
-    const source = notification.metadata?.source || notification.metadata?.type || notification.type;
-    const key = `${londonNotificationDay(notification.timestamp).key} · ${source}`;
+    const source = String(notification.metadata?.source || notification.metadata?.type || notification.type);
+    const day = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', day: 'numeric', month: 'short', year: 'numeric' }).format(notification.timestamp);
+    const key = `${day} · ${historyLabels[source] || 'Other updates'}`;
     historyGroups.set(key, [...(historyGroups.get(key) || []), notification]);
   });
 

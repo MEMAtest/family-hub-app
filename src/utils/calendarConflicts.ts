@@ -63,6 +63,8 @@ export const getSameDayConflictGroups = (
   date: string
 ): SameDayConflictGroup[] => {
   const windows = events
+    .filter(event => event.status !== 'cancelled' && !event.metadata?.binCollection &&
+      !event.metadata?.quickPresence && !['office', 'remote', 'client_site'].includes(event.workStatus?.type ?? ''))
     .map((event) => getEventWindowForDate(event, date))
     .filter((window): window is CalendarEventWindow => Boolean(window));
 
@@ -85,7 +87,14 @@ export const getSameDayConflictGroups = (
 
   for (let first = 0; first < windows.length; first += 1) {
     for (let second = first + 1; second < windows.length; second += 1) {
-      if (windowsOverlap(windows[first], windows[second])) {
+      const a = windows[first].event;
+      const b = windows[second].event;
+      const samePlan = a.id === b.id || a.title.trim().toLowerCase() === b.title.trim().toLowerCase() &&
+        a.date === b.date && a.time === b.time && a.duration === b.duration && a.endDate === b.endDate;
+      const participants = new Set([a.person, ...(a.attendees ?? [])].filter(Boolean));
+      const sharedPerson = a.person === 'all' || b.person === 'all' ||
+        [b.person, ...(b.attendees ?? [])].some(id => Boolean(id) && participants.has(id));
+      if (!samePlan && sharedPerson && windowsOverlap(windows[first], windows[second])) {
         union(first, second);
       }
     }

@@ -18,7 +18,14 @@ export function useCalendarPreferences(familyId?: string | null) {
     const load = async () => {
       const loadedRevision = revision.current;
       try {
-        const response = await fetch(`/api/families/${familyId}/calendar-preferences`, { cache: 'no-store', signal: controller.signal });
+        const url = `/api/families/${familyId}/calendar-preferences`;
+        let response = await fetch(url, { cache: 'no-store', signal: controller.signal });
+        if ([401, 404, 408, 429, 500, 502, 503, 504].includes(response.status)) {
+          // Authentication and the newly deployed route can settle after initial hydration.
+          await new Promise(resolve => setTimeout(resolve, 400));
+          if (controller.signal.aborted) return;
+          response = await fetch(url, { cache: 'no-store', signal: controller.signal });
+        }
         if (!response.ok) throw new Error('Could not load calendar choices');
         const value = await response.json();
         if (generation === epoch.current && loadedRevision === revision.current) { setPreferences({ ...emptyCalendarPreferences(), ...value }); setStatus('saved'); }

@@ -20,6 +20,23 @@ const event = (overrides: Partial<CalendarEvent>): CalendarEvent => ({
 });
 
 describe('calendar same-day conflict grouping', () => {
+  it('leaves duplicates to the duplicate review and ignores simultaneous plans for different people', () => {
+    expect(getSameDayConflictGroups([
+      event({ id: 'a', title: 'Team dinner' }),
+      event({ id: 'b', title: 'Team dinner' }),
+      event({ id: 'c', title: 'Dentist', person: 'person-2' }),
+    ], '2026-08-08')).toEqual([]);
+  });
+  it('treats work presence as availability and detects real shared-attendee clashes', () => {
+    expect(getSameDayConflictGroups([
+      event({ id: 'office', title: 'Office', type: 'work', workStatus: { type: 'office', affectsPickup: false } }),
+      event({ id: 'meeting', title: 'Meeting' }),
+    ], '2026-08-08')).toEqual([]);
+    expect(getSameDayConflictGroups([
+      event({ id: 'a', title: 'Dentist', person: 'person-1', attendees: ['person-2'] }),
+      event({ id: 'b', title: 'Meeting', person: 'person-2' }),
+    ], '2026-08-08')).toHaveLength(1);
+  });
   it('does not invent an all-day clash for date-only council bins or source dates with unknown times', () => {
     expect(getSameDayConflictGroups([
       event({ id: 'bins', time: '00:00', duration: 1440, metadata: { calendarTiming: { status: 'unknown' }, binCollection: { verified: true } } }),
