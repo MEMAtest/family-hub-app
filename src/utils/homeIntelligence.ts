@@ -180,7 +180,7 @@ const buildSchoolSignals = ({ today, tasks, events, nurseryNotices, members }: {
   });
 
   const eventEnd = addDays(today, 7);
-  events.filter((event) => event.date >= today && event.date <= eventEnd).forEach((event) => {
+  events.filter((event) => !event.metadata?.schoolImportReview && event.date >= today && event.date <= eventEnd).forEach((event) => {
     const schoolEvent = event.type === 'education' || event.source === 'gmail-school-email';
     if (!schoolEvent) return;
     const title = displayEventTitle(event);

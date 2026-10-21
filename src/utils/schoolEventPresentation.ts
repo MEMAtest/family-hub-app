@@ -29,7 +29,7 @@ export const schoolEventContext = (event: Pick<CalendarEvent, 'title' | 'notes'>
 };
 
 export const isAdultSchoolEvent = (title: string) =>
-  /\b(?:PTA AGM|parent(?:s)?['’]? (?:evening|workshop|meeting)|parent workshop)\b/i.test(title);
+  /\b(?:PTA (?:AGM|quiz night)|parent(?:s)?['’]? (?:evening|workshop|meeting)|parent workshop)\b/i.test(title);
 
 export const isChildProfile = (person: { role: string; ageGroup?: string }) =>
   /child|kid|son|daughter|student/i.test(person.role) || /child|primary|secondary|preschool|toddler|teen/i.test(person.ageGroup || '');

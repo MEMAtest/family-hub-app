@@ -354,7 +354,7 @@ export const DashboardView = () => {
   const upcomingEvents = useMemo(() => {
     const now = new Date();
     const today = formatDateForInput(now);
-    return expandEvents(events, today, addDays(today, 90))
+    return expandEvents(events.filter(event => event.status !== 'cancelled' && !event.metadata?.schoolImportReview), today, addDays(today, 90))
       .map((occurrence) => ({ ...occurrence.event, date: occurrence.date, time: occurrence.time,
         duration: occurrence.duration, endDate: occurrence.endDate,
         occurrenceDate: occurrence.date, seriesStartDate: occurrence.isRecurring ? occurrence.event.date : undefined }))

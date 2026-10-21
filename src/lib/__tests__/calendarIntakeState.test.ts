@@ -117,6 +117,7 @@ describe('calendar intake action contract', () => {
     { title: 'Holiday Camp', source: 'Booking required for 10 November at 9am' },
     { title: 'Foal Farm Animal Rescue', source: 'Open daily (except Tuesday). 10 November at 1:30pm' },
     { title: 'French camp', source: 'Our French camp brings a different theme on 10 November at 9am' },
+    { title: 'PTA Quiz Night Flyer', source: 'PTA Quiz Night on 10 November at 6:30pm' },
   ])('marks unconfirmed offers needs-review without preventing manual confirmation: $title', ({ title, source }) => {
     const value = { ...draft(title), source };
     const state = calendarIntakeState(intake, [value], [], () => true);

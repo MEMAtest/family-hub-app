@@ -169,7 +169,8 @@ test('family day distinguishes office availability, pickup overlap and unconfirm
     row('pickup', 'School pickup', 'ade', '15:00', 30),
     row('appointment', 'Dentist appointment', 'ade', '15:15', 45),
     row('other-parent', 'Angela client meeting', 'angela', '15:00', 60),
-    row('advert', 'Optional holiday camp', 'amari', '09:00', 420, { schoolImportReview: { reason: 'Booking has not been confirmed.' } }),
+    { ...row('advert', 'Optional holiday camp', 'amari', '09:00', 420, { schoolImportReview: { reason: 'Booking has not been confirmed.' } }),
+      eventDate: `${new Date(Date.now() + 86400000).toLocaleDateString('en-CA', { timeZone: 'Europe/London' })}T00:00:00Z` },
     { ...row('past-advert', 'Earlier advertised outing', 'amari', '10:00', 60, { schoolImportReview: { reason: 'Attendance not confirmed.' } }),
       eventDate: '2026-01-05T00:00:00Z' },
   ];
@@ -191,4 +192,8 @@ test('family day distinguishes office availability, pickup overlap and unconfirm
   await page.getByRole('combobox', { name: 'Presence person' }).selectOption('ade');
   await page.getByRole('button', { name: 'Morning', exact: true }).click();
   await expect(page.getByRole('combobox', { name: 'Presence person' })).toHaveValue('ade');
+  await page.getByRole('button', { name: 'Close quick presence', exact: true }).click();
+  await page.getByRole('button', { name: /^Dashboard$/ }).last().click();
+  await expect(page.getByText('Optional holiday camp', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Earlier advertised outing', { exact: true })).toHaveCount(0);
 });

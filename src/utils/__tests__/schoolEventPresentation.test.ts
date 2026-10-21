@@ -24,6 +24,7 @@ test('school headings stay short without removing source instructions', () => {
 
 test('adult meetings are distinct from a pupil assembly', () => {
   expect(isAdultSchoolEvent('PTA AGM')).toBe(true);
+  expect(isAdultSchoolEvent('PTA Quiz Night Flyer')).toBe(true);
   expect(isAdultSchoolEvent('Parents Evening')).toBe(true);
   expect(isAdultSchoolEvent('Parent workshop')).toBe(true);
   expect(isAdultSchoolEvent('African storytelling assembly')).toBe(false);
