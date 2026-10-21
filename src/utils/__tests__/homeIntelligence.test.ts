@@ -1,6 +1,6 @@
 import type { CalendarEvent, CalendarTask } from '@/types/calendar.types';
 import type { PropertyTask } from '@/types/property.types';
-import { buildHomeIntelligenceSignals } from '@/utils/homeIntelligence';
+import { buildHomeIntelligenceSignals, type NurseryNoticeInput } from '@/utils/homeIntelligence';
 
 const today = '2026-10-09';
 const members = [{ id: 'amari', name: 'Amari' }, { id: 'askia', name: 'Askia' }, { id: 'ade', name: 'Ade' }];
@@ -80,4 +80,50 @@ it('does not surface completed preparation or distant routine work', () => {
     propertyTasks: [propertyTask({ nextDueDate: '2027-04-01' })], nurseryNotices: [{ id: 'done', preparationTask: { completed: true },
       nurserySummary: { kind: 'preparation', title: 'Bring a book', purpose: 'Book week', actions: ['Bring a book.'] } }] });
   expect(signals).toEqual([]);
+});
+
+it('attaches direct actions only to saved tasks and links their recorded source event', () => {
+  const signals = buildHomeIntelligenceSignals({ today, tasks: [task({ sourceEventId: 'school-trip' })],
+    nurseryNotices: [{ id: 'review-only', nurserySummary: { kind: 'preparation', title: 'Bring a family photo',
+      purpose: 'Photo activity', actions: ['Bring a photo.'] } }] });
+  expect(signals.find(signal => signal.id === 'school-task:task-1')).toMatchObject({ taskId: 'task-1', eventIds: ['school-trip'] });
+  expect(signals.find(signal => signal.id === 'nursery-preparation:review-only')?.taskId).toBeUndefined();
+});
+
+const nurseryRequest = (overrides: Partial<NurseryNoticeInput> = {}): NurseryNoticeInput => ({
+  id: 'request', status: 'content_required', actionRequired: true, nurseryChildId: 'askia',
+  nurserySummary: { kind: 'content_pending', title: 'Bring a family photo', purpose: 'Please bring a photo.', actions: ['Bring a photo.'] },
+  ...overrides,
+});
+
+it.each(['2026-07-01T09:00:00Z', 'Tue, 1 Sep 2026 10:00:00 +0100'])('does not refresh an old nursery preview from source date %s when backfilled today', sourceDate => {
+  const notice = nurseryRequest({ sourceDate, receivedAt: '2026-10-21T10:00:00Z' });
+  const original = JSON.stringify(notice);
+  expect(buildHomeIntelligenceSignals({ today: '2026-10-21', nurseryNotices: [notice] })).toEqual([]);
+  expect(JSON.stringify(notice)).toBe(original);
+});
+
+it('keeps current unknown timing requests visible and labels missing source dates explicitly', () => {
+  const current = buildHomeIntelligenceSignals({ today: '2026-10-21', nurseryNotices: [nurseryRequest({
+    sourceDate: 'Wed, 21 Oct 2026 08:00:00 +0100', receivedAt: '2026-10-21T10:00:00Z',
+  })] });
+  expect(current[0]).toMatchObject({ status: 'needs_detail', urgency: 1 });
+  const undated = buildHomeIntelligenceSignals({ today: '2026-10-21', nurseryNotices: [nurseryRequest()] });
+  expect(undated[0]).toMatchObject({ status: 'needs_detail', sourceLabel: 'Grandir nursery · source date unknown' });
+});
+
+it('uses receivedAt only when source date is absent and keeps the fourteen-day boundary', () => {
+  expect(buildHomeIntelligenceSignals({ today: '2026-10-21', nurseryNotices: [nurseryRequest({ receivedAt: '2026-10-06T10:00:00Z' })] })).toEqual([]);
+  expect(buildHomeIntelligenceSignals({ today: '2026-10-21', nurseryNotices: [nurseryRequest({ sourceDate: '2026-10-07', receivedAt: '2026-10-21' })] })).toHaveLength(1);
+});
+
+it.each(['preparation', 'routine'] as const)('keeps stale unverified %s notices out of active signals without hiding explicit future tasks', kind => {
+  const notice = nurseryRequest({ sourceDate: '2026-08-01', receivedAt: '2026-10-21', nurserySummary: {
+    kind, title: 'Bring nursery kit', purpose: 'Bring nursery kit.', actions: ['Bring nursery kit.'],
+  } });
+  const signals = buildHomeIntelligenceSignals({ today: '2026-10-21', nurseryNotices: [notice], tasks: [
+    task({ id: 'future-kit', title: 'Bring nursery kit', dueDate: '2026-10-22', assignedDate: '2026-10-01' }),
+  ] });
+  expect(signals).toHaveLength(1);
+  expect(signals[0]).toMatchObject({ id: 'school-task:future-kit', taskId: 'future-kit', dueDate: '2026-10-22' });
 });

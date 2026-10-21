@@ -15,6 +15,30 @@ const event = (value: CalendarImportDraft) => ({ id: schoolImportedEventId('fami
   eventDate: new Date('2026-11-10'), eventTime: new Date('2026-11-10') });
 
 describe('calendar intake action contract', () => {
+  beforeEach(() => { jest.useFakeTimers(); jest.setSystemTime(new Date('2026-10-21T10:00:00Z')); });
+  afterEach(() => jest.useRealTimers());
+  it('keeps past unimported one-off dates as reference, without hiding ongoing ranges or recurring routines', () => {
+    const state = calendarIntakeState(intake, [
+      { ...draft('past'), date: '2026-10-20' },
+      { ...draft('ongoing'), date: '2026-10-19', endDate: '2026-10-29' },
+      { ...draft('routine'), date: '2026-09-01', isRecurring: true },
+    ], []);
+    expect(state).toMatchObject({ expiredDraftCount: 1, needsReview: 2, queue: 'decision' });
+    expect(state.parsedDrafts[0]).toMatchObject({ disposition: 'expired', importable: false });
+    expect(calendarIntakeState(intake, [{ ...draft('past'), date: '2026-10-20' }], []))
+      .toMatchObject({ needsReview: 0, queue: 'reference' });
+  });
+  it('keeps unread content explicitly waiting, not silently resolved or a parent decision', () => {
+    expect(calendarIntakeState({ ...intake, status: 'content_required' }, [], []))
+      .toMatchObject({ needsReview: 1, actionRequired: true, queue: 'waiting_content' });
+  });
+  it('expiry survives automatic status persistence without turning into a manual dismissal', () => {
+    const drafts = [{ ...draft('past'), date: '2026-10-20' }];
+    const before = calendarIntakeState(intake, drafts, []);
+    const after = calendarIntakeState({ ...intake, status: before.status }, drafts, []);
+    expect(after).toMatchObject({ status: 'no_events', expiredDraftCount: 1, needsReview: 0, queue: 'reference' });
+    expect(after.parsedDrafts[0].disposition).toBe('expired');
+  });
   it('keeps nursery preparation actionable until a task is saved or explicitly reviewed', () => {
     const metadata = { nurserySummary: { kind: 'preparation' } };
     expect(calendarIntakeState({ ...intake, status: 'no_events', metadata }, [], [])).toMatchObject({
@@ -91,6 +115,8 @@ describe('calendar intake action contract', () => {
   it.each([
     { title: 'Reading Morning (By Invite Only)', source: 'Reading morning on 10 November at 9am' },
     { title: 'Holiday Camp', source: 'Booking required for 10 November at 9am' },
+    { title: 'Foal Farm Animal Rescue', source: 'Open daily (except Tuesday). 10 November at 1:30pm' },
+    { title: 'French camp', source: 'Our French camp brings a different theme on 10 November at 9am' },
   ])('marks unconfirmed offers needs-review without preventing manual confirmation: $title', ({ title, source }) => {
     const value = { ...draft(title), source };
     const state = calendarIntakeState(intake, [value], [], () => true);

@@ -4,13 +4,13 @@ export const UNCONFIRMED_SCHOOL_OFFER_WARNING = 'Confirm your booking/invitation
 
 export const schoolDraftHasUnconfirmedOffer = (draft: CalendarImportDraft) => {
   const content = `${draft.title}\n${draft.source}`;
-  const offerCue = /\b(?:limited (?:places?|spaces?)|(?:places?|spaces?) (?:are|is) limited|first[- ]come,? first[- ]served|book now|register now|how to book|booking required|places? available|invite[- ]only|invitation[- ]only)\b/i.test(content);
+  const offerCue = /\b(?:limited (?:places?|spaces?)|(?:places?|spaces?) (?:are|is) limited|first[- ]come,? first[- ]served|book now|register now|how to book|booking required|places? available|invite[- ]only|invitation[- ]only|holiday (?:camp|club)|half[- ]term (?:camp|club)|open daily|opening (?:hours|times)|our (?:French |sports? )?camp brings|why not visit|family days? out)\b/i.test(content);
   const bookingConfirmed = /\b(?:your booking is confirmed|booking confirmed|your place is confirmed|place confirmed|registration confirmed|you are booked|your place is reserved)\b/i.test(content);
   return offerCue && !bookingConfirmed;
 };
 
 export const schoolDraftNonEventReason = (draft: CalendarImportDraft) =>
-  /^(?:imported event|weekly update(?: email)?|(?:school |weekly )?newsletter|school update(?: email)?|attachment|attached document|(?:please )?(?:see|find) (?:the )?attached(?: (?:file|document|newsletter|letter))?)$/i.test(draft.title.trim())
+  /^(?:from|to|on|at|date|when|imported event|weekly update(?: email)?|(?:school |weekly )?newsletter|school update(?: email)?|attachment|attached document|(?:please )?(?:see|find) (?:the )?attached(?: (?:file|document|newsletter|letter))?)$/i.test(draft.title.trim())
     ? 'generic_non_event' as const : null;
 
 export const schoolDraftTimeNeedsReview = (draft: CalendarImportDraft) => {

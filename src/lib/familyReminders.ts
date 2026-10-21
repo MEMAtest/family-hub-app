@@ -195,13 +195,21 @@ export const applyFamilyReminderAction = async (
           throw new ReminderActionError('The event or preparation has changed. Refresh your reminders.', 409);
         }
         if (action === 'cover' && metadata.purpose !== 'coverage') throw new ReminderActionError('This is not a coverage reminder.', 400);
+        const current = await tx.notification.findUnique({ where: { id: metadata.stateId } });
+        const previous = reminderObject(current?.metadata);
+        if (!unresolved(previous)) throw new ReminderActionError('This reminder has already been completed.', 409);
+        if (metadata.purpose === 'bins') {
+          const collection = await tx.notification.findUnique({ where: {
+            id: binCollectionStateId(familyId, event.id, metadata.occurrence),
+          } });
+          if (!unresolved(reminderObject(collection?.metadata))) {
+            throw new ReminderActionError('The household has already put these bins out.', 409);
+          }
+        }
         if (action === 'details') return { url: metadata.url, resolution: null };
         if (action === 'snooze' && (!until || !Number.isFinite(until.getTime()) || until <= now || until >= record.expiresAt)) {
           throw new ReminderActionError('Choose a snooze time before departure or reminder expiry.', 400);
         }
-        const current = await tx.notification.findUnique({ where: { id: metadata.stateId } });
-        const previous = reminderObject(current?.metadata);
-        if (!unresolved(previous)) throw new ReminderActionError('This reminder has already been completed.', 409);
         const stateMetadata = json({ ...previous, source: 'family-reminder-state',
           resolution: action === 'snooze' ? null : action, actionBy: personId, actionAt: now.toISOString(),
           snoozedUntil: action === 'snooze' ? until!.toISOString() : null });

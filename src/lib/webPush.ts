@@ -39,6 +39,7 @@ export const sendFamilyPushNotification = async (
   familyId: string,
   payload: PushPayload,
   personId?: string,
+  subscriptionId?: string,
 ): Promise<PushSendResult> => {
   if (!isWebPushConfigured()) {
     return { sent: 0, failed: 0, inactive: 0, configured: false, subscriptions: 0 };
@@ -79,6 +80,7 @@ export const sendFamilyPushNotification = async (
       familyId,
       isActive: true,
       ...(recipientPersonId ? { personId: recipientPersonId } : {}),
+      ...(subscriptionId ? { id: subscriptionId } : {}),
     },
   });
 
@@ -122,7 +124,7 @@ export const sendFamilyPushNotification = async (
         }
 
         results.failed += 1;
-        console.warn('Failed to send web push notification:', error);
+        console.warn('Failed to send web push notification', { statusCode: typeof statusCode === 'number' ? statusCode : undefined });
       }
     })
   );
@@ -130,7 +132,7 @@ export const sendFamilyPushNotification = async (
   return results;
 };
 
-export const sendMemberPushNotification = (familyId: string, personId: string, payload: PushPayload) => {
+export const sendMemberPushNotification = (familyId: string, personId: string, payload: PushPayload, subscriptionId?: string) => {
   if (!personId) throw new Error('A recipient member is required for private push');
-  return sendFamilyPushNotification(familyId, payload, personId);
+  return sendFamilyPushNotification(familyId, payload, personId, subscriptionId);
 };

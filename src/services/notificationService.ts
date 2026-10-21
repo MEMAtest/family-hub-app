@@ -13,6 +13,7 @@ import conflictDetectionService, { DetectedConflict } from './conflictDetectionS
 import { emailService } from './emailService';
 import { isFamilyReminder, type FamilyReminderAction } from '@/lib/familyReminderContract';
 import { isActionableNotification } from '@/lib/notificationDelivery';
+import { pushDeviceReadiness, type PushDeviceStatus } from '@/lib/pushDeviceReadiness';
 
 export class FamilyHubNotificationService implements NotificationService {
   private notifications: InAppNotification[] = [];
@@ -27,6 +28,7 @@ export class FamilyHubNotificationService implements NotificationService {
   private reminderTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
   private serviceWorkerRegistration?: ServiceWorkerRegistration;
   private pushSubscriptionInFlight: Promise<void> | null = null;
+  private deviceSettingsInFlight: Promise<void> = Promise.resolve();
   private conflicts: DetectedConflict[] = [];
   private emailRecipients: { email: string; name: string; }[] = [
     { email: 'admin@familyhub.app', name: 'Family Hub Admin' } // Default for testing
@@ -292,6 +294,7 @@ export class FamilyHubNotificationService implements NotificationService {
   }
 
   async syncPushSubscription(): Promise<void> {
+    await this.deviceSettingsInFlight;
     if (process.env.NODE_ENV !== 'production') return;
     if (!this.familyId || typeof window === 'undefined') return;
     if (!this.personId || !this.settings.channels.push || !this.settings.enabled) return;
@@ -310,7 +313,10 @@ export class FamilyHubNotificationService implements NotificationService {
     return this.pushSubscriptionInFlight;
   }
 
-  private async registerPushSubscription(): Promise<void> {
+  private async registerPushSubscription(settings = this.settings): Promise<void> {
+    const familyId = this.familyId;
+    const version = this.scopeVersion;
+    if (!familyId || !this.personId) throw new Error('Sign in as a family member before connecting push.');
     const registration = await this.getReadyServiceWorkerRegistration();
     this.serviceWorkerRegistration = registration;
 
@@ -331,18 +337,20 @@ export class FamilyHubNotificationService implements NotificationService {
       applicationServerKey,
     });
 
-    const response = await fetch(`/api/families/${this.familyId}/push-subscriptions`, {
+    if (version !== this.scopeVersion) throw new Error('Member changed. Recheck this device.');
+    const response = await fetch(`/api/families/${familyId}/push-subscriptions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         subscription: subscription.toJSON(),
         userAgent: navigator.userAgent,
         deviceLabel: this.getDeviceLabel(),
-        enabled: this.settings.channels.push && this.settings.enabled,
+        enabled: settings.channels.push && settings.enabled,
       }),
     });
 
     if (!response.ok) {
+      if (response.status === 409) throw new Error('This browser subscription has another owner. Use Reconnect this device while signed in as the intended member.');
       throw new Error('Unable to save push notification subscription');
     }
   }
@@ -700,18 +708,32 @@ export class FamilyHubNotificationService implements NotificationService {
       snoozedUntil: n.snoozedUntil ? new Date(n.snoozedUntil) : undefined }));
   }
 
-  async getDeviceDeliveryState(): Promise<{ connection: string; acceptance: string }> {
-    const acceptance = localStorage.getItem(this.storageKey('last-push-acceptance'));
-    const registration = typeof navigator !== 'undefined' && 'serviceWorker' in navigator
+  async getDeviceDeliveryState(): Promise<{ connection: string; acceptance: string; subscriptionId?: string }> {
+    await this.binding;
+    const version = this.scopeVersion;
+    const acceptance = localStorage.getItem(this.storageKey('last-device-push-acceptance'));
+    const supported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+    const registration = supported
       ? await navigator.serviceWorker.getRegistration('/sw.js') : undefined;
-    const subscription = await registration?.pushManager.getSubscription();
-    return { connection: !this.checkPermission().granted ? 'Permission not granted' :
-      subscription ? 'Browser subscribed; server connection unverified' : 'Not subscribed',
+    const subscription = await registration?.pushManager?.getSubscription();
+    let server: PushDeviceStatus | null = null;
+    if (this.familyId && this.personId && subscription && window.crypto?.subtle) {
+      try {
+        const digest = await window.crypto.subtle.digest('SHA-256', new TextEncoder().encode(subscription.endpoint));
+        const fingerprint = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+        const response = await fetch(`/api/families/${this.familyId}/push-subscriptions?endpointHash=${fingerprint}`, { cache: 'no-store' });
+        if (response.ok) server = await response.json();
+      } catch { /* Readiness remains unverified when offline. */ }
+    }
+    if (version !== this.scopeVersion) throw new Error('Member changed. Recheck this device.');
+    return { ...pushDeviceReadiness({ secure: window.isSecureContext, supported,
+      permission: supported ? window.Notification.permission : 'default',
+      enabled: this.settings.enabled && this.settings.channels.push, subscribed: Boolean(subscription), server }),
     acceptance: acceptance ? `${new Date(acceptance).toLocaleString('en-GB')} (provider accepted; device receipt unverified)` : 'No acceptance recorded on this device' };
   }
 
   recordPushAcceptance(): void {
-    localStorage.setItem(this.storageKey('last-push-acceptance'), new Date().toISOString());
+    localStorage.setItem(this.storageKey('last-device-push-acceptance'), new Date().toISOString());
   }
 
   /**
@@ -822,20 +844,74 @@ export class FamilyHubNotificationService implements NotificationService {
    * Update notification settings
    */
   async updateSettings(updates: Partial<NotificationSettings>): Promise<NotificationSettings> {
-    this.settings = { ...this.settings, ...updates };
-    this.persistData();
-    if (this.familyId && typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-      const registration = await navigator.serviceWorker.getRegistration('/sw.js');
-      const subscription = await registration?.pushManager.getSubscription();
-      if ((!this.settings.channels.push || !this.settings.enabled) && subscription) {
-        const response = await fetch(`/api/families/${this.familyId}/push-subscriptions`, {
-          method: 'DELETE', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ endpoint: subscription.endpoint }),
-        });
-        if (!response.ok) throw new Error('Could not disable this device subscription.');
-      } else if (this.settings.channels.push && this.checkPermission().granted) await this.syncPushSubscription();
+    await this.binding;
+    const version = this.scopeVersion;
+    return this.queueDeviceSettings(async () => {
+      await this.pushSubscriptionInFlight;
+      if (version !== this.scopeVersion) throw new Error('Member changed. Recheck this device.');
+      const next = { ...this.settings, ...updates, channels: { ...this.settings.channels, ...updates.channels } };
+      const changesPush = updates.enabled !== undefined || updates.channels?.push !== undefined;
+      if (changesPush && typeof window !== 'undefined') {
+        if (!next.enabled || !next.channels.push) {
+          await this.deactivateCurrentPushSubscription();
+        } else if (process.env.NODE_ENV === 'production' && this.checkPermission().granted) {
+          await this.registerPushSubscription(next);
+        }
+      }
+      if (version !== this.scopeVersion) throw new Error('Member changed. Recheck this device.');
+      if (this.familyId && this.personId) localStorage.setItem(this.storageKey('notification-settings'), JSON.stringify(next));
+      this.settings = next;
+      this.persistData();
+      return { ...this.settings };
+    });
+  }
+
+  private queueDeviceSettings<T>(action: () => Promise<T>): Promise<T> {
+    const operation = this.deviceSettingsInFlight.then(action);
+    this.deviceSettingsInFlight = operation.then(() => undefined, () => undefined);
+    return operation;
+  }
+
+  private async deactivateCurrentPushSubscription(): Promise<void> {
+    if (!('serviceWorker' in navigator)) return;
+    const version = this.scopeVersion;
+    const familyId = this.familyId;
+    const registration = await navigator.serviceWorker.getRegistration('/sw.js');
+    const subscription = await registration?.pushManager?.getSubscription();
+    if (!subscription) return;
+    if (!familyId || !this.personId || version !== this.scopeVersion) {
+      throw new Error('Sign in as the intended member to disable this device. Nothing was saved.');
     }
-    return { ...this.settings };
+    const response = await fetch(`/api/families/${familyId}/push-subscriptions`, {
+      method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ endpoint: subscription.endpoint }),
+    });
+    if (!response.ok) throw new Error('Could not disable this device on the server. Nothing was saved; reconnect and retry.');
+  }
+
+  async reconnectPushDevice(): Promise<void> {
+    await this.binding;
+    const version = this.scopeVersion;
+    return this.queueDeviceSettings(async () => {
+      await this.pushSubscriptionInFlight;
+      if (!this.familyId || !this.personId || version !== this.scopeVersion) throw new Error('Sign in as the intended family member first.');
+      if (process.env.NODE_ENV !== 'production') throw new Error('Reconnect this device from the HTTPS production app.');
+      if (!('serviceWorker' in navigator) || !('PushManager' in window) || !this.checkPermission().granted) {
+        throw new Error('Allow notifications in this browser before reconnecting this device.');
+      }
+      await this.deactivateCurrentPushSubscription();
+      const registration = await this.getReadyServiceWorkerRegistration();
+      const subscription = await registration.pushManager.getSubscription();
+      if (version !== this.scopeVersion) throw new Error('Member changed. Recheck this device.');
+      if (subscription && !await subscription.unsubscribe()) throw new Error('Could not replace this browser push subscription. Retry reconnecting this device.');
+      const next = { ...this.settings, enabled: true, channels: { ...this.settings.channels, push: true, browser: true } };
+      await this.registerPushSubscription(next);
+      if (version !== this.scopeVersion) throw new Error('Member changed. Recheck this device.');
+      localStorage.setItem(this.storageKey('notification-settings'), JSON.stringify(next));
+      this.settings = next;
+      localStorage.removeItem(this.storageKey('last-device-push-acceptance'));
+      this.persistData();
+    });
   }
 
   async applyReminderAction(id: string, action: FamilyReminderAction, until?: Date): Promise<{ url?: string }> {
@@ -859,7 +935,7 @@ export class FamilyHubNotificationService implements NotificationService {
     await this.cancelEventReminders(event.id);
     // Travel is scheduled server-side; a second browser timer would duplicate private prompts.
     if (event.workStatus?.type === 'travel' || (event as CalendarEvent & { metadata?: { travel?: unknown } }).metadata?.travel) return;
-    if (!this.settings.enabled || event.status === 'cancelled' || event.person !== this.personId) return;
+    if (!this.settings.enabled || event.status === 'cancelled' || event.metadata?.schoolImportReview || event.person !== this.personId) return;
     const eventDateTime = new Date(`${event.date}T${event.time}`);
     const eventIcon = getCalendarEventIcon(event);
     const reminderKey =

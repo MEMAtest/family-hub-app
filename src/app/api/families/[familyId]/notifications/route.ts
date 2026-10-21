@@ -98,7 +98,8 @@ export const GET = requireFamilyAccess(async (request: NextRequest, context, aut
     const schoolEventsById = new Map(schoolEvents.map((event) => [event.id, event]));
 
     return NextResponse.json(notifications.filter(notification => searchParams.get('actionable') !== 'true' ||
-      isActionableNotification(notification, now.getTime())).map((notification) => {
+      (isActionableNotification(notification, now.getTime()) &&
+        !(schoolEventsById.get(notification.relatedEventId || '')?.metadata as any)?.schoolImportReview)).map((notification) => {
       const unclaimed = visibility.unclaimed.find((member) => member.id === notification.recipientPersonId);
       const mapped = presentSchoolNotification(toClient(notification),
         schoolEventsById.get(notification.relatedEventId || ''), schoolMembers);

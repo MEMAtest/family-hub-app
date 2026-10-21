@@ -8,13 +8,14 @@ import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { assignSchoolDrafts, schoolMetadata, type SchoolDraft } from '@/utils/schoolSources';
 import { isAdultSchoolEvent, isChildProfile } from '@/utils/schoolEventPresentation';
-import { loadSchoolRules, resolveStoredSchoolDrafts, schoolDraftKey } from '@/lib/schoolIntakeServer';
+import { enrichSavedSchoolEventResponses, loadSchoolRules, resolveStoredSchoolDrafts, schoolDraftKey } from '@/lib/schoolIntakeServer';
 import { calendarIntakeState } from '@/lib/calendarIntakeState';
 import { autoProcessSavedCalendarIntake, isHighConfidenceAutoCreate, SavedIntakeProcessingError } from '@/lib/calendarEmailIngestion';
 import { isStewartFlemingSender } from '@/utils/schoolEmail';
 import { grandirPostUrl, grandirOriginalPostLink } from '@/lib/grandirClient';
 import { summarizeNurseryNotice, nurseryPreviewSummary } from '@/utils/nurseryNoticeSummary';
 import { nurseryPreparationTaskId, saveNurseryPreparation, NurseryPreparationError } from '@/lib/nurseryPreparation';
+import { matchGrandirPreviewToPost } from '@/lib/grandirPreviewCorrelation';
 
 const reviewStatuses = ['processing', 'review_required', 'partial_review', 'no_events', 'needs_ocr', 'content_required'];
 
@@ -82,12 +83,23 @@ export const GET = requireFamilyAccess(async (_request: NextRequest, context) =>
         },
       },
     });
-    const allIntakes = [...intakes, ...pending];
+    const fullPosts = await prisma.calendarEmailIntake.findMany({
+      where: { familyId, messageId: { startsWith: 'grandir-post:' } },
+      include: { attachments: { select: { id: true, fileName: true, mimeType: true, sizeBytes: true }, orderBy: { createdAt: 'asc' } } },
+    });
+    const allIntakes = [...intakes, ...pending, ...fullPosts];
+    const fullPostCandidates = Array.from(new Map(allIntakes.map(intake => [intake.id, intake])).values());
+    const matchedFullPostIds = new Set<string>();
     const portalPostIds = new Set(allIntakes.map(storedGrandirPostId).filter((id): id is string => Boolean(id)));
     const supersededNurseryPreviewIds = new Set(allIntakes.flatMap((intake) => {
       if (storedGrandirPostId(intake)) return [];
       const linkedPostId = linkedGrandirPostId(intake);
-      return linkedPostId && portalPostIds.has(linkedPostId) ? [intake.id] : [];
+      const match = linkedPostId && portalPostIds.has(linkedPostId)
+        ? fullPostCandidates.find(post => storedGrandirPostId(post) === linkedPostId)
+        : matchGrandirPreviewToPost(intake, fullPostCandidates);
+      if (!match) return [];
+      matchedFullPostIds.add('intakeId' in match ? match.intakeId : match.id);
+      return [intake.id];
     }));
     const members = await prisma.familyMember.findMany({ where: { familyId } });
     const { rules } = await loadSchoolRules(familyId, members);
@@ -130,13 +142,16 @@ export const GET = requireFamilyAccess(async (_request: NextRequest, context) =>
           { eventSource: 'gmail-school-email', authenticatedSchoolSender: true }));
       return { state, resolved, nurserySummary, nurseryChildId, preparationTask };
     };
-    const pendingEntries = pending.map((intake) => ({ intake, ...stateFor(intake) }))
+    const pendingStates = pending.map((intake) => ({ intake, ...stateFor(intake) }));
+    const pendingEntries = pendingStates
       .filter(({ intake, state }) => state.actionRequired && !supersededNurseryPreviewIds.has(intake.id));
     const recentIds = new Set(intakes.map((intake) => intake.id));
     // The reference window must never hide a decision included in the header count.
-    const visibleIntakes = [...intakes.filter((intake) => !supersededNurseryPreviewIds.has(intake.id)),
-      ...pendingEntries.filter(({ intake }) => !recentIds.has(intake.id))
-      .map(({ intake }) => intake)].sort((a, b) =>
+    const visibleIntakes = Array.from(new Map([...intakes.filter((intake) => !supersededNurseryPreviewIds.has(intake.id)),
+      ...pendingStates.filter(({ intake, state }) => !recentIds.has(intake.id) &&
+        !supersededNurseryPreviewIds.has(intake.id) && (state.actionRequired || state.expiredDraftCount > 0))
+      .map(({ intake }) => intake), ...fullPosts.filter(post => matchedFullPostIds.has(post.id))]
+      .map(intake => [intake.id, intake])).values()).sort((a, b) =>
       new Date(b.receivedAt || 0).getTime() - new Date(a.receivedAt || 0).getTime());
 
     const reviewReasons: Record<string, number> = {};
@@ -154,6 +169,9 @@ export const GET = requireFamilyAccess(async (_request: NextRequest, context) =>
     }
     return NextResponse.json({
       reviewReasons,
+      pendingDecisionCount: pendingEntries.filter(({ state }) => state.queue === 'decision').reduce((sum, { state }) => sum + state.needsReview, 0),
+      pendingDecisionEmailCount: pendingEntries.filter(({ state }) => state.queue === 'decision').length,
+      waitingContentCount: pendingEntries.filter(({ state }) => state.queue === 'waiting_content').length,
       pendingReviewCount: pendingEntries.reduce((sum, { state }) => sum + state.needsReview, 0),
       pendingReviewEmailCount: pendingEntries.length,
       supersededNurseryPreviewCount: supersededNurseryPreviewIds.size,
@@ -212,12 +230,32 @@ export const GET = requireFamilyAccess(async (_request: NextRequest, context) =>
 const autoProcessSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('auto-process'), intakeId: z.string().min(1) }).strict(),
   z.object({ action: z.literal('add-nursery-task'), intakeId: z.string().min(1), dueDate: z.string() }).strict(),
+  z.object({ action: z.literal('confirm-plan'), eventId: z.string().min(1), expectedUpdatedAt: z.string().datetime() }).strict(),
 ]);
 
-export const POST = requireFamilyAccess(async (request: NextRequest, context) => {
+export const POST = requireFamilyAccess(async (request: NextRequest, context, auth) => {
   try {
     const { familyId } = await context.params;
     const body = autoProcessSchema.parse(await request.json());
+    if (body.action === 'confirm-plan') {
+      if (!auth.familyMemberId || request.headers.get('origin') !== request.nextUrl.origin ||
+        !request.headers.get('content-type')?.startsWith('application/json')) {
+        return NextResponse.json({ error: 'Use the signed-in Family Hub confirmation controls.' }, { status: 403 });
+      }
+      const events = await prisma.calendarEvent.findMany({ where: { familyId, id: body.eventId }, take: 1 });
+      const event = events[0];
+      if (!event) return NextResponse.json({ error: 'Plan not found.' }, { status: 404 });
+      if (event.updatedAt.toISOString() !== body.expectedUpdatedAt) return NextResponse.json({ error: 'The plan changed since you viewed it. Refresh before confirming.' }, { status: 409 });
+      const [enriched] = await enrichSavedSchoolEventResponses(familyId, events);
+      if (!enriched?.metadata || !schoolMetadata(enriched.metadata).schoolImportReview) {
+        return NextResponse.json({ error: 'This plan no longer needs source confirmation. Refresh the calendar.' }, { status: 409 });
+      }
+      const updated = await prisma.calendarEvent.updateMany({ where: { familyId, id: event.id, updatedAt: event.updatedAt },
+        data: { metadata: { ...schoolMetadata(event.metadata), sourcePlanConfirmed: true,
+          sourcePlanConfirmation: { actorId: auth.familyMemberId, at: new Date().toISOString() } } as Prisma.InputJsonValue } });
+      if (updated.count !== 1) return NextResponse.json({ error: 'The plan changed. Refresh before confirming.' }, { status: 409 });
+      return NextResponse.json({ eventId: event.id, confirmed: true });
+    }
     if (body.action === 'add-nursery-task') {
       if (request.headers.get('origin') !== request.nextUrl.origin || !request.headers.get('content-type')?.startsWith('application/json')) {
         return NextResponse.json({ error: 'Use the Family Hub nursery preparation controls.' }, { status: 403 });

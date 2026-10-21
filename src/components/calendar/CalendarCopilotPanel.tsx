@@ -33,7 +33,7 @@ interface CalendarCopilotPanelProps {
   ) => Promise<{ status: 'conflict' } | { status: 'created'; event: CalendarEvent }>;
   onOpenCalendar: () => void;
   onEventsImported?: () => Promise<void>;
-  onInboxChanged?: (pendingReview: number, pendingEmails: number) => void;
+  onInboxChanged?: (pendingReview: number, pendingEmails: number, waitingContent?: number) => void;
 }
 
 interface CalendarInboxItem {
@@ -57,6 +57,8 @@ interface CalendarInboxItem {
   parsedDrafts: SchoolDraft[];
   outstandingDrafts?: SchoolDraft[];
   actionRequired?: boolean;
+  queue?: 'decision' | 'waiting_content' | 'reference';
+  expiredDraftCount?: number;
   autoProcessEligibleCount?: number;
   documentSummary?: SchoolDocumentSummary | null;
   attachments?: CalendarAttachment[];
@@ -71,6 +73,7 @@ interface CalendarAttachment {
 }
 
 const inboxItemSummary = (item: CalendarInboxItem) => {
+  if (item.expiredDraftCount && !item.needsReview) return `${item.expiredDraftCount} past date${item.expiredDraftCount === 1 ? '' : 's'} · saved for reference`;
   if (item.nurserySummary?.title === 'Parent account security notice') return 'Account notification · not a nursery activity';
   if (item.preparationTask) return item.preparationTask.completed ? 'Preparation done' : `Added to tasks · due ${item.preparationTask.dueDate}`;
   if (item.nurserySummary) return ({ preparation: 'Things to bring / preparation', routine: 'Recurring nursery routine',
@@ -201,6 +204,8 @@ const CalendarCopilotPanel = ({
   const [routinePersonId, setRoutinePersonId] = useState(people.find(isChildProfile)?.id || people[0]?.id || '');
   const [routineSaving, setRoutineSaving] = useState(false);
   const [inboxSourceFilter, setInboxSourceFilter] = useState('all');
+  const [gmailSignInUrl, setGmailSignInUrl] = useState<string | null>(null);
+  useEffect(() => { setGmailSignInUrl(null); }, [activeFamilyId]);
   const [nurseryDueDate, setNurseryDueDate] = useState('');
   const [nurseryTaskSaving, setNurseryTaskSaving] = useState(false);
   const [importSourceType, setImportSourceType] = useState('pasted-text');
@@ -212,7 +217,7 @@ const CalendarCopilotPanel = ({
   );
   const assistantDrafts = assistantResult?.drafts ?? (assistantResult?.draft ? [assistantResult.draft] : []);
   const pendingInboxItems = useMemo(
-    () => inboxItems.filter((item) => item.actionRequired ?? (item.status !== 'no_events' && (
+    () => inboxItems.filter((item) => item.queue ? item.queue === 'decision' : item.actionRequired ?? (item.status !== 'no_events' && (
       item.needsReview > 0 ||
       item.conflictCount > 0 ||
       item.status === 'needs_ocr' ||
@@ -221,11 +226,13 @@ const CalendarCopilotPanel = ({
     ))),
     [inboxItems]
   );
-  const referenceInboxItems = inboxItems.filter((item) => !pendingInboxItems.includes(item));
+  const waitingInboxItems = inboxItems.filter((item) => item.queue === 'waiting_content');
+  const referenceInboxItems = inboxItems.filter((item) => !pendingInboxItems.includes(item) && !waitingInboxItems.includes(item));
   const sourceMatches = (item: CalendarInboxItem) => inboxSourceFilter === 'all' ||
     (inboxSourceFilter === 'nursery' ? item.schoolSource?.institution === 'grandir' : item.schoolSource?.institution !== 'grandir');
   const visiblePendingItems = pendingInboxItems.filter(sourceMatches);
   const visibleReferenceItems = referenceInboxItems.filter(sourceMatches);
+  const visibleWaitingItems = waitingInboxItems.filter(sourceMatches);
   const activeNurseryItem = inboxItems.find(item => item.id === activeInboxItemId && item.nurserySummary);
   const personNameById = useMemo(
     () => new Map(people.map((person) => [person.id, person.name])),
@@ -315,8 +322,9 @@ const CalendarCopilotPanel = ({
       setWhatsappConsent(payload.whatsappConsent || 'not_configured');
       setInboxItems(Array.isArray(payload.intakes) ? payload.intakes : []);
       onInboxChanged?.(
-        payload.pendingReviewCount ?? (payload.intakes || []).reduce((count: number, item: CalendarInboxItem) => count + item.needsReview, 0),
-        payload.pendingReviewEmailCount ?? 0,
+        payload.pendingDecisionCount ?? payload.pendingReviewCount ?? (payload.intakes || []).reduce((count: number, item: CalendarInboxItem) => count + item.needsReview, 0),
+        payload.pendingDecisionEmailCount ?? payload.pendingReviewEmailCount ?? 0,
+        payload.waitingContentCount ?? 0,
       );
     } catch (error) {
       setInboxError(error instanceof Error ? error.message : 'Calendar inbox could not be loaded.');
@@ -348,19 +356,19 @@ const CalendarCopilotPanel = ({
   const connectGmail = async () => {
     if (!activeFamilyId) return;
     const authWindow = window.open('about:blank', 'family-hub-gmail-connect', 'width=560,height=720');
-    if (!authWindow) {
-      setInboxError('Allow pop-ups for Family Hub to connect Gmail.');
-      return;
-    }
-
+    setGmailSignInUrl(null);
     setInboxError(null);
     try {
       const response = await fetch(`/api/families/${activeFamilyId}/gmail/connect`);
       const payload = await response.json();
       if (!response.ok || !payload.authUrl) throw new Error(payload.error || 'Gmail connection could not be started.');
-      authWindow.location.assign(payload.authUrl);
+      if (useFamilyStore.getState().databaseStatus.familyId !== activeFamilyId) { authWindow?.close(); return; }
+      const url = new URL(payload.authUrl);
+      if (url.origin !== 'https://accounts.google.com') throw new Error('Unexpected Google sign-in destination.');
+      setGmailSignInUrl(url.href);
+      authWindow?.location.assign(url.href);
     } catch (error) {
-      authWindow.close();
+      authWindow?.close();
       setInboxError(error instanceof Error ? error.message : 'Gmail connection could not be started.');
     }
   };
@@ -1037,6 +1045,7 @@ const CalendarCopilotPanel = ({
             </div>
           </div>
           {inboxError && <p role="alert" className="mt-2 text-amber-700 dark:text-amber-200">{inboxError}</p>}
+          {!gmailConnected && gmailSignInUrl && <a href={gmailSignInUrl} className="mt-2 inline-flex min-h-11 items-center gap-1 font-semibold text-teal-700 underline"><ExternalLink className="h-4 w-4" />Continue Google sign-in</a>}
           <details className="mt-2 text-gray-500 dark:text-slate-400">
           <summary className="flex min-h-9 cursor-pointer items-center gap-1.5 text-xs font-medium"><Settings2 className="h-3.5 w-3.5" /> Connection & assignment settings</summary>
           {forwardingAddress && <p className="mt-1 break-all text-[11px]">Forward other school emails to {forwardingAddress}</p>}
@@ -1113,6 +1122,15 @@ const CalendarCopilotPanel = ({
             </div>
           )}
           {!inboxLoading && !inboxError && visiblePendingItems.length === 0 && <p className="mt-3 flex items-center gap-2 text-gray-600 dark:text-slate-300"><CheckCircle2 className="h-4 w-4 text-emerald-600" /> No decisions waiting.</p>}
+          {visibleWaitingItems.length > 0 && <details className="mt-3 border-t border-gray-200 pt-2 dark:border-slate-700">
+            <summary className="min-h-11 cursor-pointer py-2 font-medium">Waiting for original content · {visibleWaitingItems.length}</summary>
+            <p className="mb-2 text-xs text-gray-500 dark:text-slate-400">These previews are not confirmed plans. Connected nursery checks retrieve available full posts; unread content stays here until verified.</p>
+            <div className="max-h-80 overflow-y-auto">
+              {visibleWaitingItems.map(item => <button key={item.id} type="button" onClick={() => void reviewInboxItem(item)} className="flex min-h-12 w-full items-center justify-between gap-3 border-b border-gray-100 py-2 text-left dark:border-slate-800">
+                <span className="min-w-0"><span className="block break-words font-medium">{item.nurserySummary?.title || item.subject || 'Original content unavailable'}</span><span className="block text-[11px] text-gray-500 dark:text-slate-400">{item.schoolSource?.institutionName || 'Source to confirm'} · {new Date(item.sourceDate || item.receivedAt).toLocaleDateString('en-GB', { timeZone: 'Europe/London' })}</span></span><span className="shrink-0">Open</span>
+              </button>)}
+            </div>
+          </details>}
           {visibleReferenceItems.length > 0 && <details className="mt-3">
             <summary className="min-h-11 cursor-pointer py-2 font-medium">Added & reference updates · {visibleReferenceItems.length}</summary>
             {visibleReferenceItems.map((item) => <button key={item.id} type="button" onClick={() => void reviewInboxItem(item)} className="flex min-h-12 w-full items-center justify-between gap-3 border-b border-gray-100 py-2 text-left dark:border-slate-800">

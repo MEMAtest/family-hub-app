@@ -9,6 +9,7 @@ import { getCalendarEventIcon, getEventNotificationMetadata } from '@/utils/even
 import { toCalendarEventResponse } from '@/lib/calendarEventMapping';
 import { travelContext, type ReminderEvent } from '@/lib/familyReminderPlanner';
 import { isActionableNotification, londonNotificationDay } from '@/lib/notificationDelivery';
+import { enrichSavedSchoolEventResponses } from '@/lib/schoolIntakeServer';
 
 const receiptId = (familyId: string, personId: string, key: string) =>
   `sweep-${createHash('sha256').update(JSON.stringify([familyId, personId, key])).digest('hex')}`;
@@ -59,10 +60,10 @@ export const POST = requireFamilyAccess(async (_request, context, authUser) => {
     let created = 0;
     let pushSent = 0;
 
-    for (const event of events) {
+    for (const event of await enrichSavedSchoolEventResponses(familyId, events)) {
       // Travel has member-specific server intents; the old household sweep must not duplicate them.
       const mappedEvent = toCalendarEventResponse(event);
-      if (travelContext(mappedEvent as ReminderEvent) || mappedEvent.status === 'cancelled') continue;
+      if (travelContext(mappedEvent as ReminderEvent) || mappedEvent.status === 'cancelled' || mappedEvent.metadata?.schoolImportReview) continue;
       const start = eventDateTime(event);
       const minutesUntil = Math.round((start.getTime() - now.getTime()) / 60_000);
       if (minutesUntil < 0) continue;

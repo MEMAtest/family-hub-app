@@ -68,3 +68,32 @@ it('does not permanently suppress repeated explicit device tests sharing a tag',
   const ids = webpush.sendNotification.mock.calls.map((call: any[]) => JSON.parse(call[1]).data.deliveryId);
   expect(ids[0]).not.toBe(ids[1]);
 });
+
+it('targets an explicit device within the recipient and family, never broadening to other phones', async () => {
+  prisma.pushSubscription.findMany.mockResolvedValue([]);
+  const result = await sendMemberPushNotification('family', 'ade', { title: 'Test', body: 'Test' }, 'other-member-device');
+  expect(prisma.pushSubscription.findMany).toHaveBeenCalledWith({ where: {
+    familyId: 'family', personId: 'ade', isActive: true, id: 'other-member-device',
+  } });
+  expect(result.sent).toBe(0);
+  expect(webpush.sendNotification).not.toHaveBeenCalled();
+});
+
+it.each([404, 410])('marks an expired device inactive after provider status %s', async statusCode => {
+  webpush.sendNotification.mockRejectedValue({ statusCode, endpoint: 'private-endpoint' });
+  const result = await sendMemberPushNotification('family', 'ade', { title: 'Test', body: 'Test' }, 'phone');
+  expect(result).toEqual(expect.objectContaining({ sent: 0, inactive: 1, failed: 0 }));
+  expect(prisma.pushSubscription.update).toHaveBeenCalledWith({
+    where: { endpoint: 'https://push.test/device' }, data: { isActive: false },
+  });
+});
+
+it('does not log endpoint secrets or provider response bodies on failure', async () => {
+  const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+  try {
+    webpush.sendNotification.mockRejectedValue({ statusCode: 503, endpoint: 'private-endpoint', body: 'private-provider-body' });
+    const result = await sendMemberPushNotification('family', 'ade', { title: 'Test', body: 'Test' }, 'phone');
+    expect(result).toEqual(expect.objectContaining({ sent: 0, failed: 1 }));
+    expect(warn).toHaveBeenCalledWith('Failed to send web push notification', { statusCode: 503 });
+  } finally { warn.mockRestore(); }
+});

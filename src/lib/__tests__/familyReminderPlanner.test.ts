@@ -12,6 +12,10 @@ const trip = (metadata: ReminderEvent['metadata'] = {}): ReminderEvent => ({
 const plan = (event = trip(), now = '2026-10-07T07:00:00Z') => planFamilyReminders('family', [event], members, new Date(now));
 
 describe('family reminder planning', () => {
+  it('does not invent travel preparation or parent pickup assignments for ordinary school events', () => {
+    const school = { ...trip(), type: 'education' as const, person: 'child', title: 'School pickup', metadata: {} };
+    expect(plan(school)).toHaveLength(0);
+  });
   it('targets Angela preparation and Ade coverage independently at 08 London', () => {
     const result = plan();
     expect(result.map((intent) => [intent.recipientPersonId, intent.purpose])).toEqual([

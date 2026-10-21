@@ -9,16 +9,23 @@ import { type SchoolMember } from '@/utils/schoolSources';
 
 export const GRANDIR_SESSION_KEY = 'integrations.grandir.private-session';
 
+export type GrandirBackfill = {
+  cutoff: string; cursor: string | null; olderThan: string | null; completed: boolean;
+};
+
 export type GrandirSession = {
   schemaVersion: 1; enabled: boolean; sealedToken: string; ownerMemberId: string; parentEmail: string;
   childMemberId: string; providerChildId: string; nurseryName: string; connectedAt: string; expiresAt: string | null;
   lastSyncAt: string | null; lastError: string | null;
   changedNotices?: Array<{ title: string; sourceUrl: string }>;
+  backfill?: GrandirBackfill;
+  nextSyncLane?: 'fresh' | 'historical';
 };
 export type GrandirStatus = {
   configured: boolean; connected: boolean; needsReconnect: boolean; childName: string | null;
   nurseryName: string | null; parentEmail: string | null; lastSyncAt: string | null; lastError: string | null;
   changedNotices?: Array<{ title: string; sourceUrl: string }>;
+  backfillProgress?: { completed: boolean; cutoff: string } | null;
 };
 const sessionSchema = z.object({
   schemaVersion: z.literal(1), enabled: z.boolean(), sealedToken: z.string().max(8192),
@@ -26,6 +33,11 @@ const sessionSchema = z.object({
   providerChildId: z.string().min(1), nurseryName: z.string().min(1).max(500),
   connectedAt: z.string().datetime(), expiresAt: z.string().datetime().nullable(),
   lastSyncAt: z.string().datetime().nullable(), lastError: z.string().max(100).nullable(),
+  nextSyncLane: z.enum(['fresh', 'historical']).optional(),
+  backfill: z.object({ cutoff: z.string().datetime(),
+    cursor: z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/).nullable(),
+    olderThan: z.string().datetime().nullable(), completed: z.boolean(),
+  }).refine(value => Boolean(value.cursor) === Boolean(value.olderThan)).optional(),
   changedNotices: z.array(z.object({ title: z.string().max(300), sourceUrl: z.string().regex(/^https:\/\/www\.app\.grandiruk\.com\/#\/account\/post\/[a-zA-Z0-9_-]{1,100}$/) })).max(40).optional(),
 }).refine(value => !value.enabled || Boolean(value.sealedToken));
 
@@ -85,7 +97,8 @@ export async function grandirStatus(familyId: string): Promise<GrandirStatus> {
   const member = session ? await prisma.familyMember.findFirst({ where: { familyId, id: session.childMemberId }, select: { name: true } }) : null;
   return { configured, connected, needsReconnect: Boolean(session && !connected), childName: member?.name || null,
     nurseryName: session?.nurseryName || null, parentEmail: session?.parentEmail || null,
-    lastSyncAt: session?.lastSyncAt || null, lastError: session?.lastError || null, changedNotices: session?.changedNotices || [] };
+    lastSyncAt: session?.lastSyncAt || null, lastError: session?.lastError || null, changedNotices: session?.changedNotices || [],
+    backfillProgress: session?.backfill ? { completed: session.backfill.completed, cutoff: session.backfill.cutoff } : null };
 }
 
 export async function connectGrandirSession(familyId: string, ownerMemberId: string, parentEmail: string, token: string) {

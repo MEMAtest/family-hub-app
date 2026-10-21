@@ -19,10 +19,14 @@ export interface HomeIntelligenceSignal {
   dueDate?: string;
   destination: 'calendar' | 'budget' | 'property';
   urgency: 1 | 2 | 3;
+  taskId?: string;
+  eventIds?: string[];
 }
 
 export interface NurseryNoticeInput {
   id: string;
+  sourceDate?: string | Date | null;
+  receivedAt?: string | Date | null;
   status?: string;
   actionRequired?: boolean;
   nurseryChildId?: string | null;
@@ -115,6 +119,16 @@ const isServiceExpense = (expense: BudgetExpenseInput) =>
 const isSchoolTask = (task: CalendarTask) => task.taskType === 'homework' || task.taskType === 'reading' ||
   task.taskType === 'practice' || SCHOOL_TASK_PATTERN.test(`${task.subject || ''} ${task.title}`);
 
+const noticeDate = (value: NurseryNoticeInput['sourceDate']): string | null => {
+  if (!value) return null;
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return null;
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(date).map(({ type, value: part }) => [type, part]));
+  return `${parts.year}-${parts.month}-${parts.day}`;
+};
+
 const schoolEventNeedsTime = (event: CalendarEvent) => {
   if (!hasUnspecifiedEventTime(event)) return false;
   const title = displayEventTitle(event);
@@ -137,24 +151,30 @@ const buildSchoolSignals = ({ today, tasks, events, nurseryNotices, members }: {
     signals.push({ id: `school-task:${task.id}`, area: 'school', kind: 'action', ...timing,
       title: task.title, summary: task.notes || 'Complete this school or nursery preparation before it is due.',
       sourceLabel: task.subject || 'School preparation', ownerLabel: task.assignees.map((id) => ownerName(id, members, '')).filter(Boolean).join(', ') || 'Child to confirm',
-      dueDate: due, destination: 'calendar' });
+      dueDate: due, destination: 'calendar', taskId: task.id,
+      eventIds: task.sourceEventId ? [task.sourceEventId] : undefined });
   });
 
   nurseryNotices.forEach((notice) => {
     const summary = notice.nurserySummary;
     if (!summary || summary.title === 'Parent account security notice' || notice.preparationTask?.completed) return;
+    // Import time cannot refresh an old source request. Saved tasks are evaluated independently above.
+    const sourceDay = noticeDate(notice.sourceDate) ?? noticeDate(notice.receivedAt);
+    if (sourceDay && daysFrom(sourceDay, today) > 14 &&
+        (['content_pending', 'preparation', 'routine'].includes(summary.kind) || notice.status === 'content_required')) return;
+    const sourceLabel = sourceDay ? 'Grandir nursery' : 'Grandir nursery · source date unknown';
     if (summary.kind === 'content_pending' || notice.status === 'content_required') {
       const previewText = `${summary.title} ${summary.purpose} ${summary.actions.join(' ')}`;
       const hasPreparationRequest = /\b(?:bring|pack|wear|return|label|prepare|complete|submit|permission|consent|book by|respond by|must|need to)\b/i.test(previewText);
       if (!notice.actionRequired || !hasPreparationRequest) return;
       signals.push({ id: `nursery-content:${notice.id}`, area: 'school', kind: 'exception', status: 'needs_detail',
         title: summary.title, summary: summary.actions[0] || 'Open the original nursery post so dates and required items can be confirmed.',
-        sourceLabel: 'Grandir nursery', ownerLabel: ownerName(notice.nurseryChildId, members, 'Askia'),
+        sourceLabel, ownerLabel: ownerName(notice.nurseryChildId, members, 'Askia'),
         destination: 'calendar', urgency: 1 });
     } else if (summary.kind === 'preparation' && !notice.preparationTask) {
       signals.push({ id: `nursery-preparation:${notice.id}`, area: 'school', kind: 'action', status: 'needs_detail',
         title: summary.title, summary: summary.actions.join(' ') || summary.purpose,
-        sourceLabel: 'Grandir nursery', ownerLabel: ownerName(notice.nurseryChildId, members, 'Child to confirm'),
+        sourceLabel, ownerLabel: ownerName(notice.nurseryChildId, members, 'Child to confirm'),
         destination: 'calendar', urgency: 2 });
     }
   });

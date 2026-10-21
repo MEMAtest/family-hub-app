@@ -1,7 +1,10 @@
 import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
-import { sendFamilyPushNotification } from '@/lib/webPush';
-import { londonDate, londonParts } from '@/lib/familyReminderPlanner';
+import { sendMemberPushNotification } from '@/lib/webPush';
+import { londonDate, londonParts, reminderRecordId } from '@/lib/familyReminderPlanner';
+import { londonNotificationDay } from '@/lib/notificationDelivery';
+import { loadTaskReminderStates } from '@/lib/taskReminderActions';
+import { taskReminderVisible } from '@/utils/personalSnooze';
 import { buildHomeIntelligenceSignals, type BudgetExpenseInput } from '@/utils/homeIntelligence';
 import type { CalendarTask } from '@/types/calendar.types';
 import type { PropertyTask } from '@/types/property.types';
@@ -37,7 +40,8 @@ export const runHomeIntelligenceSweep = async (familyId: string, now = new Date(
     prisma.calendarTask.findMany({ where: { familyId, completedAt: null, dueDate: { gte: taskFloor } }, orderBy: { dueDate: 'asc' }, take: 100 }),
     prisma.budgetExpense.findMany({ where: { familyId, isRecurring: true }, orderBy: { createdAt: 'desc' }, take: 100 }),
     prisma.familyDocument.findUnique({ where: { familyId_key: { familyId, key: 'property.tasks' } }, select: { data: true } }),
-    prisma.familyMember.findMany({ where: { familyId }, select: { id: true, name: true } }),
+    prisma.familyMember.findMany({ where: { familyId }, select: { id: true, name: true, role: true, ageGroup: true,
+      user: { select: { neonAuthId: true } } } }),
   ]);
 
   const signals = buildHomeIntelligenceSignals({
@@ -46,47 +50,69 @@ export const runHomeIntelligenceSweep = async (familyId: string, now = new Date(
     expenses: expenses as unknown as BudgetExpenseInput[],
     propertyTasks: propertyTasksFrom(propertyDocument?.data),
     members,
-  }).filter((signal) => signal.urgency <= 2).slice(0, 4);
+  }).filter((signal) => signal.urgency <= 2);
   if (!signals.length) return { planned: 0, created: 0, pushAccepted: 0, deliveryConfirmed: false };
 
   const phase = `${today}-${hour}`;
-  const dedupeKey = `home-intelligence:${phase}`;
+  const legacyDedupeKey = `home-intelligence:${phase}`;
+  // Do not replay an already-issued shared prompt when switching to recipient-scoped prompts.
   const existing = await prisma.notification.findFirst({ where: {
-    familyId, metadata: { path: ['dedupeKey'], equals: dedupeKey },
+    familyId, recipientPersonId: null, metadata: { path: ['dedupeKey'], equals: legacyDedupeKey },
   }, select: { id: true } });
   if (existing) return { planned: signals.length, created: 0, pushAccepted: 0, deliveryConfirmed: false };
-
-  const title = signals.length === 1 ? signals[0].title : `${signals.length} household items need attention`;
-  const message = signals.map((signal) => `${signal.area === 'school' ? 'School' : signal.area === 'bills' ? 'Bills' : 'Home'}: ${signal.title}`).join(' · ');
-  const url = '/?homeFocus=all';
-  const notification = await prisma.notification.create({ data: {
-    familyId, type: 'reminder', title, message, icon: '✓', priority: signals.some((signal) => signal.urgency === 1) ? 'high' : 'medium',
-    category: 'event', read: false, actionRequired: true,
-    actions: [
-      { id: 'open', label: 'Review household', type: 'primary', action: 'view_home_intelligence', data: { url } },
-      { id: 'snooze', label: 'Snooze', type: 'secondary', action: 'snooze' },
-      { id: 'dismiss', label: 'Dismiss', type: 'secondary', action: 'dismiss' },
-    ],
-    metadata: json({ source: 'home-intelligence', dedupeKey, phase, url, signalIds: signals.map((signal) => signal.id) }),
-  } });
-
+  let planned = 0;
+  let created = 0;
   let pushAccepted = 0;
-  if (deliverPush) {
+  const recipients = members.filter(member => /parent|adult/i.test(member.role ?? '') || /adult/i.test(member.ageGroup ?? ''));
+  // Load every recipient's state before creating anything; a failed read must not become an empty opt-out list.
+  const recipientStates = await Promise.all(recipients.map(async member => ({
+    member, states: await loadTaskReminderStates(familyId, member.id),
+  })));
+  for (const { member, states } of recipientStates) {
+    const personalSignals = signals.filter(signal => !signal.taskId ||
+      taskReminderVisible(states.find(state => state.taskId === signal.taskId), now)).slice(0, 4);
+    if (!personalSignals.length) continue;
+    planned += personalSignals.length;
+    const dedupeKey = `${legacyDedupeKey}:${member.id}`;
+    const id = reminderRecordId('home', [familyId, member.id, phase]);
+    const title = personalSignals.length === 1 ? personalSignals[0].title : `${personalSignals.length} household items need attention`;
+    const message = personalSignals.map(signal => `${signal.area === 'school' ? 'School' : signal.area === 'bills' ? 'Bills' : 'Home'}: ${signal.title}`).join(' · ');
+    const url = '/?homeFocus=all';
+    const metadata = { source: 'home-intelligence', dedupeKey, phase, url,
+      signalIds: personalSignals.map(signal => signal.id), deliveryConfirmed: false,
+      preferenceCoverage: 'personal_task_state_and_active_subscriptions',
+      pushStatus: !deliverPush ? 'disabled' : !member.user?.neonAuthId ? 'unavailable' : 'pending' };
+    // The deterministic primary key arbitrates concurrent routine ticks, not a check-then-create race.
     try {
-      const push = await sendFamilyPushNotification(familyId, { title, body: message, tag: dedupeKey,
-        data: { familyId, notificationId: notification.id, type: 'home-intelligence', url },
+      await prisma.notification.create({ data: {
+        id, familyId, recipientPersonId: member.id, relatedPersonId: member.id,
+        type: 'reminder', title, message, priority: personalSignals.some(signal => signal.urgency === 1) ? 'high' : 'medium',
+        category: 'event', read: false, actionRequired: true, timestamp: now, expiresAt: londonNotificationDay(now).endsAt,
+        actions: [
+          { id: 'open', label: 'Review household', type: 'primary', action: 'view_home_intelligence', data: { url } },
+          { id: 'snooze', label: 'Snooze', type: 'secondary', action: 'snooze' },
+          { id: 'dismiss', label: 'Dismiss', type: 'secondary', action: 'dismiss' },
+        ], metadata: json(metadata),
+      } });
+    } catch (error) {
+      if ((error as { code?: string }).code === 'P2002') continue;
+      throw error;
+    }
+    created += 1;
+    if (!deliverPush || !member.user?.neonAuthId) continue;
+    try {
+      const push = await sendMemberPushNotification(familyId, member.id, { title, body: message, tag: dedupeKey,
+        data: { familyId, notificationId: id, type: 'home-intelligence', url },
         actions: [{ action: 'view', title: 'Review household' }] });
-      pushAccepted = push.sent;
-      await prisma.notification.update({ where: { id: notification.id }, data: { metadata: json({
-        source: 'home-intelligence', dedupeKey, phase, url, signalIds: signals.map((signal) => signal.id),
+      pushAccepted += push.sent;
+      await prisma.notification.update({ where: { id }, data: { metadata: json({ ...metadata,
         pushStatus: push.sent ? 'accepted' : push.failed ? 'unknown' : 'unavailable', deliveryConfirmed: false,
       }) } });
     } catch {
-      await prisma.notification.update({ where: { id: notification.id }, data: { metadata: json({
-        source: 'home-intelligence', dedupeKey, phase, url, signalIds: signals.map((signal) => signal.id),
+      await prisma.notification.update({ where: { id }, data: { metadata: json({ ...metadata,
         pushStatus: 'unknown', deliveryConfirmed: false, manualReviewRequired: true,
       }) } });
     }
   }
-  return { planned: signals.length, created: 1, pushAccepted, deliveryConfirmed: false };
+  return { planned, created, pushAccepted, deliveryConfirmed: false };
 };

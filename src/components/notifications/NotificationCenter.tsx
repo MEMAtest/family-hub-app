@@ -16,6 +16,7 @@ import {
   Search,
   Send,
   Smartphone,
+  RefreshCw,
   ChevronLeft,
   ChevronRight,
   type LucideIcon
@@ -26,6 +27,7 @@ import { useAppView } from '@/contexts/familyHub/AppViewContext';
 import { InAppNotification } from '@/types/notification.types';
 import type { CalendarEvent } from '@/types/calendar.types';
 import WorkStatusManager from '@/components/calendar/WorkStatusManager';
+import BinReminderDetails from './BinReminderDetails';
 import { isFamilyReminder, type FamilyReminderAction } from '@/lib/familyReminderContract';
 import notificationService from '@/services/notificationService';
 import { isActionableNotification } from '@/lib/notificationDelivery';
@@ -68,6 +70,7 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
   const [mounted, setMounted] = useState(false);
   const [pushStatus, setPushStatus] = useState<string | null>(null);
   const [sendingPushTest, setSendingPushTest] = useState(false);
+  const [savingDeviceSettings, setSavingDeviceSettings] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [busyReminder, setBusyReminder] = useState<string | null>(null);
   const [detailsEvent, setDetailsEvent] = useState<CalendarEvent | null>(null);
@@ -247,7 +250,7 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
           command === 'snooze' ? new Date(Date.now() + 10 * 60_000) : undefined);
         if (command === 'details') {
           const event = useFamilyStore.getState().events.find((item) => item.id === notification.relatedEventId);
-          if (!event) throw new Error('This trip has not loaded yet. Open the calendar and try again.');
+          if (!event) throw new Error('This event has not loaded yet. Open the calendar and try again.');
           setDetailsEvent(event);
         }
       } catch (error) { setActionError(error instanceof Error ? error.message : 'Could not update reminder.'); }
@@ -322,20 +325,33 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
 
   const handlePushToggle = async (enabled: boolean) => {
     setPushStatus(null);
-
-    if (!enabled) {
-      await updateSettings({
-        channels: { ...settings.channels, push: false }
-      });
-      setPushStatus('Push notifications are off for this browser.');
-      return;
+    setSavingDeviceSettings(true);
+    try {
+      await notificationService.updateSettings({ channels: { ...settings.channels, push: enabled, ...(enabled ? { browser: true } : {}) } });
+      // Refresh context only after the service has confirmed the device change.
+      await updateSettings({});
+      if (enabled) {
+        const permission = await notificationService.requestPermission();
+        if (!permission.granted) throw new Error('Notifications are not allowed on this device. Allow them in browser settings.');
+      }
+      setPushStatus(enabled ? 'Push registration requested. Device receipt is still unverified.' : 'Push is off for your member on this browser. Browser permission is unchanged.');
+    } catch (error) {
+      setPushStatus(error instanceof Error ? error.message : 'Device settings could not be saved.');
+    } finally {
+      setSavingDeviceSettings(false);
     }
+  };
 
-    await updateSettings({
-      channels: { ...settings.channels, push: true, browser: true }
-    });
-    await requestPermission();
-    setPushStatus('Push permission requested. Device delivery has not been verified.');
+  const handleReconnectDevice = async () => {
+    setSavingDeviceSettings(true);
+    setPushStatus(null);
+    try {
+      await notificationService.reconnectPushDevice();
+      await updateSettings({});
+      setPushStatus('This browser was reconnected for your signed-in member. Closed-app receipt is still unverified.');
+    } catch (error) {
+      setPushStatus(error instanceof Error ? error.message : 'Could not reconnect this device.');
+    } finally { setSavingDeviceSettings(false); }
   };
 
   const handleSendPushTest = async () => {
@@ -348,10 +364,15 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
     setPushStatus(null);
 
     try {
+      const device = await notificationService.getDeviceDeliveryState();
+      if (!device.subscriptionId) {
+        setPushStatus(device.connection);
+        return;
+      }
       const response = await fetch(`/api/families/${familyId}/push-test`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ subscriptionId: device.subscriptionId }),
       });
       const payload = await response.json().catch(() => ({}));
 
@@ -361,9 +382,15 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
 
       if (payload.sent > 0) {
         notificationService.recordPushAcceptance();
-        setPushStatus(`${payload.sent} push submission${payload.sent === 1 ? '' : 's'} accepted. Check your device; delivery is unverified.`);
+        setPushStatus('Provider accepted a test for this browser only. Receipt is unverified; check the intended phone.');
       } else {
-        setPushStatus('No device subscriptions yet. Enable push on your Android phone first.');
+        const gaps: Record<string, string> = {
+          not_configured: 'Server push is not configured. Contact the administrator.',
+          subscription_expired: 'This device subscription expired. Re-enable push on this phone.',
+          provider_failed: 'The push provider rejected or could not accept the test. Retry later; receipt is unverified.',
+          device_not_registered: 'This device is not registered for your member. Re-enable push on this phone.',
+        };
+        setPushStatus(gaps[payload.status] ?? 'No test was accepted. Recheck this device registration.');
       }
     } catch (error) {
       setPushStatus(error instanceof Error ? error.message : 'Unable to send test notification');
@@ -469,6 +496,7 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
               {deliveryState && <dl className="mb-3 space-y-1 text-xs text-gray-600 dark:text-slate-400">
                 <div><dt className="font-medium">This device</dt><dd>{deliveryState.connection}</dd></div>
                 <div><dt className="font-medium">Last test acceptance</dt><dd>{deliveryState.acceptance}</dd></div>
+                <div><dt className="font-medium">Phone receipt</dt><dd>Not yet verified on your phone lock screen.</dd></div>
               </dl>}
               <div className="space-y-2">
                 <label className="flex items-center">
@@ -486,6 +514,7 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
                   <input
                     type="checkbox"
                     checked={settings.channels.push}
+                    disabled={savingDeviceSettings || sendingPushTest}
                     onChange={(e) => handlePushToggle(e.target.checked)}
                     className="mr-2"
                   />
@@ -508,11 +537,15 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
                 <button
                   type="button"
                   onClick={handleSendPushTest}
-                  disabled={sendingPushTest}
+                  disabled={sendingPushTest || savingDeviceSettings}
                   className="mt-2 inline-flex items-center gap-2 rounded-md bg-[#4c8177] px-3 py-2 text-sm font-medium text-white transition hover:bg-[#3d6f66] disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <Send className="h-4 w-4" />
                   {sendingPushTest ? 'Sending...' : 'Send test notification'}
+                </button>
+                <button type="button" onClick={handleReconnectDevice} disabled={savingDeviceSettings || sendingPushTest}
+                  className="inline-flex min-h-11 items-center gap-2 px-2 text-sm text-teal-700 disabled:opacity-50">
+                  <RefreshCw className="h-4 w-4" />{savingDeviceSettings ? 'Updating device...' : 'Reconnect this device'}
                 </button>
                 {pushStatus && (
                   <p className="text-xs text-gray-600 dark:text-slate-400">{pushStatus}</p>
@@ -656,7 +689,9 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
           </div>
         </div>
       </div>
-      {detailsEvent && <div className="fixed inset-0 z-[110]">
+      {detailsEvent && detailsEvent.metadata?.binCollection ? <BinReminderDetails
+        collection={detailsEvent.metadata.binCollection as { date: string; services: string[]; verified: boolean }}
+        onClose={() => setDetailsEvent(null)} /> : detailsEvent && <div className="fixed inset-0 z-[110]">
         <WorkStatusManager event={detailsEvent} people={people} events={[]} onClose={() => setDetailsEvent(null)}
           onAddWorkEvent={async (draft) => {
             const response = await fetch(`/api/families/${familyId}/events`, {

@@ -4,6 +4,7 @@ import prisma from '@/lib/prisma';
 import { createOAuthClient, decodeGoogleState } from '@/lib/googleCalendarServer';
 
 export const runtime = 'nodejs';
+const scriptJson = (value: unknown) => JSON.stringify(value).replace(/</g, '\\u003c');
 
 const popupResponse = (
   type: 'google_calendar_auth_success' | 'google_calendar_auth_error' | 'gmail_auth_success' | 'gmail_auth_error',
@@ -12,10 +13,15 @@ const popupResponse = (
   new NextResponse(
     `<!doctype html><html><body><script>
       if (window.opener) {
-        window.opener.postMessage(${JSON.stringify({ type, message })}, window.location.origin);
+        window.opener.postMessage(${scriptJson({ type, message })}, window.location.origin);
         window.close();
       } else {
-        document.body.textContent = ${JSON.stringify(message || (type === 'google_calendar_auth_success' ? 'Google Calendar connected.' : type === 'gmail_auth_success' ? 'Gmail connected.' : 'Google connection failed.'))};
+        document.body.textContent = ${scriptJson(message || (type === 'google_calendar_auth_success' ? 'Google Calendar connected.' : type === 'gmail_auth_success' ? 'Gmail connected.' : 'Google connection failed.'))};
+        const back = document.createElement('a');
+        back.href = '/?view=calendar&homeFocus=school';
+        back.textContent = 'Return to Family Hub calendar';
+        document.body.appendChild(document.createElement('br'));
+        document.body.appendChild(back);
       }
     </script></body></html>`,
     { headers: { 'content-type': 'text/html; charset=utf-8' } }

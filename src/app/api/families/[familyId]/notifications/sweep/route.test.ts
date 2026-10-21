@@ -3,6 +3,7 @@ jest.mock('@/lib/prisma', () => ({ __esModule: true, default: {
 } }));
 jest.mock('@/lib/auth-utils', () => ({ requireFamilyAccess: (handler: unknown) => handler }));
 jest.mock('@/lib/webPush', () => ({ sendMemberPushNotification: jest.fn() }));
+jest.mock('@/lib/schoolIntakeServer', () => ({ enrichSavedSchoolEventResponses: async (_family: string, events: unknown[]) => events }));
 jest.mock('@/lib/calendarEventMapping', () => ({ toCalendarEventResponse: (event: unknown) => event }));
 jest.mock('@/lib/familyReminderPlanner', () => ({ travelContext: (event: any) => event.travel }));
 jest.mock('next/server', () => ({ NextResponse: { json: (body: unknown, init?: { status?: number }) => ({ status: init?.status || 200, body }) } }));
@@ -33,6 +34,14 @@ beforeEach(() => {
   (sendMemberPushNotification as jest.Mock).mockResolvedValue({ sent: 1 });
 });
 afterEach(() => jest.useRealTimers());
+
+it('does not remind a parent about a held unconfirmed imported suggestion', async () => {
+  (prisma.calendarEvent.findMany as jest.Mock).mockResolvedValue([event('camp', {
+    metadata: { schoolImportReview: { reason: 'Confirm booking' } },
+  })]);
+  expect((await (POST as any)({}, context, auth)).body).toEqual({ created: 0, pushSent: 0 });
+  expect(prisma.notification.create).not.toHaveBeenCalled();
+});
 
 it('creates silent recipient-scoped event notices and only one catch-up alert', async () => {
   const response = await (POST as any)({}, context, auth);

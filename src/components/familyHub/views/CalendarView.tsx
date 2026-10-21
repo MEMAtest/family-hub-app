@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, ChevronUp, Import, Settings, LayoutGrid, Plus, Loader2, MapPin, Sparkles, AlertTriangle, Clock3, UserRoundCheck } from 'lucide-react';
+import { ChevronDown, ChevronUp, Import, Settings, LayoutGrid, Plus, Loader2, MapPin, Sparkles, AlertTriangle, Clock3, UserRoundCheck, Check } from 'lucide-react';
 import CalendarMain from '@/components/calendar/CalendarMain';
 import CalendarCopilotPanel from '@/components/calendar/CalendarCopilotPanel';
 import { useCalendarContext } from '@/contexts/familyHub/CalendarContext';
@@ -41,6 +41,8 @@ export const CalendarView = () => {
   const [showPresence, setShowPresence] = useState(false);
   const [pendingReview, setPendingReview] = useState<number | null>(null);
   const [pendingReviewEmails, setPendingReviewEmails] = useState<number | null>(null);
+  const [waitingSources, setWaitingSources] = useState(0);
+  const [confirmingSource, setConfirmingSource] = useState<string | null>(null);
   const familyId = useFamilyStore((state) => state.databaseStatus.familyId);
   const { preferences, status: preferenceStatus, update: updatePreference, retry: retryPreferences } = useCalendarPreferences(familyId);
   const [reviewReasons, setReviewReasons] = useState<Record<string, number>>({});
@@ -63,7 +65,7 @@ export const CalendarView = () => {
   const dateKey = formatDateForInput(currentDate);
   const todayKey = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/London' }).format(new Date());
   const upcomingEvents = useMemo(() => expandEvents(
-    events.filter((event) => event.status !== 'cancelled' && !recurringSourceDateWarning(event)),
+    events.filter((event) => event.status !== 'cancelled' && !recurringSourceDateWarning(event) && !event.metadata?.schoolImportReview),
     dateKey,
     addDays(dateKey, 6)
   ).map((occurrence) => ({
@@ -84,15 +86,17 @@ export const CalendarView = () => {
     }
   }, [isEventFormOpen, travelEvent, showPresence]);
   const dateWarnings = events.filter((event) => recurringSourceDateWarning(event));
-  const confirmedDateEvents = useMemo(() => events.filter((event) => !recurringSourceDateWarning(event)), [events]);
+  const sourceWarnings = events.filter(event => event.metadata?.schoolImportReview && event.status !== 'cancelled');
+  const confirmedDateEvents = useMemo(() => events.filter((event) => !recurringSourceDateWarning(event) && !event.metadata?.schoolImportReview), [events]);
   const loadReviewCount = useCallback(async () => {
     if (!familyId) { setPendingReview(null); return; }
     try {
       const response = await fetch(`/api/families/${familyId}/calendar-intake/inbox`);
       if (!response.ok) throw new Error('Inbox unavailable');
       const payload = await response.json();
-      setPendingReview(payload.pendingReviewCount ?? (payload.intakes || []).reduce((count: number, item: { needsReview?: number }) => count + (item.needsReview || 0), 0));
-      setPendingReviewEmails(payload.pendingReviewEmailCount ?? null);
+      setPendingReview(payload.pendingDecisionCount ?? payload.pendingReviewCount ?? (payload.intakes || []).reduce((count: number, item: { needsReview?: number }) => count + (item.needsReview || 0), 0));
+      setPendingReviewEmails(payload.pendingDecisionEmailCount ?? payload.pendingReviewEmailCount ?? null);
+      setWaitingSources(payload.waitingContentCount ?? 0);
       setReviewReasons(payload.reviewReasons ?? {});
     } catch { setPendingReview(null); setPendingReviewEmails(null); }
   }, [familyId]);
@@ -136,7 +140,27 @@ export const CalendarView = () => {
         <button type="button" onClick={openConflictSettings} title="Conflict rules" aria-label="Conflict rules" className="min-h-10 rounded-md border border-gray-200 p-2.5 dark:border-slate-700"><Settings className="h-4 w-4" /></button>
       </div>
     </header>
+    {waitingSources > 0 && <button onClick={openImport} className="min-h-10 px-4 text-left text-xs text-gray-500">{waitingSources} updates waiting for original content · separate from decisions</button>}
     <BinCollectionStrip familyId={familyId} onSynced={refreshEvents} />
+    {sourceWarnings.length > 0 && <section aria-label="Imported plans to confirm" className="border-b border-sky-200 bg-sky-50 px-4 py-2 text-sm dark:bg-sky-950/30"><details>
+      <summary className="min-h-10 cursor-pointer py-2 font-medium">{sourceWarnings.length} imported plan{sourceWarnings.length === 1 ? '' : 's'} need confirmation</summary>
+      {sourceWarnings.map(event => <div key={event.id} className="flex flex-wrap items-center gap-2 border-t border-sky-100 py-3">
+        <div className="min-w-0 flex-1"><strong>{event.title}</strong><p className="text-xs">{event.date} · {String((event.metadata?.schoolImportReview as { reason?: string })?.reason || '')} Held outside your confirmed calendar.</p></div>
+        <button onClick={() => eventEditor.open(event)} className="min-h-11 px-2 text-teal-700 underline">Review details</button>
+        <button disabled={Boolean(confirmingSource)} onClick={async () => {
+          setConfirmingSource(event.id);
+          try {
+            const response = await fetch(`/api/families/${familyId}/calendar-intake/inbox`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'confirm-plan', eventId: event.id, expectedUpdatedAt: new Date(event.updatedAt).toISOString() }),
+            });
+            if (!response.ok) throw new Error('Confirmation failed');
+            await refreshEvents(); toast.success('Plan confirmed');
+          } catch { toast.error('Could not confirm this plan. Please retry.'); }
+          finally { setConfirmingSource(null); }
+        }} className="inline-flex min-h-11 items-center gap-1 px-2 font-medium text-teal-700"><Check className="h-4 w-4" />Confirm my plan</button>
+      </div>)}
+    </details></section>}
     {dateWarnings.length > 0 && <section aria-label="School dates to confirm" className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-200"><details>
       <summary className="cursor-pointer py-1 font-medium">{dateWarnings.length} school date{dateWarnings.length === 1 ? '' : 's'} to confirm</summary>
       {dateWarnings.map((event) => <button key={event.id} onClick={() => eventEditor.open(event)} className="block min-h-10 w-full text-left"><strong>{event.title}: check school date</strong><span className="mt-1 block text-xs">{recurringSourceDateWarning(event)} Held from the calendar until confirmed.</span></button>)}
@@ -145,7 +169,7 @@ export const CalendarView = () => {
     {eventEditor.error && <div role="alert" className="flex items-center gap-3 px-4 py-2 text-sm text-amber-800 dark:text-amber-200"><span>{eventEditor.error}</span><button onClick={eventEditor.retry} className="min-h-11 underline">Retry</button></div>}
     {showImport && <section ref={importRef} className="scroll-mt-4 border-t border-gray-200 dark:border-slate-800" aria-label="School inbox and import">
       {Object.keys(reviewReasons).length > 0 && <p className="px-4 pt-4 text-sm text-gray-600">{Object.entries(reviewReasons).filter(([, count]) => count > 0).map(([reason, count]) => `${count} ${reason}`).join(' · ')}</p>}
-      <CalendarCopilotPanel events={events} tasks={tasks} people={people} currentDate={currentDate} createEvent={createEvent} createTask={createTask} onOpenCalendar={() => setCurrentDate(currentDate)} onEventsImported={refreshPlanning} onInboxChanged={(count, emails) => { setPendingReview(count); setPendingReviewEmails(emails); }} />
+      <CalendarCopilotPanel events={confirmedDateEvents} tasks={tasks} people={people} currentDate={currentDate} createEvent={createEvent} createTask={createTask} onOpenCalendar={() => setCurrentDate(currentDate)} onEventsImported={refreshPlanning} onInboxChanged={(count, emails, waiting) => { setPendingReview(count); setPendingReviewEmails(emails); setWaitingSources(waiting ?? 0); }} />
     </section>}
     <div className="grid min-w-0 gap-5 px-3 py-4 sm:px-5 xl:grid-cols-[minmax(0,1fr)_300px]">
       <div className="min-w-0 overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-slate-800 dark:bg-slate-900">
@@ -173,7 +197,7 @@ export const CalendarView = () => {
             <button type="button" onClick={() => openCreateForm()} className="min-h-10 text-sm font-medium text-gray-500 dark:text-slate-400">Full event options</button>
           </form>
         </section>
-        <UpcomingPlans events={events} tasks={tasks} date={dateKey} people={people} hidden={preferences.hiddenUpcoming} ready={preferenceStatus === 'saved' || preferenceStatus === 'saving'} onPreference={updatePreference} onOpen={eventEditor.open} onComplete={(id, occurrenceDate) => { void toggleTaskComplete(id, undefined, occurrenceDate).catch(() => toast.error('Could not update this reminder.')); }} />
+        <UpcomingPlans events={confirmedDateEvents} tasks={tasks} date={dateKey} people={people} hidden={preferences.hiddenUpcoming} ready={preferenceStatus === 'saved' || preferenceStatus === 'saving'} onPreference={updatePreference} onOpen={eventEditor.open} onComplete={(id, occurrenceDate) => { void toggleTaskComplete(id, undefined, occurrenceDate).catch(() => toast.error('Could not update this reminder.')); }} />
         <section className="order-2 border-t border-gray-200 pt-5 dark:border-slate-800" aria-label="Schedule check">
           <div className="flex items-start justify-between gap-3">
             <div><h3 className="flex items-center gap-2 text-base font-semibold"><Sparkles className="h-5 w-5 text-teal-600" />Schedule check</h3></div>

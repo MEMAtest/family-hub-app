@@ -121,6 +121,46 @@ it('blocks a late reservation after household completion but not a later collect
   expect(await reserveReminderIntent('another-family', { ...planned[1], id: 'another-intent' }, binTime)).toBe(true);
   expect(await reserveReminderIntent('family', { ...planned[1], id: 'next-intent', stateId: 'next-state', occurrence: '2026-10-16' }, binTime)).toBe(true);
 });
+it('keeps skipping a bin collection personal and permits the other parent to complete it', async () => {
+  const binTime = new Date('2026-10-08T19:00:00Z');
+  const event = { ...dbEvent, id: 'bins', eventDate: new Date('2026-10-09'), eventTime: new Date('2026-10-09'),
+    metadata: { binCollection: { date: '2026-10-09', services: ['Food waste'], verified: true } } };
+  (prisma.calendarEvent.findMany as jest.Mock).mockResolvedValue([event]);
+  (prisma.calendarEvent.findFirst as jest.Mock).mockResolvedValue(event);
+  await runFamilyReminderSweep('family', binTime, false);
+  const angela = [...records.values()].find(record => record.recipientPersonId === 'angela');
+  const ade = [...records.values()].find(record => record.recipientPersonId === 'ade');
+  await applyFamilyReminderAction('family', 'angela', angela.id, 'not_needed', undefined, binTime);
+  expect(records.has(binCollectionStateId('family', 'bins', '2026-10-09'))).toBe(false);
+  expect(ade.actionRequired).toBe(true);
+  await applyFamilyReminderAction('family', 'ade', ade.id, 'done', undefined, binTime);
+  expect(records.get(binCollectionStateId('family', 'bins', '2026-10-09')).metadata.actionBy).toBe('ade');
+});
+
+it.each(['done', 'not_needed', 'snooze', 'details'] as const)('rejects stale bin %s actions after household completion', async action => {
+  const binTime = new Date('2026-10-08T19:00:00Z');
+  const event = { ...dbEvent, id: 'bins', eventDate: new Date('2026-10-09'), eventTime: new Date('2026-10-09'),
+    metadata: { binCollection: { date: '2026-10-09', services: ['Food waste'], verified: true } } };
+  (prisma.calendarEvent.findMany as jest.Mock).mockResolvedValue([event]);
+  (prisma.calendarEvent.findFirst as jest.Mock).mockResolvedValue(event);
+  await runFamilyReminderSweep('family', binTime, false);
+  const ade = [...records.values()].find(record => record.recipientPersonId === 'ade');
+  // Model an active row reserved after the other parent's completion transaction read its siblings.
+  records.set(binCollectionStateId('family', 'bins', '2026-10-09'), { metadata: { resolution: 'done', actionBy: 'angela' } });
+  await expect(applyFamilyReminderAction('family', 'ade', ade.id, action, new Date('2026-10-08T20:00:00Z'), binTime))
+    .rejects.toMatchObject({ status: 409 });
+  expect(records.has(ade.metadata.stateId)).toBe(false);
+});
+
+it('confirms pickup cover only for the named coordinator without completing traveller preparation', async () => {
+  await runFamilyReminderSweep('family', now, false);
+  const ade = [...records.values()].find(record => record.recipientPersonId === 'ade');
+  const angela = [...records.values()].find(record => record.recipientPersonId === 'angela');
+  await applyFamilyReminderAction('family', 'ade', ade.id, 'cover', undefined, now);
+  expect(records.get(ade.metadata.stateId).metadata).toMatchObject({ resolution: 'cover', actionBy: 'ade' });
+  expect(angela.actionRequired).toBe(true);
+  expect(records.has(angela.metadata.stateId)).toBe(false);
+});
 it('holds unverified bin sends and resumes after a successful council check', async () => {
   const binTime = new Date('2026-10-08T19:00:00Z');
   const binDb = { ...dbEvent, id: 'bins', eventDate: new Date('2026-10-09'), eventTime: new Date('2026-10-09'),

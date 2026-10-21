@@ -79,6 +79,7 @@ export function GrandirConnection({ familyId, onChanged }: { familyId: string | 
           <p className="mt-1 text-emerald-700 dark:text-emerald-300">Connected for {status.childName}</p>
           <p className="mt-1 break-words text-gray-500">{status.nurseryName}</p>
           <p className="mt-1 text-gray-500">08:00 and 20:00 London time{status.lastSyncAt ? ` · Last successful check ${new Date(status.lastSyncAt).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/London' })}` : ' · First check pending'}</p>
+          {status.backfillProgress && <p className="mt-1 text-gray-500">Earlier posts: {status.backfillProgress.completed ? 'scan complete' : 'scan in progress'} · since {new Date(status.backfillProgress.cutoff).toLocaleDateString('en-GB', { timeZone: 'Europe/London' })}</p>}
         </> : <p className={`mt-1 ${status?.needsReconnect ? 'text-amber-700' : 'text-gray-500'}`}>
           {status?.needsReconnect ? 'Session expired or disconnected. Reconnect to resume nursery intake.' : status ? 'Not connected' : error ? 'Connection not checked' : 'Checking connection...'}</p>}
       </div>

@@ -118,6 +118,26 @@ describe('school intake server trust and source persistence', () => {
     expect(await getSavedSchoolEventMetadata('other-family', event, intake)).toBeNull();
     expect(await getSavedSchoolEventMetadata('family', { ...event, sourceId: 'foreign-intake' }, intake)).toBeNull();
   });
+  it('holds a legacy advertising import until the parent explicitly confirms the plan', async () => {
+    intake.parsedDrafts[0].title = 'Foal Farm Animal Rescue';
+    intake.parsedDrafts[0].source = 'Foal Farm Animal Rescue. Open daily except Tuesday.';
+    const saved = { id: 'outing', sourceId: 'intake', title: 'Foal Farm Animal Rescue',
+      personId: 'amari-id', eventDate: new Date('2026-10-07') };
+    expect(await getSavedSchoolEventMetadata('family', saved, intake)).toMatchObject({
+      schoolImportReview: { reason: expect.stringContaining('advertised activity') },
+    });
+    expect(await getSavedSchoolEventMetadata('family', { ...saved, metadata: { sourcePlanConfirmed: true } }, intake))
+      .toMatchObject({ schoolImportReview: null });
+    expect(saved).not.toHaveProperty('metadata');
+  });
+  it('holds generic legacy fragments without deleting or rewriting the saved event', async () => {
+    intake.parsedDrafts[0].title = 'From';
+    const saved = { id: 'fragment', sourceId: 'intake', title: 'From', personId: 'amari-id', eventDate: new Date('2026-10-07') };
+    expect(await getSavedSchoolEventMetadata('family', saved, intake)).toMatchObject({
+      schoolImportReview: { reason: expect.stringContaining('not an identifiable event') },
+    });
+    expect(saved.title).toBe('From');
+  });
   it('enriches a legacy PTA with no remaining draft without inventing a confirmed attendee', async () => {
     intake.parsedDrafts = [];
     const result = await getSavedSchoolEventMetadata('family', { id: 'pta', sourceId: 'intake', title: 'PTA AGM',

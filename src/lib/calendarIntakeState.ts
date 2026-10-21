@@ -31,15 +31,20 @@ export const findImportedDraftEvent = (familyId: string, intakeId: string, draft
 };
 
 export const calendarIntakeState = (intake: { id: string; familyId: string; status: string; metadata?: unknown },
-  drafts: CalendarImportDraft[], events: any[], eligible: (draft: CalendarImportDraft) => boolean = () => false) => {
+  drafts: CalendarImportDraft[], events: any[], eligible: (draft: CalendarImportDraft) => boolean = () => false,
+  now = new Date()) => {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now).map(part => [part.type, part.value]));
+  const today = `${parts.year}-${parts.month}-${parts.day}`;
   const dismissed = Boolean(schoolMetadata(intake.metadata).schoolDismissed) || ['reviewed', 'reviewed_imported'].includes(intake.status);
   const parsedDrafts = drafts.map((draft, index) => {
     const event = findImportedDraftEvent(intake.familyId, intake.id, draft, index, events);
     const nonEventReason = schoolDraftNonEventReason(draft);
     const heldTime = schoolDraftTimeNeedsReview(draft);
     const unconfirmedOffer = schoolDraftHasUnconfirmedOffer(draft);
+    const expired = !draft.isRecurring && (draft.endDate || draft.date) < today;
     const disposition = event ? 'imported' as const : dismissed ? 'dismissed' as const :
-      nonEventReason ? 'non_event' as const : draft.importStatus === 'duplicate' ? 'duplicate' as const : 'outstanding' as const;
+      nonEventReason ? 'non_event' as const : draft.importStatus === 'duplicate' ? 'duplicate' as const :
+        expired ? 'expired' as const : 'outstanding' as const;
     const offerNeedsReview = unconfirmedOffer && disposition === 'outstanding';
     const warnings = (draft.warnings || []).filter((warning) => warning !== UNCONFIRMED_SCHOOL_OFFER_WARNING);
     if (offerNeedsReview) warnings.push(UNCONFIRMED_SCHOOL_OFFER_WARNING);
@@ -51,6 +56,7 @@ export const calendarIntakeState = (intake: { id: string; familyId: string; stat
       autoProcessEligible: disposition === 'outstanding' && !heldTime && !unconfirmedOffer && eligible(draft) };
   });
   const outstandingDrafts = parsedDrafts.filter((draft) => draft.disposition === 'outstanding');
+  const expiredDraftCount = parsedDrafts.filter((draft) => draft.disposition === 'expired').length;
   const importedDrafts = parsedDrafts.filter((draft) => draft.disposition === 'imported');
   const createdEventIds = Array.from(new Set(events.filter((event) =>
     event.familyId === intake.familyId && event.sourceId === intake.id).map((event) => event.id as string)));
@@ -66,8 +72,10 @@ export const calendarIntakeState = (intake: { id: string; familyId: string; stat
   const needsReview = contentAction || nurseryAction ? Math.max(1, outstandingDraftCount) : outstandingDraftCount;
   const status = dismissed ? intake.status : contentAction ? intake.status :
     outstandingDraftCount || nurseryAction ? createdEventIds.length ? 'partial_review' : 'review_required' :
-      createdEventIds.length ? 'auto_created' : drafts.length ? 'reviewed' : 'no_events';
+      createdEventIds.length ? 'auto_created' : expiredDraftCount ? 'no_events' : drafts.length ? 'reviewed' : 'no_events';
   return { status, parsedDrafts, allParsedDrafts: parsedDrafts, importedDrafts, outstandingDrafts,
+    expiredDraftCount,
+    queue: !actionRequired ? 'reference' as const : contentAction ? 'waiting_content' as const : 'decision' as const,
     referenceDrafts: parsedDrafts.filter((draft) => draft.disposition !== 'outstanding'),
     importedDraftCount: importedDrafts.length, outstandingDraftCount, actionRequired,
     autoProcessEligibleCount: pendingAutoCreate, pendingAutoCreate,

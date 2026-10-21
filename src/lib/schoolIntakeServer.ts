@@ -8,7 +8,7 @@ import { assignSchoolDrafts, initialSchoolRules, resolveSchoolSource, schoolMeta
 import { importDraftToCalendarEventDraft } from '@/utils/calendarImport';
 import { isStewartFlemingSender } from '@/utils/schoolEmail';
 import { isAdultSchoolEvent, schoolEventTitle } from '@/utils/schoolEventPresentation';
-import { schoolDraftNonEventReason, schoolDraftTimeNeedsReview } from '@/lib/schoolIntakeDraftSafety';
+import { schoolDraftHasUnconfirmedOffer, schoolDraftNonEventReason, schoolDraftTimeNeedsReview } from '@/lib/schoolIntakeDraftSafety';
 
 /** Main's events POST uses this for both trusted school mail and ordinary linked intake imports. */
 export type SchoolEventImportInput = {
@@ -128,7 +128,10 @@ const deriveSavedSchoolEventMetadata = (familyId: string, event: SavedSchoolEven
   // A named source attendee must agree with the stored member; a legacy child/default is not attendance evidence.
   const attendance = explicit ? display : trusted.schoolAssignment.attendeePersonId === event.personId
     ? display : { attendeePersonId: null, attendeeStatus: 'needs_confirmation' as const };
-  return { ...trusted, schoolAssignment: { ...trusted.schoolAssignment,
+  const reviewReason = schoolDraftNonEventReason(draft) ? 'The imported title is not an identifiable event. Check the original update.' :
+    schoolDraftHasUnconfirmedOffer(draft) ? 'This looks like an advertised activity. Your booking or attendance has not been confirmed.' : null;
+  return { ...trusted, schoolImportReview: saved.sourcePlanConfirmed === true || !reviewReason ? null : { reason: reviewReason },
+    schoolAssignment: { ...trusted.schoolAssignment,
     ...(explicit ? { basis: 'manual', manualOverride: existingAssignment.manualOverride,
       assignmentOverride: saved.assignmentOverride } : {}), ...attendance } };
 };

@@ -44,6 +44,29 @@ describe('private Grandir session', () => {
     (prisma.familyDocument.findUnique as jest.Mock).mockResolvedValue({ data: { ...session, enabled: 'false' } });
     expect((await loadGrandirSession('family')).session).toBeNull();
   });
+  it('loads old sessions and round-trips a validated paired backfill cursor', async () => {
+    const backfill = { cutoff: '2026-07-09T12:00:00.000Z', cursor: 'post-1',
+      olderThan: '2026-08-01T12:00:00.000Z', completed: false };
+    (prisma.familyDocument.findUnique as jest.Mock).mockResolvedValue({ data: { ...session, backfill } });
+    expect((await loadGrandirSession('family')).session?.backfill).toEqual(backfill);
+    (prisma.familyDocument.findUnique as jest.Mock).mockResolvedValue({ data: session });
+    expect((await loadGrandirSession('family')).session?.enabled).toBe(true);
+    (prisma.familyDocument.findUnique as jest.Mock).mockResolvedValue({ data: { ...session,
+      backfill: { ...backfill, olderThan: null } } });
+    expect((await loadGrandirSession('family')).session).toBeNull();
+  });
+  it('exposes only completion and cutoff for backfill progress', async () => {
+    const backfill = { cutoff: '2026-07-09T12:00:00.000Z', cursor: 'private-provider-post',
+      olderThan: '2026-08-01T12:00:00.000Z', completed: false };
+    (prisma.familyDocument.findUnique as jest.Mock).mockResolvedValue({ data: { ...session, backfill, nextSyncLane: 'historical' } });
+    const status = await grandirStatus('family');
+    expect(status.backfillProgress).toEqual({ completed: false, cutoff: backfill.cutoff });
+    expect(JSON.stringify(status)).not.toContain(backfill.cursor);
+    expect(JSON.stringify(status)).not.toContain(backfill.olderThan);
+    expect(status).not.toHaveProperty('nextSyncLane');
+    (prisma.familyDocument.findUnique as jest.Mock).mockResolvedValue({ data: session });
+    expect((await grandirStatus('family')).backfillProgress).toBeNull();
+  });
   it('never exposes a token or ciphertext and keeps access until the provider revokes it', async () => {
     (prisma.familyDocument.findUnique as jest.Mock).mockResolvedValue({ data: session });
     (prisma.familyMember.findFirst as jest.Mock).mockResolvedValue({ name: 'Askia' });
