@@ -15,6 +15,12 @@ describe('conservative Grandir preview correlation', () => {
     expect(matchGrandirPreviewToPost({ ...preview, receivedAt: '2026-10-25',
       metadata: { gmailInternalDate: String(Date.parse('2026-10-20T23:30:00Z')) } }, [post])).not.toBeNull();
   });
+  it('matches the actual 72-character nursery email preview without fuzzy matching', () => {
+    const email = { ...preview, text: `Staff posted on your Grandir UK wall: "${body.slice(0, 72)}..."` };
+    expect(matchGrandirPreviewToPost(email, [post])).toEqual({ intakeId: 'full', postId: 'post-1' });
+    expect(matchGrandirPreviewToPost(email, [post, { ...post, id: 'second' }])).toBeNull();
+    expect(matchGrandirPreviewToPost({ ...email, text: email.text.replace('children', 'child') }, [post])).toBeNull();
+  });
   it('does not match short, absent, multiple or non-prefix quotes or fuzzy text', () => {
     for (const text of ['posted on your Grandir UK wall: "Short preview..."', body,
       `${preview.text} ${preview.text}`, preview.text!.replace('children', 'child'),

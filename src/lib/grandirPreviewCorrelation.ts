@@ -30,7 +30,7 @@ export function matchGrandirPreviewToPost(
   const internalDate = previewMetadata.gmailInternalDate;
   const date = londonDate(typeof internalDate === 'string' && /^\d+$/.test(internalDate)
     ? new Date(Number(internalDate)) : previewMetadata.sourceDate || preview.receivedAt);
-  if (prefix.length < 80 || !date) return null;
+  if (prefix.length < 64 || !date) return null;
   const matches = new Map<string, { intakeId: string; postId: string }>();
   for (const post of posts) {
     const metadata = schoolMetadata(post.metadata);
