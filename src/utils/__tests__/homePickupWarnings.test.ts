@@ -40,3 +40,13 @@ it('excludes held school import plans from pickup conflicts and cover actions', 
   expect(homePickupWarnings([{ ...trip, metadata: { schoolImportReview: { reason: 'Unconfirmed offer.' } } }], people)).toEqual([]);
   expect(explicitCoverReminder({ ...trip, metadata: { schoolImportReview: { reason: 'Unconfirmed offer.' } } }, [notification], now)).toBeUndefined();
 });
+it('expands a recurring pickup from its original date into the upcoming week', () => {
+  const weekly = { date: '2026-09-04', recurring: 'weekly' as const, isRecurring: true };
+  const warnings = homePickupWarnings([
+    event({ ...weekly, workStatus: { type: 'office', affectsPickup: false } }),
+    event({ ...weekly, id: 'pickup', title: 'School pickup', time: '15:00', duration: 15, type: 'education' }),
+  ], people, '2026-10-09');
+  expect(warnings).toHaveLength(1);
+  expect(warnings[0]).toMatchObject({ kind: 'availability', occurrenceDate: '2026-10-09',
+    relatedEventIds: ['office', 'pickup'] });
+});

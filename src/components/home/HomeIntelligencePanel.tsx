@@ -138,13 +138,13 @@ export const HomeIntelligencePanel = ({ defaultFilter = 'all', compact = false }
     maintenance: activeSignals.filter((signal) => signal.area === 'maintenance').length,
     exceptions: activeSignals.filter((signal) => signal.kind === 'exception').length,
   }), [activeSignals]);
-  const pickupWarnings = useMemo(() => homePickupWarnings(events.filter(event => event.date >= today && event.date <=
-    new Date(new Date(`${today}T12:00:00Z`).getTime() + 7 * 86_400_000).toISOString().slice(0, 10)),
-    members.map(member => ({ ...member, role: String(member.role ?? '') }))), [events, members, today]);
+  const pickupWarnings = useMemo(() => homePickupWarnings(events,
+    members.map(member => ({ ...member, role: String(member.role ?? '') })), today), [events, members, today]);
 
-  const openEvent = (id: string) => {
+  const openEvent = (id: string, occurrenceDate?: string) => {
     const event = events.find(item => item.id === id);
-    if (event) { setView('calendar'); openEditForm(event); }
+    if (event) { setView('calendar'); openEditForm(occurrenceDate && event.isRecurring ? { ...event, date: occurrenceDate,
+      occurrenceDate, seriesStartDate: event.isRecurring ? event.date : undefined } : event); }
   };
 
   const actOnCover = async (notificationId: string, action: 'cover' | 'snooze') => {
@@ -203,9 +203,9 @@ export const HomeIntelligencePanel = ({ defaultFilter = 'all', compact = false }
       const linked = (warning.relatedEventIds ?? [warning.eventId]).flatMap(id => events.filter(event => event.id === id));
       return <article key={warning.id} className="mt-3 border-l-4 border-amber-500 bg-amber-50 p-3 dark:bg-amber-950/30">
         <h3 className="text-sm font-semibold">{warning.title}</h3><p className="mt-1 text-sm">{warning.detail}</p>
-        <div className="mt-2 flex flex-wrap gap-3">{linked.map(event => <button key={event.id} type="button" onClick={() => openEvent(event.id)} className="min-h-10 text-sm font-semibold text-teal-700 dark:text-teal-300">{event.title}<ArrowRight className="ml-1 inline h-4 w-4" /></button>)}</div>
+        <div className="mt-2 flex flex-wrap gap-3">{linked.map(event => <button key={event.id} type="button" onClick={() => openEvent(event.id, warning.occurrenceDate)} className="min-h-10 text-sm font-semibold text-teal-700 dark:text-teal-300">{event.title}<ArrowRight className="ml-1 inline h-4 w-4" /></button>)}</div>
         {linked.map(event => {
-          const reminder = explicitCoverReminder(event, notifications, clock);
+          const reminder = explicitCoverReminder({ ...event, occurrenceDate: warning.occurrenceDate }, notifications, clock);
           return reminder ? <div key={reminder.id} className="flex flex-wrap gap-3">
             <button type="button" disabled={!!busyAction} onClick={() => void actOnCover(reminder.id, 'cover')} className="min-h-10 text-sm font-semibold text-teal-700 dark:text-teal-300"><Check className="mr-1 inline h-4 w-4" />Confirm cover</button>
             <button type="button" disabled={!!busyAction} onClick={() => void actOnCover(reminder.id, 'snooze')} className="min-h-10 text-sm font-semibold text-teal-700 dark:text-teal-300"><Clock className="mr-1 inline h-4 w-4" />Snooze cover reminder</button>
