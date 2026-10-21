@@ -75,7 +75,7 @@ describe('Grandir intake', () => {
     const second = { ...notice, feedItemId: 'post-2', body: 'Next week is Book of the Week. Please bring a favourite book.' };
     (readGrandirFeed as jest.Mock).mockResolvedValueOnce([notice]).mockResolvedValueOnce([second]).mockResolvedValue([second]);
     expect(await syncGrandirIntake('family')).toMatchObject({ processed: 2 });
-    expect(readGrandirFeed).toHaveBeenNthCalledWith(2, 'opaque-test-session', notice.feedItemId, notice.createdDate);
+    expect(readGrandirFeed).toHaveBeenNthCalledWith(2, 'opaque-test-session', notice.feedItemId, new Date(notice.createdDate).toISOString());
     expect(ingestCalendarEmailPayload).toHaveBeenLastCalledWith(expect.anything(), expect.objectContaining({ referenceOnly: true,
       nurserySummary: expect.objectContaining({ kind: 'preparation', title: 'Book of the Week' }) }));
   });
@@ -84,6 +84,12 @@ describe('Grandir intake', () => {
     await syncGrandirIntake('family');
     expect(ingestCalendarEmailPayload).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
       referenceOnly: true, contentPending: true, nurserySummary: expect.objectContaining({ kind: 'content_pending' }) }));
+  });
+  it('uses the portal-observed canonical ISO clock for the next page', async () => {
+    const offsetNotice = { ...notice, createdDate: '2026-10-06T12:00:00+00:00' };
+    (readGrandirFeed as jest.Mock).mockResolvedValueOnce([offsetNotice]).mockResolvedValue([]);
+    await syncGrandirIntake('family');
+    expect(readGrandirFeed).toHaveBeenNthCalledWith(2, 'opaque-test-session', notice.feedItemId, '2026-10-06T12:00:00.000Z');
   });
   it('excludes notices outside the recent history window', async () => {
     (readGrandirFeed as jest.Mock).mockResolvedValue([{ ...notice, createdDate: '2026-01-01T12:00:00Z' }]);

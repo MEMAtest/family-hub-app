@@ -121,7 +121,7 @@ export async function syncGrandirIntake(familyId: string): Promise<GrandirSyncRe
           }
           laneSeen.add(item.feedItemId);
           cursor = item.feedItemId;
-          olderThan = item.createdDate;
+          olderThan = new Date(createdAt).toISOString();
           advanced = true;
           if (historical) {
             backfill.cursor = cursor;
