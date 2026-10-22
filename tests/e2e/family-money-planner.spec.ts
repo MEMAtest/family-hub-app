@@ -201,6 +201,7 @@ async function setup(page: Page) {
   });
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/?view=budget");
+  await openMonthlyReview(page);
   await expect(
     page.getByRole("heading", { name: "Where your money went" }),
   ).toBeVisible({ timeout: 25_000 });
@@ -219,6 +220,12 @@ async function setup(page: Page) {
       failSave = value;
     },
   };
+}
+
+async function openMonthlyReview(page: Page) {
+  await page.getByText(/^Monthly review ·/).click();
+  await expect(page.getByRole('heading', { name: 'Where your money went' })).toBeVisible();
+  await page.getByText('Optional patterns and savings scenarios', { exact: true }).click();
 }
 
 test("planner compares three months, identifies pressure without invented savings, and retains household targets", async ({
@@ -266,6 +273,7 @@ test("planner compares three months, identifies pressure without invented saving
   ).toBeVisible();
   expect(fixture.preferences.targets.Groceries.amount).toBe(100);
   await page.reload();
+  await openMonthlyReview(page);
   await expect(
     page.getByText("Groceries · £100.00 monthly target"),
   ).toBeVisible();
@@ -276,6 +284,7 @@ test("planner compares three months, identifies pressure without invented saving
     page.getByText("Several grocery payment dates", { exact: true }),
   ).not.toBeVisible();
   await page.reload();
+  await openMonthlyReview(page);
   await expect(
     page.getByText("Groceries · £100.00 monthly target"),
   ).toBeVisible();
@@ -344,6 +353,7 @@ test("payment review remembers exact account-scoped choices and failed saves pre
   ).toEqual({ category: "Housing", kind: "spend" });
   expect(rows.find((row) => row.id === "unknown")?.amount).toBe(900);
   await page.reload();
+  await openMonthlyReview(page);
   await page.getByLabel("Search planner payments").fill("Monthly payment");
   await expect(
     page.getByText(/Housing · Confirmed by household/),
@@ -368,6 +378,7 @@ test("partial and unavailable months do not invent comparisons, targets or stale
   await expect(
     page.getByText("October 2026 · Partial imported month"),
   ).toBeVisible();
+  await page.getByText("Optional patterns and savings scenarios", { exact: true }).click();
   await expect(
     page
       .getByRole("region", { name: "Three-month category comparison" })

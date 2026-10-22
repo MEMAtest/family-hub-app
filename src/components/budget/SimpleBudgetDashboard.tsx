@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useFamilyStore } from '@/store/familyStore';
 import {
   DollarSign,
@@ -37,6 +37,7 @@ import BudgetCalculator from './BudgetCalculator';
 import { ActualCashFlowPanel } from './ActualCashFlowPanel';
 import { IncomeForecastPanel } from './IncomeForecastPanel';
 import { FamilyMoneyPlanner } from './FamilyMoneyPlanner';
+import { RecentSpending } from './RecentSpending';
 import databaseService from '@/services/databaseService';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { filterExpenses, filterIncome } from '@/utils/budgetFilters';
@@ -90,6 +91,8 @@ const SimpleBudgetDashboard: React.FC = () => {
   const [plansReloadKey, setPlansReloadKey] = useState(0);
   const [plansFamilyId, setPlansFamilyId] = useState<string | null>(null);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [monthlyOpen, setMonthlyOpen] = useState(false);
+  const monthlyRef = useRef<HTMLDetailsElement>(null);
 
   // Month/Year navigation state
   const [selectedMonth, setSelectedMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1).getMonth() + 1);
@@ -534,7 +537,7 @@ const SimpleBudgetDashboard: React.FC = () => {
         </div>
       </div>
       {/* Month Navigation */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between" style={{ display: budgetMode === 'overview' ? 'none' : undefined }}>
         <button
           onClick={goToPreviousMonth}
           aria-label="Previous month"
@@ -680,7 +683,7 @@ const SimpleBudgetDashboard: React.FC = () => {
           <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
             <div>
               <h1 className="text-2xl font-semibold text-gray-900 dark:text-slate-100 mb-2">Family Money Planner</h1>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3" style={{ display: budgetMode === 'overview' ? 'none' : undefined }}>
                 <button
                   onClick={goToPreviousMonth}
                   className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
@@ -800,7 +803,21 @@ const SimpleBudgetDashboard: React.FC = () => {
       </div>
 
       {budgetMode === 'overview' && <>
-        <FamilyMoneyPlanner familyId={familyId} month={`${selectedYear}-${String(selectedMonth).padStart(2, '0')}`} refreshKey={cashFlowRefreshKey} />
+        <RecentSpending familyId={familyId} refreshKey={cashFlowRefreshKey} onReviewMonth={month => {
+          setSelectedYear(Number(month.slice(0, 4))); setSelectedMonth(Number(month.slice(5, 7))); setMonthlyOpen(true);
+          requestAnimationFrame(() => monthlyRef.current?.scrollIntoView({ block: 'start' }));
+        }} />
+        <details ref={monthlyRef} open={monthlyOpen} onToggle={event => setMonthlyOpen(event.currentTarget.open)} className="mt-5 scroll-mt-40 border-y border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+          <summary className="min-h-12 cursor-pointer px-4 py-3 text-sm font-semibold">Monthly review · {getMonthName(selectedMonth)} {selectedYear}</summary>
+          {monthlyOpen && <>
+            <div className="flex flex-wrap items-center justify-between gap-2 border-y border-slate-200 px-4 py-2 dark:border-slate-700">
+              <button type="button" onClick={goToPreviousMonth} className="min-h-11 rounded-md p-3" aria-label="Previous month" title="Previous month"><ChevronLeft className="h-4 w-4" /></button>
+              <span className="text-sm font-medium">{getMonthName(selectedMonth)} {selectedYear}</span>
+              <button type="button" onClick={goToNextMonth} className="min-h-11 rounded-md p-3" aria-label="Next month" title="Next month"><ChevronRight className="h-4 w-4" /></button>
+            </div>
+            <FamilyMoneyPlanner familyId={familyId} month={`${selectedYear}-${String(selectedMonth).padStart(2, '0')}`} refreshKey={cashFlowRefreshKey} onPreferencesChanged={() => setCashFlowRefreshKey(value => value + 1)} />
+          </>}
+        </details>
         <details className="mt-5 border-y border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900"><summary className="min-h-10 cursor-pointer text-sm font-semibold">Expected money and longer-term plans</summary><IncomeForecastPanel familyId={familyId} refreshKey={cashFlowRefreshKey} onPlanIncome={() => { setEditingIncome(null); setShowAddIncome(true); }} /></details>
       </>}
       {budgetMode === 'source' && <ActualCashFlowPanel familyId={familyId} month={`${selectedYear}-${String(selectedMonth).padStart(2, '0')}`} refreshKey={cashFlowRefreshKey} />}

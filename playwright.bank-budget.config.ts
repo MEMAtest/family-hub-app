@@ -1,6 +1,6 @@
 import { defineConfig } from '@playwright/test';
 export default defineConfig({
-  testDir: './tests/e2e', testMatch: ['budget-truth-and-review.spec.ts', 'family-money-planner.spec.ts'], workers: 1, timeout: 60_000,
+  testDir: './tests/e2e', testMatch: ['budget-truth-and-review.spec.ts', 'family-money-planner.spec.ts', 'recent-spending.spec.ts'], workers: 1, timeout: 60_000,
   use: { baseURL: 'http://127.0.0.1:3212', headless: true, screenshot: 'only-on-failure', trace: 'off', video: 'off' },
   outputDir: 'output/bank-budget-tests',
   webServer: {

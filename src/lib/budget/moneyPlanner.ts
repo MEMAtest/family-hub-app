@@ -130,6 +130,12 @@ const classify = (row: MoneyRow, preferences: MoneyPreferences, key: string) => 
   return { ...selected, source, reason };
 };
 
+export const classifyMoneyTransaction = (row: MoneyRow, preferences: MoneyPreferences): MoneyReport['transactions'][number] => {
+  const merchantKey = moneyMerchantKey(row.accountId, row.description);
+  const result = classify(row, preferences, merchantKey);
+  return { ...row, category: result.category, kind: result.kind, assignmentSource: result.source, reason: result.reason, merchantKey };
+};
+
 const accountCoverage = (month: string, accountIds: string[], imports: MoneyImport[], rows: Array<{ accountId: string; transactionDate: string }> = []) => {
   const { start, end } = monthBounds(month);
   if (!accountIds.length) return 'none' as const;
@@ -186,9 +192,7 @@ export function buildMoneyReport(input: { month: string; now?: string; accountId
     const date = strictDate(row.transactionDate);
     if (!date || date < rangeStart || date > rangeEnd || !input.accountIds.includes(row.accountId)
       || !Number.isFinite(row.amount) || row.amount < 0) return [];
-    const key = moneyMerchantKey(row.accountId, row.description);
-    const result = classify(row, input.preferences, key);
-    return [{ ...row, transactionDate: date, category: result.category, kind: result.kind, assignmentSource: result.source, reason: result.reason, merchantKey: key, pence: cents(row.amount) }];
+    return [{ ...classifyMoneyTransaction({ ...row, transactionDate: date }, input.preferences), pence: cents(row.amount) }];
   });
   const coverageAt = (key: string) => {
     const coverage = accountCoverage(key, input.accountIds, input.imports, rows);

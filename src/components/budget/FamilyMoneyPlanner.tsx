@@ -38,7 +38,12 @@ type PlannerData = {
   preferences: MoneyPreferences;
   accounts: Array<{ id: string; name: string }>;
 };
-type Props = { familyId: string | null; month: string; refreshKey?: number };
+type Props = {
+  familyId: string | null;
+  month: string;
+  refreshKey?: number;
+  onPreferencesChanged?: () => void;
+};
 const money = (value: number | null | undefined) =>
   typeof value === "number" ? cashFlowMoney(value) : "Unavailable";
 const shortMonth = (value: string) =>
@@ -52,7 +57,12 @@ const button =
   "inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-slate-300 px-3 py-2 text-sm font-medium disabled:opacity-50 dark:border-slate-700";
 const colors = ["#a8b0b8", "#4178b5", "#147c72"];
 
-export function FamilyMoneyPlanner({ familyId, month, refreshKey = 0 }: Props) {
+export function FamilyMoneyPlanner({
+  familyId,
+  month,
+  refreshKey = 0,
+  onPreferencesChanged,
+}: Props) {
   const [result, setResult] = useState<{
     scope: string;
     data: PlannerData;
@@ -70,6 +80,7 @@ export function FamilyMoneyPlanner({ familyId, month, refreshKey = 0 }: Props) {
   const [applyGroup, setApplyGroup] = useState(true);
   const [targetCategory, setTargetCategory] = useState("");
   const [targetAmount, setTargetAmount] = useState("");
+  const [showPlanning, setShowPlanning] = useState(false);
   const scope = `${familyId ?? ""}:${month}`;
   const activeScope = useRef(scope);
   const paymentsRef = useRef<HTMLElement>(null);
@@ -147,6 +158,7 @@ export function FamilyMoneyPlanner({ familyId, month, refreshKey = 0 }: Props) {
   useEffect(() => {
     setNotice("");
     setSaving(false);
+    setShowPlanning(false);
   }, [scope]);
 
   async function save(action: Record<string, unknown>, message: string) {
@@ -168,6 +180,7 @@ export function FamilyMoneyPlanner({ familyId, month, refreshKey = 0 }: Props) {
         throw new Error(value.error || "Your change could not be saved.");
       setNotice(message);
       setRevision((value) => value + 1);
+      onPreferencesChanged?.();
     } catch (reason) {
       if (activeScope.current === scope)
         setNotice(
@@ -486,253 +499,264 @@ export function FamilyMoneyPlanner({ familyId, month, refreshKey = 0 }: Props) {
             )}
           </section>
 
-          <section
-            aria-label="Spending insights"
-            className="mt-6 border-t border-slate-200 pt-5 dark:border-slate-700"
-          >
-            <h3 className="text-base font-semibold">Patterns worth a look</h3>
-            {!report.insights.length && (
-              <p className="py-4 text-sm text-slate-500">
-                No supported patterns to flag for this month. Unclear payments
-                are not being turned into savings claims.
-              </p>
-            )}
-            <div className="divide-y divide-slate-100 dark:divide-slate-800">
-              {report.insights.map((insight) => (
-                <article key={insight.id} className="py-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <h4 className="text-sm font-semibold">{insight.title}</h4>
-                      <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-                        {insight.detail}
-                      </p>
-                    </div>
-                    <button
-                      className="shrink-0 p-2 text-slate-500"
-                      type="button"
-                      title="Not relevant"
-                      aria-label={`Dismiss ${insight.title}`}
-                      disabled={saving}
-                      onClick={() =>
-                        void save(
-                          { action: "dismiss", insightId: insight.id },
-                          "Insight hidden for this household.",
-                        )
-                      }
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {insight.type === "shopping" && (
-                      <a className={button} href="/?view=shopping">
-                        <ShoppingCart className="h-4 w-4" />
-                        Plan next shop
-                      </a>
-                    )}
-                    {insight.category &&
-                      availableTargetCategories.some(
-                        (item) => item.category === insight.category,
-                      ) && (
-                        <button
-                          type="button"
-                          className={button}
-                          onClick={() => {
-                            setTargetCategory(insight.category!);
-                            setTargetAmount("");
-                          }}
-                        >
-                          <Target className="h-4 w-4" />
-                          Set a target
-                        </button>
-                      )}
-                  </div>
-                </article>
-              ))}
-            </div>
-            {data.preferences.dismissed.length > 0 && (
-              <details className="py-3 text-xs text-slate-500">
-                <summary className="cursor-pointer">
-                  Hidden insights ({data.preferences.dismissed.length})
-                </summary>
-                <div className="flex flex-wrap gap-2 pt-2">
-                  {data.preferences.dismissed.map((id, index) => (
-                    <button
-                      key={id}
-                      type="button"
-                      className={button}
-                      disabled={saving}
-                      onClick={() =>
-                        void save(
-                          { action: "restore", insightId: id },
-                          "Insight restored.",
-                        )
-                      }
-                    >
-                      Restore insight {index + 1}
-                    </button>
-                  ))}
-                </div>
-              </details>
-            )}
-          </section>
-
-          <section
-            aria-label="Savings scenarios"
-            className="mt-6 border-t border-slate-200 pt-5 dark:border-slate-700"
-          >
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <h3 className="text-base font-semibold">What could we change?</h3>
-              <button
-                type="button"
-                className={button}
-                disabled={!availableTargetCategories.length}
-                onClick={() => {
-                  setTargetCategory(
-                    availableTargetCategories[0]?.category ?? "",
-                  );
-                  setTargetAmount("");
-                }}
-              >
-                <Target className="h-4 w-4" />
-                Set spending target
-              </button>
-            </div>
-            <p className="mt-2 text-xs text-slate-500">
-              Targets are scenarios, not guaranteed savings. Lower spending later
-              does not prove that a target caused it.
-            </p>
-            {report.targets.length > 0 && (
-              <p className="mt-3 text-lg font-semibold">
-                {money(
-                  report.targets.reduce(
-                    (total, target) => total + target.potentialSaving,
-                    0,
-                  ),
-                )}{" "}
-                potential monthly reduction{" "}
-                <span className="text-xs font-normal text-slate-500">
-                  · your saved target scenarios, not money already saved
-                </span>
-              </p>
-            )}
-            {!availableTargetCategories.length && (
-              <p className="mt-2 text-xs text-slate-500">
-                Choose a finished month with complete bank coverage and
-                categorised spending to set a baseline.
-              </p>
-            )}
-            {targetCategory && (
-              <form
-                aria-label="Set category target"
-                className="mt-4 grid gap-3 border-y border-slate-200 py-4 sm:grid-cols-2"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  if (targetAmount.trim() !== "")
-                    void save(
-                      {
-                        action: "target",
-                        category: targetCategory,
-                        amount: Number(targetAmount),
-                        month,
-                      },
-                      "Target saved across your household devices.",
-                    );
-                }}
-              >
-                <label className="text-xs font-medium">
-                  Category
-                  <select
-                    className={`${field} mt-1`}
-                    value={targetCategory}
-                    onChange={(event) => setTargetCategory(event.target.value)}
-                  >
-                    {availableTargetCategories.map((item) => (
-                      <option key={item.category}>{item.category}</option>
-                    ))}
-                  </select>
-                </label>
-                <label className="text-xs font-medium">
-                  Monthly target (£)
-                  <input
-                    className={`${field} mt-1`}
-                    aria-label="Monthly target amount"
-                    required
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    max={targetBaseline}
-                    value={targetAmount}
-                    onChange={(event) => setTargetAmount(event.target.value)}
-                  />
-                </label>
-                <p className="text-sm">
-                  Baseline {money(targetBaseline)} in {cashFlowMonth(month)}.
-                  Potential reduction:{" "}
-                  {targetAmount.trim() && Number.isFinite(Number(targetAmount))
-                    ? money(
-                        Math.max(
-                          0,
-                          (targetBaseline ?? 0) - Number(targetAmount),
-                        ),
-                      )
-                    : "Choose a target"}
-                  .
+          <details open={showPlanning} onToggle={event => setShowPlanning(event.currentTarget.open)} className="mt-6 border-t border-slate-200 pt-3 dark:border-slate-700">
+            <summary className="min-h-11 cursor-pointer py-2 text-sm font-semibold">
+              Optional patterns and savings scenarios
+            </summary>
+            <section
+              aria-label="Spending insights"
+              className="mt-6 border-t border-slate-200 pt-5 dark:border-slate-700"
+            >
+              <h3 className="text-base font-semibold">Patterns worth a look</h3>
+              {!report.insights.length && (
+                <p className="py-4 text-sm text-slate-500">
+                  No supported patterns to flag for this month. Unclear payments
+                  are not being turned into savings claims.
                 </p>
-                <div className="flex flex-wrap gap-2 sm:justify-end">
-                  <button
-                    type="button"
-                    className={button}
-                    onClick={() => setTargetCategory("")}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    disabled={saving}
-                    className={`${button} bg-teal-700 text-white`}
-                    type="submit"
-                  >
-                    {saving ? "Saving..." : "Save target"}
-                  </button>
-                </div>
-              </form>
-            )}
-            {report.targets.map((target) => (
-              <div
-                key={target.category}
-                className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 py-4 dark:border-slate-800"
-              >
-                <div>
-                  <p className="text-sm font-semibold">
-                    {target.category} · {money(target.amount)} monthly target
-                  </p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    Potential reduction {money(target.potentialSaving)} against{" "}
-                    {cashFlowMonth(target.baselineMonth)} (
-                    {money(target.baselineAmount)}).{" "}
-                    {target.observedReduction === null
-                      ? "A later complete month with a matching category baseline is needed to compare."
-                      : `${money(target.observedReduction)} lower spending observed; not a verified saving.`}
-                  </p>
-                </div>
+              )}
+              <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                {report.insights.map((insight) => (
+                  <article key={insight.id} className="py-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <h4 className="text-sm font-semibold">
+                          {insight.title}
+                        </h4>
+                        <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+                          {insight.detail}
+                        </p>
+                      </div>
+                      <button
+                        className="shrink-0 p-2 text-slate-500"
+                        type="button"
+                        title="Not relevant"
+                        aria-label={`Dismiss ${insight.title}`}
+                        disabled={saving}
+                        onClick={() =>
+                          void save(
+                            { action: "dismiss", insightId: insight.id },
+                            "Insight hidden for this household.",
+                          )
+                        }
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {insight.type === "shopping" && (
+                        <a className={button} href="/?view=shopping">
+                          <ShoppingCart className="h-4 w-4" />
+                          Plan next shop
+                        </a>
+                      )}
+                      {insight.category &&
+                        availableTargetCategories.some(
+                          (item) => item.category === insight.category,
+                        ) && (
+                          <button
+                            type="button"
+                            className={button}
+                            onClick={() => {
+                              setTargetCategory(insight.category!);
+                              setTargetAmount("");
+                            }}
+                          >
+                            <Target className="h-4 w-4" />
+                            Set a target
+                          </button>
+                        )}
+                    </div>
+                  </article>
+                ))}
+              </div>
+              {data.preferences.dismissed.length > 0 && (
+                <details className="py-3 text-xs text-slate-500">
+                  <summary className="cursor-pointer">
+                    Hidden insights ({data.preferences.dismissed.length})
+                  </summary>
+                  <div className="flex flex-wrap gap-2 pt-2">
+                    {data.preferences.dismissed.map((id, index) => (
+                      <button
+                        key={id}
+                        type="button"
+                        className={button}
+                        disabled={saving}
+                        onClick={() =>
+                          void save(
+                            { action: "restore", insightId: id },
+                            "Insight restored.",
+                          )
+                        }
+                      >
+                        Restore insight {index + 1}
+                      </button>
+                    ))}
+                  </div>
+                </details>
+              )}
+            </section>
+
+            <section
+              aria-label="Savings scenarios"
+              className="mt-6 border-t border-slate-200 pt-5 dark:border-slate-700"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h3 className="text-base font-semibold">
+                  What could we change?
+                </h3>
                 <button
                   type="button"
                   className={button}
-                  disabled={saving}
-                  onClick={() =>
-                    void save(
-                      { action: "remove-target", category: target.category },
-                      "Target removed. Bank activity is unchanged.",
-                    )
-                  }
-                  aria-label={`Remove ${target.category} target`}
+                  disabled={!availableTargetCategories.length}
+                  onClick={() => {
+                    setTargetCategory(
+                      availableTargetCategories[0]?.category ?? "",
+                    );
+                    setTargetAmount("");
+                  }}
                 >
-                  <X className="h-4 w-4" />
+                  <Target className="h-4 w-4" />
+                  Set spending target
                 </button>
               </div>
-            ))}
-          </section>
-
+              <p className="mt-2 text-xs text-slate-500">
+                Targets are scenarios, not guaranteed savings. Lower spending
+                later does not prove that a target caused it.
+              </p>
+              {report.targets.length > 0 && (
+                <p className="mt-3 text-lg font-semibold">
+                  {money(
+                    report.targets.reduce(
+                      (total, target) => total + target.potentialSaving,
+                      0,
+                    ),
+                  )}{" "}
+                  potential monthly reduction{" "}
+                  <span className="text-xs font-normal text-slate-500">
+                    · your saved target scenarios, not money already saved
+                  </span>
+                </p>
+              )}
+              {!availableTargetCategories.length && (
+                <p className="mt-2 text-xs text-slate-500">
+                  Choose a finished month with complete bank coverage and
+                  categorised spending to set a baseline.
+                </p>
+              )}
+              {targetCategory && (
+                <form
+                  aria-label="Set category target"
+                  className="mt-4 grid gap-3 border-y border-slate-200 py-4 sm:grid-cols-2"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    if (targetAmount.trim() !== "")
+                      void save(
+                        {
+                          action: "target",
+                          category: targetCategory,
+                          amount: Number(targetAmount),
+                          month,
+                        },
+                        "Target saved across your household devices.",
+                      );
+                  }}
+                >
+                  <label className="text-xs font-medium">
+                    Category
+                    <select
+                      className={`${field} mt-1`}
+                      value={targetCategory}
+                      onChange={(event) =>
+                        setTargetCategory(event.target.value)
+                      }
+                    >
+                      {availableTargetCategories.map((item) => (
+                        <option key={item.category}>{item.category}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="text-xs font-medium">
+                    Monthly target (£)
+                    <input
+                      className={`${field} mt-1`}
+                      aria-label="Monthly target amount"
+                      required
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      max={targetBaseline}
+                      value={targetAmount}
+                      onChange={(event) => setTargetAmount(event.target.value)}
+                    />
+                  </label>
+                  <p className="text-sm">
+                    Baseline {money(targetBaseline)} in {cashFlowMonth(month)}.
+                    Potential reduction:{" "}
+                    {targetAmount.trim() &&
+                    Number.isFinite(Number(targetAmount))
+                      ? money(
+                          Math.max(
+                            0,
+                            (targetBaseline ?? 0) - Number(targetAmount),
+                          ),
+                        )
+                      : "Choose a target"}
+                    .
+                  </p>
+                  <div className="flex flex-wrap gap-2 sm:justify-end">
+                    <button
+                      type="button"
+                      className={button}
+                      onClick={() => setTargetCategory("")}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      disabled={saving}
+                      className={`${button} bg-teal-700 text-white`}
+                      type="submit"
+                    >
+                      {saving ? "Saving..." : "Save target"}
+                    </button>
+                  </div>
+                </form>
+              )}
+              {report.targets.map((target) => (
+                <div
+                  key={target.category}
+                  className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 py-4 dark:border-slate-800"
+                >
+                  <div>
+                    <p className="text-sm font-semibold">
+                      {target.category} · {money(target.amount)} monthly target
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Potential reduction {money(target.potentialSaving)}{" "}
+                      against {cashFlowMonth(target.baselineMonth)} (
+                      {money(target.baselineAmount)}).{" "}
+                      {target.observedReduction === null
+                        ? "A later complete month with a matching category baseline is needed to compare."
+                        : `${money(target.observedReduction)} lower spending observed; not a verified saving.`}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className={button}
+                    disabled={saving}
+                    onClick={() =>
+                      void save(
+                        { action: "remove-target", category: target.category },
+                        "Target removed. Bank activity is unchanged.",
+                      )
+                    }
+                    aria-label={`Remove ${target.category} target`}
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ))}
+            </section>
+          </details>
           <section
             aria-label="Review payments"
             ref={paymentsRef}

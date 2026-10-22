@@ -1,9 +1,30 @@
 # Family Money Planner
 
-The Money screen opens on the last finished calendar month. Its selected month
-and tab are retained in moneyMonth and moneyView URL parameters. Existing budget
-URLs remain compatible. Saved income/bill plans and the raw bank source stay
-separate from category analysis.
+The Money screen opens on recorded spending in the last 30 calendar days,
+including today in Europe/London. The period selector supports 7, 14, 30 and 90
+days, or a custom integer from 1 to 365. Exact dates and imported coverage stay
+visible. The selection is retained in the moneyDays URL parameter.
+
+Monthly review is collapsed below the recent view and defaults to the last
+finished calendar month. Its selected month and tab are retained in moneyMonth
+and moneyView URL parameters. Existing budget URLs remain compatible. Saved
+income/bill plans, optional savings scenarios and the raw bank source stay
+separate from recorded spending. Savings tools are collapsed by default.
+
+## Recent Spending
+
+The read-only recent-spending endpoint loads only the requested window and its
+immediately preceding equal-length comparison window, scoped to the current
+household's active GBP accounts. It returns current-window payment rows only.
+It shares category classification and household corrections with monthly review.
+
+Recorded money out is the headline, with identified spending, payments whose
+purpose needs checking and transfers shown separately. Integer-pence totals
+avoid rounding drift. Calendar-day arithmetic is independent of daylight saving.
+Coverage must include every active account for every requested day. Partial
+totals remain visible with warnings, unavailable totals are null, and a covered
+day without activity is zero. Prior-period comparisons are suppressed unless
+both complete windows are covered. Monthly corrections refresh both views.
 
 ## What Is Calculated
 
