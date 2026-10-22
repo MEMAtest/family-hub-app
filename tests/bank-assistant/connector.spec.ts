@@ -9,6 +9,58 @@ import { dueBankSlot } from '../../src/lib/localBankAssistant/schedule';
 import { retrieveVirginStatements, VIRGIN_ENTRY, isVirginPage } from '../../src/lib/localBankAssistant/virginMoney';
 import { VirginAssistant } from '../../src/lib/localBankAssistant/service';
 import { createAssistantServer } from '../../scripts/bank-assistant/server';
+import { parseCsvStatement, parseVirginMoneyCsv } from '../../src/utils/statementImport';
+import { retrieveVirginTransactionExport } from '../../src/lib/localBankAssistant/transactionExport';
+
+const basicCsv = '22-Oct-26, -12.20, 70.20, GBP,"SYNTHETIC, groceries"\n21-Apr-23, 100, 100, GBP,"SYNTHETIC deposit"\n';
+
+test('Virgin headerless CSV keeps the first row, quoted commas, signs and London-safe dates', () => {
+  const result = parseCsvStatement(basicCsv);
+  expect(result.success).toBe(true);
+  expect(result.metadata).toMatchObject({ bank: 'Virgin Money', startDate: '2023-04-21', endDate: '2026-10-22' });
+  expect(result.transactions).toHaveLength(2);
+  expect(result.transactions[0]).toMatchObject({ date: '2026-10-22', amount: 12.2, balance: 70.2, direction: 'debit', description: 'SYNTHETIC, groceries' });
+  expect(result.transactions[1].direction).toBe('credit');
+  for (const invalid of [basicCsv.replace('22-Oct', '32-Oct'), basicCsv.replace('GBP', 'USD'), '<html>Sign in</html>', '']) {
+    expect(parseVirginMoneyCsv(invalid).success).toBe(false);
+  }
+  expect(parseCsvStatement('Date,Amount,Description\n2026-10-22,-1,SYNTHETIC').transactions).toHaveLength(1);
+});
+
+test('read-only current-account export commits dates and downloads without payment actions', async ({ page }) => {
+  let payments = 0; let requests = 0;
+  await page.route('https://internet-banking.ib.apps.virginmoney.com/**', route => {
+    const url = new URL(route.request().url());
+    if (url.pathname === '/payment') { payments++; return route.abort(); }
+    if (url.pathname === '/export.csv') {
+      requests++;
+      expect(url.searchParams.get('from')).toBe('01/01/2000');
+      expect(url.searchParams.get('to')).toBe('22/10/2026');
+      return route.fulfill({ contentType: 'text/csv', headers: { 'content-disposition': 'attachment; filename="TransactionHistory.csv"' }, body: basicCsv });
+    }
+    return route.fulfill({ contentType: 'text/html', body: `<h1>Download transactions</h1><h2>M Plus Current</h2><a href="#">Download transactions</a><form action="/export.csv"><label>From<input name="from"></label><label>To<input name="to"></label><label>Basic CSV<input type="radio" checked></label><button>Export transactions</button></form><button onclick="fetch('/payment')">Pay or transfer money</button>` });
+  });
+  await page.goto(VIRGIN_ENTRY);
+  expect(await retrieveVirginTransactionExport(page, '01/01/2000', '22/10/2026')).toEqual(Buffer.from(basicCsv));
+  expect(requests).toBe(1); expect(payments).toBe(0);
+});
+
+test('CSV originals persist privately, deduplicate concurrent receipts and never mark bank connected', async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'fh-bank-csv-'));
+  const service = new VirginAssistant(dir);
+  try {
+    await service.initialise();
+    await Promise.all([service.keepTransactionExport(Buffer.from(basicCsv)), service.keepTransactionExport(Buffer.from(basicCsv))]);
+    expect(service.snapshot().transactionExports).toHaveLength(1);
+    expect(service.snapshot()).toMatchObject({ status: 'idle', lastSuccess: null, historyComplete: false, scheduleEnabled: false });
+    const id = service.snapshot().transactionExports[0].id;
+    expect((await stat(service.transactionExportPath(id))).mode & 0o777).toBe(0o600);
+    expect(await readFile(service.transactionExportPath(id), 'utf8')).toBe(basicCsv);
+    await expect(service.keepTransactionExport(Buffer.from('<html>Sign in</html>'))).rejects.toThrow('Invalid');
+    const restored = new VirginAssistant(dir); await restored.initialise();
+    expect(restored.snapshot().transactionExports).toHaveLength(1);
+  } finally { await service.close(false); await rm(dir, { recursive: true }); }
+});
 
 let pdf: Buffer;
 test.beforeAll(async ({ browser }) => {
@@ -174,6 +226,16 @@ test('local dashboard rejects foreign actions and remains usable on phone and de
     expect((await request.get('http://127.0.0.1:3948/api/status')).status()).toBe(403);
     await page.goto('http://127.0.0.1:3948/');
     expect((await page.request.post('http://127.0.0.1:3948/api/action', { headers: { Origin: 'https://evil.test' }, data: { action: 'schedule', enabled: true } })).status()).toBe(403);
+    expect((await page.request.post('http://127.0.0.1:3948/api/transaction-exports', { headers: { Origin: 'https://evil.test', 'Content-Type': 'text/csv' }, data: basicCsv })).status()).toBe(403);
+    expect((await page.request.post('http://127.0.0.1:3948/api/transaction-exports', { headers: { Origin: 'http://127.0.0.1:3948', 'Content-Type': 'text/csv' }, data: '<html>Sign in</html>' })).status()).toBe(400);
+    expect((await page.request.post('http://127.0.0.1:3948/api/transaction-exports', { headers: { Origin: 'http://127.0.0.1:3948', 'Content-Type': 'text/csv' }, data: basicCsv })).status()).toBe(200);
+    const exportId = service.snapshot().transactionExports[0].id;
+    const exported = await page.request.get(`http://127.0.0.1:3948/api/transaction-exports/${exportId}`);
+    expect(await exported.body()).toEqual(Buffer.from(basicCsv));
+    expect(exported.headers()['content-disposition']).toContain('attachment');
+    expect((await request.get(`http://127.0.0.1:3948/api/transaction-exports/${exportId}`)).status()).toBe(403);
+    await page.reload();
+    await expect(page.getByRole('link', { name: 'Download CSV', exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Virgin Money', exact: true })).toBeVisible();
     await page.getByLabel('Daily at 07:00 London time, or after this Mac wakes').check();
     await expect.poll(() => service.snapshot().scheduleEnabled).toBe(true);

@@ -1,13 +1,44 @@
 # Virgin Money Local Browser Connector
 
+## Live Follow-Up: 22 October 2026
+
+- Read-only rehearsal downloaded M Plus Current Basic CSV: 1,764 rows dated
+  21 April 2023 through 20 October 2026. Requested dates were 1 January 2000
+  through 22 October 2026. This is the returned range, not independent proof
+  that every historical statement is available.
+- Original stored once by SHA-256 in the private assistant directory. Local
+  parsing and byte-identical download verified. No financial rows, account
+  identifiers or authentication tokens belong in repository evidence.
+- Basic CSV is headerless: date, signed amount, balance, GBP, description.
+  Parser preserves the first row, quoted commas and UTC calendar dates. Headed
+  CSV imports remain supported. Invalid rows fail closed.
+- Worker now tries the current-account export before the old PDF route. First
+  export requests available history; subsequent exports use a seven-day overlap.
+  Files are hash-deduplicated, not silently committed to Family Hub. Overlapping
+  rows still need account-specific import reconciliation.
+- Successful live login was in existing Chrome, not the separate Chromium
+  worker. No Chrome cookies were copied. Live worker session restoration,
+  Android relay and MCP registration remain unproved or unimplemented.
+  Daily checks and startup remain disabled.
+- PDF frames failed to render reliably; no PDF was saved. Do not navigate to
+  standalone iframe URLs: doing so lost parent context and required sign-in.
+- Local CSV receipt endpoint is cookie- and same-origin protected. Registering
+  a downloaded original does not mark the bank connected or enable scheduling.
+- Twelve controlled tests passed: parsing, date selection, no payment actions,
+  concurrent receipt deduplication, restart, request guards, byte equality and
+  responsive UI. These are not unattended live-authentication proof.
+
 ## What Exists
 
-Local Chromium worker for Virgin Money UK current/savings statement PDFs. No
-Open Banking provider or bank API is used. This is not a live transaction feed.
+Local Chromium worker for Virgin Money UK M Plus Current transaction exports
+and a legacy statement-PDF retrieval path. No Open Banking provider or bank API
+is used. This is not a live transaction feed.
 The October 3 local pilot was recovered from commit 4665cf9 and upgraded here;
 unrelated unfinished work in that other checkout has not been changed.
 
-For development use `npm ci` followed by `npm run bank:virgin`, then visit
+For the small standalone runtime, use `npm ci` inside
+`scripts/bank-assistant/runtime`, then run `node scripts/bank-assistant/build.mjs`
+and `node scripts/bank-assistant/runtime/server.cjs` from the checkout root. Visit
 http://127.0.0.1:3941/ on this Mac. Existing compatible Chromium is reused;
 install a Playwright browser only if the local runtime reports it missing.
 

@@ -533,7 +533,33 @@ export const parseStatementRows = (rows: string[][], sourceType: StatementSource
 
 export const parseCsvStatement = (content: string, sourceType: StatementSource = 'csv'): StatementParseResult => {
   const rows = parseCsvContent(content);
+  // Virgin's Basic CSV has five positional columns and no header row.
+  if (rows[0]?.length === 5 && /^\d{1,2}-[A-Za-z]{3}-\d{2}$/.test(rows[0][0]) && rows[0][3] === 'GBP') {
+    return parseVirginMoneyCsv(content);
+  }
   return parseStatementRows(rows, sourceType);
+};
+
+export const parseVirginMoneyCsv = (content: string): StatementParseResult => {
+  const rows = parseCsvContent(content);
+  const normalized: string[][] = [];
+  for (const row of rows) {
+    const match = row[0]?.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{2})$/);
+    const month = match ? MONTHS[match[2].toLowerCase()] : undefined;
+    const year = match ? 2000 + Number(match[3]) : 0;
+    const day = match ? Number(match[1]) : 0;
+    const date = month === undefined ? null : new Date(Date.UTC(year, month, day));
+    if (row.length !== 5 || row[3] !== 'GBP' || !date || date.getUTCFullYear() !== year
+      || date.getUTCMonth() !== month || date.getUTCDate() !== day
+      || !/^[+-]?\d+(?:\.\d{1,2})?$/.test(row[1]) || !/^[+-]?\d+(?:\.\d{1,2})?$/.test(row[2]) || !row[4]) {
+      return { success: false, transactions: [], warnings: [], errors: ['Invalid Virgin Money Basic CSV row.'], metadata: { bank: 'Virgin Money', sourceType: 'csv' } };
+    }
+    normalized.push([toIsoDate(date), row[1], row[2], row[3], row[4]]);
+  }
+  if (!normalized.length) return { success: false, transactions: [], warnings: [], errors: ['Statement file is empty.'], metadata: { bank: 'Virgin Money', sourceType: 'csv' } };
+  const result = parseStatementRows([['Date', 'Amount', 'Balance', 'Currency', 'Description'], ...normalized]);
+  result.metadata.bank = 'Virgin Money'; result.metadata.currency = 'GBP';
+  return result;
 };
 
 export const detectBankFromText = (text: string) => {

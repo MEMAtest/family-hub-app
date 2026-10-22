@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": { "start": "node server.cjs" },
+  "devDependencies": { "esbuild": "0.25.10" },
   "dependencies": {
     "@playwright/test": "1.56.0",
     "express": "5.1.0",

@@ -26,9 +26,18 @@ async function refresh() {
     byId('checked').textContent = `Last attempt: ${dates(state.lastChecked)} · Last complete check: ${dates(state.lastSuccess)}`;
     byId('schedule').checked = state.scheduleEnabled;
     byId('mac-alerts').checked = state.alertsEnabled;
-    byId('count').textContent = `${state.statements.length} ${state.statements.length === 1 ? 'file' : 'files'}`;
+    const count = state.statements.length + (state.transactionExports || []).length;
+    byId('count').textContent = `${count} ${count === 1 ? 'file' : 'files'}`;
     const list = byId('statements'); list.replaceChildren();
-    if (!state.statements.length) { const empty = document.createElement('p'); empty.className = 'empty'; empty.textContent = 'No statements retrieved.'; list.append(empty); }
+    for (const item of state.transactionExports || []) {
+      const row = document.createElement('article'); row.className = 'statement';
+      const text = document.createElement('div');
+      const title = document.createElement('strong'); title.textContent = 'Current-account transaction export';
+      const detail = document.createElement('p'); detail.textContent = `${item.rows} rows \u00b7 ${item.from} to ${item.through} \u00b7 Stored locally, not imported`;
+      const link = document.createElement('a'); link.href = `/api/transaction-exports/${item.id}`; link.textContent = 'Download CSV'; link.className = 'pdf-link';
+      text.append(title, detail); row.append(text, link); list.append(row);
+    }
+    if (!state.statements.length) { const empty = document.createElement('p'); empty.className = 'empty'; empty.textContent = 'No PDF statements retrieved.'; list.append(empty); }
     for (const statement of state.statements) {
       const row = document.createElement('article'); row.className = 'statement';
       const text = document.createElement('div');

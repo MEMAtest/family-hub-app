@@ -2,7 +2,8 @@ import { chromium, type Browser, type BrowserContext, type Page } from '@playwri
 import { createHash } from 'crypto';
 import { chmod, mkdir, readFile, writeFile, lstat, readdir, stat } from 'fs/promises';
 import path from 'path';
-import { parseVirginMoneyPdfText } from '../../utils/statementImport';
+import { parseVirginMoneyPdfText, parseVirginMoneyCsv } from '../../utils/statementImport';
+import { retrieveVirginTransactionExport } from './transactionExport';
 import { bankNeedsSignin, retrieveVirginStatements, VIRGIN_ENTRY } from './virginMoney';
 import { dueBankSlot } from './schedule';
 import { isVirginPage } from './virginMoney';
@@ -11,6 +12,7 @@ import { SessionVault, privateWrite } from './sessionVault';
 
 export type BankStatus = 'idle' | 'checking' | 'awaiting_signin' | 'navigation_required' | 'batch_pending' | 'ready' | 'error';
 type LocalStatement = { id: string; retrievedAt: string; through: string | null; rows: number; reviewRequired: boolean };
+type LocalExport = { id: string; retrievedAt: string; from: string; through: string; rows: number };
 
 export class VirginAssistant {
   private browser?: Browser;
@@ -20,6 +22,7 @@ export class VirginAssistant {
   private hubPage?: Page;
   private busy = false;
   private statements: LocalStatement[] = [];
+  private transactionExports: LocalExport[] = [];
   private schedule = false;
   private alerts = false;
   private lastAlert = '';
@@ -29,6 +32,7 @@ export class VirginAssistant {
   private lastSuccess: string | null = null;
   private knownKeys = new Set<string>();
   private writeQueue: Promise<void> = Promise.resolve();
+  private exportQueue: Promise<void> = Promise.resolve();
   private vault: SessionVault;
   private historyComplete = false;
   private activeCheck?: Promise<void>;
@@ -55,20 +59,22 @@ export class VirginAssistant {
       if (state.batchPending === true) { this.status = 'batch_pending'; this.notice = 'Resuming the saved statement-history scan.'; }
       this.knownKeys = new Set(Array.isArray(state.knownKeys) ? state.knownKeys.filter((key: unknown) => typeof key === 'string' && /^[a-f0-9]{64}$/.test(key)) : []);
       this.statements = Array.isArray(state.statements) ? state.statements.filter((item: LocalStatement) => /^[a-f0-9]{64}$/.test(item.id)) : [];
+      this.transactionExports = Array.isArray(state.transactionExports) ? state.transactionExports.filter((item: LocalExport) => /^[a-f0-9]{64}$/.test(item.id)) : [];
     }
+    if (this.transactionExports.length && this.status === 'idle') this.notice = 'Transaction history saved locally. Automatic bank sign-in is not connected.';
     if (this.schedule && this.status !== 'batch_pending') { this.notice = 'Daily checks enabled. The saved bank session will be tried at the next check.'; }
   }
   snapshot() {
-    return { institution: 'Virgin Money', accountType: 'current-savings', status: this.status, notice: this.notice,
+    return { institution: 'Virgin Money', accountType: 'm-plus-current', status: this.status, notice: this.notice,
       lastChecked: this.lastChecked, lastSuccess: this.lastSuccess, historyComplete: this.historyComplete,
-      scheduleEnabled: this.schedule, alertsEnabled: this.alerts, statements: this.statements,
+      scheduleEnabled: this.schedule, alertsEnabled: this.alerts, statements: this.statements, transactionExports: this.transactionExports,
       bankOpen: Boolean(this.bankPage && !this.bankPage.isClosed()), hubOpen: Boolean(this.hubPage && !this.hubPage.isClosed()),
       destination: new URL(this.hubUrl).origin, mode: 'local-pilot' };
   }
   private async persist() {
     const state = JSON.stringify({ schedule: this.schedule, alerts: this.alerts, lastSlot: this.lastSlot,
       lastChecked: this.lastChecked, lastSuccess: this.lastSuccess, historyComplete: this.historyComplete,
-      batchPending: this.status === 'batch_pending', knownKeys: [...this.knownKeys], statements: this.statements });
+      batchPending: this.status === 'batch_pending', knownKeys: [...this.knownKeys], statements: this.statements, transactionExports: this.transactionExports });
     this.writeQueue = this.writeQueue.catch(() => {}).then(() => privateWrite(path.join(this.directory, 'state.json'), state));
     await this.writeQueue;
   }
@@ -134,6 +140,19 @@ export class VirginAssistant {
       } else if (previousStatus === 'ready') {
         await this.bankPage.goto(VIRGIN_ENTRY, { waitUntil: 'domcontentloaded' });
       }
+      const dates = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', day: '2-digit', month: '2-digit', year: 'numeric' });
+      const latest = this.transactionExports.map(item => item.through).sort().at(-1);
+      const since = latest ? new Date(`${latest}T12:00:00Z`) : null;
+      if (since) since.setUTCDate(since.getUTCDate() - 7);
+      const exportBytes = await retrieveVirginTransactionExport(this.bankPage, since ? dates.format(since) : '01/01/2000', dates.format(new Date()));
+      if (exportBytes) {
+        await this.keepTransactionExport(exportBytes);
+        await this.saveSession();
+        this.lastChecked = new Date().toISOString(); this.lastSuccess = this.lastChecked;
+        this.status = 'ready'; this.lastAlert = '';
+        this.notice = 'Current-account transactions saved locally. PDF statement retrieval is not confirmed.';
+        return;
+      }
       const result = await retrieveVirginStatements(this.bankPage, { knownKeys: this.knownKeys,
         onStatement: async (bytes, key) => {
           await this.keepStatement(bytes);
@@ -159,7 +178,7 @@ export class VirginAssistant {
     if (bytes.length > 20 * 1024 * 1024 || bytes.subarray(0, 5).toString() !== '%PDF-') throw new Error('Invalid PDF.');
     const id = createHash('sha256').update(bytes).digest('hex');
     if (this.statements.some(item => item.id === id)) return;
-    const files = (await readdir(this.directory)).filter(file => /^[a-f0-9]{64}\.pdf$/.test(file));
+    const files = (await readdir(this.directory)).filter(file => /^[a-f0-9]{64}\.(?:pdf|csv)$/.test(file));
     let size = 0;
     for (const file of files) size += (await stat(path.join(this.directory, file))).size;
     if (size + bytes.length > 2 * 1024 ** 3) throw new Error('Local statement storage has reached its 2 GiB limit.');
@@ -178,6 +197,32 @@ export class VirginAssistant {
     await this.persist();
   }
   async setSchedule(enabled: boolean) { this.schedule = enabled; await this.persist(); }
+  async keepTransactionExport(bytes: Buffer) {
+    const pending = this.exportQueue.catch(() => {}).then(() => this.storeTransactionExport(bytes));
+    this.exportQueue = pending;
+    await pending;
+  }
+  private async storeTransactionExport(bytes: Buffer) {
+    if (bytes.length > 20 * 1024 * 1024) throw new Error('Export exceeds 20 MB.');
+    const parsed = parseVirginMoneyCsv(bytes.toString('utf8'));
+    if (!parsed.success || !parsed.metadata.startDate || !parsed.metadata.endDate) throw new Error('Invalid Virgin Money transaction export.');
+    const id = createHash('sha256').update(bytes).digest('hex');
+    if (this.transactionExports.some(item => item.id === id)) return;
+    let size = 0;
+    for (const file of (await readdir(this.directory)).filter(file => /^[a-f0-9]{64}\.(?:pdf|csv)$/.test(file))) size += (await stat(path.join(this.directory, file))).size;
+    if (size + bytes.length > 2 * 1024 ** 3) throw new Error('Local bank storage has reached its 2 GiB limit.');
+    await writeFile(path.join(this.directory, `${id}.csv`), bytes, { flag: 'wx', mode: 0o600 }).catch(async error => {
+      if (error.code !== 'EEXIST') throw error;
+      if (createHash('sha256').update(await readFile(path.join(this.directory, `${id}.csv`))).digest('hex') !== id) throw new Error('Stored export is damaged.');
+    });
+    this.transactionExports.unshift({ id, retrievedAt: new Date().toISOString(), from: parsed.metadata.startDate,
+      through: parsed.metadata.endDate, rows: parsed.transactions.length });
+    await this.persist();
+  }
+  transactionExportPath(id: string) {
+    if (!/^[a-f0-9]{64}$/.test(id) || !this.transactionExports.some(item => item.id === id)) throw new Error('Export not found.');
+    return path.join(this.directory, `${id}.csv`);
+  }
   async setAlerts(enabled: boolean) { this.alerts = enabled; await this.persist(); }
   statementPath(id: string) {
     if (!/^[a-f0-9]{64}$/.test(id) || !this.statements.some(item => item.id === id)) throw new Error('Statement not found.');
@@ -255,6 +300,7 @@ export class VirginAssistant {
     if (this.timer) clearInterval(this.timer);
     this.timer = undefined;
     await this.activeCheck;
+    await this.exportQueue.catch(() => {});
     try { if (preserveSession) await this.saveSession(); }
     finally { await this.browser?.close(); }
     this.browser = undefined; this.context = undefined; this.hubContext = undefined;

@@ -35,6 +35,18 @@ export function createAssistantServer(service: VirginAssistant, port: number) {
     response.sendFile(path.join(root, 'scripts/bank-assistant', request.params.file));
   });
   app.get('/api/status', (_request, response) => response.json(service.snapshot()));
+  app.get('/api/transaction-exports/:id', (request, response) => {
+    try { response.download(service.transactionExportPath(request.params.id), 'virgin-transactions.csv'); }
+    catch { response.status(404).end(); }
+  });
+  app.post('/api/transaction-exports', express.raw({ type: 'text/csv', limit: '20mb' }), async (request, response) => {
+    try {
+      if (service.snapshot().status === 'checking') { response.status(409).end(); return; }
+      if (!Buffer.isBuffer(request.body)) { response.status(400).end(); return; }
+      await service.keepTransactionExport(request.body);
+      response.json({ success: true });
+    } catch { response.status(400).json({ error: 'Export could not be saved.' }); }
+  });
   app.get('/api/statements/:id', (request, response) => {
     try {
       const file = service.statementPath(request.params.id);
