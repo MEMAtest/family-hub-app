@@ -33,6 +33,7 @@ import { ReceiptScanner } from './ReceiptScanner';
 import StatementImportModal from './modals/StatementImportModal';
 import BudgetCalculator from './BudgetCalculator';
 import { ActualCashFlowPanel } from './ActualCashFlowPanel';
+import { IncomeForecastPanel } from './IncomeForecastPanel';
 import databaseService from '@/services/databaseService';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { filterExpenses, filterIncome } from '@/utils/budgetFilters';
@@ -106,6 +107,10 @@ const SimpleBudgetDashboard: React.FC = () => {
   // Lists state - derived from budgetData
   const [incomeList, setIncomeList] = useState<any[]>([]);
   const [expenseList, setExpenseList] = useState<any[]>([]);
+
+  useEffect(() => {
+    setCashFlowRefreshKey(current => current + 1);
+  }, [incomeList, expenseList]);
 
   const [incomeCategories, setIncomeCategories] = useState<string[]>(DEFAULT_INCOME_CATEGORIES);
   const [expenseCategories, setExpenseCategories] = useState<string[]>(DEFAULT_EXPENSE_CATEGORIES);
@@ -676,7 +681,7 @@ const SimpleBudgetDashboard: React.FC = () => {
       {/* Desktop Header */}
       {!isMobile && (
         <div className="mb-8">
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
             <div>
               <h1 className="text-2xl md:text-3xl font-light text-gray-900 dark:text-slate-100 mb-2">Budget Management</h1>
               <div className="flex items-center gap-3">
@@ -703,7 +708,7 @@ const SimpleBudgetDashboard: React.FC = () => {
                 </button>
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <button
                 onClick={() => setShowAddIncome(true)}
                 className="bg-green-600 text-white px-4 py-2 rounded-sm hover:bg-green-700 transition-colors text-sm font-medium flex items-center gap-2"
@@ -765,6 +770,7 @@ const SimpleBudgetDashboard: React.FC = () => {
       )}
 
       <ActualCashFlowPanel familyId={familyId} month={`${selectedYear}-${String(selectedMonth).padStart(2, '0')}`} refreshKey={cashFlowRefreshKey} />
+      <IncomeForecastPanel familyId={familyId} refreshKey={cashFlowRefreshKey} onPlanIncome={() => { setEditingIncome(null); setShowAddIncome(true); }} />
 
       {dashboardData.excludedQaCount > 0 && (
         <div className={`${isMobile ? 'mx-4' : ''} mb-4 border-y border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900`}>
@@ -1446,37 +1452,18 @@ const SimpleBudgetDashboard: React.FC = () => {
         categories={incomeCategories}
         editData={editingIncome}
         onSave={async (data) => {
-          try {
-            if (editingIncome) {
-              // Update existing income
-              console.log('Updating income:', { ...editingIncome, ...data });
-              const updatedIncome = await databaseService.updateBudgetIncome({ ...data, id: editingIncome.id });
-
-              if (updatedIncome) {
-                console.log('Income updated successfully:', updatedIncome);
-                setIncomeList(prev => prev.map(item => item.id === editingIncome.id ? updatedIncome : item));
-              }
-            } else {
-              // Create new income
-              const newIncome = {
-                id: `income-${Date.now()}`,
-                ...data,
-                createdAt: new Date().toISOString(),
-              };
-
-              console.log('Saving new income:', newIncome);
-              const savedIncome = await databaseService.saveBudgetIncome(newIncome);
-
-              if (savedIncome) {
-                console.log('Income saved successfully:', savedIncome);
-                setIncomeList(prev => [...prev, savedIncome]);
-              }
-            }
-          } catch (error) {
-            console.error('Failed to save income:', error);
-          }
+          if (!familyId) throw new Error('Sign in to your household before saving income.');
+          const response = await fetch(`/api/families/${encodeURIComponent(familyId)}/budget/income`, {
+            method: editingIncome ? 'PUT' : 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(editingIncome ? { ...data, id: editingIncome.id } : data),
+          });
+          const saved = await response.json();
+          if (!response.ok || !saved.id) throw new Error(saved.error || 'Income could not be saved. Please try again.');
+          setIncomeList(prev => editingIncome ? prev.map(item => item.id === editingIncome.id ? saved : item) : [...prev, saved]);
           setShowAddIncome(false);
           setEditingIncome(null);
+          toast.success('Income plan saved');
         }}
       />
 

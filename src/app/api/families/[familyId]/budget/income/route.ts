@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { deduplicateRecurringItems, filterBudgetItemsByMonth } from '@/utils/budgetMonthFilter';
 import prisma from '@/lib/prisma';
 import { requireFamilyAccess } from '@/lib/auth-utils';
+import { z } from 'zod';
+import { validateIncomePlan } from '@/lib/budget/incomePlan';
 
 export const GET = requireFamilyAccess(async (request: NextRequest, context, _authUser) => {
   try {
@@ -45,10 +47,11 @@ export const GET = requireFamilyAccess(async (request: NextRequest, context, _au
 export const POST = requireFamilyAccess(async (request: NextRequest, context, _authUser) => {
   try {
     const { familyId } = await context.params;
-    const body = await request.json();
+    const body = z.record(z.unknown()).parse(await request.json());
+    const plan = validateIncomePlan(body);
 
     // Handle personId - if it's not a valid database ID or doesn't exist, set to null
-    let validPersonId = body.personId;
+    let validPersonId = typeof body.personId === 'string' ? body.personId : null;
 
     if (validPersonId && validPersonId !== 'null' && validPersonId !== 'undefined') {
       // Check if the person exists
@@ -67,19 +70,13 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context, _a
       data: {
         familyId: familyId,
         personId: validPersonId,
-        incomeName: body.incomeName,
-        amount: parseFloat(body.amount),
-        category: body.category,
-        isRecurring: body.isRecurring || false,
-        recurringFrequency: body.recurringFrequency || null,
-        recurringStartDate: body.recurringStartDate ? new Date(body.recurringStartDate) : null,
-        recurringEndDate: body.recurringEndDate ? new Date(body.recurringEndDate) : null,
-        paymentDate: body.paymentDate ? new Date(body.paymentDate) : null
+        ...plan,
       }
     });
 
     return NextResponse.json(income);
   } catch (error) {
+    if (error instanceof z.ZodError) return NextResponse.json({ error: error.issues[0]?.message || 'Invalid income plan.' }, { status: 400 });
     console.error('Error creating budget income:', error);
     return NextResponse.json(
       { error: 'Failed to create budget income' },
@@ -91,8 +88,8 @@ export const POST = requireFamilyAccess(async (request: NextRequest, context, _a
 export const PUT = requireFamilyAccess(async (request: NextRequest, context, _authUser) => {
   try {
     const { familyId } = await context.params;
-    const body = await request.json();
-    const { id } = body;
+    const body = z.record(z.unknown()).parse(await request.json());
+    const id = typeof body.id === 'string' ? body.id : null;
 
     if (!id) {
       return NextResponse.json({ error: 'Income ID is required' }, { status: 400 });
@@ -100,34 +97,34 @@ export const PUT = requireFamilyAccess(async (request: NextRequest, context, _au
 
     const existing = await prisma.budgetIncome.findFirst({
       where: { id, familyId },
-      select: { id: true },
     });
 
     if (!existing) {
       return NextResponse.json({ error: 'Income not found' }, { status: 404 });
     }
 
-    const validPerson = body.personId
+    const plan = validateIncomePlan({
+      ...existing,
+      recurringStartDate: existing.recurringStartDate ?? (existing.isRecurring ? existing.createdAt : null),
+      paymentDate: existing.paymentDate ?? (!existing.isRecurring ? existing.createdAt : null),
+      ...body,
+    });
+
+    const validPerson = typeof body.personId === 'string' && body.personId
       ? await prisma.familyMember.findFirst({ where: { id: body.personId, familyId }, select: { id: true } })
       : null;
 
     const income = await prisma.budgetIncome.update({
       where: { id },
       data: {
-        incomeName: typeof body.incomeName === 'string' ? body.incomeName : undefined,
-        amount: body.amount !== undefined ? parseFloat(body.amount) : undefined,
-        category: typeof body.category === 'string' ? body.category : undefined,
-        isRecurring: typeof body.isRecurring === 'boolean' ? body.isRecurring : undefined,
-        recurringFrequency: body.recurringFrequency ?? undefined,
-        recurringStartDate: body.recurringStartDate ? new Date(body.recurringStartDate) : body.recurringStartDate === null ? null : undefined,
-        recurringEndDate: body.recurringEndDate ? new Date(body.recurringEndDate) : body.recurringEndDate === null ? null : undefined,
-        paymentDate: body.paymentDate ? new Date(body.paymentDate) : body.paymentDate === null ? null : undefined,
-        personId: body.personId === null ? null : validPerson?.id,
+        ...plan,
+        personId: body.personId !== undefined ? validPerson?.id ?? null : undefined,
       }
     });
 
     return NextResponse.json(income);
   } catch (error) {
+    if (error instanceof z.ZodError) return NextResponse.json({ error: error.issues[0]?.message || 'Invalid income plan.' }, { status: 400 });
     console.error('Error updating budget income:', error);
     return NextResponse.json(
       { error: 'Failed to update budget income' },

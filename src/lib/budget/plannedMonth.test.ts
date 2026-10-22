@@ -29,6 +29,17 @@ describe('planned budget month selection', () => {
 });
 
 describe('planned weekly amounts', () => {
+  test('does not count monthly or yearly payments after their end date within a month', () => {
+    const monthly = { amount: 3000, isRecurring: true, recurringStartDate: '2026-01-28', recurringEndDate: '2026-10-15' };
+    expect(plannedAmountForMonth(monthly, '2026-10')).toBe(0);
+    expect(plannedAmountForMonth(monthly, '2026-09')).toBe(3000);
+    expect(plannedAmountForMonth({ ...monthly, recurringFrequency: 'yearly', recurringStartDate: '2025-10-28' }, '2026-10')).toBe(0);
+  });
+  test('clamps end-of-month paydays and includes the end day', () => {
+    const monthly = { amount: 3000, isRecurring: true, recurringStartDate: '2024-01-31', recurringEndDate: '2024-02-29' };
+    expect(plannedAmountForMonth(monthly, '2024-02')).toBe(3000);
+    expect(plannedAmountForMonth(monthly, '2024-03')).toBe(0);
+  });
   test('counts weekly occurrences anchored to the recurring start date', () => {
     const weekly = {
       amount: 25,

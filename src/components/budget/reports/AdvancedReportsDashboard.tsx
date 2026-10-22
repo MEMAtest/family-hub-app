@@ -207,8 +207,8 @@ const AdvancedReportsDashboard: React.FC<AdvancedReportsDashboardProps> = ({ onC
     },
     {
       id: 'forecast',
-      title: 'Expense Forecasting',
-      description: 'Predictive analysis and trends',
+      title: 'Income & Forecast',
+      description: 'Imported history and income plans',
       icon: <TrendingUp className="w-5 h-5" />,
       color: 'pink'
     }
