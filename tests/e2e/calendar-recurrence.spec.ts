@@ -461,7 +461,7 @@ test.describe('everything else that answers "what is on" agrees with the grid', 
     ]);
 
     const quickPlan = page.getByRole('heading', { name: 'Quick plan' }).locator('../..');
-    await page.getByRole('button', { name: 'School inbox & quick plan', exact: true }).click();
+    await page.getByRole('button', { name: 'School items to check', exact: true }).click();
     // Was empty: the panel only ever knew about the week the event was created.
     await expect(quickPlan).toContainText('1 today', { timeout: 10_000 });
     await expect(quickPlan).toContainText('Swimming lesson');
