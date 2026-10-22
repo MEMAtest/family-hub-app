@@ -2,7 +2,11 @@ import type { Page } from '@playwright/test';
 import { createHash } from 'crypto';
 
 export const VIRGIN_ENTRY = 'https://internet-banking.ib.apps.virginmoney.com/vm/';
-const BANK_HOSTS = new Set(['internet-banking.ib.apps.virginmoney.com', 'login-and-registration.ib.apps.virginmoney.com']);
+const BANK_HOSTS = new Set([
+  'internet-banking.ib.apps.virginmoney.com',
+  'login-and-registration.ib.apps.virginmoney.com',
+  'verification.ib.apps.virginmoney.com',
+]);
 export function isVirginPage(url: string) {
   try {
     const parsed = new URL(url);

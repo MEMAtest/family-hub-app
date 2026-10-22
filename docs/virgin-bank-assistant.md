@@ -2,6 +2,12 @@
 
 ## Live Follow-Up: 22 October 2026
 
+- Dedicated worker sign-in reached Virgin's mobile approval screen after adding
+  the observed official `verification.ib.apps.virginmoney.com` authentication
+  origin to the exact HTTPS allowlist. Lookalike domains, non-HTTPS, alternate
+  ports and URL credentials remain rejected. Thirteen controlled tests passed.
+  Reaching approval is not proof of a completed login or restored session.
+
 - Read-only rehearsal downloaded M Plus Current Basic CSV: 1,764 rows dated
   21 April 2023 through 20 October 2026. Requested dates were 1 January 2000
   through 22 October 2026. This is the returned range, not independent proof

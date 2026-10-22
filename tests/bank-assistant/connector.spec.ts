@@ -98,6 +98,17 @@ test('daily London checks catch up after wake, handle DST and do not repeat', ()
   expect(dueBankSlot(new Date('2026-10-25T18:00:00Z'), false, null)).toBeNull();
 });
 
+test('official Virgin mobile verification is allowed without permitting lookalike hosts', () => {
+  expect(isVirginPage('https://verification.ib.apps.virginmoney.com/vm')).toBe(true);
+  for (const url of [
+    'https://verification.ib.apps.virginmoney.com.evil.test/vm',
+    'https://evil.test/verification.ib.apps.virginmoney.com/vm',
+    'http://verification.ib.apps.virginmoney.com/vm',
+    'https://verification.ib.apps.virginmoney.com:8080/vm',
+    'https://user:password@verification.ib.apps.virginmoney.com/vm',
+  ]) expect(isVirginPage(url)).toBe(false);
+});
+
 async function bankFixture(page: Page, total = 31) {
   await page.route('https://internet-banking.ib.apps.virginmoney.com/**', route => {
     const url = new URL(route.request().url());

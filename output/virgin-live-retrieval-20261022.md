@@ -20,6 +20,13 @@
 
 ## Not Verified or Not Implemented
 
+- Follow-up dedicated Chromium sign-in accepted supplied credentials and reached
+  the official mobile approval page. Initial verification frame was blocked by
+  the worker allowlist; exact official HTTPS origin was added and 13 tests passed.
+  Corrected mobile request displayed the bank's approval countdown, then expired
+  without confirmation. No repeated approval requests were sent after expiry.
+  No password was saved to application files, documentation or source control.
+
 - No PDF statements downloaded: bank communications/statement frames were blank.
 - Standalone iframe navigation failed and required reauthentication; not reused.
 - No live unattended worker authentication, Android approval relay or MCP.
