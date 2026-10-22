@@ -11,8 +11,94 @@ import { VirginAssistant } from '../../src/lib/localBankAssistant/service';
 import { createAssistantServer } from '../../scripts/bank-assistant/server';
 import { parseCsvStatement, parseVirginMoneyCsv } from '../../src/utils/statementImport';
 import { retrieveVirginTransactionExport } from '../../src/lib/localBankAssistant/transactionExport';
+import { completeVirginApproval, resumeVirginSignin } from '../../src/lib/localBankAssistant/signin';
+import { validateLogin } from '../../src/lib/localBankAssistant/credentials';
+import { legacyStatementFingerprint, statementBoundaryBalances, statementFingerprints } from '../../src/lib/budget/statementFingerprint';
+import { createRequire } from 'module';
 
 const basicCsv = '22-Oct-26, -12.20, 70.20, GBP,"SYNTHETIC, groceries"\n21-Apr-23, 100, 100, GBP,"SYNTHETIC deposit"\n';
+
+test('equal payments with different balances survive, repeat imports and legacy keys remain stable', () => {
+  const first = { date: '2026-10-22', description: 'SYNTHETIC purchase', amount: 10, direction: 'debit', balance: 90 };
+  const second = { ...first, balance: 80 };
+  const keys = statementFingerprints([first, second, first]);
+  expect(new Set(keys).size).toBe(2);
+  expect(keys[0]).toBe(legacyStatementFingerprint(first));
+  const stored = [{ fingerprint: keys[0], balance: 90 }];
+  expect(statementFingerprints([second, first], stored)).toEqual([keys[1], keys[0]]);
+  expect(statementFingerprints([second], stored)[0]).toBe(keys[1]);
+  expect(statementFingerprints([{ ...first, balance: undefined }], stored)[0]).toBe(keys[0]);
+  expect(() => validateLogin({ username: '', password: 'synthetic' })).toThrow('Invalid');
+});
+
+test('statement boundaries preserve bank order within dates and avoid invented balances', () => {
+  const rows = [
+    { date: '2026-10-22', description: 'SYNTHETIC A', amount: 10, direction: 'debit', balance: 70 },
+    { date: '2026-10-22', description: 'SYNTHETIC B', amount: 20, direction: 'debit', balance: 80 },
+    { date: '2026-10-21', description: 'SYNTHETIC C', amount: 100, direction: 'credit', balance: 100 },
+  ];
+  expect(statementBoundaryBalances(rows)).toEqual({ openingBalance: 0, closingBalance: 70 });
+  expect(statementBoundaryBalances([...rows].reverse())).toEqual({ openingBalance: 0, closingBalance: 70 });
+  expect(statementBoundaryBalances(rows.slice(0, 2))).toEqual({ openingBalance: null, closingBalance: null });
+});
+
+test('saved login is sent only to official forms and requests phone approval once', async ({ page }) => {
+  let approvals = 0; let passwords = 0;
+  await page.route('https://login-and-registration.ib.apps.virginmoney.com/**', route => {
+    const url = new URL(route.request().url());
+    if (url.pathname === '/approval') { approvals++; return route.fulfill({ body: 'ok' }); }
+    if (url.pathname === '/password') {
+      expect(route.request().method()).toBe('POST');
+      return route.fulfill({ contentType: 'text/html', body: '<form method="POST" action="/confirm"><label>Enter your online banking password.<input type="password" name="password"></label><button>Continue</button></form>' });
+    }
+    if (url.pathname === '/confirm') {
+      passwords++;
+      expect(route.request().postData()).toBe('password=SYNTHETIC-ONLY');
+      return route.fulfill({ contentType: 'text/html', body: '<button onclick="fetch(\'/approval\')">Confirm login attempt</button>' });
+    }
+    return route.fulfill({ contentType: 'text/html', body: '<form method="POST" action="/password"><label>Your username or customer number<input name="username"></label><button>Continue</button></form>' });
+  });
+  await page.goto('https://login-and-registration.ib.apps.virginmoney.com/vm');
+  expect(await resumeVirginSignin(page, { username: 'SYNTHETIC', password: 'SYNTHETIC-ONLY' })).toBe('phone_approval');
+  await expect.poll(() => approvals).toBe(1); expect(passwords).toBe(1);
+  await page.route('https://evil.test/**', route => route.fulfill({ contentType: 'text/html', body: '<label>Your username or customer number<input></label><input type="password">' }));
+  await page.goto('https://evil.test/');
+  expect(await resumeVirginSignin(page, { username: 'SYNTHETIC', password: 'SYNTHETIC-ONLY' })).toBe('manual_required');
+  expect(await page.locator('input[type="password"]').inputValue()).toBe('');
+});
+
+test('MCP exposes metadata, refresh and local preparation but no credentials or payment tools', async () => {
+  const requireRuntime = createRequire(path.resolve('scripts/bank-assistant/runtime/package.json'));
+  const { Client } = requireRuntime('@modelcontextprotocol/sdk/client/index.js');
+  const { InMemoryTransport } = requireRuntime('@modelcontextprotocol/sdk/inMemory.js');
+  const { createVirginMcp } = await import('../../scripts/bank-assistant/mcp.mjs');
+  const calls: string[] = [];
+  const server = createVirginMcp(async (route: string) => { calls.push(route); return { status: 'ready', credentialsStored: true }; });
+  const client = new Client({ name: 'synthetic-connector-test', version: '1' });
+  const [a, b] = InMemoryTransport.createLinkedPair();
+  try {
+    await server.connect(a); await client.connect(b);
+    const listed = await client.listTools();
+    expect(listed.tools.map((item: { name: string }) => item.name).sort()).toEqual(['virgin_prepare_budget_import', 'virgin_refresh', 'virgin_request_phone_approval', 'virgin_status']);
+    expect(JSON.stringify(listed)).not.toContain('save_password');
+    const status = await client.callTool({ name: 'virgin_status', arguments: {} });
+    expect(status.structuredContent).toMatchObject({ credentialsStored: true });
+    await client.callTool({ name: 'virgin_refresh', arguments: {} });
+    expect(calls).toEqual(['/api/status', '/api/action', '/api/status']);
+  } finally { await client.close(); await server.close(); }
+});
+
+test('successful phone approval is acknowledged only inside the official verification frame', async ({ page }) => {
+  let acknowledged = 0;
+  await page.route('https://login-and-registration.ib.apps.virginmoney.com/**', route => route.fulfill({ contentType: 'text/html', body: '<script>window.addEventListener("message",()=>location.href="https://internet-banking.ib.apps.virginmoney.com/vm/")</script><iframe src="https://verification.ib.apps.virginmoney.com/vm"></iframe>' }));
+  await page.route('https://verification.ib.apps.virginmoney.com/**', route => route.fulfill({ contentType: 'text/html', body: '<p>Login successful</p><button onclick="parent.postMessage(\'approved\',\'*\')">Ok</button>' }));
+  await page.route('https://internet-banking.ib.apps.virginmoney.com/**', route => { acknowledged++; return route.fulfill({ contentType: 'text/html', body: '<button>Log out</button>' }); });
+  await page.goto('https://login-and-registration.ib.apps.virginmoney.com/vm');
+  await page.frameLocator('iframe').getByRole('button', { name: 'Ok', exact: true }).waitFor();
+  expect(await completeVirginApproval(page)).toBe(true);
+  expect(acknowledged).toBe(1);
+  expect(await completeVirginApproval(page)).toBe(false);
+});
 
 test('Virgin headerless CSV keeps the first row, quoted commas, signs and London-safe dates', () => {
   const result = parseCsvStatement(basicCsv);
@@ -244,6 +330,13 @@ test('local dashboard rejects foreign actions and remains usable on phone and de
     const exported = await page.request.get(`http://127.0.0.1:3948/api/transaction-exports/${exportId}`);
     expect(await exported.body()).toEqual(Buffer.from(basicCsv));
     expect(exported.headers()['content-disposition']).toContain('attachment');
+    const prepared = await page.request.post('http://127.0.0.1:3948/api/prepare-budget', { headers: { Origin: 'http://127.0.0.1:3948' }, data: { id: exportId } });
+    expect(prepared.status()).toBe(200);
+    const preparedBody = await prepared.json();
+    expect(preparedBody).toMatchObject({ rows: 2, imported: false, originalHash: exportId });
+    const headed = await readFile(preparedBody.file, 'utf8');
+    expect(parseCsvStatement(headed).transactions).toHaveLength(2);
+    expect((await stat(preparedBody.file)).mode & 0o777).toBe(0o600);
     expect((await request.get(`http://127.0.0.1:3948/api/transaction-exports/${exportId}`)).status()).toBe(403);
     await page.reload();
     await expect(page.getByRole('link', { name: 'Download CSV', exact: true })).toBeVisible();

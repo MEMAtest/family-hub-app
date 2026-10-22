@@ -66,7 +66,7 @@ const StatementImportModal = ({
   const [parseProgress, setParseProgress] = useState(0);
   const [isImporting, setIsImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [useAi, setUseAi] = useState(true);
+  const [useAi, setUseAi] = useState(false);
   const [accounts, setAccounts] = useState<Array<{ id: string; name: string }>>([]);
   const [accountId, setAccountId] = useState('');
   const [newAccountName, setNewAccountName] = useState('');
@@ -173,13 +173,6 @@ const StatementImportModal = ({
         throw new Error(result.errors?.[0] || 'Statement parsing failed');
       }
       setParseResult(result);
-      console.log('📊 Statement parse result:', {
-        success: result.success,
-        transactionCount: result.transactions?.length ?? 0,
-        warnings: result.warnings,
-        errors: result.errors,
-        metadata: result.metadata,
-      });
 
       const nextRows = (result.transactions ?? []).map((transaction: StatementTransaction) => {
         const importAs: 'income' | 'expense' = transaction.direction === 'credit' ? 'income' : 'expense';
@@ -207,13 +200,6 @@ const StatementImportModal = ({
         };
       });
 
-      console.log('📋 Rows to display:', {
-        total: nextRows.length,
-        includedCount: nextRows.filter(r => r.include).length,
-        duplicates: nextRows.filter(r => r.duplicate).length,
-        missingDate: nextRows.filter(r => !r.date).length,
-        sampleRow: nextRows[0],
-      });
       setRows(nextRows);
     } catch (parseError) {
       setError(parseError instanceof Error ? parseError.message : 'Failed to parse statement');
@@ -321,14 +307,14 @@ const StatementImportModal = ({
   return (
     <div className="fixed inset-0 z-[70] overflow-y-auto">
       <div className="fixed inset-0 bg-black/50" onClick={handleClose} />
-      <div className="relative mx-auto my-10 w-full max-w-5xl rounded-xl bg-white shadow-xl">
+      <div role="dialog" aria-modal="true" aria-labelledby="statement-import-title" data-preview-contract="review-v1" className="relative mx-auto my-10 w-full max-w-5xl rounded-xl bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-blue-100 p-2 text-blue-600">
               <FileText className="h-5 w-5" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-gray-900">Import Statement</h2>
+              <h2 id="statement-import-title" className="text-lg font-semibold text-gray-900">Import Statement</h2>
                   <p className="text-sm text-gray-500">Preview, review and then add selected rows to actual cash flow.</p>
             </div>
           </div>
@@ -355,7 +341,7 @@ const StatementImportModal = ({
                   className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                 />
                 <Sparkles className="h-3 w-3" />
-                Enhance PDF parsing with AI
+                Send PDF text to OpenRouter for AI parsing
               </label>
               <label className="cursor-pointer rounded-md bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700">
                 Choose file
@@ -371,8 +357,8 @@ const StatementImportModal = ({
 
           <div className="grid gap-3 rounded-lg border border-gray-200 p-4 sm:grid-cols-[1fr_auto]">
             <div>
-              <label className="mb-1 block text-xs font-semibold text-gray-700">Statement account</label>
-              <select value={accountId} onChange={(event) => setAccountId(event.target.value)} className="h-10 w-full rounded-md border border-gray-300 bg-white px-3 text-sm">
+              <label htmlFor="statement-account" className="mb-1 block text-xs font-semibold text-gray-700">Statement account</label>
+              <select id="statement-account" value={accountId} onChange={(event) => setAccountId(event.target.value)} className="h-10 w-full rounded-md border border-gray-300 bg-white px-3 text-sm">
                 <option value="">Choose account</option>
                 {accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
               </select>

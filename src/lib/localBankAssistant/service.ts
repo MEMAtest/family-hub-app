@@ -9,6 +9,8 @@ import { dueBankSlot } from './schedule';
 import { isVirginPage } from './virginMoney';
 import pdfParse from 'pdf-parse';
 import { SessionVault, privateWrite } from './sessionVault';
+import type { LoginStore } from './credentials';
+import { completeVirginApproval, resumeVirginSignin, virginApprovalExpired } from './signin';
 
 export type BankStatus = 'idle' | 'checking' | 'awaiting_signin' | 'navigation_required' | 'batch_pending' | 'ready' | 'error';
 type LocalStatement = { id: string; retrievedAt: string; through: string | null; rows: number; reviewRequired: boolean };
@@ -37,13 +39,17 @@ export class VirginAssistant {
   private historyComplete = false;
   private activeCheck?: Promise<void>;
   private closing = false;
+  private credentialsStored = false;
+  private lastLoginAttempt: string | null = null;
+  private loginRejected = false;
   private notice = 'Not connected';
   private timer?: ReturnType<typeof setInterval>;
-  constructor(private directory: string, private hubUrl = 'https://family-hub-app.vercel.app/', private notify: (message: string) => Promise<void> = async () => {}, vault?: SessionVault) {
+  constructor(private directory: string, private hubUrl = 'https://family-hub-app.vercel.app/', private notify: (message: string) => Promise<void> = async () => {}, vault?: SessionVault, private loginStore?: LoginStore) {
     this.vault = vault ?? new SessionVault(directory);
   }
 
   async initialise() {
+    this.credentialsStored = await this.loginStore?.exists() ?? false;
     await mkdir(this.directory, { recursive: true, mode: 0o700 });
     if ((await lstat(this.directory)).isSymbolicLink()) throw new Error('Use a private directory, not a symbolic link.');
     await chmod(this.directory, 0o700);
@@ -55,6 +61,8 @@ export class VirginAssistant {
       this.lastSlot = typeof state.lastSlot === 'string' ? state.lastSlot : null;
       this.lastChecked = typeof state.lastChecked === 'string' ? state.lastChecked : null;
       this.lastSuccess = typeof state.lastSuccess === 'string' ? state.lastSuccess : null;
+      this.lastLoginAttempt = typeof state.lastLoginAttempt === 'string' ? state.lastLoginAttempt : null;
+      this.loginRejected = state.loginRejected === true;
       this.historyComplete = state.historyComplete === true;
       if (state.batchPending === true) { this.status = 'batch_pending'; this.notice = 'Resuming the saved statement-history scan.'; }
       this.knownKeys = new Set(Array.isArray(state.knownKeys) ? state.knownKeys.filter((key: unknown) => typeof key === 'string' && /^[a-f0-9]{64}$/.test(key)) : []);
@@ -68,13 +76,15 @@ export class VirginAssistant {
     return { institution: 'Virgin Money', accountType: 'm-plus-current', status: this.status, notice: this.notice,
       lastChecked: this.lastChecked, lastSuccess: this.lastSuccess, historyComplete: this.historyComplete,
       scheduleEnabled: this.schedule, alertsEnabled: this.alerts, statements: this.statements, transactionExports: this.transactionExports,
+      credentialsStored: this.credentialsStored, loginRejected: this.loginRejected,
       bankOpen: Boolean(this.bankPage && !this.bankPage.isClosed()), hubOpen: Boolean(this.hubPage && !this.hubPage.isClosed()),
       destination: new URL(this.hubUrl).origin, mode: 'local-pilot' };
   }
   private async persist() {
     const state = JSON.stringify({ schedule: this.schedule, alerts: this.alerts, lastSlot: this.lastSlot,
       lastChecked: this.lastChecked, lastSuccess: this.lastSuccess, historyComplete: this.historyComplete,
-      batchPending: this.status === 'batch_pending', knownKeys: [...this.knownKeys], statements: this.statements, transactionExports: this.transactionExports });
+      batchPending: this.status === 'batch_pending', knownKeys: [...this.knownKeys], statements: this.statements, transactionExports: this.transactionExports,
+      lastLoginAttempt: this.lastLoginAttempt, loginRejected: this.loginRejected });
     this.writeQueue = this.writeQueue.catch(() => {}).then(() => privateWrite(path.join(this.directory, 'state.json'), state));
     await this.writeQueue;
   }
@@ -128,10 +138,16 @@ export class VirginAssistant {
     this.activeCheck = this.performCheck();
     try { await this.activeCheck; } finally { this.activeCheck = undefined; }
   }
+  async requestPhoneApproval() {
+    if (this.busy) throw new Error('Wait for the current bank check.');
+    if (this.loginRejected) throw new Error('Virgin rejected the saved login. Replace it before retrying.');
+    this.lastLoginAttempt = null; await this.persist();
+    await this.check();
+  }
   private async performCheck() {
     if (this.busy) return;
     const previousStatus = this.status;
-    this.busy = true; this.status = 'checking'; this.notice = 'Checking Virgin secure messages';
+    this.busy = true; this.status = 'checking'; this.notice = 'Checking Virgin current-account transactions';
     try {
       if (!this.bankPage || this.bankPage.isClosed()) {
         await this.ensureBrowser();
@@ -140,8 +156,33 @@ export class VirginAssistant {
       } else if (previousStatus === 'ready') {
         await this.bankPage.goto(VIRGIN_ENTRY, { waitUntil: 'domcontentloaded' });
       }
+      await this.bankPage.getByRole('button', { name: 'Log out', exact: true })
+        .or(this.bankPage.getByRole('textbox', { name: 'Your username or customer number', exact: true }))
+        .or(this.bankPage.getByRole('button', { name: 'Reject optional cookies', exact: true }))
+        .or(this.bankPage.getByRole('link', { name: /^New statement\b/i }))
+        .or(this.bankPage.getByRole('link', { name: 'Download transactions', exact: true }))
+        .or(this.bankPage.locator('input[type="password"]:visible')).first().waitFor({ state: 'visible', timeout: 15_000 }).catch(() => {});
+      if (await bankNeedsSignin(this.bankPage) && this.loginStore && this.credentialsStored) {
+        const attempted = this.lastLoginAttempt ? Date.parse(this.lastLoginAttempt) : 0;
+        if (this.loginRejected || Date.now() - attempted < 10 * 60_000) {
+          this.status = 'awaiting_signin';
+          this.notice = this.loginRejected ? 'Virgin rejected the saved login. Automatic retries are stopped.' : 'Waiting for bank approval. No repeated login request was sent.';
+          return;
+        }
+        const login = await this.loginStore.load();
+        if (login) {
+          this.lastLoginAttempt = new Date().toISOString(); await this.persist();
+          const outcome = await resumeVirginSignin(this.bankPage, login);
+          this.loginRejected = outcome === 'rejected';
+          this.status = 'awaiting_signin';
+          this.notice = outcome === 'phone_approval' ? 'Approve the login in Virgin Money on your phone. Bank authentication cannot be bypassed.'
+            : outcome === 'rejected' ? 'Virgin rejected the saved login. Automatic retries are stopped.'
+              : 'Virgin requires an additional sign-in step. Complete it in the bank window.';
+          return;
+        }
+      }
       const dates = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', day: '2-digit', month: '2-digit', year: 'numeric' });
-      const latest = this.transactionExports.map(item => item.through).sort().at(-1);
+      const latest = this.transactionExports.map(item => item.through).sort().pop();
       const since = latest ? new Date(`${latest}T12:00:00Z`) : null;
       if (since) since.setUTCDate(since.getUTCDate() - 7);
       const exportBytes = await retrieveVirginTransactionExport(this.bankPage, since ? dates.format(since) : '01/01/2000', dates.format(new Date()));
@@ -223,6 +264,20 @@ export class VirginAssistant {
     if (!/^[a-f0-9]{64}$/.test(id) || !this.transactionExports.some(item => item.id === id)) throw new Error('Export not found.');
     return path.join(this.directory, `${id}.csv`);
   }
+  async prepareBudgetImport(id: string) {
+    const original = await readFile(this.transactionExportPath(id));
+    if (createHash('sha256').update(original).digest('hex') !== id) throw new Error('Stored export is damaged.');
+    const parsed = parseVirginMoneyCsv(original.toString('utf8'));
+    if (!parsed.success) throw new Error('Bank export could not be parsed.');
+    const quote = (value: string | number) => `"${String(value).replace(/"/g, '""')}"`;
+    const csv = [['Date', 'Amount', 'Balance', 'Currency', 'Description'], ...parsed.transactions.map(item =>
+      [item.date, item.direction === 'debit' ? -item.amount : item.amount, item.balance ?? '', 'GBP', item.description])]
+      .map(row => row.map(quote).join(',')).join('\r\n') + '\r\n';
+    const file = path.join(this.directory, `${id}.budget.csv`);
+    await privateWrite(file, csv);
+    return { file, originalHash: id, previewHash: createHash('sha256').update(csv).digest('hex'), rows: parsed.transactions.length,
+      from: parsed.metadata.startDate, through: parsed.metadata.endDate, imported: false };
+  }
   async setAlerts(enabled: boolean) { this.alerts = enabled; await this.persist(); }
   statementPath(id: string) {
     if (!/^[a-f0-9]{64}$/.test(id) || !this.statements.some(item => item.id === id)) throw new Error('Statement not found.');
@@ -233,6 +288,10 @@ export class VirginAssistant {
     this.timer = setInterval(() => { void this.tick().catch(() => { this.status = 'error'; this.notice = 'Scheduled check failed.'; }); }, 60_000);
   }
   async tick(now = new Date()) {
+    if (!this.busy && this.status === 'awaiting_signin' && this.bankPage && !this.bankPage.isClosed()) {
+      await completeVirginApproval(this.bankPage);
+      if (await virginApprovalExpired(this.bankPage)) this.notice = 'Virgin approval has expired. Request a fresh login when you are ready to approve on your phone.';
+    }
     if (!this.busy && this.status === 'batch_pending') { await this.check(); return; }
     if (!this.busy && this.status === 'awaiting_signin' && this.bankPage && !this.bankPage.isClosed()
       && isVirginPage(this.bankPage.url()) && new URL(this.bankPage.url()).hostname === 'internet-banking.ib.apps.virginmoney.com') {
@@ -270,7 +329,7 @@ export class VirginAssistant {
     await account.selectOption({ label: accountName });
     await dialog.getByRole('checkbox', { name: 'Send PDF text to OpenRouter for AI parsing', exact: true }).uncheck();
     await dialog.locator('input[type="file"]').setInputFiles(path.join(this.directory, `${id}.pdf`));
-    const save = dialog.getByRole('button', { name: 'Save reviewed transactions', exact: true });
+    const save = dialog.getByRole('button', { name: 'Add reviewed transactions', exact: true });
     await save.waitFor({ state: 'visible' });
     const deadline = Date.now() + 60_000;
     while (!(await save.isEnabled()) && Date.now() < deadline) {
@@ -293,6 +352,8 @@ export class VirginAssistant {
     await this.setSchedule(false);
     await this.close(false);
     await this.vault.clear();
+    await this.loginStore?.clear(); this.credentialsStored = false;
+    this.loginRejected = false; this.lastLoginAttempt = null; await this.persist();
     this.notice = 'Disconnected. Saved bank session removed; local PDFs retained.';
   }
   async close(preserveSession = true) {

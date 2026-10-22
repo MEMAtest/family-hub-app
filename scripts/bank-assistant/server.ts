@@ -9,6 +9,7 @@ import { assistantPage } from './page';
 import { installMacStartup } from '../../src/lib/localBankAssistant/macStartup';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
+import { KeychainLoginStore } from '../../src/lib/localBankAssistant/credentials';
 const root = process.env.BANK_ASSISTANT_ROOT || path.resolve(__dirname, '../..');
 
 export function createAssistantServer(service: VirginAssistant, port: number) {
@@ -35,6 +36,12 @@ export function createAssistantServer(service: VirginAssistant, port: number) {
     response.sendFile(path.join(root, 'scripts/bank-assistant', request.params.file));
   });
   app.get('/api/status', (_request, response) => response.json(service.snapshot()));
+  app.post('/api/prepare-budget', async (request, response) => {
+    try {
+      const id = z.string().regex(/^[a-f0-9]{64}$/).parse(request.body?.id);
+      response.json(await service.prepareBudgetImport(id));
+    } catch { response.status(400).json({ error: 'Budget preview could not be prepared.' }); }
+  });
   app.get('/api/transaction-exports/:id', (request, response) => {
     try { response.download(service.transactionExportPath(request.params.id), 'virgin-transactions.csv'); }
     catch { response.status(404).end(); }
@@ -57,7 +64,7 @@ export function createAssistantServer(service: VirginAssistant, port: number) {
   app.post('/api/action', async (request, response) => {
     try {
       const body = z.discriminatedUnion('action', [
-        z.object({ action: z.enum(['open-bank', 'check', 'open-hub', 'disconnect']) }),
+        z.object({ action: z.enum(['open-bank', 'check', 'open-hub', 'disconnect', 'request-phone-approval']) }),
         z.object({ action: z.literal('schedule'), enabled: z.boolean() }),
         z.object({ action: z.literal('alerts'), enabled: z.boolean() }),
         z.object({ action: z.literal('startup') }),
@@ -65,6 +72,7 @@ export function createAssistantServer(service: VirginAssistant, port: number) {
       ]).parse(request.body);
       if (body.action === 'open-bank') await service.openBank();
       if (body.action === 'check') await service.check();
+      if (body.action === 'request-phone-approval') await service.requestPhoneApproval();
       if (body.action === 'open-hub') await service.openHub();
       if (body.action === 'schedule') await service.setSchedule(body.enabled);
       if (body.action === 'alerts') await service.setAlerts(body.enabled);
@@ -86,7 +94,7 @@ export async function main() {
   if (!path.isAbsolute(directory)) throw new Error('Use an absolute private data directory.');
   const service = new VirginAssistant(directory, undefined, async () => {
     if (process.platform === 'darwin') await promisify(execFile)('/usr/bin/osascript', ['-e', 'display notification "Virgin Money needs attention. Open the Family Hub bank assistant." with title "Family Hub"'], { timeout: 5000 });
-  });
+  }, undefined, new KeychainLoginStore());
   await service.initialise();
   const server = createAssistantServer(service, port).listen(port, '127.0.0.1', () => {
     service.startSchedule();

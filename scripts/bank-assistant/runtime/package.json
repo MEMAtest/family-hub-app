@@ -5,6 +5,7 @@
   "scripts": { "start": "node server.cjs" },
   "devDependencies": { "esbuild": "0.25.10" },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.1",
     "@playwright/test": "1.56.0",
     "express": "5.1.0",
     "helmet": "8.1.0",

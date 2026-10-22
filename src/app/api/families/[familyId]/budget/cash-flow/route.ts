@@ -36,7 +36,7 @@ export const GET = requireFamilyAccess(async (request: NextRequest, context) => 
       prisma.budgetIncome.findMany({ where: { familyId } }),
       prisma.budgetExpense.findMany({ where: { familyId } }),
       prisma.statementImport.findMany({
-        where: { familyId, statementStart: { gte: start, lt: end } },
+        where: { familyId, statementStart: { gte: start, lt: end }, statementEnd: { gte: start, lt: end } },
         select: { accountId: true, openingBalance: true, closingBalance: true, statementStart: true, statementEnd: true },
       }),
       prisma.familyDocument.findUnique({

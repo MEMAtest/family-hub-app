@@ -23,6 +23,9 @@ async function refresh() {
     const state = await response.json();
     byId('status').textContent = statusLabels[state.status] || 'Needs review';
     byId('notice').textContent = state.notice;
+    byId('login-status').textContent = state.credentialsStored
+      ? 'Login saved in macOS Keychain. Virgin may require approval on your phone. Daily checks need this Mac awake and the assistant running.'
+      : 'No login details saved. Browser sessions are encrypted with a key in macOS Keychain. Daily checks need this Mac awake and the assistant running.';
     byId('checked').textContent = `Last attempt: ${dates(state.lastChecked)} · Last complete check: ${dates(state.lastSuccess)}`;
     byId('schedule').checked = state.scheduleEnabled;
     byId('mac-alerts').checked = state.alertsEnabled;

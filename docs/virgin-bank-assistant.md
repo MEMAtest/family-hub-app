@@ -1,5 +1,39 @@
 # Virgin Money Local Browser Connector
 
+## Current Connection
+
+- User-approved login details are held in macOS Keychain under
+  `FamilyHub.VirginMoney.Credentials.v1`. They are never written to source,
+  environment files, command arguments, MCP results or logs. The protected-stdin
+  setup command is `node scripts/bank-assistant/runtime/credentials.cjs --save`.
+- Codex has a local stdio MCP named `virgin-money`, with status, refresh, private
+  budget-preview preparation and explicit phone-ready reconnect tools. It has
+  no payment or credential-reading tools. It calls the existing loopback worker;
+  it does not create another bank-browser process per MCP client.
+- Real MCP handshake and refresh succeeded after restarting the worker, using
+  the encrypted saved session. Saved-credential sign-in subsequently reached
+  official phone approval during a daily catch-up. That approval expired without
+  confirmation, so it is not counted as a completed scheduled retrieval.
+- Daily 07:00 Europe/London checks and next-Mac-login startup are enabled.
+  This Mac must be awake and the worker running. Virgin decides whether phone
+  approval or additional security checks are required; fingerprint-only or
+  permanent login cannot be guaranteed. Successful approval acknowledgement is
+  automatic; repeated failed-login attempts are stopped.
+- The verified initial CSV contains 1,764 rows from 21 April 2023 through
+  20 October 2026. Requested export dates were 1 January 2000 to 22 October 2026.
+  No issued PDF statement has been downloaded successfully yet.
+- Original bank CSV and headed budget CSV preserve every row and signed amount.
+  Two genuine equal payments with different balances remain distinct, while
+  repeated/overlapping rows retain stable keys. Full-file balances reconcile.
+- Downloads and budget imports are separate. The MCP prepares a local preview;
+  it does not automatically upload or commit it. Live initial import evidence is
+  recorded in `output/virgin-keychain-mcp-budget-20261022.md`.
+
+Implementation references: [MCP SDK server](https://ts.sdk.modelcontextprotocol.io/server)
+and [Codex MCP configuration](https://learn.chatgpt.com/docs/extend/mcp).
+
+The following notes retain the chronology of earlier rehearsal stages.
+
 ## Live Follow-Up: 22 October 2026
 
 - Later successful phone approval completed sign-in inside the dedicated worker.

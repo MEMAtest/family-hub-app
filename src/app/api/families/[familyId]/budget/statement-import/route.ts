@@ -7,6 +7,7 @@ import { requireFamilyAccess } from '@/lib/auth-utils';
 // Force Node.js runtime for pdf-parse and file processing
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
 import {
   EXPENSE_CATEGORIES,
   INCOME_CATEGORIES,
@@ -23,6 +24,7 @@ import {
   parseVirginMoneyPdfText,
 } from '@/utils/statementImport';
 import type { StatementDirection, StatementParseResult, StatementTransaction } from '@/types/statementImport.types';
+import { legacyStatementFingerprint, statementBoundaryBalances, statementFingerprints } from '@/lib/budget/statementFingerprint';
 
 const ALLOWED_CATEGORIES = [...EXPENSE_CATEGORIES, ...INCOME_CATEGORIES];
 
@@ -163,11 +165,6 @@ const normalizeDirection = (direction?: string, description?: string): Statement
   return 'debit';
 };
 
-const transactionFingerprint = (transaction: StatementTransaction) =>
-  createHash('sha256')
-    .update(`${transaction.date}|${transaction.description.trim().toLowerCase().replace(/\s+/g, ' ')}|${Number(transaction.amount).toFixed(2)}|${transaction.direction}`)
-    .digest('hex');
-
 const looksLikeTransfer = (description: string) =>
   /(bank transfer|faster payment|transfer|cash transfer|to account|from account|standing order)/i.test(description);
 
@@ -206,15 +203,21 @@ async function persistStatementImport({
     .filter((transaction) => !validRows.some((valid) => valid.id === transaction.id))
     .map((transaction) => ({ id: transaction.id, date: transaction.date, description: transaction.description, amount: transaction.amount }))
     .slice(0, 100);
-  const orderedRows = [...validRows].sort((a, b) => a.date.localeCompare(b.date));
-  const first = orderedRows[0];
-  const last = orderedRows[orderedRows.length - 1];
-  const openingBalance = first?.balance === undefined
-    ? null
-    : first.direction === 'debit' ? first.balance + first.amount : first.balance - first.amount;
-  const closingBalance = last?.balance ?? null;
+  const { openingBalance, closingBalance } = statementBoundaryBalances(validRows);
 
   const created = await prisma.$transaction(async (tx) => {
+    // Serialize imports per account so canonical legacy keys cannot race.
+    await tx.$queryRaw`SELECT id FROM budget_accounts WHERE id = ${accountId} FOR UPDATE`;
+    const repeated = await tx.statementImport.findUnique({
+      where: { accountId_contentHash: { accountId, contentHash } },
+      select: { id: true, importedRows: true, duplicateRows: true },
+    });
+    if (repeated) return { ...repeated, alreadyImported: true };
+    const legacyKeys = [...new Set(validRows.map(legacyStatementFingerprint))];
+    const existingRows = await tx.budgetTransaction.findMany({
+      where: { accountId, fingerprint: { in: legacyKeys } }, select: { fingerprint: true, balance: true },
+    });
+    const fingerprints = statementFingerprints(validRows, existingRows);
     const statementImport = await tx.statementImport.create({
       data: {
         familyId,
@@ -233,7 +236,7 @@ async function persistStatementImport({
     });
 
     const write = await tx.budgetTransaction.createMany({
-      data: validRows.map((transaction) => ({
+      data: validRows.map((transaction, index) => ({
         familyId,
         accountId,
         statementImportId: statementImport.id,
@@ -243,7 +246,7 @@ async function persistStatementImport({
         direction: transaction.direction,
         balance: transaction.balance ?? null,
         category: transaction.category || null,
-        fingerprint: transactionFingerprint(transaction),
+        fingerprint: fingerprints[index],
       })),
       skipDuplicates: true,
     });
@@ -253,7 +256,12 @@ async function persistStatementImport({
       data: { importedRows: write.count, duplicateRows: validRows.length - write.count },
     });
     return { id: statementImport.id, importedRows: write.count, duplicateRows: validRows.length - write.count };
-  });
+  }, { timeout: 30_000 });
+
+  if ('alreadyImported' in created && created.alreadyImported) return created;
+
+  const otherAccount = await prisma.budgetAccount.findFirst({ where: { familyId, active: true, id: { not: accountId } }, select: { id: true } });
+  if (!otherAccount) return created;
 
   const importedTransactions = await prisma.budgetTransaction.findMany({
     where: { statementImportId: created.id, transactionType: 'normal' },
