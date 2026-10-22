@@ -70,3 +70,5 @@ journey-report/
 playwright-report/
 test-results/
 .env*.local
+# Reproducible local bank worker bundle; source and runtime lockfile are retained.
+scripts/bank-assistant/runtime/server.cjs

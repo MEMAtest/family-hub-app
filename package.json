@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "bank:virgin": "tsx scripts/bank-assistant/server.ts",
+    "bank:virgin:build": "node scripts/bank-assistant/build.mjs",
+    "test:bank-assistant": "playwright test --config playwright.bank-assistant.config.ts",
     "dev": "next dev",
     "build": "prisma generate && next build",
     "start": "next start",

@@ -1,0 +1,16 @@
+{
+  "name": "family-hub-virgin-local-runtime",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": { "start": "node server.cjs" },
+  "dependencies": {
+    "@playwright/test": "1.56.0",
+    "express": "5.1.0",
+    "helmet": "8.1.0",
+    "zod": "3.25.76",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "lucide-react": "0.544.0",
+    "pdf-parse": "1.1.1"
+  }
+}
