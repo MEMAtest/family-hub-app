@@ -1,5 +1,21 @@
 # Virgin Money Live Retrieval: 22 October 2026
 
+## Successful Dedicated-Worker Login Follow-Up
+
+- Fresh mobile approval returned the bank's "Login successful" result.
+- Dedicated Chromium worker reached the authenticated M Plus Current export.
+- Worker automatically retrieved a five-row incremental CSV dated 2026-10-19
+  through 2026-10-20. These rows overlap the original history; they are not five
+  newly imported transactions. No ledger writes occurred.
+- Local worker status reached `ready`, with last success
+  `2026-10-22T14:46:24.981Z`.
+- Encrypted browser-session file exists: 13,437 bytes, mode 0600. Password not
+  saved to app files or source. This proves live retrieval and session saving,
+  not restored login following restart or indefinite bank authentication.
+- Daily/startup remain disabled. PDF retrieval, Android reconnect relay and MCP
+  remain unfinished. No production changes or uploads made.
+- No new worktrees or dependencies. One small local-dashboard screenshot retained.
+
 ## Verified
 
 - Existing authenticated Chrome; joint M Plus Current only. No payments,

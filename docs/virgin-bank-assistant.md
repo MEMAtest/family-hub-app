@@ -2,6 +2,12 @@
 
 ## Live Follow-Up: 22 October 2026
 
+- Later successful phone approval completed sign-in inside the dedicated worker.
+  The worker retrieved a real five-row incremental export, reached `ready` and
+  saved an encrypted browser session (0600). These rows overlap the initial
+  history; no transactions were committed to a cloud ledger. Session restoration
+  after restart is still unverified, and daily/startup remain disabled.
+
 - Dedicated worker sign-in reached Virgin's mobile approval screen after adding
   the observed official `verification.ib.apps.virginmoney.com` authentication
   origin to the exact HTTPS allowlist. Lookalike domains, non-HTTPS, alternate
