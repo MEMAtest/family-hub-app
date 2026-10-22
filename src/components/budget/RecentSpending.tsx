@@ -109,7 +109,9 @@ export function RecentSpending({
       .catch((reason) => {
         if (!controller.signal.aborted)
           setError(
-            reason instanceof Error
+            reason instanceof TypeError
+              ? "Could not connect to your spending data. Refresh to try again."
+              : reason instanceof Error
               ? reason.message
               : "Recent spending is unavailable.",
           );
@@ -283,11 +285,11 @@ export function RecentSpending({
               . This is past spending, not a saving prediction.
             </p>
           )}
-          {report.categories.length > 0 && (
+          {report.categories.some(item => item.count > 0) && (
             <section aria-label="Recent spending categories" className="mt-6">
               <h3 className="text-base font-semibold">What we spent on</h3>
               <div className="mt-2 divide-y divide-slate-100 dark:divide-slate-800">
-                {report.categories.map((item) => (
+                {report.categories.filter(item => item.count > 0).map((item) => (
                   <div key={item.category} className="py-3">
                     <button
                       type="button"
@@ -305,7 +307,7 @@ export function RecentSpending({
                       <span className="tabular-nums">
                         {money(item.amount)}{" "}
                         <span className="text-xs text-slate-500">
-                          · {item.count} payments
+                          · {item.count} {item.count === 1 ? "payment" : "payments"}
                         </span>
                       </span>
                     </button>

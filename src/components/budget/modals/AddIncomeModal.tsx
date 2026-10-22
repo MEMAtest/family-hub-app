@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { X, PoundSterling } from 'lucide-react';
 import { IncomeFormData } from '@/types/budget.types';
 import { useFamilyStore } from '@/store/familyStore';
+import { londonCalendarDate } from '@/utils/dateUtils';
 
 interface AddIncomeModalProps {
   isOpen: boolean;
@@ -30,7 +31,7 @@ const AddIncomeModal: React.FC<AddIncomeModalProps> = ({ isOpen, onClose, onSave
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
-  const newPlan = (): IncomeFormData => ({ incomeName: '', amount: 0, category: 'Salary', isRecurring: true, recurringFrequency: 'monthly', recurringStartDate: new Date().toISOString().slice(0, 10), paymentDate: '', personId: '' });
+  const newPlan = (): IncomeFormData => ({ incomeName: '', amount: 0, category: 'Salary', isRecurring: true, recurringFrequency: 'monthly', recurringStartDate: londonCalendarDate(), paymentDate: '', personId: '' });
 
   // Populate form when editData is provided
   useEffect(() => {

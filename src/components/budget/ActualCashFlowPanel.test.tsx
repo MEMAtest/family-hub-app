@@ -25,5 +25,7 @@ test('bank statement balance is dated and distinct from monthly net movement', a
     expect(screen.queryByText('Actual balance')).not.toBeInTheDocument();
     expect(screen.getByText('Latest statement balance £45.67 · as of 20 Oct 2026')).toBeInTheDocument();
     expect(screen.getByText('Month not reconciled')).toBeInTheDocument();
+    expect(screen.getByText('Original import tags (unconfirmed)')).toBeInTheDocument();
+    expect(screen.queryByText('Actual spending by category')).not.toBeInTheDocument();
   } finally { global.fetch = originalFetch; }
 });

@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 import { createHash } from 'crypto';
 
-export const VIRGIN_ENTRY = 'https://internet-banking.ib.apps.virginmoney.com/vm/';
+export const VIRGIN_ENTRY = 'https://internet-banking.ib.apps.virginmoney.com/vm/homepage';
 const BANK_HOSTS = new Set([
   'internet-banking.ib.apps.virginmoney.com',
   'login-and-registration.ib.apps.virginmoney.com',

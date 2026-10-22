@@ -11,6 +11,11 @@ and moneyView URL parameters. Existing budget URLs remain compatible. Saved
 income/bill plans, optional savings scenarios and the raw bank source stay
 separate from recorded spending. Savings tools are collapsed by default.
 
+Bank source preserves original import tags as unconfirmed provenance; those
+labels are not bank-verified categories and are not silently treated as reviewed
+planner assignments. New income plans use the London calendar date, including
+the hour when BST is on the following day from UTC.
+
 ## Recent Spending
 
 The read-only recent-spending endpoint loads only the requested window and its

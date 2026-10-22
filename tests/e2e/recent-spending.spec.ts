@@ -32,7 +32,7 @@ test("recent actual spending supports presets, custom days, reload and phone wit
     transaction("transfer", "2026-09-30", 200, "Own account", "transfer"),
     transaction("boundary", "2026-09-23", 60),
     transaction("prior", "2026-09-22", 70),
-    transaction("older", "2026-08-30", 100),
+    transaction("older", "2026-08-30", 100, "Octopus Energy"),
     transaction(
       "incoming",
       "2026-10-22",
@@ -48,7 +48,7 @@ test("recent actual spending supports presets, custom days, reload and phone wit
     familyCode: "recent",
     members: [],
   };
-  let fail = false,
+  let fail = false, disconnected = false,
     partial = false;
   const requests: number[] = [];
   await page.clock.setFixedTime(new Date("2026-10-22T12:00:00Z"));
@@ -79,6 +79,7 @@ test("recent actual spending supports presets, custom days, reload and phone wit
       new URL(route.request().url()).searchParams.get("days"),
     );
     requests.push(days);
+    if (disconnected) return route.abort('internetdisconnected');
     if (fail)
       return route.fulfill({
         status: 503,
@@ -141,6 +142,7 @@ test("recent actual spending supports presets, custom days, reload and phone wit
     recent.getByText("£35.30", { exact: true }).first(),
   ).toBeVisible();
   await expect(recent.getByText("£395.30", { exact: true })).not.toBeVisible();
+  await expect(recent.getByText('Household bills', { exact: true })).not.toBeVisible();
   await page.getByLabel("Spending period", { exact: true }).selectOption("custom");
   await page.getByLabel("Number of spending days").fill("1");
   await page
@@ -153,6 +155,7 @@ test("recent actual spending supports presets, custom days, reload and phone wit
   await expect(
     recent.getByText("£15.10", { exact: true }).first(),
   ).toBeVisible();
+  await expect(recent.getByText('· 1 payment', { exact: true })).toBeVisible();
   const count = requests.length;
   await page.getByLabel("Number of spending days").fill("0");
   await page
@@ -196,4 +199,12 @@ test("recent actual spending supports presets, custom days, reload and phone wit
     "Synthetic recent spending unavailable",
   );
   await expect(recent.getByText("£565.30", { exact: true })).not.toBeVisible();
+  fail = false;
+  disconnected = true;
+  await page.getByRole('button', { name: 'Refresh recent spending' }).click();
+  await expect(recent.getByRole('alert')).toHaveText('Could not connect to your spending data. Refresh to try again.');
+  await expect(recent.getByText('£565.30', { exact: true })).not.toBeVisible();
+  disconnected = false;
+  await page.getByRole('button', { name: 'Refresh recent spending' }).click();
+  await expect(recent.getByText('£565.30', { exact: true })).toBeVisible();
 });

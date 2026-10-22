@@ -2,6 +2,12 @@
 
 ## Current Connection
 
+- The observed account entry is `/vm/homepage`. A live saved-session rehearsal
+  found that `/vm/` could render a blank application shell; the connector now
+  enters the account route rather than mistaking that shell for a connected
+  account. Saved Keychain credentials reached Virgin's phone approval on the
+  corrected route. That approval expired; it is not a successful new retrieval.
+
 - User-approved login details are held in macOS Keychain under
   `FamilyHub.VirginMoney.Credentials.v1`. They are never written to source,
   environment files, command arguments, MCP results or logs. The protected-stdin

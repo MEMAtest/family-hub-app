@@ -3,6 +3,16 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import AddIncomeModal from './AddIncomeModal';
 
 jest.mock('@/store/familyStore', () => ({ useFamilyStore: (selector: (state: unknown) => unknown) => selector({ familyMembers: [], people: [] }) }));
+test.each([
+  ['2026-10-22T23:30:00Z', '2026-10-23'],
+  ['2026-10-26T23:30:00Z', '2026-10-26'],
+])('new income uses the London calendar day at %s', (now, expected) => {
+  jest.useFakeTimers().setSystemTime(new Date(now));
+  try {
+    render(<AddIncomeModal isOpen onClose={jest.fn()} onSave={jest.fn()} />);
+    expect(screen.getByLabelText('First payment date *')).toHaveValue(expected);
+  } finally { jest.useRealTimers(); }
+});
 test('validates expected dates and leaves a failed save open with the entered details', async () => {
   const save = jest.fn().mockRejectedValue(new Error('Connection unavailable'));
   const close = jest.fn();

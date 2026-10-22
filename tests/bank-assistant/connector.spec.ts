@@ -18,6 +18,11 @@ import { createRequire } from 'module';
 
 const basicCsv = '22-Oct-26, -12.20, 70.20, GBP,"SYNTHETIC, groceries"\n21-Apr-23, 100, 100, GBP,"SYNTHETIC deposit"\n';
 
+test('bank launch uses the observed account route rather than the blank application root', () => {
+  expect(VIRGIN_ENTRY).toBe('https://internet-banking.ib.apps.virginmoney.com/vm/homepage');
+  expect(isVirginPage(VIRGIN_ENTRY)).toBe(true);
+});
+
 test('equal payments with different balances survive, repeat imports and legacy keys remain stable', () => {
   const first = { date: '2026-10-22', description: 'SYNTHETIC purchase', amount: 10, direction: 'debit', balance: 90 };
   const second = { ...first, balance: 80 };

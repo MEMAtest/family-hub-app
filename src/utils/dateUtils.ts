@@ -1,5 +1,12 @@
 // Date utilities to ensure consistent formatting between server and client
 
+export const londonCalendarDate = (now = new Date()): string => {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(now).map(({ type, value }) => [type, value]));
+  return `${parts.year}-${parts.month}-${parts.day}`;
+};
+
 export const formatDateConsistently = (date: Date): string => {
   // Use a consistent format that works the same on server and client
   const year = date.getFullYear()
