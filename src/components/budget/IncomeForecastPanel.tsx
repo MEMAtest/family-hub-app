@@ -62,8 +62,8 @@ export function IncomeForecastPanel({ familyId, refreshKey, onPlanIncome }: Prop
         </div>
       </div>
       <div className="mt-4 flex flex-wrap items-end justify-between gap-3">
-        <label className="grid gap-1 text-xs text-slate-600 dark:text-slate-300">Income basis
-          <select value={basis} onChange={event => setBasis(event.target.value as 'history' | 'plan')} className="min-h-10 max-w-full rounded-md border border-slate-300 bg-transparent px-2 text-sm text-slate-900 dark:text-slate-100">
+        <label className="grid w-full min-w-0 gap-1 text-xs text-slate-600 sm:w-auto dark:text-slate-300">Income basis
+          <select value={basis} onChange={event => setBasis(event.target.value as 'history' | 'plan')} className="min-h-10 w-full min-w-0 rounded-md border border-slate-300 bg-transparent pl-3 pr-9 text-sm text-slate-900 sm:w-64 dark:text-slate-100">
             <option value="history">Historical incoming money</option><option value="plan">My saved income plan</option>
           </select>
         </label>
