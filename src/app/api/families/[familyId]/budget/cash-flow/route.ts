@@ -6,6 +6,7 @@ import { partitionBudgetRecords } from '@/lib/budget/dataQuality';
 import { quoteReferenceSpend, selectedSpend } from '@/lib/sourcing/spend';
 import type { ProjectSourcing } from '@/types/sourcing.types';
 import { deduplicateRecurringItems } from '@/utils/budgetMonthFilter';
+import { coveredByImports } from '@/lib/budget/historyForecast';
 
 const sourcingFrom = (value: unknown): ProjectSourcing | null => {
   if (!value || typeof value !== 'object') return null;
@@ -21,7 +22,7 @@ export const GET = requireFamilyAccess(async (request: NextRequest, context) => 
     const { start, end, key } = monthRangeUtc(new URL(request.url).searchParams.get('month') ?? '');
     const [accounts, transactions, income, expenses, imports, projectDocument] = await Promise.all([
       prisma.budgetAccount.findMany({
-        where: { familyId, active: true },
+        where: { familyId, active: true, currency: 'GBP' },
         orderBy: { name: 'asc' },
         include: {
           _count: { select: { imports: true, transactions: true } },
@@ -29,14 +30,14 @@ export const GET = requireFamilyAccess(async (request: NextRequest, context) => 
         },
       }),
       prisma.budgetTransaction.findMany({
-        where: { familyId, transactionDate: { gte: start, lt: end } },
+        where: { familyId, account: { active: true, currency: 'GBP' }, transactionDate: { gte: start, lt: end } },
         include: { account: { select: { id: true, name: true } } },
         orderBy: { transactionDate: 'asc' },
       }),
       prisma.budgetIncome.findMany({ where: { familyId } }),
       prisma.budgetExpense.findMany({ where: { familyId } }),
       prisma.statementImport.findMany({
-        where: { familyId, statementStart: { gte: start, lt: end }, statementEnd: { gte: start, lt: end } },
+        where: { familyId, statementStart: { lt: end }, statementEnd: { gte: start } },
         select: { accountId: true, openingBalance: true, closingBalance: true, statementStart: true, statementEnd: true },
       }),
       prisma.familyDocument.findUnique({
@@ -100,6 +101,7 @@ export const GET = requireFamilyAccess(async (request: NextRequest, context) => 
       const lastDate = accountTransactions.length ? Math.max(...accountTransactions.map(item => item.transactionDate.getTime())) : null;
       const statement = imports.find((item) => item.accountId === account.id && item.openingBalance !== null && item.closingBalance !== null
         && firstDate !== null && lastDate !== null && item.statementStart !== null && item.statementEnd !== null
+        && item.statementStart >= start && item.statementEnd < end
         && item.statementStart.getTime() <= firstDate && item.statementEnd.getTime() >= lastDate);
       const expectedClosingBalance = statement?.openingBalance === null || statement?.openingBalance === undefined
         ? null
@@ -118,8 +120,17 @@ export const GET = requireFamilyAccess(async (request: NextRequest, context) => 
       };
     });
 
+    const completeAccounts = accounts.filter(account => coveredByImports(key, imports.filter(item => item.accountId === account.id))).length;
     return NextResponse.json({
       month: key,
+      coverage: {
+        status: accounts.length > 0 && completeAccounts === accounts.length ? 'complete' : transactions.length ? 'partial' : 'none',
+        firstTransactionDate: transactions[0]?.transactionDate ?? null,
+        lastTransactionDate: transactions[transactions.length - 1]?.transactionDate ?? null,
+        transactionCount: transactions.length,
+        accounts: accounts.length,
+        completeAccounts,
+      },
       summary: {
         actualIncome,
         actualSpend,
@@ -152,7 +163,7 @@ export const GET = requireFamilyAccess(async (request: NextRequest, context) => 
       categorySpend: Object.entries(byCategory).map(([category, amount]) => ({ category, amount })),
       reconciliations,
       transactions: transactions.map(({ account, ...transaction }) => ({ ...transaction, accountName: account.name })),
-    });
+    }, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
     console.error('Cash flow error:', error);
     return NextResponse.json({ error: 'Could not load cash flow.' }, { status: 500 });

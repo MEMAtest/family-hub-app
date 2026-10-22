@@ -36,7 +36,7 @@ export const quantile = (values: number[], fraction: number) => {
   return sorted[index] + (sorted[Math.min(index + 1, sorted.length - 1)] - sorted[index]) * (position - index);
 };
 
-const coveredByImports = (month: string, imports: ForecastImport[]) => {
+export const coveredByImports = (month: string, imports: ForecastImport[]) => {
   const ranges = imports.flatMap(item => {
     const start = dateKey(item.statementStart);
     const end = dateKey(item.statementEnd);

@@ -12,6 +12,7 @@ const monthLabel = (month: string) => new Date(`${month}-01T00:00:00Z`).toLocale
 export function IncomeForecastPanel({ familyId, refreshKey, onPlanIncome }: Props) {
   const [horizon, setHorizon] = useState(6);
   const [basis, setBasis] = useState<'history' | 'plan'>('history');
+  const [showBillPlans, setShowBillPlans] = useState(false);
   const [revision, setRevision] = useState(0);
   const [data, setData] = useState<HistoryForecast | null>(null);
   const [loading, setLoading] = useState(false);
@@ -105,14 +106,15 @@ export function IncomeForecastPanel({ familyId, refreshKey, onPlanIncome }: Prop
           </ResponsiveContainer>
         </div>
         {ready && <>
-          <p id="forecast-range-note" className="mt-4 text-xs text-slate-500">Forecast ranges reflect past monthly variation (10th–90th percentiles), not a confidence guarantee. Planned bills are shown separately, not added to historical spending.</p>
+          <p id="forecast-range-note" className="mt-4 text-xs text-slate-500">Forecast ranges reflect past monthly variation (10th–90th percentiles), not a confidence guarantee. Saved bill plans are excluded from historical spending.</p>
+          <label className="mt-3 flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={showBillPlans} onChange={event => setShowBillPlans(event.target.checked)} className="rounded border-slate-300 text-teal-700" />Show saved bill plans (not bank verified)</label>
           <div className="mt-2 overflow-x-auto"><table aria-label="Monthly forecast" aria-describedby="forecast-range-note" className="w-full min-w-[580px] text-left text-sm">
-            <thead className="border-b border-slate-200 text-xs text-slate-500"><tr><th className="py-2 pr-3">Month</th><th className="px-3 py-2">{plannedMode ? 'Planned income' : 'Incoming estimate'}</th><th className="px-3 py-2">Spending estimate</th><th className="px-3 py-2">Surplus / shortfall</th><th className="px-3 py-2">Planned bills</th></tr></thead>
+            <thead className="border-b border-slate-200 text-xs text-slate-500"><tr><th className="py-2 pr-3">Month</th><th className="px-3 py-2">{plannedMode ? 'Planned income' : 'Incoming estimate'}</th><th className="px-3 py-2">Spending estimate</th><th className="px-3 py-2">Surplus / shortfall</th>{showBillPlans && <th className="px-3 py-2">Saved bill plans</th>}</tr></thead>
             <tbody>{data.projection.map(point => {
               const net = plannedMode ? point.planIncomeNet : point.net;
               const low = plannedMode && point.spending ? point.plannedIncome - point.spending.high : point.netLow;
               const high = plannedMode && point.spending ? point.plannedIncome - point.spending.low : point.netHigh;
-              return <tr key={point.month} className="border-b border-slate-100 align-top"><th className="py-3 pr-3 font-medium">{monthLabel(point.month)}</th><td className="px-3 py-3">{currency(plannedMode ? point.plannedIncome : point.income?.expected ?? 0)}<span className="mt-1 block text-xs text-slate-500">{!plannedMode && point.income ? `${currency(point.income.low)}–${currency(point.income.high)}` : 'Saved plan'}</span></td><td className="px-3 py-3">{currency(point.spending?.expected ?? 0)}<span className="mt-1 block text-xs text-slate-500">{point.spending ? `${currency(point.spending.low)}–${currency(point.spending.high)}` : ''}</span></td><td className={`px-3 py-3 ${net !== null && net < 0 ? 'text-rose-700' : 'text-teal-700'}`}>{net === null ? 'Unavailable' : currency(net)}<span className="mt-1 block text-xs text-slate-500">{low !== null && high !== null ? `${currency(low)}–${currency(high)}` : ''}</span></td><td className="px-3 py-3">{currency(point.plannedExpenses)}</td></tr>;
+              return <tr key={point.month} className="border-b border-slate-100 align-top"><th className="py-3 pr-3 font-medium">{monthLabel(point.month)}</th><td className="px-3 py-3">{currency(plannedMode ? point.plannedIncome : point.income?.expected ?? 0)}<span className="mt-1 block text-xs text-slate-500">{!plannedMode && point.income ? `${currency(point.income.low)}–${currency(point.income.high)}` : 'Saved plan'}</span></td><td className="px-3 py-3">{currency(point.spending?.expected ?? 0)}<span className="mt-1 block text-xs text-slate-500">{point.spending ? `${currency(point.spending.low)}–${currency(point.spending.high)}` : ''}</span></td><td className={`px-3 py-3 ${net !== null && net < 0 ? 'text-rose-700' : 'text-teal-700'}`}>{net === null ? 'Unavailable' : currency(net)}<span className="mt-1 block text-xs text-slate-500">{low !== null && high !== null ? `${currency(low)}–${currency(high)}` : ''}</span></td>{showBillPlans && <td className="px-3 py-3">{currency(point.plannedExpenses)}</td>}</tr>;
             })}</tbody>
           </table></div>
         </>}

@@ -1,6 +1,9 @@
 import { validateIncomePlan } from './incomePlan';
 
 const base = { incomeName: 'Monthly pay', amount: 2500, category: 'Salary', isRecurring: true, recurringFrequency: 'monthly', recurringStartDate: '2026-11-28', recurringEndDate: '', paymentDate: '' };
+test('accepts the existing Home quick-entry ISO timestamp without losing its payment date', () => {
+  expect(validateIncomePlan({ ...base, isRecurring: false, paymentDate: '2026-10-22T16:00:00.000Z' }).paymentDate).toEqual(new Date('2026-10-22'));
+});
 test('preserves the legacy immediate one-off payload without accepting explicitly blank dates', () => {
   expect(validateIncomePlan({ incomeName: 'Legacy one-off', amount: 100, category: 'Other' }, new Date('2026-10-22'))).toMatchObject({ isRecurring: false, paymentDate: new Date('2026-10-22') });
 });

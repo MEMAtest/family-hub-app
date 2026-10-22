@@ -25,16 +25,6 @@ import {
   RotateCcw,
   X,
 } from 'lucide-react';
-import {
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-} from 'recharts';
 import { useAppView } from '@/contexts/familyHub/AppViewContext';
 import { useCalendarContext } from '@/contexts/familyHub/CalendarContext';
 import { useBudgetContext } from '@/contexts/familyHub/BudgetContext';
@@ -44,7 +34,9 @@ import { useGoalsContext } from '@/contexts/familyHub/GoalsContext';
 import { useMealsContext } from '@/contexts/familyHub/MealsContext';
 import { useContractorContext } from '@/contexts/familyHub/ContractorContext';
 import { stewartFleming2025To2026, stewartFleming2026To2027 } from '@/data/schoolTerms';
-import { extractBudgetRecords, summariseBudgetForMonth } from '@/utils/budgetAnalytics';
+import { useCashFlow } from '@/hooks/useCashFlow';
+import { cashFlowMonth, hasKnownActuals } from '@/lib/budget/cashFlow';
+import { BankCashFlowSummary } from '@/components/budget/BankCashFlowSummary';
 import { getNextSchoolBreak } from '@/utils/schoolBreaks';
 import { UpcomingContractorVisits } from '@/components/contractors';
 import BrainFocusWidget from '@/components/dashboard/BrainFocusWidget';
@@ -113,7 +105,8 @@ const normalizeDashboardPreferences = (
 const currencyFormatter = new Intl.NumberFormat('en-GB', {
   style: 'currency',
   currency: 'GBP',
-  maximumFractionDigits: 0,
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
 });
 
 const formatCurrency = (value: number) => currencyFormatter.format(value);
@@ -156,12 +149,12 @@ const StatCard = ({
       onClick ? 'cursor-pointer' : 'cursor-default'
     } ${className ?? ''} dark:border-slate-700 dark:bg-slate-800`}
   >
-    <div className="flex items-center justify-between">
-      <div>
+    <div className="flex items-center justify-between gap-2">
+      <div className="min-w-0 flex-1">
         <p className="kinboard-label">{label}</p>
-        <p className="kinboard-serif mt-1 text-3xl leading-none text-[#18221f] dark:text-slate-100">{value}</p>
+        <p className="kinboard-serif mt-1 break-words text-xl leading-tight text-[#18221f] sm:text-2xl dark:text-slate-100">{value}</p>
       </div>
-      <div className="rounded-lg bg-[#eaf1e7] p-2 text-[#147c72] dark:bg-[#147c72]/20 dark:text-[#56c6b8]">
+      <div className="shrink-0 rounded-lg bg-[#eaf1e7] p-2 text-[#147c72] dark:bg-[#147c72]/20 dark:text-[#56c6b8]">
         <Icon className="h-5 w-5" />
       </div>
     </div>
@@ -223,7 +216,7 @@ const CollapsedWidget = ({
 export const DashboardView = () => {
   const { setView } = useAppView();
   const { events, openCreateForm, openEditForm } = useCalendarContext();
-  const { data: budgetData, openForm: openBudgetForm } = useBudgetContext();
+  const { openForm: openBudgetForm } = useBudgetContext();
   const mealsContext = useMealsContext();
   const { openMealForm } = mealsContext;
   const { lists, openForm: openShoppingForm } = useShoppingContext();
@@ -233,6 +226,8 @@ export const DashboardView = () => {
   const { showNotification } = useNotifications();
   const mealPlanning = mealsContext.mealPlanning;
   const familyId = useFamilyStore((state) => state.databaseStatus.familyId);
+  const overviewMonth = formatDateForInput(new Date()).slice(0, 7);
+  const bankCashFlow = useCashFlow(familyId, overviewMonth);
   const storedDashboardPreferences = useFamilyStore((state) => state.dashboardPreferences);
   const setDashboardPreferences = useFamilyStore((state) => state.setDashboardPreferences);
 
@@ -371,18 +366,7 @@ export const DashboardView = () => {
     return availableYears[selectedSchoolYear] ?? [];
   }, [selectedSchoolYear]);
 
-  const { expenseRecords } = useMemo(() => extractBudgetRecords(budgetData), [budgetData]);
-
-  const monthlyBudgetSnapshot = useMemo(
-    () => summariseBudgetForMonth(budgetData),
-    [budgetData]
-  );
-
-  const budgetCardTotals = useMemo(() => ({
-    income: monthlyBudgetSnapshot.totalIncome,
-    expenses: monthlyBudgetSnapshot.totalExpenses,
-    net: monthlyBudgetSnapshot.netIncome,
-  }), [monthlyBudgetSnapshot.netIncome, monthlyBudgetSnapshot.totalExpenses, monthlyBudgetSnapshot.totalIncome]);
+  const actualsKnown = hasKnownActuals(bankCashFlow.data);
 
   const totalGoals = (goalsData?.familyGoals?.length || 0) + (goalsData?.individualGoals?.length || 0);
   const avgGoalProgress = useMemo(() => {
@@ -409,21 +393,6 @@ export const DashboardView = () => {
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
       .slice(0, 4);
   }, [mealPlanning]);
-
-  const budgetCategorySeries = useMemo(() => {
-    if (!expenseRecords.length) return [] as Array<{ category: string; amount: number }>;
-
-    const totals = new Map<string, number>();
-    expenseRecords.forEach((record) => {
-      const category = record.category || 'Other';
-      totals.set(category, (totals.get(category) || 0) + Number(record.amount || 0));
-    });
-
-    return Array.from(totals.entries()).map(([category, amount]) => ({
-      category,
-      amount: Number(amount.toFixed(2)),
-    }));
-  }, [expenseRecords]);
 
   const upcomingSchoolHighlights = useMemo(() => {
     const today = new Date();
@@ -508,11 +477,9 @@ export const DashboardView = () => {
     },
     {
       key: 'budget',
-      label: 'Net Income',
-      value: formatPrivateCurrency(budgetCardTotals.net),
-      subtext: dashboardPreferences.showFinancials
-        ? `Income ${formatPrivateCurrency(budgetCardTotals.income)}`
-        : 'Income hidden',
+      label: 'Actual net flow',
+      value: actualsKnown && bankCashFlow.data ? formatPrivateCurrency(bankCashFlow.data.summary.actualNet) : bankCashFlow.loading ? 'Loading...' : 'Unavailable',
+      subtext: `${cashFlowMonth(overviewMonth)} · ${bankCashFlow.data?.coverage.status === 'complete' ? 'Imported full-month range' : 'Partial / missing imported coverage'}`,
       icon: DollarSign,
       onClick: () => setView('budget' as const),
     },
@@ -532,7 +499,7 @@ export const DashboardView = () => {
       icon: Target,
       onClick: () => setView('goals' as const),
     },
-  ]), [avgGoalProgress, budgetCardTotals, dashboardPreferences.showFinancials, formatPrivateCurrency, lists, setView, totalGoals, upcomingEvents]);
+  ]), [avgGoalProgress, actualsKnown, bankCashFlow.data, bankCashFlow.loading, overviewMonth, formatPrivateCurrency, lists, setView, totalGoals, upcomingEvents]);
 
   const nextEvent = upcomingEvents[0];
   const totalShoppingEstimate = lists.reduce((sum, list) => sum + (list.estimatedTotal || 0), 0);
@@ -1084,46 +1051,7 @@ export const DashboardView = () => {
             </h3>
             {widgetControls('budgetOverview')}
           </div>
-          {dashboardPreferences.showFinancials ? (
-            <div className="mt-4 h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={[
-                  { name: 'Income', amount: budgetCardTotals.income, fill: '#10B981' },
-                  { name: 'Expenses', amount: budgetCardTotals.expenses, fill: '#EF4444' },
-                  { name: 'Net', amount: budgetCardTotals.net, fill: budgetCardTotals.net >= 0 ? '#3B82F6' : '#F59E0B' }
-                ]}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-                  <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-                  <YAxis tickFormatter={(value) => `£${value.toLocaleString()}`} width={80} />
-                  <Tooltip formatter={(value: number) => `£${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} />
-                  <Legend wrapperStyle={{ fontSize: 12 }} />
-                  <Bar dataKey="amount" radius={[6, 6, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          ) : (
-            <div className="mt-4 flex h-64 flex-col items-center justify-center rounded-lg border border-dashed border-gray-200 bg-gray-50 text-center dark:border-slate-700 dark:bg-slate-800">
-              <EyeOff className="h-8 w-8 text-gray-400 dark:text-slate-500" />
-              <p className="mt-2 text-sm font-medium text-gray-700 dark:text-slate-200">Financial values hidden</p>
-              <p className="text-xs text-gray-500 dark:text-slate-400">Use Customise to show income again.</p>
-            </div>
-          )}
-          <div className="mt-4 grid grid-cols-3 gap-4 text-sm">
-            <div className="rounded-lg bg-green-50 p-3 border border-green-200 dark:border-green-500/40 dark:bg-green-500/10">
-              <p className="text-xs text-green-700 font-medium dark:text-green-300">Total Income</p>
-              <p className="text-lg font-semibold text-green-900 dark:text-green-200">{formatPrivateCurrency(budgetCardTotals.income)}</p>
-            </div>
-            <div className="rounded-lg bg-red-50 p-3 border border-red-200 dark:border-red-500/40 dark:bg-red-500/10">
-              <p className="text-xs text-red-700 font-medium dark:text-red-300">Total Expenses</p>
-              <p className="text-lg font-semibold text-red-900 dark:text-red-200">{formatPrivateCurrency(budgetCardTotals.expenses)}</p>
-            </div>
-            <div className={`rounded-lg p-3 border ${budgetCardTotals.net >= 0 ? 'bg-[#eaf1e7] border-[#147c72]/30 dark:border-[#147c72]/40 dark:bg-[#147c72]/10' : 'bg-amber-50 border-amber-200 dark:border-amber-500/40 dark:bg-amber-500/10'}`}>
-              <p className={`text-xs font-medium ${budgetCardTotals.net >= 0 ? 'text-[#147c72] dark:text-[#56c6b8]' : 'text-amber-700 dark:text-amber-200'}`}>Net Income</p>
-              <p className={`text-lg font-semibold ${budgetCardTotals.net >= 0 ? 'text-[#0f625a] dark:text-[#56c6b8]' : 'text-amber-900 dark:text-amber-200'}`}>
-                {formatPrivateCurrency(budgetCardTotals.net)}
-              </p>
-            </div>
-          </div>
+          <BankCashFlowSummary data={bankCashFlow.data} loading={bankCashFlow.loading} error={bankCashFlow.error} hidden={!dashboardPreferences.showFinancials} onRefresh={bankCashFlow.refresh} />
         </div>
         ))}
 

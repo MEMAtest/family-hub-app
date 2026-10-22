@@ -41,6 +41,7 @@ export const HomeIntelligencePanel = ({ defaultFilter = 'all', compact = false }
   const budgetData = useFamilyStore((state) => state.budgetData);
   const propertyTasks = useFamilyStore((state) => state.propertyTasks);
   const [filter, setFilter] = useState<Filter>(defaultFilter);
+  const [includeSavedBills, setIncludeSavedBills] = useState(false);
   const [nurseryNotices, setNurseryNotices] = useState<NurseryNoticeInput[]>([]);
   const [loadingInbox, setLoadingInbox] = useState(false);
   const [inboxUnavailable, setInboxUnavailable] = useState(false);
@@ -115,10 +116,10 @@ export const HomeIntelligencePanel = ({ defaultFilter = 'all', compact = false }
 
   useEffect(() => { void loadNursery(); }, [loadNursery]);
 
-  const expenses = useMemo(() => [
+  const expenses = useMemo(() => includeSavedBills ? [
     ...Object.values(budgetData?.expenses?.recurringMonthly || {}),
     ...(budgetData?.expenses?.oneTimeSpends || []),
-  ], [budgetData]);
+  ] : [], [budgetData, includeSavedBills]);
   const today = formatDateForInput(new Date());
   const signals = useMemo(() => buildHomeIntelligenceSignals({ today, tasks, events, expenses, propertyTasks, nurseryNotices,
     members: members.map(({ id, name }) => ({ id, name })) }), [events, expenses, members, nurseryNotices, propertyTasks, tasks, today]);
@@ -186,6 +187,7 @@ export const HomeIntelligencePanel = ({ defaultFilter = 'all', compact = false }
         className={`min-h-10 shrink-0 rounded-md px-3 text-sm font-semibold ${filter === item.id ? 'bg-[#147c72] text-white' : 'border border-[#dfe7e2] bg-white text-[#40504a] dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300'}`}>{item.label}</button>)}
     </div>
 
+    {(filter === 'all' || filter === 'bills') && <label className="mt-3 flex items-start gap-2 text-xs text-slate-500"><input type="checkbox" checked={includeSavedBills} onChange={event => setIncludeSavedBills(event.target.checked)} className="mt-0.5 rounded border-slate-300 text-teal-700" />Include unverified saved bill plans</label>}
     {loadingInbox && <p role="status" className="mt-3 flex items-center gap-2 text-sm text-[#5f6a64]"><RefreshCw className="h-4 w-4 animate-spin" />Checking school and nursery updates...</p>}
     {inboxUnavailable && <div role="alert" className="mt-3 flex items-center justify-between gap-3 border-l-2 border-amber-500 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-950/30 dark:text-amber-200"><span>School inbox could not be checked. Existing tasks are still shown.</span><button type="button" onClick={() => void loadNursery()} className="min-h-10 font-semibold underline">Retry</button></div>}
     {actionError && <p role="alert" className="mt-3 text-sm text-red-700 dark:text-red-300">{actionError}</p>}

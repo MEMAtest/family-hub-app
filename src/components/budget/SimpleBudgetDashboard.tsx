@@ -75,7 +75,6 @@ const DEFAULT_EXPENSE_CATEGORIES = [
 ];
 
 const SimpleBudgetDashboard: React.FC = () => {
-  const budgetData = useFamilyStore((state) => state.budgetData);
   const databaseStatus = useFamilyStore((state) => state.databaseStatus);
   const familyId = databaseStatus.familyId;
 
@@ -83,7 +82,10 @@ const SimpleBudgetDashboard: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [viewTab, setViewTab] = useState<'all' | 'receipt-scans'>('all');
-  const [budgetMode, setBudgetMode] = useState<'overview' | 'calculator'>('overview');
+  const [budgetMode, setBudgetMode] = useState<'overview' | 'plans' | 'calculator'>('overview');
+  const [plansError, setPlansError] = useState('');
+  const [plansReloadKey, setPlansReloadKey] = useState(0);
+  const [plansFamilyId, setPlansFamilyId] = useState<string | null>(null);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
 
   // Month/Year navigation state
@@ -204,68 +206,48 @@ const SimpleBudgetDashboard: React.FC = () => {
 
   // Load budget data from store
   useEffect(() => {
+    const controller = new AbortController();
+    setIsLoading(true);
+    setPlansError('');
     const loadBudgetData = async () => {
       try {
         if (!familyId) {
-          console.log('No family ID available yet');
+          setIncomeList([]);
+          setExpenseList([]);
           return;
         }
-
-        console.log('Loading budget data for family:', familyId);
-
-        let incomeItems: any[] = [];
-        let expenseItems: any[] = [];
-
-        try {
-          console.log('Fetching authoritative budget data from API');
           const [incomeData, expenseData] = await Promise.all([
-            fetch(`/api/families/${familyId}/budget/income`, { cache: 'no-store' }).then((res) => {
+            fetch(`/api/families/${familyId}/budget/income`, { cache: 'no-store', signal: controller.signal }).then((res) => {
               if (!res.ok) throw new Error(`Income request failed (${res.status})`);
               return res.json();
             }),
-            fetch(`/api/families/${familyId}/budget/expenses`, { cache: 'no-store' }).then((res) => {
+            fetch(`/api/families/${familyId}/budget/expenses`, { cache: 'no-store', signal: controller.signal }).then((res) => {
               if (!res.ok) throw new Error(`Expense request failed (${res.status})`);
               return res.json();
             }),
           ]);
 
-          if (Array.isArray(incomeData)) {
-            incomeItems = incomeData;
-            console.log('Loaded income from API:', incomeData.length, 'items');
-          }
-
-          if (Array.isArray(expenseData)) {
-            expenseItems = expenseData;
-            console.log('Loaded expenses from API:', expenseData.length, 'items');
-          }
-        } catch (apiError) {
-          console.warn('Budget API unavailable; using the last device snapshot.', apiError);
-          incomeItems = [
-            ...Object.values(budgetData?.income?.monthly || {}),
-            ...(budgetData?.income?.oneTime || [])
-          ];
-          expenseItems = [
-            ...Object.values(budgetData?.expenses?.recurringMonthly || {}),
-            ...(budgetData?.expenses?.oneTimeSpends || [])
-          ];
-        }
-
-        if (incomeItems.length || expenseItems.length) {
-          const safeIncome = sanitizeBudgetItems(incomeItems);
-          const safeExpenses = sanitizeBudgetItems(expenseItems);
+          if (!Array.isArray(incomeData) || !Array.isArray(expenseData)) throw new Error('Saved plan response was incomplete.');
+          if (controller.signal.aborted) return;
+          const safeIncome = sanitizeBudgetItems(incomeData);
+          const safeExpenses = sanitizeBudgetItems(expenseData);
           setIncomeList(safeIncome);
           setExpenseList(safeExpenses);
           persistBudgetLists(safeIncome, safeExpenses);
-        }
       } catch (error) {
-        console.error('Error loading budget data:', error);
+        if (!controller.signal.aborted) {
+          setIncomeList([]);
+          setExpenseList([]);
+          setPlansError('Saved plans could not be loaded. No device snapshot or example figures have been substituted.');
+        }
       } finally {
-        setIsLoading(false);
+        if (!controller.signal.aborted) { setIsLoading(false); setPlansFamilyId(familyId); }
       }
     };
 
     loadBudgetData();
-  }, [familyId, budgetData, persistBudgetLists, sanitizeBudgetItems]);
+    return () => controller.abort();
+  }, [familyId, plansReloadKey, persistBudgetLists, sanitizeBudgetItems]);
 
   const reloadBudgetCategories = useCallback(async () => {
     if (!familyId) return;
@@ -644,16 +626,7 @@ const SimpleBudgetDashboard: React.FC = () => {
     );
   };
 
-  if (isLoading) {
-    return (
-      <div className="p-3 sm:p-4 md:p-6 lg:p-8 bg-gray-50 dark:bg-slate-950 min-h-screen">
-        <div className="flex items-center justify-center h-64">
-          <RefreshCw className="w-8 h-8 animate-spin text-gray-400" />
-          <span className="ml-2 text-gray-600">Loading budget data...</span>
-        </div>
-      </div>
-    );
-  }
+  const plansReady = !isLoading && plansFamilyId === familyId;
 
   if (!dashboardData) {
     return (
@@ -769,10 +742,7 @@ const SimpleBudgetDashboard: React.FC = () => {
         </div>
       )}
 
-      <ActualCashFlowPanel familyId={familyId} month={`${selectedYear}-${String(selectedMonth).padStart(2, '0')}`} refreshKey={cashFlowRefreshKey} />
-      <IncomeForecastPanel familyId={familyId} refreshKey={cashFlowRefreshKey} onPlanIncome={() => { setEditingIncome(null); setShowAddIncome(true); }} />
-
-      {dashboardData.excludedQaCount > 0 && (
+      {budgetMode === 'plans' && dashboardData.excludedQaCount > 0 && (
         <div className={`${isMobile ? 'mx-4' : ''} mb-4 border-y border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900`}>
           {dashboardData.excludedQaCount} test or rehearsal {dashboardData.excludedQaCount === 1 ? 'row is' : 'rows are'} excluded from the household plan totals. The saved records have not been deleted.
         </div>
@@ -791,6 +761,7 @@ const SimpleBudgetDashboard: React.FC = () => {
           >
             Overview
           </button>
+          <button type="button" onClick={() => setBudgetMode('plans')} className={`rounded-md px-3 py-2 text-sm font-semibold transition ${budgetMode === 'plans' ? 'bg-[#147c72] text-white' : 'text-[#5f6a64] hover:bg-[#eaf1e7] dark:text-slate-300 dark:hover:bg-slate-800'}`}>Saved plans</button>
           <button
             type="button"
             onClick={() => setBudgetMode('calculator')}
@@ -805,7 +776,14 @@ const SimpleBudgetDashboard: React.FC = () => {
         </div>
       </div>
 
-      {budgetMode === 'calculator' ? (
+      {budgetMode === 'overview' && <>
+        <ActualCashFlowPanel familyId={familyId} month={`${selectedYear}-${String(selectedMonth).padStart(2, '0')}`} refreshKey={cashFlowRefreshKey} />
+        <IncomeForecastPanel familyId={familyId} refreshKey={cashFlowRefreshKey} onPlanIncome={() => { setEditingIncome(null); setShowAddIncome(true); }} />
+      </>}
+      {budgetMode === 'plans' && <section className="mb-4 border-y border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900"><h2 className="font-semibold">Saved plans, not bank-verified spending</h2><p className="mt-1">These saved entries are kept for review. They do not supply the Home or Budget Overview figures. Edit or remove entries that are not yours.</p>{plansError && <><p role="alert" className="mt-2">{plansError}</p><button type="button" onClick={() => setPlansReloadKey(value => value + 1)} className="mt-2 underline">Retry saved plans</button></>}</section>}
+      {budgetMode !== 'overview' && !plansReady && <p role="status" className="p-4 text-sm text-slate-500">Loading saved plans...</p>}
+
+      {budgetMode === 'calculator' && plansReady ? (
         <BudgetCalculator
           totalIncome={calculatorDefaults.totalIncome}
           fixedCosts={calculatorDefaults.fixedCosts}
@@ -813,7 +791,7 @@ const SimpleBudgetDashboard: React.FC = () => {
           monthLabel={`${getMonthName(selectedMonth)} ${selectedYear}`}
           formatCurrency={formatCurrency}
         />
-      ) : (
+      ) : budgetMode === 'plans' && plansReady && !plansError ? (
       <>
       {/* Key Metrics Cards */}
       <div className={`grid gap-3 mb-4 md:mb-8 ${
@@ -1055,7 +1033,7 @@ const SimpleBudgetDashboard: React.FC = () => {
               isMobile ? 'text-base' : 'text-lg'
             }`}>
               <PieChartIcon className="w-5 h-5 mr-2" />
-              Expense Breakdown
+              Planned Expense Breakdown
             </h2>
             <div className={isMobile ? 'h-72' : 'h-96'}>
               <ResponsiveContainer width="100%" height="100%">
@@ -1098,7 +1076,7 @@ const SimpleBudgetDashboard: React.FC = () => {
               isMobile ? 'text-base' : 'text-lg'
             }`}>
               <PieChartIcon className="w-5 h-5 mr-2" />
-              Income Breakdown
+              Planned Income Breakdown
             </h2>
             <div className={isMobile ? 'h-72' : 'h-96'}>
               <ResponsiveContainer width="100%" height="100%">
@@ -1139,7 +1117,7 @@ const SimpleBudgetDashboard: React.FC = () => {
           <h2 className={`font-medium text-gray-900 dark:text-slate-100 mb-4 ${
             isMobile ? 'text-base' : 'text-lg'
           }`}>
-            Category Summary
+            Planned Category Summary
           </h2>
           <div className="overflow-auto max-h-80">
             <table className="w-full text-sm">
@@ -1440,7 +1418,7 @@ const SimpleBudgetDashboard: React.FC = () => {
         </div>
       </div>
       </>
-      )}
+      ) : null}
 
       {/* Modals */}
       <AddIncomeModal
@@ -1461,6 +1439,7 @@ const SimpleBudgetDashboard: React.FC = () => {
           const saved = await response.json();
           if (!response.ok || !saved.id) throw new Error(saved.error || 'Income could not be saved. Please try again.');
           setIncomeList(prev => editingIncome ? prev.map(item => item.id === editingIncome.id ? saved : item) : [...prev, saved]);
+          setPlansReloadKey(value => value + 1);
           setShowAddIncome(false);
           setEditingIncome(null);
           toast.success('Income plan saved');

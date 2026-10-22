@@ -27,6 +27,7 @@ beforeEach(() => {
   jest.setSystemTime(new Date('2026-10-09T07:00:00Z'));
   jest.clearAllMocks();
   durableStates = []; failWrite = false; mockEvents = []; mockNotifications = [];
+  mockStore.budgetData = {};
   mockTasks = [{ id: 'kit', title: 'Bring PE kit', assignees: [], assignedDate: '2026-10-08', dueDate: '2026-10-09',
     taskType: 'homework', priority: 'medium', createdAt: new Date(), updatedAt: new Date() }];
   global.fetch = jest.fn(async (_url: any, options?: RequestInit) => {
@@ -46,6 +47,14 @@ const ready = async () => { await waitFor(() => {
   expect(screen.queryByText('Checking school and nursery updates...')).not.toBeInTheDocument();
   expect(screen.queryByText('Checking personal task reminders...')).not.toBeInTheDocument();
 }); };
+
+it('does not turn unverified saved bill amounts into default household alerts', async () => {
+  mockStore.budgetData = { expenses: { recurringMonthly: { old: { id: 'old', expenseName: 'Example Broadband', name: 'Example Broadband', amount: 50, isRecurring: true } } } };
+  render(<HomeIntelligencePanel />); await ready();
+  expect(screen.queryByText(/Example Broadband/)).not.toBeInTheDocument();
+  fireEvent.click(screen.getByLabelText('Include unverified saved bill plans'));
+  expect(screen.getByText(/Example Broadband: payment date needed/)).toBeInTheDocument();
+});
 
 it('snoozes a real task for an hour, reloads its personal state and wakes it without completing it', async () => {
   const view = render(<HomeIntelligencePanel />); await ready();

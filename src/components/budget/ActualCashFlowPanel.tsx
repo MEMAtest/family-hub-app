@@ -1,92 +1,39 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { AlertCircle, CircleCheck, FolderKanban, Landmark, RefreshCw, WalletCards } from 'lucide-react';
-
-type CashFlow = {
-  month: string;
-  summary: {
-    actualIncome: number;
-    actualSpend: number;
-    actualNet: number;
-    plannedIncome: number;
-    plannedExpenses: number;
-    plannedNet: number;
-    forecastNet: number | null;
-    forecastStatus: 'unreconciled';
-  };
-  categorySpend: Array<{ category: string; amount: number }>;
-  reconciliations: Array<{ accountId: string; accountName: string; mismatch: number | null; reconciled: boolean | null }>;
-  connections: {
-    planned: { incomeItems: number; expenseItems: number; excludedQaItems?: number };
-    accounts: Array<{ id: string; name: string; institution: string | null; importCount: number; transactionCount: number; lastImportAt: string | null; statementThrough: string | null; latestBalance?: number | null }>;
-    property: { projects: Array<{ id: string; title: string; status: string; selectedCost: number; unknownCostItems: number; quoteReference: number | null; actualSpend: number | null }>; updatedAt: string | null };
-  };
-};
+import { useCashFlow } from '@/hooks/useCashFlow';
+import { BankCashFlowSummary } from './BankCashFlowSummary';
+import { BankTransactionDetails } from './BankTransactionDetails';
 
 const formatMoney = (value: number) => new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 0 }).format(value);
 const formatStatementMoney = (value: number) => new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
 const formatDate = (value: string | null) => value ? new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(value)) : 'Never';
 
 export function ActualCashFlowPanel({ familyId, month, refreshKey = 0 }: { familyId: string | null; month: string; refreshKey?: number }) {
-  const [data, setData] = useState<CashFlow | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-
-  const refresh = async () => {
-    if (!familyId) return;
-    setLoading(true);
-    setError('');
-    try {
-      const response = await fetch(`/api/families/${familyId}/budget/cash-flow?month=${month}`);
-      const body = await response.json();
-      if (!response.ok) throw new Error(body.error || 'Could not load actual cash flow.');
-      setData(body);
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Could not load actual cash flow.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => { void refresh(); }, [familyId, month, refreshKey]);
+  const { data, loading, error, refresh } = useCashFlow(familyId, month, refreshKey);
 
   const hasMismatch = useMemo(() => data?.reconciliations.some((item) => item.reconciled === false) ?? false, [data]);
-  const hasActualTransactions = Boolean(
-    data && (data.summary.actualIncome !== 0 || data.summary.actualSpend !== 0)
-  );
 
   if (!familyId) return null;
   return (
-    <section className="mb-6 border-y border-[#dbe6df] bg-white px-4 py-5 dark:border-slate-800 dark:bg-slate-900 sm:px-5">
+    <section aria-labelledby="actual-cash-flow-title" className="mb-6 border-y border-[#dbe6df] bg-white px-4 py-5 dark:border-slate-800 dark:bg-slate-900 sm:px-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <div className="flex items-center gap-2"><WalletCards className="h-4 w-4 text-[#147c72]" /><h2 className="text-base font-semibold text-[#18221f] dark:text-slate-100">Actual cash flow</h2></div>
+          <div className="flex items-center gap-2"><WalletCards className="h-4 w-4 text-[#147c72]" /><h2 id="actual-cash-flow-title" className="text-base font-semibold text-[#18221f] dark:text-slate-100">Actual cash flow</h2></div>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Imported statement transactions are separate from planned bills.</p>
         </div>
         <button type="button" onClick={refresh} className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800" title="Refresh actual cash flow" aria-label="Refresh actual cash flow"><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /></button>
       </div>
-      {error && <p className="mt-4 text-sm text-rose-700 dark:text-rose-300">{error}</p>}
-      {!error && data && (
+      <BankCashFlowSummary data={data} loading={loading} error={error} onRefresh={refresh} />
+      {!error && !loading && data && (
         <>
-          <div className="mt-4 grid grid-cols-2 gap-px overflow-hidden rounded-md border border-slate-200 bg-slate-200 sm:grid-cols-4 dark:border-slate-700 dark:bg-slate-700">
-            {[
-              ['Actual in', data.summary.actualIncome, 'text-[#147c72]'],
-              ['Actual out', data.summary.actualSpend, 'text-rose-700'],
-              ['Actual net flow', data.summary.actualNet, data.summary.actualNet >= 0 ? 'text-[#147c72]' : 'text-rose-700'],
-              ['Plan balance', data.summary.plannedNet, data.summary.plannedNet >= 0 ? 'text-[#147c72]' : 'text-rose-700'],
-            ].map(([label, value, colour]) => <div key={String(label)} className="bg-white p-3 dark:bg-slate-900"><p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">{label}</p><p className={`mt-1 text-lg font-semibold ${colour}`}>{formatMoney(Number(value))}</p></div>)}
-          </div>
-          {!hasActualTransactions && (
-            <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
-              No statement transactions have been imported for this month. The plan is shown separately and is not presented as actual savings.
-            </p>
-          )}
           {(data.categorySpend.length > 0 || data.reconciliations.length > 0) && <div className="mt-4 grid gap-4 lg:grid-cols-2">
-            <div><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Actual spending</p><div className="mt-2 space-y-2">{data.categorySpend.slice(0, 5).map((item) => <div key={item.category} className="flex justify-between text-sm"><span>{item.category}</span><span className="font-medium">{formatMoney(item.amount)}</span></div>)}{data.categorySpend.length === 0 && <p className="text-sm text-slate-500">No statement transactions for this month yet.</p>}</div></div>
+            <div><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Actual spending by category</p><div className="mt-2 space-y-2">{[...data.categorySpend].sort((a, b) => b.amount - a.amount).map((item) => <div key={item.category} className="flex flex-wrap justify-between gap-2 text-sm"><span>{item.category}</span><span className="font-medium">{formatStatementMoney(item.amount)} <span className="text-xs text-slate-500">({data.summary.actualSpend > 0 ? (item.amount / data.summary.actualSpend * 100).toFixed(1) : '0.0'}%)</span></span></div>)}{data.categorySpend.length === 0 && <p className="text-sm text-slate-500">No imported spending for this month.</p>}</div></div>
             <div><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Account reconciliation</p><div className="mt-2 space-y-2">{data.reconciliations.map((item) => <div key={item.accountId} className="flex items-center justify-between gap-3 text-sm"><span className="inline-flex items-center gap-1.5"><Landmark className="h-3.5 w-3.5 text-slate-400" />{item.accountName}</span><span className={item.reconciled === false ? 'font-medium text-amber-700 dark:text-amber-300' : 'text-slate-500'}>{item.reconciled === false ? `${formatMoney(Math.abs(item.mismatch || 0))} to check` : item.reconciled ? 'Matched' : 'Month not reconciled'}</span></div>)}</div></div>
           </div>}
           {hasMismatch && <p className="mt-4 flex items-center gap-2 text-xs text-amber-800 dark:text-amber-200"><AlertCircle className="h-4 w-4" />One or more imported statement balances do not reconcile with the transactions in this month.</p>}
+          <BankTransactionDetails key={data.month} data={data} />
           <div className="mt-5 border-t border-[#dbe6df] pt-4 dark:border-slate-800">
             <div className="flex flex-wrap items-end justify-between gap-2">
               <div><h3 className="text-sm font-semibold text-[#18221f] dark:text-slate-100">Money index</h3><p className="mt-1 text-xs text-slate-500">What is connected, what is current, and what still sits outside cash flow.</p></div>

@@ -5,7 +5,15 @@ const date = z.preprocess(value => value === '' || value === undefined ? null : 
     const parsed = new Date(`${value}T00:00:00Z`);
     return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
   }, 'Enter a valid date.').nullable());
-const dateOnly = (value: unknown) => value instanceof Date ? value.toISOString().slice(0, 10) : value;
+const dateOnly = (value: unknown) => {
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(value)) {
+    const parsed = new Date(value);
+    const calendarDay = new Date(`${value.slice(0, 10)}T00:00:00Z`);
+    if (!Number.isNaN(parsed.getTime()) && !Number.isNaN(calendarDay.getTime()) && calendarDay.toISOString().slice(0, 10) === value.slice(0, 10)) return parsed.toISOString().slice(0, 10);
+  }
+  return value;
+};
 
 export function validateIncomePlan(body: Record<string, unknown>, now = new Date()) {
   const result = z.object({
