@@ -18,6 +18,8 @@ import {
   FileUp,
   Search,
   Calculator,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import {
   PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip,
@@ -34,6 +36,7 @@ import StatementImportModal from './modals/StatementImportModal';
 import BudgetCalculator from './BudgetCalculator';
 import { ActualCashFlowPanel } from './ActualCashFlowPanel';
 import { IncomeForecastPanel } from './IncomeForecastPanel';
+import { FamilyMoneyPlanner } from './FamilyMoneyPlanner';
 import databaseService from '@/services/databaseService';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { filterExpenses, filterIncome } from '@/utils/budgetFilters';
@@ -82,15 +85,37 @@ const SimpleBudgetDashboard: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [viewTab, setViewTab] = useState<'all' | 'receipt-scans'>('all');
-  const [budgetMode, setBudgetMode] = useState<'overview' | 'plans' | 'calculator'>('overview');
+  const [budgetMode, setBudgetMode] = useState<'overview' | 'source' | 'plans' | 'calculator'>('overview');
   const [plansError, setPlansError] = useState('');
   const [plansReloadKey, setPlansReloadKey] = useState(0);
   const [plansFamilyId, setPlansFamilyId] = useState<string | null>(null);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
 
   // Month/Year navigation state
-  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1); // 1-12
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1).getMonth() + 1);
+  const [selectedYear, setSelectedYear] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1).getFullYear());
+  const [moneyLocationReady, setMoneyLocationReady] = useState(false);
+
+  useEffect(() => {
+    const params = new URL(window.location.href).searchParams;
+    const month = params.get('moneyMonth');
+    const mode = params.get('moneyView');
+    if (month && /^(20\d{2})-(0[1-9]|1[0-2])$/.test(month)) {
+      setSelectedYear(Number(month.slice(0, 4)));
+      setSelectedMonth(Number(month.slice(5, 7)));
+    }
+    if (mode === 'overview' || mode === 'source' || mode === 'plans' || mode === 'calculator') setBudgetMode(mode);
+    setMoneyLocationReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!moneyLocationReady) return;
+    const url = new URL(window.location.href);
+    if (url.searchParams.get('view') !== 'budget') return;
+    url.searchParams.set('moneyMonth', `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`);
+    url.searchParams.set('moneyView', budgetMode);
+    window.history.replaceState(window.history.state, '', url);
+  }, [moneyLocationReady, selectedMonth, selectedYear, budgetMode]);
 
   // Modal states
   const [showAddIncome, setShowAddIncome] = useState(false);
@@ -497,7 +522,7 @@ const SimpleBudgetDashboard: React.FC = () => {
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-3">
           <DollarSign className="w-6 h-6 text-blue-600" />
-          <h1 className="mobile-title">Budget</h1>
+          <h1 className="text-lg font-semibold">Family Money Planner</h1>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -512,22 +537,20 @@ const SimpleBudgetDashboard: React.FC = () => {
       <div className="flex items-center justify-between">
         <button
           onClick={goToPreviousMonth}
+          aria-label="Previous month"
           className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
         >
-          <svg className="w-4 h-4 dark:text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
+          <ChevronLeft className="h-4 w-4" />
         </button>
         <p className="text-sm font-medium text-gray-900 dark:text-slate-100">
           {getMonthName(selectedMonth)} {selectedYear}
         </p>
         <button
           onClick={goToNextMonth}
+          aria-label="Next month"
           className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
         >
-          <svg className="w-4 h-4 dark:text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
+          <ChevronRight className="h-4 w-4" />
         </button>
       </div>
     </div>
@@ -541,7 +564,7 @@ const SimpleBudgetDashboard: React.FC = () => {
       <div className="lg:hidden fixed inset-0 bg-black bg-opacity-50 z-50" onClick={() => setShowMobileMenu(false)}>
         <div className="absolute right-0 top-0 h-full w-80 surface-card shadow-xl" onClick={(e) => e.stopPropagation()}>
           <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-slate-800 pwa-safe-top">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Budget Actions</h2>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Money actions</h2>
             <button
               onClick={() => setShowMobileMenu(false)}
               className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
@@ -656,16 +679,15 @@ const SimpleBudgetDashboard: React.FC = () => {
         <div className="mb-8">
           <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
             <div>
-              <h1 className="text-2xl md:text-3xl font-light text-gray-900 dark:text-slate-100 mb-2">Budget Management</h1>
+              <h1 className="text-2xl font-semibold text-gray-900 dark:text-slate-100 mb-2">Family Money Planner</h1>
               <div className="flex items-center gap-3">
                 <button
                   onClick={goToPreviousMonth}
                   className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
                   title="Previous month"
+                  aria-label="Previous month"
                 >
-                  <svg className="w-5 h-5 dark:text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                  </svg>
+                  <ChevronLeft className="h-5 w-5" />
                 </button>
                 <p className="text-lg font-medium text-gray-900 dark:text-slate-100 min-w-[200px] text-center">
                   {getMonthName(selectedMonth)} {selectedYear}
@@ -674,10 +696,9 @@ const SimpleBudgetDashboard: React.FC = () => {
                   onClick={goToNextMonth}
                   className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
                   title="Next month"
+                  aria-label="Next month"
                 >
-                  <svg className="w-5 h-5 dark:text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
+                  <ChevronRight className="h-5 w-5" />
                 </button>
               </div>
             </div>
@@ -687,16 +708,16 @@ const SimpleBudgetDashboard: React.FC = () => {
                 className="bg-green-600 text-white px-4 py-2 rounded-sm hover:bg-green-700 transition-colors text-sm font-medium flex items-center gap-2"
               >
                 <Plus className="w-4 h-4" />
-                Add Income
+                Plan income
               </button>
-              <button
+              <button style={{ display: budgetMode === 'overview' ? 'none' : undefined }}
                 onClick={() => setShowAddExpense(true)}
                 className="bg-red-600 text-white px-4 py-2 rounded-sm hover:bg-red-700 transition-colors text-sm font-medium flex items-center gap-2"
               >
                 <Plus className="w-4 h-4" />
                 Add Expense
               </button>
-              <button
+              <button style={{ display: budgetMode === 'overview' ? 'none' : undefined }}
                 onClick={() => setShowReceiptScanner(true)}
                 className="bg-purple-600 text-white px-4 py-2 rounded-sm hover:bg-purple-700 transition-colors text-sm font-medium flex items-center gap-2"
               >
@@ -710,21 +731,21 @@ const SimpleBudgetDashboard: React.FC = () => {
                 <FileUp className="w-4 h-4" />
                 Import Statement
               </button>
-              <button
+              <button style={{ display: budgetMode === 'overview' ? 'none' : undefined }}
                 onClick={() => setShowAddSavingsGoal(true)}
                 className="bg-blue-600 text-white px-4 py-2 rounded-sm hover:bg-blue-700 transition-colors text-sm font-medium flex items-center gap-2"
               >
                 <Target className="w-4 h-4" />
                 Savings Goal
               </button>
-              <button
+              <button style={{ display: budgetMode === 'overview' ? 'none' : undefined }}
                 onClick={() => setBudgetMode('calculator')}
                 className="bg-[#147c72] text-white px-4 py-2 rounded-sm hover:bg-[#0f625a] transition-colors text-sm font-medium flex items-center gap-2"
               >
                 <Calculator className="w-4 h-4" />
                 Calculator
               </button>
-              <button
+              <button style={{ display: budgetMode === 'overview' ? 'none' : undefined }}
                 onClick={() => setShowAdvancedReports(true)}
                 className="bg-purple-600 text-white px-4 py-2 rounded-sm hover:bg-purple-700 transition-colors text-sm font-medium flex items-center gap-2"
               >
@@ -749,7 +770,7 @@ const SimpleBudgetDashboard: React.FC = () => {
       )}
 
       <div className={`${isMobile ? 'px-4' : ''} mb-4`}>
-        <div className="inline-flex rounded-lg border border-[#dde5e0] bg-white/80 p-1 dark:border-slate-800 dark:bg-slate-900/80">
+        <div className="flex max-w-full flex-wrap gap-1 rounded-lg border border-[#dde5e0] bg-white/80 p-1 dark:border-slate-800 dark:bg-slate-900/80">
           <button
             type="button"
             onClick={() => setBudgetMode('overview')}
@@ -759,12 +780,14 @@ const SimpleBudgetDashboard: React.FC = () => {
                 : 'text-[#5f6a64] hover:bg-[#eaf1e7] dark:text-slate-300 dark:hover:bg-slate-800'
             }`}
           >
-            Overview
+            Planner
           </button>
+          <button type="button" onClick={() => setBudgetMode('source')} className={`rounded-md px-3 py-2 text-sm font-semibold transition ${budgetMode === 'source' ? 'bg-[#147c72] text-white' : 'text-[#5f6a64] hover:bg-[#eaf1e7] dark:text-slate-300 dark:hover:bg-slate-800'}`}>Bank source</button>
           <button type="button" onClick={() => setBudgetMode('plans')} className={`rounded-md px-3 py-2 text-sm font-semibold transition ${budgetMode === 'plans' ? 'bg-[#147c72] text-white' : 'text-[#5f6a64] hover:bg-[#eaf1e7] dark:text-slate-300 dark:hover:bg-slate-800'}`}>Saved plans</button>
           <button
             type="button"
             onClick={() => setBudgetMode('calculator')}
+            style={{ display: budgetMode === 'overview' || budgetMode === 'source' ? 'none' : undefined }}
             className={`rounded-md px-3 py-2 text-sm font-semibold transition ${
               budgetMode === 'calculator'
                 ? 'bg-[#147c72] text-white'
@@ -777,11 +800,12 @@ const SimpleBudgetDashboard: React.FC = () => {
       </div>
 
       {budgetMode === 'overview' && <>
-        <ActualCashFlowPanel familyId={familyId} month={`${selectedYear}-${String(selectedMonth).padStart(2, '0')}`} refreshKey={cashFlowRefreshKey} />
-        <IncomeForecastPanel familyId={familyId} refreshKey={cashFlowRefreshKey} onPlanIncome={() => { setEditingIncome(null); setShowAddIncome(true); }} />
+        <FamilyMoneyPlanner familyId={familyId} month={`${selectedYear}-${String(selectedMonth).padStart(2, '0')}`} refreshKey={cashFlowRefreshKey} />
+        <details className="mt-5 border-y border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900"><summary className="min-h-10 cursor-pointer text-sm font-semibold">Expected money and longer-term plans</summary><IncomeForecastPanel familyId={familyId} refreshKey={cashFlowRefreshKey} onPlanIncome={() => { setEditingIncome(null); setShowAddIncome(true); }} /></details>
       </>}
+      {budgetMode === 'source' && <ActualCashFlowPanel familyId={familyId} month={`${selectedYear}-${String(selectedMonth).padStart(2, '0')}`} refreshKey={cashFlowRefreshKey} />}
       {budgetMode === 'plans' && <section className="mb-4 border-y border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900"><h2 className="font-semibold">Saved plans, not bank-verified spending</h2><p className="mt-1">These saved entries are kept for review. They do not supply the Home or Budget Overview figures. Edit or remove entries that are not yours.</p>{plansError && <><p role="alert" className="mt-2">{plansError}</p><button type="button" onClick={() => setPlansReloadKey(value => value + 1)} className="mt-2 underline">Retry saved plans</button></>}</section>}
-      {budgetMode !== 'overview' && !plansReady && <p role="status" className="p-4 text-sm text-slate-500">Loading saved plans...</p>}
+      {(budgetMode === 'plans' || budgetMode === 'calculator') && !plansReady && <p role="status" className="p-4 text-sm text-slate-500">Loading saved plans...</p>}
 
       {budgetMode === 'calculator' && plansReady ? (
         <BudgetCalculator

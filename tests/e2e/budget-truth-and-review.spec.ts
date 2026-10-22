@@ -60,16 +60,16 @@ test('budget separates plans from actuals and commits a statement only after rev
   });
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/');
-  await page.getByRole('button', { name: /^Budget$/ }).click();
+  await page.getByRole('button', { name: /^Money$/ }).click();
 
-  await expect(page.getByRole('heading', { name: 'Budget Management' })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole('heading', { name: 'Family Money Planner' })).toBeVisible({ timeout: 20_000 });
   await expect(page.getByText('Planned Income', { exact: true })).not.toBeVisible();
   await page.getByRole('button', { name: 'Saved plans', exact: true }).click();
   await expect(page.getByText('Planned Income', { exact: true })).toBeVisible();
   await expect(page.getByText('Plan Balance', { exact: true })).toBeVisible();
   await expect(page.getByText(/1 test or rehearsal row is excluded/)).toBeVisible();
   await expect(page.getByText(/This is not actual savings/)).toBeVisible();
-  await page.getByRole('button', { name: 'Overview', exact: true }).click();
+  await page.getByRole('button', { name: 'Bank source', exact: true }).click();
 
   await page.getByRole('button', { name: 'Import Statement' }).click();
   await expect(page.getByRole('option', { name: 'Virgin' })).toBeAttached();
@@ -122,6 +122,8 @@ test('Home and Budget Overview reconcile to the same bank rows, never saved-plan
   await expect(page.getByText(/£88,888/)).not.toBeVisible();
   await expect(page.getByRole('button', { name: /^Actual net flow/ })).toContainText('£965.44');
   await page.getByRole('button', { name: /^Actual net flow/ }).click();
+  await page.getByRole('button', { name: 'Bank source', exact: true }).click();
+  await page.getByRole('button', { name: 'Next month', exact: true }).click();
   await expect(summary.getByText('£234.56', { exact: true })).toBeVisible();
   await expect(summary.getByText('£965.44', { exact: true })).toBeVisible();
   await expect(page.getByText('Planned Expenses', { exact: true })).not.toBeVisible();
@@ -136,7 +138,7 @@ test('Home and Budget Overview reconcile to the same bank rows, never saved-plan
   await page.getByRole('button', { name: 'Saved plans', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Saved plans, not bank-verified spending' })).toBeVisible();
   await expect(page.getByText('£88,888.00', { exact: true }).first()).toBeVisible();
-  await page.getByRole('button', { name: 'Overview', exact: true }).click();
+  await page.getByRole('button', { name: 'Bank source', exact: true }).click();
   await page.getByRole('button', { name: 'Previous month', exact: true }).click();
   await expect(summary.getByText('£200.00', { exact: true })).toBeVisible();
   await expect(summary.getByText(/Imported full-month range/)).toBeVisible();
@@ -154,12 +156,13 @@ test('Home and Budget Overview reconcile to the same bank rows, never saved-plan
   unavailable = false;
   plansUnavailable = true;
   await page.reload();
+  await page.getByRole('button', { name: 'Bank source', exact: true }).click();
   await expect(summary.getByText('£234.56', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Saved plans', exact: true }).click();
   await expect(page.getByRole('alert').filter({ hasText: 'Saved plans could not be loaded' })).toBeVisible();
   await expect(page.getByText(/999,999/)).not.toBeVisible();
   await expect(page.getByText('Planned Expenses', { exact: true })).not.toBeVisible();
-  await page.getByRole('button', { name: 'Overview', exact: true }).click();
+  await page.getByRole('button', { name: 'Bank source', exact: true }).click();
   await expect(summary.getByText('£234.56', { exact: true })).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
   await summary.scrollIntoViewIfNeeded();
@@ -214,6 +217,7 @@ test('income planning and history forecast work on phone and desktop without mix
   });
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/?view=budget');
+  await page.getByText('Expected money and longer-term plans', { exact: true }).click();
   const panel = page.getByRole('region', { name: 'Income & forecast' });
   await expect(panel.getByText(/24 of 24 complete months available/)).toBeVisible({ timeout: 25_000 });
   await expect(panel.locator('svg.recharts-surface[role="application"]')).toBeVisible();
@@ -240,6 +244,7 @@ test('income planning and history forecast work on phone and desktop without mix
   expect(headingBox?.x).toBeGreaterThanOrEqual(288);
   await page.screenshot({ path: 'output/playwright/income-forecast-desktop.png', fullPage: false });
   await page.reload();
+  await page.getByText('Expected money and longer-term plans', { exact: true }).click();
   await panel.getByLabel('Income basis').selectOption('plan');
   await expect(panel.getByText('£3,200', { exact: true }).first()).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });

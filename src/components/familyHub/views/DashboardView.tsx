@@ -80,7 +80,7 @@ const DASHBOARD_WIDGETS = [
   { id: 'activity', label: 'Family Activity' },
   { id: 'schoolTerms', label: 'School Breaks' },
   { id: 'quickActions', label: 'Quick Actions' },
-  { id: 'budgetOverview', label: 'Budget Overview' },
+  { id: 'budgetOverview', label: 'Family Money' },
   { id: 'recentActivity', label: 'Recent Activity' },
   { id: 'household', label: 'Household Members' },
   { id: 'meals', label: 'Meal Plan Highlights' },
@@ -1047,7 +1047,7 @@ export const DashboardView = () => {
         <div className="kinboard-card p-5 xl:col-span-2 dark:border-slate-700 dark:bg-slate-900">
           <div className="flex items-center justify-between gap-3">
             <h3 className="flex items-center gap-2 text-base font-semibold text-gray-900 dark:text-slate-100">
-              <BarChart3 className="h-5 w-5 text-[#147c72]" /> Budget Overview
+              <BarChart3 className="h-5 w-5 text-[#147c72]" /> Family Money
             </h3>
             {widgetControls('budgetOverview')}
           </div>

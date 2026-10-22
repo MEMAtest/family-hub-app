@@ -56,7 +56,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'dashboard', label: 'Dashboard', mobileLabel: 'Today', icon: Home, section: 'Home' },
   { id: 'calendar', label: 'Calendar', mobileLabel: 'Cal', icon: CalendarIcon, section: 'Home' },
   { id: 'family', label: 'Family', mobileLabel: 'People', icon: Users, section: 'Home' },
-  { id: 'budget', label: 'Budget', mobileLabel: 'Money', icon: DollarSign, section: 'Plan' },
+  { id: 'budget', label: 'Money', mobileLabel: 'Money', icon: DollarSign, section: 'Plan' },
   { id: 'meals', label: 'Meals', mobileLabel: 'Meals', icon: UtensilsCrossed, section: 'Plan' },
   { id: 'shopping', label: 'Shopping', mobileLabel: 'Basket', icon: ShoppingCart, section: 'Plan' },
   { id: 'kitchen', label: 'Kitchen', mobileLabel: 'Kitchen', icon: Refrigerator, section: 'Plan' },
@@ -299,7 +299,7 @@ export const FamilyHubShell = () => {
 
     const labels: Record<string, string> = {
       calendar: 'Calendar',
-      budget: 'Budget',
+      budget: 'Money',
       meals: 'Meals',
       shopping: 'Shopping',
       kitchen: 'Kitchen',
