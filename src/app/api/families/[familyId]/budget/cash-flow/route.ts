@@ -25,7 +25,7 @@ export const GET = requireFamilyAccess(async (request: NextRequest, context) => 
         orderBy: { name: 'asc' },
         include: {
           _count: { select: { imports: true, transactions: true } },
-          imports: { orderBy: { createdAt: 'desc' }, take: 1, select: { createdAt: true, statementEnd: true } },
+          imports: { orderBy: { createdAt: 'desc' }, take: 1, select: { createdAt: true, statementEnd: true, closingBalance: true } },
         },
       }),
       prisma.budgetTransaction.findMany({
@@ -96,7 +96,11 @@ export const GET = requireFamilyAccess(async (request: NextRequest, context) => 
       const accountTransactions = transactions.filter((transaction) => transaction.accountId === account.id);
       const debit = accountTransactions.filter((transaction) => transaction.direction === 'debit').reduce((sum, transaction) => sum + transaction.amount, 0);
       const credit = accountTransactions.filter((transaction) => transaction.direction === 'credit').reduce((sum, transaction) => sum + transaction.amount, 0);
-      const statement = imports.find((item) => item.accountId === account.id && item.openingBalance !== null && item.closingBalance !== null);
+      const firstDate = accountTransactions.length ? Math.min(...accountTransactions.map(item => item.transactionDate.getTime())) : null;
+      const lastDate = accountTransactions.length ? Math.max(...accountTransactions.map(item => item.transactionDate.getTime())) : null;
+      const statement = imports.find((item) => item.accountId === account.id && item.openingBalance !== null && item.closingBalance !== null
+        && firstDate !== null && lastDate !== null && item.statementStart !== null && item.statementEnd !== null
+        && item.statementStart.getTime() <= firstDate && item.statementEnd.getTime() >= lastDate);
       const expectedClosingBalance = statement?.openingBalance === null || statement?.openingBalance === undefined
         ? null
         : statement.openingBalance + credit - debit;
@@ -141,6 +145,7 @@ export const GET = requireFamilyAccess(async (request: NextRequest, context) => 
           transactionCount: account._count.transactions,
           lastImportAt: account.imports[0]?.createdAt ?? null,
           statementThrough: account.imports[0]?.statementEnd ?? null,
+          latestBalance: account.imports[0]?.closingBalance ?? null,
         })),
         property: { projects, updatedAt: projectDocument?.updatedAt ?? null },
       },

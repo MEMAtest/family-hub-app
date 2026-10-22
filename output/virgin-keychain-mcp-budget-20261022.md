@@ -28,8 +28,19 @@
 - Authenticated UI initially showed no bank account connected and no imported
   actual transactions. Agent created the approved tracking account
   `Virgin Money Joint Current`; this is not creation of a bank account.
-- External AI was explicitly switched off. Live import is pending the verified
-  production fix and must not be inferred from the local CSV or tests.
+- Git production release `23fa31b1a8054559a0c15164ab37deb8d2644772` succeeded.
+  Alias `https://family-hub-app.vercel.app` was verified by Vercel inspect against
+  deployment `dpl_CLnrm83iufQCtr2qmq1P9mod8rTb`.
+- Original bank CSV was uploaded with external AI off. Production preview showed
+  1,764 parsed and selected rows before the explicit reviewed-commit action.
+- Live account displayed 1,764 persisted transactions through 20 October 2026.
+  Reload retained the count. Re-uploading and committing the same original file
+  again left the count unchanged at 1,764; no duplicate transactions were added.
+- Acceptance screenshot: `output/playwright/virgin-budget-live-20261022.jpg`.
+- A live UI defect called monthly net movement "Actual balance". Follow-up changes
+  label it "Actual net flow", show the latest dated statement balance separately,
+  and do not confuse a partial statement with a whole-month reconciliation.
+  Follow-up local build and 1,368 unit tests across 160 suites passed.
 
 ## Boundaries
 

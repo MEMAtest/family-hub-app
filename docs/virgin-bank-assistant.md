@@ -28,6 +28,10 @@
 - Downloads and budget imports are separate. The MCP prepares a local preview;
   it does not automatically upload or commit it. Live initial import evidence is
   recorded in `output/virgin-keychain-mcp-budget-20261022.md`.
+- The initial original CSV is now imported into the live tracking account
+  `Virgin Money Joint Current`: 1,764 persisted transactions, unchanged after
+  reload and a same-file repeat. External AI stayed off. Later daily downloads
+  are not yet automatically uploaded into that account.
 
 Implementation references: [MCP SDK server](https://ts.sdk.modelcontextprotocol.io/server)
 and [Codex MCP configuration](https://learn.chatgpt.com/docs/extend/mcp).
