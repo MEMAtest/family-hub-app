@@ -152,3 +152,13 @@ test('source-through follows available data rather than claiming today and never
   const futureImport = buildRecentSpending({ ...fixture(), imports: [{ accountId: 'a', statementStart: '2026-10-18', statementEnd: '2026-10-30' }] });
   expect(futureImport.sourceThrough).toBe('2026-10-23');
 });
+
+test('daily chart reconciles to recorded money out, includes unresolved bills but not credits, and leaves uncovered days as gaps', () => {
+  const result = buildRecentSpending({ ...fixture(), imports: [{ accountId: 'a', statementStart: '2026-10-21', statementEnd: '2026-10-22' }], transactions: [
+    row('bill', '2026-10-21', 3723.62, 'Direct Debit Halifax, reference'), row('shop', '2026-10-21', .38),
+    row('tax', '2026-10-22', 1100, 'Transfer MOB, HMRC, reference'), row('incoming', '2026-10-22', 9000, 'Payee', 'credit'),
+  ] });
+  expect(result.daily.map(day => day.outgoing)).toEqual([3724, 1100, null]);
+  expect(result.daily.reduce((sum, day) => sum + Math.round((day.outgoing ?? 0) * 100), 0) / 100).toBe(result.summary.outgoing);
+  expect(result.summary).toMatchObject({ outgoing: 4824, review: 3723.62, spending: 1100.38 });
+});

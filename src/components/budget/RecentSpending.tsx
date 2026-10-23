@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { ChevronRight, RefreshCw } from "lucide-react";
+import { useEffect, useState } from "react";
+import { List, RefreshCw, Store } from "lucide-react";
 import type { RecentSpendingReport } from "@/lib/budget/recentSpending";
 import { cashFlowDate, cashFlowMoney } from "@/lib/budget/cashFlow";
-import { MoneyVisualOverview, type PaymentScope } from './MoneyVisualOverview';
+import { MoneyVisualOverview } from './MoneyVisualOverview';
 import { SpendingActions } from './SpendingActions';
-import { MerchantBreakdown } from './MerchantBreakdown';
-import { MerchantSource } from './MerchantSource';
+import { PaymentDetailsModal, type PaymentSelection } from './PaymentDetailsModal';
+import { CalendarMoneyComparison } from './CalendarMoneyComparison';
 
 type Props = {
   familyId: string | null;
@@ -37,11 +37,7 @@ export function RecentSpending({
   } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [category, setCategory] = useState("All");
-  const [paymentScope, setPaymentScope] = useState<PaymentScope>('all');
-  const [page, setPage] = useState(0);
-  const [ledgerOpen, setLedgerOpen] = useState(false);
-  const [search, setSearch] = useState('');
+  const [selectionDetails, setSelectionDetails] = useState<PaymentSelection | null>(null);
   const scope = `${familyId ?? ""}:${days}`;
   const data = result?.scope === scope ? result : null;
   const report = data?.report;
@@ -68,11 +64,7 @@ export function RecentSpending({
     setResult(null);
     setError("");
     setLoading(true);
-    setCategory("All");
-    setPaymentScope('all');
-    setPage(0);
-    setLedgerOpen(false);
-    setSearch('');
+    setSelectionDetails(null);
     if (!familyId || !ready) {
       setLoading(false);
       return () => controller.abort();
@@ -130,27 +122,17 @@ export function RecentSpending({
     return () => controller.abort();
   }, [familyId, days, ready, scope, refreshKey, revision]);
 
-  const transactions = useMemo(
-    () =>
-      (report?.transactions ?? []).filter(
-        (row) =>
-          (paymentScope === 'all' || (row.direction === 'debit' && (paymentScope === 'outgoing' || row.kind === paymentScope))) &&
-          (category === "All" ||
-          (category === "Needs review" && row.kind === "review") ||
-          row.category === category) && (!search.trim() || `${row.description} ${row.merchantName ?? ''} ${row.category} ${row.amount}`.toLowerCase().includes(search.trim().toLowerCase())),
-      ),
-    [report, category, search, paymentScope],
-  );
-  const revealLedger = () => {
-    setPage(0); setLedgerOpen(true);
-    requestAnimationFrame(() => {
-      const ledger = document.getElementById('recent-payment-ledger');
-      ledger?.scrollIntoView({ block: 'start', behavior: 'smooth' });
-      ledger?.querySelector<HTMLElement>('summary')?.focus({ preventScroll: true });
-    });
-  };
   const openCategory = (value: string) => {
-    setCategory(value); setSearch(''); setPaymentScope('outgoing'); revealLedger();
+    setSelectionDetails({ scope: 'outgoing', category: value });
+  };
+  const refreshAfterAssignment = async () => {
+    const response = await fetch(`/api/families/${encodeURIComponent(familyId!)}/budget/recent-spending?days=${days}`, { cache: 'no-store' });
+    const value = await response.json();
+    if (!response.ok || value.report?.days !== days || !Array.isArray(value.report?.transactions)) {
+      setError('Category saved, but spending totals could not refresh. Refresh recent spending to continue.');
+      throw new Error('Could not refresh spending.');
+    }
+    setResult({ scope, report: value.report, accounts: value.accounts });
   };
 
   return (
@@ -251,7 +233,8 @@ export function RecentSpending({
       )}
       {!loading && !error && report && (
         <>
-          <MoneyVisualOverview report={report} onCategory={openCategory} onPayments={scope => { setPaymentScope(scope); setCategory('All'); setSearch(''); revealLedger(); }} onReview={() => onReviewMonth(report.end.slice(0, 7))} />
+          <MoneyVisualOverview report={report} onCategory={openCategory} onPayments={scope => setSelectionDetails({ scope })} onDate={date => setSelectionDetails({ scope: 'outgoing', date })} onReview={() => setSelectionDetails({ scope: 'review' })} />
+          {report.context && <CalendarMoneyComparison months={report.context.months} />}
           <p
             className={`mt-3 text-sm ${report.coverage === "complete" ? "text-slate-600 dark:text-slate-300" : "text-amber-800 dark:text-amber-300"}`}
           >
@@ -283,122 +266,11 @@ export function RecentSpending({
             </p>
           )}
           {familyId && <SpendingActions report={report} familyId={familyId} onCategory={openCategory} onReview={month => onReviewMonth(month ?? report.end.slice(0, 7))} />}
-          <MerchantBreakdown transactions={report.transactions} onSelect={merchant => {
-            setSearch(merchant); setCategory('All'); setPaymentScope('spend'); revealLedger();
-          }} />
-          <details
-            id="recent-payment-ledger"
-            open={ledgerOpen}
-            onToggle={(event) => setLedgerOpen(event.currentTarget.open)}
-            className="mt-6 scroll-mt-36 border-t border-slate-200 pt-3 dark:border-slate-700"
-          >
-            <summary className="min-h-11 cursor-pointer py-2 text-sm font-semibold">
-              Payments in this period ({report.summary.count})
-            </summary>
-            <div className="mt-2 flex flex-wrap gap-3">
-            <label className="block text-xs">
-              Payment type
-              <select aria-label="Recent payment type" value={paymentScope} onChange={event => { setPaymentScope(event.target.value as PaymentScope); setPage(0); }} className="mt-1 block min-h-11 max-w-full rounded-md border border-slate-300 bg-transparent px-3 py-2 text-sm dark:border-slate-700">
-                <option value="all">All payments</option>
-                <option value="outgoing">Recorded money out</option>
-                <option value="spend">Identified spending</option>
-                <option value="review">Purpose to check</option>
-                <option value="transfer">Transfers, not spending</option>
-              </select>
-            </label>
-            <label className="block text-xs">
-              Category
-              <select
-                aria-label="Recent payment category"
-                className="mt-1 block min-h-11 max-w-full rounded-md border border-slate-300 bg-transparent px-3 py-2 text-sm dark:border-slate-700"
-                value={category}
-                onChange={(event) => {
-                  setCategory(event.target.value);
-                  setPage(0);
-                }}
-              >
-                <option>All</option>
-                {[
-                  ...new Set([
-                    "Needs review",
-                    "Transfers",
-                    ...report.transactions.map((row) => row.category),
-                  ]),
-                ].map((value) => (
-                  <option key={value}>{value}</option>
-                ))}
-              </select>
-            </label>
-            </div>
-            <input aria-label="Search recent payments" placeholder="Search merchant, category or amount..." value={search} onChange={event => { setSearch(event.target.value); setPage(0); }} className="mt-3 min-h-11 w-full rounded-md border border-slate-300 bg-transparent px-3 text-sm dark:border-slate-700" />
-            <p role="status" className="mt-3 text-xs text-slate-500">{transactions.length} matching {transactions.length === 1 ? 'payment' : 'payments'} · {money(transactions.reduce((total, row) => total + (row.direction === 'debit' ? row.amount : -row.amount), 0))} net out</p>
-            <div className="mt-3 divide-y divide-slate-100 dark:divide-slate-800">
-              {transactions.slice(page * 10, (page + 1) * 10).map((row) => (
-                <div
-                  key={row.id}
-                  className="flex items-start justify-between gap-3 py-3"
-                >
-                  <div className="min-w-0">
-                    <p className="break-words text-sm font-medium">
-                      {row.merchantName ?? row.description}
-                    </p>
-                    {row.merchantName && row.merchantName !== row.description && <p className="mt-1 break-words text-xs text-slate-500">{row.description}</p>}
-                    <p className="mt-1 text-xs text-slate-500">
-                      {cashFlowDate(row.transactionDate)} · {row.category}
-                    </p>
-                    <p className="mt-1 text-xs text-slate-500">{row.assignmentSource === 'suggested' ? row.reason : row.assignmentSource === 'confirmed' ? 'Confirmed by household' : 'Recorded by bank'}</p>
-                    <MerchantSource evidence={row.merchantEvidence} />
-                    <button
-                      type="button"
-                      onClick={() =>
-                        onReviewMonth(row.transactionDate.slice(0, 7))
-                      }
-                      className="inline-flex min-h-10 items-center gap-1 text-xs font-medium text-teal-800 dark:text-teal-300"
-                    >
-                      Review in month
-                      <ChevronRight className="h-3 w-3" />
-                    </button>
-                  </div>
-                  <span className="shrink-0 text-sm font-semibold tabular-nums">
-                    {row.direction === "credit" ? "+" : "-"}
-                    {money(row.amount)}
-                  </span>
-                </div>
-              ))}
-            </div>
-            {!transactions.length && (
-              <p className="py-4 text-sm text-slate-500">
-                No matching imported payments.
-              </p>
-            )}
-            {transactions.length > 10 && (
-              <div className="flex flex-wrap items-center justify-between gap-2 pt-3 text-xs">
-                <span>
-                  {page * 10 + 1}–
-                  {Math.min((page + 1) * 10, transactions.length)} of{" "}
-                  {transactions.length}
-                </span>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    className={button}
-                    disabled={page === 0}
-                    onClick={() => setPage((value) => value - 1)}
-                  >
-                    Previous
-                  </button>
-                  <button
-                    type="button"
-                    className={button}
-                    disabled={(page + 1) * 10 >= transactions.length}
-                    onClick={() => setPage((value) => value + 1)}
-                  >
-                    Next
-                  </button>
-                </div>
-              </div>
-            )}
-          </details>
+          <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-200 pt-3 dark:border-slate-700">
+            <button type="button" onClick={() => setSelectionDetails({ view: 'suppliers', scope: 'outgoing' })} className={button}><Store className="h-4 w-4" />Suppliers & bills</button>
+            <button type="button" onClick={() => setSelectionDetails({ scope: 'all' })} className={button}><List className="h-4 w-4" />All payments ({report.summary.count})</button>
+          </div>
+          {familyId && <PaymentDetailsModal report={report} familyId={familyId} selection={selectionDetails} onClose={() => setSelectionDetails(null)} onSaved={refreshAfterAssignment} />}
         </>
       )}
     </section>

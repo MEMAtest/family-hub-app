@@ -645,6 +645,11 @@ const rules: MerchantRule[] = [
 ];
 
 export function recogniseMerchant(description: string): MerchantMatch | null {
+  const mobilePayee = /^\s*transfer mob,\s*([^,]+),/i.exec(description)?.[1].trim();
+  if (mobilePayee && /^(?:hmrc|hm revenue (?:and|&) customs|london borough of(?: [a-z -]+)?)$/i.test(mobilePayee)) {
+    const name = /^hm/i.test(mobilePayee) ? 'HMRC' : 'Local council';
+    return { name, category: 'Tax & government', reason: `${name} identified from the named bank payee. Government payment; the specific tax or fee is not stated.` };
+  }
   const text = merchantText(description);
   // A bank/product name or card repayment does not identify the purchases behind it.
   if (

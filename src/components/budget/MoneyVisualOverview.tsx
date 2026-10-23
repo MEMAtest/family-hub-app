@@ -1,6 +1,6 @@
 "use client";
 
-import { useId } from "react";
+import { useId, useState } from "react";
 import {
   Area,
   AreaChart,
@@ -42,14 +42,17 @@ export function MoneyVisualOverview({
   report,
   onCategory,
   onPayments,
+  onDate,
   onReview,
 }: {
   report: RecentSpendingReport;
   onCategory: (category: string) => void;
   onPayments: (scope: PaymentScope) => void;
+  onDate: (date: string) => void;
   onReview: () => void;
 }) {
   const id = useId().replace(/:/g, "");
+  const [chart, setChart] = useState<'trend' | 'categories'>('trend');
   const categories = report.categories.filter((item) => item.count > 0);
   const segments = [
     ...categories.map((item, index) => ({
@@ -100,7 +103,7 @@ export function MoneyVisualOverview({
       icon: Search,
       style: "bg-amber-50 text-amber-950 dark:bg-amber-950 dark:text-amber-100",
       detail: report.summary.outgoing
-        ? `${(((report.summary.review ?? 0) / report.summary.outgoing) * 100).toFixed(1)}% of recorded money out`
+        ? `${report.transactions.filter(row => row.direction === 'debit' && row.kind === 'review').length} outgoing payments need a purpose`
         : "Review imported payments",
       scope: 'review' as const,
     },
@@ -121,7 +124,7 @@ export function MoneyVisualOverview({
           <div key={label} className="min-w-0">
             <dt className="sr-only">{label}</dt>
             <dd className="h-full">
-              <button type="button" aria-label={`View ${label.toLowerCase()} payments`} aria-controls="recent-payment-ledger" onClick={() => onPayments(scope)} className={`h-full w-full min-w-0 rounded-lg p-3 text-left transition hover:brightness-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 sm:p-5 ${style}`}>
+              <button type="button" aria-label={`View ${label.toLowerCase()} payments`} aria-haspopup="dialog" onClick={() => onPayments(scope)} className={`h-full w-full min-w-0 rounded-lg p-3 text-left transition hover:brightness-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 sm:p-5 ${style}`}>
                 <span className="flex items-center gap-2 text-xs font-medium sm:text-sm"><Icon aria-hidden="true" className="h-4 w-4 shrink-0 opacity-80" /><span className="min-w-0 flex-1">{label}</span><ArrowRight aria-hidden="true" className="h-4 w-4 shrink-0" /></span>
                 <span className="mt-1 block break-words text-xl font-semibold tabular-nums sm:text-2xl">{amount(value)}</span>
                 <span className="mt-2 block text-[11px] leading-4 opacity-80 sm:text-xs sm:leading-5">{detail}</span>
@@ -130,14 +133,15 @@ export function MoneyVisualOverview({
           </div>
         ))}
       </dl>
-      <div className="grid min-w-0 gap-6 border-y border-slate-200 py-5 dark:border-slate-700 xl:grid-cols-2">
-        <section className="min-w-0" aria-label="Recorded outgoing trend">
+      <div className="min-w-0 border-y border-slate-200 py-3 dark:border-slate-700">
+        <div className="mb-3 flex gap-1" aria-label="Money chart view">{(['trend', 'categories'] as const).map(value => <button key={value} type="button" aria-pressed={chart === value} onClick={() => setChart(value)} className={`min-h-11 rounded-md px-3 text-sm font-medium ${chart === value ? 'bg-teal-700 text-white' : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'}`}>{value === 'trend' ? 'Daily money out' : 'Categories'}</button>)}</div>
+        <section hidden={chart !== 'trend'} className="min-w-0" aria-label="Recorded outgoing trend">
           <h3 className="font-semibold">When money went out</h3>
           <p className="mt-1 text-xs text-slate-500">
-            Daily recorded outgoings · gaps mean missing coverage
+            Daily total, not your balance · includes bills, transfers and payments awaiting a purpose. Gaps mean missing coverage.
           </p>
           <div
-            className="mt-4 h-56 w-full min-w-0"
+            className="mt-3 h-40 w-full min-w-0 sm:h-48"
             role="img"
             aria-label={`Daily recorded outgoing payments from ${cashFlowDate(report.start)} to ${cashFlowDate(report.end)}. Exact payments are listed below.`}
           >
@@ -194,8 +198,9 @@ export function MoneyVisualOverview({
               </AreaChart>
             </ResponsiveContainer>
           </div>
+          <select aria-label="Open payment day" value="" onChange={event => { if (event.target.value) onDate(event.target.value); }} className="mt-2 min-h-11 max-w-full rounded-md border border-slate-300 bg-transparent px-3 text-xs dark:border-slate-700"><option value="">Payment days</option>{report.daily.filter(day => day.outgoing !== null && day.outgoing > 0).map(day => <option key={day.date} value={day.date}>{cashFlowDate(day.date)} · {amount(day.outgoing)}</option>)}</select>
         </section>
-        <section className="min-w-0" aria-label="Where recorded money went">
+        <section hidden={chart !== 'categories'} className="min-w-0" aria-label="Where recorded money went">
           <h3 className="font-semibold">Where the money went</h3>
           <p className="mt-1 text-xs text-slate-500">
             Includes unreviewed purposes, not guessed categories
@@ -274,18 +279,11 @@ export function MoneyVisualOverview({
           )}
         </section>
       </div>
-      <section
-        className="grid gap-4 border-b border-slate-200 pb-5 dark:border-slate-700 sm:grid-cols-2"
-        aria-label="Bank coverage and next action"
-      >
-        <div className="min-w-0">
-          <h3 className="flex items-center gap-2 text-sm font-semibold">
+      <details className="border-b border-slate-200 pb-2 dark:border-slate-700">
+          <summary className="min-h-11 cursor-pointer py-2 text-sm font-semibold">
             <ShieldCheck className="h-4 w-4 text-teal-700" />
-            Bank coverage
-          </h3>
-          <p className="mt-2 text-lg font-semibold">
-            {report.coveredDays} of {report.days} days
-          </p>
+            Bank coverage · {report.coveredDays} of {report.days} days
+          </summary>
           <div
             role="progressbar"
             aria-label="Imported bank coverage"
@@ -307,14 +305,6 @@ export function MoneyVisualOverview({
               ? "Missing days are not treated as zero."
               : "All connected accounts covered."}
           </p>
-        </div>
-        <div className="min-w-0 sm:border-l sm:border-slate-200 sm:pl-5 dark:sm:border-slate-700">
-          <h3 className="text-sm font-semibold">Your next step</h3>
-          <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-            {report.summary.review
-              ? `${amount(report.summary.review)} needs a purpose before the spending picture is complete.`
-              : "Review the month to confirm categories and set your own spending targets."}
-          </p>
           <button
             type="button"
             onClick={onReview}
@@ -323,8 +313,7 @@ export function MoneyVisualOverview({
             Review transactions
             <ArrowRight className="h-4 w-4" />
           </button>
-        </div>
-      </section>
+      </details>
     </div>
   );
 }

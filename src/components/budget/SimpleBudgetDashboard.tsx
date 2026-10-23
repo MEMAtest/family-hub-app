@@ -821,9 +821,9 @@ const SimpleBudgetDashboard: React.FC = () => {
         {budgetMode === 'overview' && <RecentSpending familyId={familyId} refreshKey={cashFlowRefreshKey} onReviewMonth={month => {
           setSelectedYear(Number(month.slice(0, 4))); setSelectedMonth(Number(month.slice(5, 7))); setMonthlyOpen(true); setBudgetMode('review');
         }} />}
-        <details ref={monthlyRef} open={monthlyOpen} onToggle={event => setMonthlyOpen(event.currentTarget.open)} className="mt-5 scroll-mt-40 border-y border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
-          <summary className="min-h-12 cursor-pointer px-4 py-3 text-sm font-semibold">Monthly review · {getMonthName(selectedMonth)} {selectedYear}</summary>
-          {monthlyOpen && <>
+        <details ref={monthlyRef} open={budgetMode === 'review' && monthlyOpen} onToggle={event => { if (budgetMode === 'review') setMonthlyOpen(event.currentTarget.open); }} className="mt-5 scroll-mt-40 border-y border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+          <summary onClick={event => { event.preventDefault(); if (budgetMode !== 'review') { setMonthlyOpen(true); setBudgetMode('review'); } else setMonthlyOpen(value => !value); }} className="min-h-12 cursor-pointer px-4 py-3 text-sm font-semibold">Monthly review · {getMonthName(selectedMonth)} {selectedYear}</summary>
+          {budgetMode === 'review' && monthlyOpen && <>
             <div className="flex flex-wrap items-center justify-between gap-2 border-y border-slate-200 px-4 py-2 dark:border-slate-700">
               <button type="button" onClick={goToPreviousMonth} className="min-h-11 rounded-md p-3" aria-label="Previous month" title="Previous month"><ChevronLeft className="h-4 w-4" /></button>
               <span className="text-sm font-medium">{getMonthName(selectedMonth)} {selectedYear}</span>

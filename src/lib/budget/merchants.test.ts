@@ -1,4 +1,11 @@
 import { recogniseMerchant } from "./merchants";
+
+test('recognises explicit government payees without guessing a bank repayment purpose or a personal-transfer match', () => {
+  expect(recogniseMerchant('Transfer MOB, Hmrc, 123456')).toMatchObject({ name: 'HMRC', category: 'Tax & government' });
+  expect(recogniseMerchant('Transfer MOB, London Borough Of, 123456')).toMatchObject({ name: 'Local council', category: 'Tax & government' });
+  expect(recogniseMerchant('Transfer MOB, Friend HMRC, 123456')).toBeNull();
+  expect(recogniseMerchant('Direct Debit Halifax, 123456')).toBeNull();
+});
 import {
   classifyMoneyTransaction,
   emptyMoneyPreferences,

@@ -1,5 +1,6 @@
 import prisma from "@/lib/prisma";
 import { buildRecentSpending, recentSpendingRange } from "./recentSpending";
+import { paymentHistoryStart } from './paymentPatterns';
 import {
   MONEY_PREFERENCES_KEY,
   readMoneyPreferences,
@@ -11,7 +12,7 @@ export async function loadRecentSpending(
   referenceDate?: string,
 ) {
   const range = recentSpendingRange(days, referenceDate);
-  const start = new Date(`${range.previousStart}T00:00:00Z`);
+  const start = new Date(`${[range.previousStart, paymentHistoryStart(range.end)].sort()[0]}T00:00:00Z`);
   const end = new Date(`${range.end}T00:00:00Z`);
   end.setUTCDate(end.getUTCDate() + 1);
   const [accounts, rows, imports, document] = await Promise.all([

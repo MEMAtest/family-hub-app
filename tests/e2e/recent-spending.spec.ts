@@ -9,6 +9,8 @@ test("recent actual spending supports presets, custom days, reload and phone wit
   page,
 }) => {
   const accountId = "synthetic";
+  const preferences = emptyMoneyPreferences();
+  let failSave = false;
   const transaction = (
     id: string,
     transactionDate: string,
@@ -33,6 +35,9 @@ test("recent actual spending supports presets, custom days, reload and phone wit
     transaction("boundary", "2026-09-23", 60),
     transaction("prior", "2026-09-22", 70),
     transaction("older", "2026-08-30", 100, "Octopus Energy"),
+    transaction("bill-aug", "2026-08-01", 10, "Direct Debit Netflix"),
+    transaction("bill-jul", "2026-07-01", 9, "Direct Debit Netflix"),
+    transaction("bill-jun", "2026-06-01", 9, "Direct Debit Netflix"),
     transaction(
       "incoming",
       "2026-10-22",
@@ -97,7 +102,7 @@ test("recent actual spending supports presets, custom days, reload and phone wit
           referenceDate: "2026-10-22T12:00:00Z",
           accountIds: [accountId],
           transactions: rows,
-          preferences: emptyMoneyPreferences(),
+          preferences,
           imports: [
             {
               accountId,
@@ -109,6 +114,12 @@ test("recent actual spending supports presets, custom days, reload and phone wit
         accounts: [{ id: accountId, name: "Synthetic bank" }],
       }),
     });
+  });
+  await page.route('**/api/families/*/budget/money-planner', async route => {
+    if (failSave) return route.fulfill({ status: 503, json: { error: 'Synthetic category save failed.' } });
+    const action = route.request().postDataJSON();
+    preferences.overrides[action.transactionId] = { category: action.category, kind: action.kind };
+    return route.fulfill({ json: { preferences } });
   });
   let failInsights = false;
   await page.route('**/budget/recent-insights', route => route.fulfill(failInsights ? { status: 503, json: { error: 'Synthetic AI unavailable; verified facts remain.' } } : { json: { actions: [{ factId: 'review', action: 'Check the payment purpose before setting a target.' }] } }));
@@ -130,41 +141,62 @@ test("recent actual spending supports presets, custom days, reload and phone wit
   await expect(
     recent.getByText("Full imported coverage for this period."),
   ).toBeVisible();
-  const ledger = recent.locator('#recent-payment-ledger');
+  const ledger = page.getByRole('dialog');
+  const close = async () => { await ledger.getByRole('button', { name: 'Close payment details' }).click(); await expect(ledger).not.toBeVisible(); };
   await recent.getByRole('button', { name: 'View recorded money out payments', exact: true }).click();
-  await expect(recent.getByLabel('Recent payment type')).toHaveValue('outgoing');
+  await expect(ledger).toBeVisible();
+  await expect(ledger.getByLabel('Recent payment type')).toHaveValue('outgoing');
   await expect(ledger.getByRole('status')).toHaveText('5 matching payments · £395.30 net out');
-  await expect(ledger.getByText('Personal incoming', { exact: true })).not.toBeVisible();
+  await expect(ledger.getByRole('heading', { name: 'Personal incoming', exact: true })).not.toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(ledger).not.toBeVisible();
+  await expect(recent.getByRole('button', { name: 'View recorded money out payments', exact: true })).toBeFocused();
   await recent.getByRole('button', { name: 'View purpose to check payments', exact: true }).click();
-  await expect(recent.getByLabel('Recent payment type')).toHaveValue('review');
-  await expect(ledger.getByText('Payment purpose unclear', { exact: true })).toBeVisible();
+  await expect(ledger.getByLabel('Recent payment type')).toHaveValue('review');
+  await expect(ledger.getByRole('heading', { name: 'Payment purpose unclear', exact: true })).toBeVisible();
   await expect(ledger.getByRole('status')).toHaveText('1 matching payment · £100.00 net out');
-  await expect(ledger.getByText('Personal incoming', { exact: true })).not.toBeVisible();
+  await expect(ledger.getByRole('heading', { name: 'Personal incoming', exact: true })).not.toBeVisible();
+  const scrollBefore = await page.evaluate(() => scrollY);
+  await ledger.getByRole('button', { name: 'Categorise Payment purpose unclear' }).click();
+  await ledger.getByLabel('Confirm category', { exact: true }).selectOption('Housing');
+  failSave = true;
+  await ledger.getByRole('button', { name: 'Confirm category', exact: true }).click();
+  await expect(ledger.getByRole('alert')).toHaveText('Synthetic category save failed.');
+  await expect(ledger.getByLabel('Confirm category', { exact: true })).toHaveValue('Housing');
+  await close();
+  expect(await page.evaluate(() => scrollY)).toBe(scrollBefore);
   await recent.getByRole('button', { name: 'View transfers, not spending payments', exact: true }).click();
-  await expect(recent.getByLabel('Recent payment type')).toHaveValue('transfer');
-  await expect(ledger.getByText('Own account', { exact: true })).toBeVisible();
+  await expect(ledger.getByLabel('Recent payment type')).toHaveValue('transfer');
+  await expect(ledger.getByRole('heading', { name: 'Own account', exact: true })).toBeVisible();
   await expect(ledger.getByRole('status')).toHaveText('1 matching payment · £200.00 net out');
+  await close();
   await page.setViewportSize({ width: 390, height: 844 });
   await recent.getByRole('button', { name: 'View identified spending payments', exact: true }).focus();
   await page.keyboard.press('Enter');
-  await expect(recent.getByLabel('Recent payment type')).toHaveValue('spend');
+  await expect(ledger.getByLabel('Recent payment type')).toHaveValue('spend');
   await expect(ledger.getByRole('status')).toHaveText('3 matching payments · £95.30 net out');
-  await expect(ledger.getByText('Payment purpose unclear', { exact: true })).not.toBeVisible();
-  await expect(ledger.locator('summary')).toBeFocused();
-  await recent.getByLabel('Search recent payments').fill('Lidl');
+  await expect(ledger.getByRole('heading', { name: 'Payment purpose unclear', exact: true })).not.toBeVisible();
+  await expect(ledger.getByRole('button', { name: 'Close payment details' })).toBeFocused();
+  await ledger.getByLabel('Search recent payments').fill('Lidl');
+  await close();
   await recent.getByRole('button', { name: 'View recorded money out payments', exact: true }).click();
-  await expect(recent.getByLabel('Search recent payments')).toHaveValue('');
-  await expect(recent.getByLabel('Recent payment category')).toHaveValue('All');
-  await recent.getByLabel('Recent payment type').selectOption('all');
-  await expect(ledger.getByText('Personal incoming', { exact: true })).toBeVisible();
+  await expect(ledger.getByLabel('Search recent payments')).toHaveValue('');
+  await expect(ledger.getByLabel('Recent payment category')).toHaveValue('All');
+  await ledger.getByLabel('Recent payment type').selectOption('all');
+  await expect(ledger.getByRole('heading', { name: 'Personal incoming', exact: true })).toBeVisible();
+  expect(await ledger.getByTestId('payment-modal-body').evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+  await close();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  expect(await recent.evaluate(el => el.getBoundingClientRect().height)).toBeLessThan(1882); // 60% below the production 4,706px baseline.
   await page.setViewportSize({ width: 1024, height: 900 });
+  await recent.getByRole('button', { name: 'Categories', exact: true }).click();
   const legend = recent.getByRole('region', { name: 'Where recorded money went' });
   for (const item of await legend.getByRole('button').all()) {
     expect(await item.locator('span').nth(1).evaluate(element => element.getBoundingClientRect().width)).toBeGreaterThan(60);
     expect(await item.evaluate(element => element.getBoundingClientRect().height)).toBeLessThan(70);
   }
   await page.setViewportSize({ width: 1440, height: 900 });
+  await recent.locator('summary').filter({ hasText: 'What to do next' }).click();
   await recent.getByRole('button', { name: 'Suggest next steps' }).click();
   await expect(recent.getByText('Check the payment purpose before setting a target.')).toBeVisible();
   failInsights = true;
@@ -172,11 +204,11 @@ test("recent actual spending supports presets, custom days, reload and phone wit
   await expect(recent.getByRole('alert')).toHaveText('Synthetic AI unavailable; verified facts remain.');
   await expect(recent.getByText('Start with the payments we cannot explain yet')).toBeVisible();
   await recent.getByRole('button', { name: /Groceries/ }).click();
-  await expect(recent.getByLabel('Recent payment category')).toHaveValue('Groceries');
-  await recent.getByLabel('Search recent payments').fill('Lidl');
-  await expect(recent.locator('#recent-payment-ledger').getByText('Lidl', { exact: true })).toBeVisible();
-  await expect(recent.locator('#recent-payment-ledger').getByText('Tesco', { exact: true })).not.toBeVisible();
-  await recent.getByLabel('Search recent payments').fill('');
+  await expect(ledger.getByLabel('Recent payment category')).toHaveValue('Groceries');
+  await ledger.getByLabel('Search recent payments').fill('Lidl');
+  await expect(ledger.getByRole('heading', { name: 'Lidl', exact: true })).toBeVisible();
+  await expect(ledger.getByRole('heading', { name: 'Tesco', exact: true })).not.toBeVisible();
+  await close();
   await expect(
     page.getByRole("heading", { name: "Where your money went" }),
   ).not.toBeVisible();
@@ -204,7 +236,7 @@ test("recent actual spending supports presets, custom days, reload and phone wit
   await expect(
     recent.getByText("£15.10", { exact: true }).first(),
   ).toBeVisible();
-  await expect(recent.getByRole('button', { name: /Groceries/ })).toBeVisible();
+  await expect(recent.getByRole('button', { name: /View identified spending payments/ })).toBeVisible();
   const count = requests.length;
   await page.getByLabel("Number of spending days").fill("0");
   await page
@@ -213,12 +245,17 @@ test("recent actual spending supports presets, custom days, reload and phone wit
     .click();
   expect(requests.length).toBe(count);
   await page.getByLabel("Spending period", { exact: true }).selectOption("90");
-  await expect(recent.getByText("£565.30", { exact: true }).first()).toBeVisible();
+  await expect(recent.getByText("£575.30", { exact: true }).first()).toBeVisible();
   await page.reload();
   await expect(
     recent.getByRole("heading", { name: "Spending in the last 90 days" }),
   ).toBeVisible();
-  await expect(recent.getByText("£565.30", { exact: true }).first()).toBeVisible();
+  await expect(recent.getByText("£575.30", { exact: true }).first()).toBeVisible();
+  await recent.getByRole('button', { name: 'Suppliers & bills', exact: true }).click();
+  await ledger.getByRole('button', { name: 'View Netflix payments', exact: true }).click();
+  await expect(ledger.getByRole('region', { name: 'Supplier payment pattern' })).toContainText('Usually around day 1 of the month');
+  await expect(ledger.getByRole('region', { name: 'Supplier payment pattern' })).toContainText('September 2026 vs August 2026');
+  await close();
   await page.setViewportSize({ width: 390, height: 844 });
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth),
@@ -247,15 +284,16 @@ test("recent actual spending supports presets, custom days, reload and phone wit
   await expect(recent.getByRole("alert")).toHaveText(
     "Synthetic recent spending unavailable",
   );
-  await expect(recent.getByText("£565.30", { exact: true })).not.toBeVisible();
+  await expect(recent.getByText("£575.30", { exact: true })).not.toBeVisible();
   fail = false;
   disconnected = true;
   await page.getByRole('button', { name: 'Refresh recent spending' }).click();
   await expect(recent.getByRole('alert')).toHaveText('Could not connect to your spending data. Refresh to try again.');
-  await expect(recent.getByText('£565.30', { exact: true })).not.toBeVisible();
+  await expect(recent.getByText('£575.30', { exact: true })).not.toBeVisible();
   disconnected = false;
   await page.getByRole('button', { name: 'Refresh recent spending' }).click();
-  await expect(recent.getByText('£565.30', { exact: true }).first()).toBeVisible();
+  await expect(recent.getByText('£575.30', { exact: true }).first()).toBeVisible();
+  await recent.locator('summary').filter({ hasText: 'What to do next' }).click();
   await recent.getByRole('button', { name: 'Review month', exact: true }).click();
   await expect(page).toHaveURL(/moneyMonth=2026-09/);
   await expect(page).toHaveURL(/moneyView=review/);
@@ -276,4 +314,15 @@ test("recent actual spending supports presets, custom days, reload and phone wit
     if (mode === 'plans') await expect(page.getByRole('heading', { name: 'Saved plans, not bank-verified spending', exact: true })).toBeVisible();
   }
   await expect(page.locator('details').filter({ has: page.locator('summary').filter({ hasText: 'Monthly review' }) }).first()).toHaveAttribute('open', '');
+  await navigation.getByRole('button', { name: 'Overview', exact: true }).click();
+  await recent.getByRole('button', { name: 'View purpose to check payments', exact: true }).click();
+  await ledger.getByRole('button', { name: 'Categorise Payment purpose unclear' }).click();
+  await ledger.getByLabel('Confirm category', { exact: true }).selectOption('Housing');
+  failSave = false;
+  await ledger.getByRole('button', { name: 'Confirm category', exact: true }).click();
+  await expect(ledger.getByText('Category saved. Totals updated; bank amounts unchanged.')).toBeVisible();
+  await expect(ledger.getByText('No matching imported payments.')).toBeVisible();
+  await close();
+  await page.reload();
+  await expect(recent.getByRole('button', { name: 'View purpose to check payments' })).toContainText('£0.00');
 });

@@ -13,7 +13,7 @@ export type MoneyPreferences = {
 
 export const MONEY_CATEGORIES = [
   'Groceries', 'Dining', 'Household bills', 'Housing', 'Childcare', 'Transport', 'Shopping',
-  'Subscriptions', 'Insurance', 'Health', 'Home improvements', 'Holidays', 'Education',
+  'Subscriptions', 'Insurance', 'Tax & government', 'Health', 'Home improvements', 'Holidays', 'Education',
   'Entertainment', 'Clothing', 'Personal care', "Children's activities", 'Income', 'Refunds', 'Transfers', 'Needs review',
 ];
 
@@ -96,7 +96,9 @@ const compatible = (kind: MoneyKind, direction: string) => kind === 'review' || 
 const classify = (row: MoneyRow, preferences: MoneyPreferences, key: string, merchant: MerchantMatch | null) => {
   let selected: MoneyAssignment | undefined;
   let source: 'suggested' | 'confirmed' | 'recorded' = 'suggested';
-  let reason = 'No confident category match; review this transaction.';
+  let reason = /^\s*direct debit\s+(?:halifax|nationwide|virgin money|barclays|hsbc|lloyds|natwest|santander)\b/i.test(row.description)
+    ? 'Bank direct debit: the statement does not identify whether this is a mortgage, card or loan payment.'
+    : 'No confident category match; review this transaction.';
   const override = preferences.overrides[row.id];
   if (row.transactionType.trim().toLowerCase() === 'transfer') {
     selected = assignment('Transfers', 'transfer'); source = 'recorded'; reason = 'Recorded as a transfer.';

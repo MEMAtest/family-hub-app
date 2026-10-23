@@ -75,11 +75,12 @@ export function SpendingActions({
     }
   };
   return (
-    <section
+    <details
       aria-label="Spending insights and next steps"
       className="mt-6 border-t border-slate-200 pt-5 dark:border-slate-700"
     >
-      <header className="flex flex-wrap items-center justify-between gap-3">
+      <summary className="min-h-11 cursor-pointer text-sm font-semibold">What to do next · {facts.length} observations</summary>
+      <header className="mt-3 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h3 className="font-semibold">What to do next</h3>
           <p className="mt-1 text-xs text-slate-500">
@@ -148,6 +149,6 @@ export function SpendingActions({
           </article>
         ))}
       </div>
-    </section>
+    </details>
   );
 }

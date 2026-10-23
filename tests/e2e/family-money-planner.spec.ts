@@ -223,7 +223,7 @@ async function setup(page: Page, transactions: MoneyRow[] = rows) {
 }
 
 async function openMonthlyReview(page: Page) {
-  await page.getByText(/^Monthly review ·/).click();
+  await page.getByRole('navigation', { name: 'Money sections' }).getByRole('button', { name: 'Transactions & analysis', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Where your money went' })).toBeVisible();
   await page.getByText('Optional patterns and savings scenarios', { exact: true }).click();
 }

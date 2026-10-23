@@ -1,4 +1,5 @@
 import { classifyMoneyTransaction, type MoneyImport, type MoneyPreferences, type MoneyReport, type MoneyRow } from './moneyPlanner';
+import { buildPaymentContext, type PaymentContext } from './paymentPatterns';
 
 export type RecentSpendingReport = {
   days: number; start: string; end: string; coverage: 'complete' | 'partial' | 'none'; coveredDays: number; sourceThrough: string | null;
@@ -7,6 +8,7 @@ export type RecentSpendingReport = {
   categories: Array<{ category: string; amount: number; count: number; previous: number | null; change: number | null; changePercent: number | null }>;
   transactions: MoneyReport['transactions'];
   daily: Array<{ date: string; outgoing: number | null; covered: boolean }>;
+  context: PaymentContext;
 };
 
 const dayMs = 86_400_000;
@@ -128,6 +130,7 @@ export function buildRecentSpending(input: {
       spending: previousCoverage.coverage === 'none' ? null : money(previousSpending),
       change: change === null ? null : money(change), changePercent: change === null ? null : percent(change, previousSpending) },
     categories, transactions: current.map(row => row.transaction),
+    context: buildPaymentContext({ ...input, end: range.end }),
     daily: Array.from({ length: input.days }, (_, index) => {
       const date = offsetDate(range.start, index);
       const covered = accountIds.length > 0 && accountIds.every(accountId => imports.some(item => item.accountId === accountId && item.start <= date && item.end >= date));
