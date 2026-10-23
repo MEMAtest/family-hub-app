@@ -84,7 +84,7 @@ const rows: MoneyRow[] = [
   },
 ];
 
-async function setup(page: Page) {
+async function setup(page: Page, transactions: MoneyRow[] = rows) {
   const preferences = emptyMoneyPreferences();
   let failLoad = false,
     failSave = false,
@@ -147,7 +147,7 @@ async function setup(page: Page) {
         if (action.action === "remove-target")
           delete preferences.targets[action.category];
         if (action.action === "assign") {
-          const row = rows.find((item) => item.id === action.transactionId)!;
+          const row = transactions.find((item) => item.id === action.transactionId)!;
           const assignment = { category: action.category, kind: action.kind };
           preferences.overrides[row.id] = assignment;
           if (action.applyToGroup)
@@ -179,7 +179,7 @@ async function setup(page: Page) {
             month,
             now: "2026-10-22",
             accountIds: ["synthetic"],
-            transactions: rows,
+            transactions,
             imports: [
               {
                 accountId: "synthetic",
@@ -227,6 +227,35 @@ async function openMonthlyReview(page: Page) {
   await expect(page.getByRole('heading', { name: 'Where your money went' })).toBeVisible();
   await page.getByText('Optional patterns and savings scenarios', { exact: true }).click();
 }
+
+test('researched shops show evidence and mixed-purpose payees wait for a household choice', async ({ page }) => {
+  const researchRows: MoneyRow[] = [
+    { id: 'verified-merchant', accountId: 'synthetic', transactionDate: '2026-09-08', description: 'Card WLT 1234, Idil Retail Limited T/', amount: 10.5, direction: 'debit', transactionType: 'normal' },
+    { id: 'mixed-merchant', accountId: 'synthetic', transactionDate: '2026-09-09', description: 'Little Mouse', amount: 5.5, direction: 'debit', transactionType: 'normal' },
+  ];
+  const fixture = await setup(page, researchRows);
+  await page.getByRole('button', { name: 'View TFC Woolwich payments', exact: true }).click();
+  const payments = page.getByRole('region', { name: 'Review payments', exact: true });
+  const source = payments.getByRole('link', { name: 'Business source', exact: true });
+  await expect(source).toHaveAttribute('href', 'https://anjomanfood.com/store-locator');
+  await expect(source).toHaveAttribute('referrerpolicy', 'no-referrer');
+  await expect(payments.getByText(/Groceries.*Suggested/)).toBeVisible();
+  await page.getByLabel('Search planner payments').fill('Little Mouse');
+  await expect(payments.getByText(/Groceries or Dining/)).toBeVisible();
+  await expect(payments.getByText(/Needs review.*Suggested/)).toBeVisible();
+  await payments.getByRole('button', { name: 'Categorise Little Mouse', exact: true }).click();
+  const form = page.getByRole('form', { name: 'Confirm payment category' });
+  await form.getByLabel('Confirm category', { exact: true }).selectOption('Dining');
+  await form.getByRole('button', { name: 'Confirm category', exact: true }).click();
+  expect(fixture.preferences.overrides['mixed-merchant']).toEqual({ kind: 'spend', category: 'Dining' });
+  await page.reload();
+  await openMonthlyReview(page);
+  await page.getByLabel('Search planner payments').fill('Little Mouse');
+  await expect(payments.getByText(/Dining.*Confirmed by household/)).toBeVisible();
+  await expect(payments.getByRole('link', { name: 'Business source' })).toHaveAttribute('href', 'https://littlemousecheese.com/');
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+});
 
 test("planner compares three months, identifies pressure without invented savings, and retains household targets", async ({
   page,

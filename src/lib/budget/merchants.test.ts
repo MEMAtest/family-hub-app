@@ -6,7 +6,79 @@ import {
   type MoneyRow,
 } from "./moneyPlanner";
 
+test("researched matches carry a dated primary source, without upgrading suggested category confidence", () => {
+  const result = classifyMoneyTransaction(
+    {
+      id: "research",
+      accountId: "synthetic",
+      transactionDate: "2026-10-05",
+      description: "Idil Retail Limited T/",
+      amount: 25,
+      direction: "debit",
+      transactionType: "normal",
+    },
+    emptyMoneyPreferences(),
+  );
+  expect(result).toMatchObject({
+    merchantName: "TFC Woolwich",
+    category: "Groceries",
+    assignmentSource: "suggested",
+    merchantEvidence: {
+      url: "https://anjomanfood.com/store-locator",
+      checkedAt: "2026-10-23",
+    },
+  });
+});
+
+test("identifying a mixed shop/bar does not force a spending purpose, and household choices still win", () => {
+  const row: MoneyRow = {
+    id: "mixed",
+    accountId: "synthetic",
+    transactionDate: "2026-10-05",
+    description: "Little Mouse",
+    amount: 25,
+    direction: "debit",
+    transactionType: "normal",
+  };
+  const preferences = emptyMoneyPreferences();
+  expect(classifyMoneyTransaction(row, preferences)).toMatchObject({
+    category: "Needs review",
+    kind: "review",
+    merchantName: "Little Mouse",
+  });
+  expect(classifyMoneyTransaction(row, preferences).reason).toContain(
+    "Groceries or Dining",
+  );
+  preferences.overrides.mixed = { category: "Dining", kind: "spend" };
+  expect(classifyMoneyTransaction(row, preferences)).toMatchObject({
+    category: "Dining",
+    kind: "spend",
+    assignmentSource: "confirmed",
+  });
+  preferences.overrides.mixed = { category: "Transfers", kind: "transfer" };
+  expect(
+    classifyMoneyTransaction(row, preferences).merchantEvidence,
+  ).toBeUndefined();
+});
+
 test.each([
+  ["Card WLT 1234, Idil Retail Limited T/", "TFC Woolwich", "Groceries"],
+  ["Card WLT 1234, Sp Www.Root2Tip.Com", "ROOT2TIP", "Personal care"],
+  ["Card WLT 1234, Zyber Ltd", "ZYBER", "Home improvements"],
+  [
+    "Card WLT 1234, Woolwich Express Dry C",
+    "Woolwich Express Dry Cleaners",
+    "Personal care",
+  ],
+  ["Card WLT 1234, Cewe Boots Sedley Pla", "Boots Photo (CEWE)", "Shopping"],
+  ["Card CLS 1234, Woolwich Library", "Woolwich Library", "Education"],
+  ["Card WLT 1234, Clr*The Black Farmer", "The Black Farmer", "Groceries"],
+  ["Card WLT 1234, Sq *Here At Outernet", "HERE at Outernet", "Entertainment"],
+  ["Card CLS 1234, Indigo Rich Mix", "Indigo Rich Mix", "Dining"],
+  ["Card WLT 1234, Mm Fresh", "MM Fresh", "Groceries"],
+  ["Card WLT 1234, Suya Academy", "Suya Academy", "Dining"],
+  ["Card CLS 1234, Akimalans Ltd", "Akimalans", "Shopping"],
+  ["Card WLT 1234, Zettle_*Galeta Limited", "Galeta Bakery", "Groceries"],
   [
     "Direct Debit Home Insurancelbis, SYNTHETIC",
     "Home Insurance LBIS",
@@ -115,6 +187,18 @@ test.each([
   "Loan payment Tesco",
   "Interest family support",
   "Disney Store",
+  "Mandala",
+  "L'Amuse Bouche",
+  "Sydenham Inside",
+  "The Secret Garden",
+  "Milsha Stores",
+  "Continental Supermarke",
+  "Hanbatu Ltd Ta",
+  "Cdb Caribbean Food",
+  "On The Hoof New Croft",
+  "Tasty Flavours",
+  "Sw London Ices",
+  "Burger Express Londo",
   "Home Insurance refund from Alex",
   "Gocardless",
   "Octopus Publishing",

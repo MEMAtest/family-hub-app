@@ -7,6 +7,7 @@ import { cashFlowDate, cashFlowMoney } from "@/lib/budget/cashFlow";
 import { MoneyVisualOverview } from './MoneyVisualOverview';
 import { SpendingActions } from './SpendingActions';
 import { MerchantBreakdown } from './MerchantBreakdown';
+import { MerchantSource } from './MerchantSource';
 
 type Props = {
   familyId: string | null;
@@ -324,6 +325,7 @@ export function RecentSpending({
                       {cashFlowDate(row.transactionDate)} · {row.category}
                     </p>
                     <p className="mt-1 text-xs text-slate-500">{row.assignmentSource === 'suggested' ? row.reason : row.assignmentSource === 'confirmed' ? 'Confirmed by household' : 'Recorded by bank'}</p>
+                    <MerchantSource evidence={row.merchantEvidence} />
                     <button
                       type="button"
                       onClick={() =>

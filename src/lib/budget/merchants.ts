@@ -1,10 +1,18 @@
-export type MerchantMatch = { name: string; category: string; reason: string };
+export type MerchantEvidence = { url: string; checkedAt: string; note: string };
+export type MerchantMatch = {
+  name: string;
+  category: string;
+  reason: string;
+  evidence?: MerchantEvidence;
+};
 type MerchantRule = {
   name: string;
   category: string;
   pattern: RegExp;
   mixed?: boolean;
   directDebitOnly?: boolean;
+  evidence?: MerchantEvidence;
+  reason?: string;
 };
 
 // Match the payee, not arbitrary words in a personal transfer or bank reference.
@@ -25,6 +33,153 @@ const merchantText = (description: string) =>
     .trim();
 
 const rules: MerchantRule[] = [
+  {
+    name: "MM Fresh",
+    category: "Groceries",
+    pattern: /^mm\s+fresh$/,
+    evidence: {
+      url: "https://ratings.food.gov.uk/business/1250695",
+      checkedAt: "2026-10-23",
+      note: "Official FSA record identifies MM Fresh as a grocer and green grocer in Penge.",
+    },
+  },
+  {
+    name: "Suya Academy",
+    category: "Dining",
+    pattern: /^suya\s+academy(?:\s+ltd)?$/,
+    evidence: {
+      url: "https://ratings.food.gov.uk/business/1319113",
+      checkedAt: "2026-10-23",
+      note: "Official FSA API identifies Suya Academy Ltd as a takeaway/sandwich shop; no inference that this is tuition.",
+    },
+  },
+  {
+    name: "Akimalans",
+    category: "Shopping",
+    pattern: /^akimalans\s+(?:ltd|limited)\b/,
+    mixed: true,
+    evidence: {
+      url: "https://ratings.food.gov.uk/business/1604215",
+      checkedAt: "2026-10-23",
+      note: "Official FSA API confirms the exact legal name and general retail classification in Woolwich.",
+    },
+  },
+  {
+    name: "Galeta Bakery",
+    category: "Groceries",
+    pattern: /^galeta\s+(?:ltd|limited)\b/,
+    evidence: {
+      url: "https://galeta.co.uk/",
+      checkedAt: "2026-10-23",
+      note: "Official bakery site identifies Galeta Limited and bakery products; Companies House 07527266 corroborates the legal name and bread/cake manufacturing.",
+    },
+  },
+  {
+    name: "TFC Woolwich",
+    category: "Groceries",
+    pattern: /^idil\s+retail\s+(?:limited|ltd)\b/,
+    evidence: {
+      url: "https://anjomanfood.com/store-locator",
+      checkedAt: "2026-10-23",
+      note: "Supplier stockist list explicitly links TFC Woolwich with Idil Retail Ltd; Companies House lists food retail.",
+    },
+  },
+  {
+    name: "ROOT2TIP",
+    category: "Personal care",
+    pattern: /^(?:www\s+)?root2tip(?:\s+(?:com|co\s+uk))?\b/,
+    evidence: {
+      url: "https://root2tip.co.uk/policies/contact-information",
+      checkedAt: "2026-10-23",
+      note: "Official hair-care business contact page identifies the root2tip.com domain.",
+    },
+  },
+  {
+    name: "ZYBER",
+    category: "Home improvements",
+    pattern: /^zyber\s+(?:ltd|limited)\b/,
+    evidence: {
+      url: "https://www.zyberltd.co.uk/pages/terms-and-conditions",
+      checkedAt: "2026-10-23",
+      note: "Official tools and decorating retailer identifies company 13278872; registration confirms hardware retail.",
+    },
+  },
+  {
+    name: "Woolwich Express Dry Cleaners",
+    category: "Personal care",
+    pattern: /^woolwich\s+express\s+dry\s+c(?:lean(?:ers|ing)?)?\b/,
+    evidence: {
+      url: "https://expresscleaners.uk/",
+      checkedAt: "2026-10-23",
+      note: "Official Woolwich dry-cleaning and garment-care service.",
+    },
+  },
+  {
+    name: "Boots Photo (CEWE)",
+    category: "Shopping",
+    pattern: /^cewe\s+boots\b/,
+    mixed: true,
+    evidence: {
+      url: "https://www.bootsphoto.com/photo-printing/instant-photo-prints.html",
+      checkedAt: "2026-10-23",
+      note: "Official Boots Photo page confirms CEWE photo kiosks and photo products; not a pharmacy classification.",
+    },
+  },
+  {
+    name: "Woolwich Library",
+    category: "Education",
+    pattern: /^woolwich\s+(?:centre\s+)?library\b/,
+    mixed: true,
+    evidence: {
+      url: "https://www.royalgreenwich.gov.uk/directory_record/1613/woolwich_library",
+      checkedAt: "2026-10-23",
+      note: "Council listing identifies the library and educational/reference services; exact service or fee is unknown.",
+    },
+  },
+  {
+    name: "The Black Farmer",
+    category: "Groceries",
+    pattern: /^the\s+black\s+farmer\b/,
+    mixed: true,
+    evidence: {
+      url: "https://theblackfarmer.com/shop/",
+      checkedAt: "2026-10-23",
+      note: "Official food retailer and specialist meats shop. Merchant category only; not an itemised receipt.",
+    },
+  },
+  {
+    name: "HERE at Outernet",
+    category: "Entertainment",
+    pattern: /^here\s+at\s+outernet\b/,
+    mixed: true,
+    evidence: {
+      url: "https://www.outernet.com/",
+      checkedAt: "2026-10-23",
+      note: "Official entertainment district links the HERE at Outernet live venue; exact ticket/bar purchase is unknown.",
+    },
+  },
+  {
+    name: "Indigo Rich Mix",
+    category: "Dining",
+    pattern: /^indigo\s+rich\s*mix\b/,
+    evidence: {
+      url: "https://www.indigostreetfood.com/",
+      checkedAt: "2026-10-23",
+      note: "Official food-service site corroborates the venue catering list; ICO ZB314297 lists Indigo Rich Mix as a trading name.",
+    },
+  },
+  {
+    name: "Little Mouse",
+    category: "Needs review",
+    pattern: /^little\s+mouse$/,
+    reason:
+      "A cheese shop and wine bar share this name. Groceries or Dining needs confirmation for this payment.",
+    evidence: {
+      url: "https://littlemousecheese.com/",
+      checkedAt: "2026-10-23",
+      note: "Candidate business runs both a cheese shop and wine bar. Name alone does not establish the payment purpose.",
+    },
+  },
   {
     name: "Home Insurance LBIS",
     category: "Insurance",
@@ -507,8 +662,11 @@ export function recogniseMerchant(description: string): MerchantMatch | null {
   return {
     name: rule.name,
     category: rule.category,
-    reason: rule.mixed
-      ? `${rule.name} recognised. Suggested ${rule.category.toLowerCase()}; the purchased items are not shown by the bank.`
-      : `${rule.name} recognised. Suggested ${rule.category.toLowerCase()} from the merchant, not an itemised receipt.`,
+    ...(rule.evidence ? { evidence: rule.evidence } : {}),
+    reason:
+      rule.reason ??
+      (rule.mixed
+        ? `${rule.name} recognised. Suggested ${rule.category.toLowerCase()}; the purchased items are not shown by the bank.`
+        : `${rule.name} recognised. Suggested ${rule.category.toLowerCase()} from the merchant, not an itemised receipt.`),
   };
 }

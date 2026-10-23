@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MerchantBreakdown } from './MerchantBreakdown';
+import { MerchantSource } from './MerchantSource';
 import {
   ArrowDownRight,
   ArrowUpRight,
@@ -840,6 +841,7 @@ export function FamilyMoneyPlanner({
                             : "Suggested / needs checking"}
                       </p>
                       <p className="mt-1 text-xs text-slate-500">{row.reason}</p>
+                      <MerchantSource evidence={row.merchantEvidence} />
                     </div>
                     <span className="shrink-0 text-sm font-semibold tabular-nums">
                       {row.direction === "credit" ? "+" : "−"}
