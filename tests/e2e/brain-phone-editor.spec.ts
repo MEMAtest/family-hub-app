@@ -157,8 +157,13 @@ test("Brain phone editor fits a short screen, auto-titles, preserves manual titl
     path: "output/playwright/brain-phone-release.png",
     fullPage: false,
   });
+  nodes.push({ ...nodes[0], id: 'long-option', title: 'Household notes with a long descriptive title for travel, nursery, repairs and family planning' });
   await page.setViewportSize({ width: 1024, height: 900 });
+  await page.reload();
+  await page.getByRole('button', { name: 'Phone notes', exact: true }).click();
   await page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Updated shopping plan', exact: true }) }).getByRole('button').first().click();
   expect(await page.getByLabel('Note title', { exact: true }).first().evaluate(element => element.getBoundingClientRect().width)).toBeGreaterThan(100);
+  expect(await page.getByLabel('Note title', { exact: true }).first().evaluate(element => element.getBoundingClientRect().right)).toBeLessThanOrEqual(1024);
+  await expect(page.getByRole('dialog', { name: 'Note details' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1024);
 });

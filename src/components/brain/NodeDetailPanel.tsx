@@ -38,7 +38,7 @@ const NodeDetailPanel = () => {
     mentionSuggestionsByNodeId,
   } = useBrainContext();
 
-  const isDesktop = useMediaQuery('(min-width: 768px)');
+  const isDesktop = useMediaQuery('(min-width: 1280px)');
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const selectedNodeIdRef = useRef(selectedNodeId);
   const pending = useRef<Record<string, string | string[] | boolean | null>>({});

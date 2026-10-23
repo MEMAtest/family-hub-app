@@ -57,7 +57,7 @@ const MobileProjectSelector = () => {
 
 const ProjectBrainDashboard = () => {
   const { activeProjectId, isLoading } = useBrainContext();
-  const isDesktop = useMediaQuery('(min-width: 768px)');
+  const isDesktop = useMediaQuery('(min-width: 1280px)');
   const [mode, setMode] = useState<'notes' | 'map' | 'tasks'>('notes');
 
   return (

@@ -111,7 +111,7 @@ const BrainNotesView = () => {
   return (
     <div className="min-w-0 bg-gray-50 pb-20 dark:bg-slate-950">
       <div className="hidden border-b border-gray-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900 md:block">
-        <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_260px]">
+        <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_260px]">
           <div className="min-w-0 space-y-2">
             <BrainNoteTitle title={title} content={content} onChange={value => { setTitle(value); setManualTitle(Boolean(value.trim())); }} />
             <AIEnhancedField
@@ -124,7 +124,7 @@ const BrainNotesView = () => {
             />
           </div>
 
-          <div className="flex flex-col gap-2">
+          <div className="flex min-w-0 flex-col gap-2">
             <div className="relative">
               <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
               <input
@@ -195,7 +195,7 @@ const BrainNotesView = () => {
               return (
                 <article
                   key={node.id}
-                  className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900"
+                  className="min-w-0 rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900"
                 >
                   <button type="button" onClick={() => selectNode(node.id)} className="block w-full text-left">
                     <div className="flex items-start gap-2">
