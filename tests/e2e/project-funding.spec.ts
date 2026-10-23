@@ -100,6 +100,8 @@ test("project money persists across Money, Contractors and devices without touch
     await expect(
       planner.getByRole("button", { name: "Set project fund", exact: true }),
     ).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole('button', { name: 'Previous month', exact: true })).not.toBeVisible();
+    await expect(page.getByRole('button', { name: 'Next month', exact: true })).not.toBeVisible();
     await planner
       .getByRole("button", { name: "Set project fund", exact: true })
       .click();

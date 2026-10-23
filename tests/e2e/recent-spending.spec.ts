@@ -201,6 +201,7 @@ test("recent actual spending supports presets, custom days, reload and phone wit
   expect(await ledger.getByTestId('payment-modal-body').evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
   await close();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  expect(await recent.locator('[aria-label="Money chart view"]').evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
   expect(await recent.evaluate(el => el.getBoundingClientRect().height)).toBeLessThan(1882); // 60% below the production 4,706px baseline.
   await page.setViewportSize({ width: 1024, height: 900 });
   await recent.getByRole('button', { name: 'Categories', exact: true }).click();

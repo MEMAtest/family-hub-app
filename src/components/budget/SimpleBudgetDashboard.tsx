@@ -548,7 +548,7 @@ const SimpleBudgetDashboard: React.FC = () => {
         </div>
       </div>
       {/* Month Navigation */}
-      <div className="flex items-center justify-between" style={{ display: budgetMode === 'overview' || budgetMode === 'review' ? 'none' : undefined }}>
+      <div className="flex items-center justify-between" style={{ display: isActualView ? 'none' : undefined }}>
         <button
           onClick={goToPreviousMonth}
           aria-label="Previous month"
