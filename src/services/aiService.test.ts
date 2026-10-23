@@ -41,4 +41,27 @@ describe('AIService calendar summaries', () => {
     expect(request.messages[0].content).toContain('Never describe a past event as upcoming.');
     expect(summary).toBe('The workshop took place at school.');
   });
+
+  it('keeps spending suggestions tied to supplied fact IDs and rejects new numerical claims', async () => {
+    const service = new AIService();
+    const chat = jest.spyOn(service as any, 'chat');
+    const facts = [{ id: 'review', title: 'Review payments', evidence: '£15.00 needs review.', action: 'Check the purpose.' }];
+    chat.mockResolvedValue('{"actions":[{"factId":"review","action":"Check what this payment covered before changing a target."}]}');
+    expect(await service.suggestSpendingActions(facts)).toHaveLength(1);
+    chat.mockResolvedValue('{"actions":[{"factId":"invented","action":"Cancel an unknown subscription."}]}');
+    await expect(service.suggestSpendingActions(facts)).rejects.toThrow('Unsupported spending suggestion');
+    chat.mockResolvedValue('{"actions":[{"factId":"review","action":"Save £100 per month."}]}');
+    await expect(service.suggestSpendingActions(facts)).rejects.toThrow('Unsupported spending suggestion');
+  });
+
+  it('can analyse an empty or single-category plan without claiming planned figures are actual spending', async () => {
+    const service = new AIService();
+    const chat = jest.spyOn(service as any, 'chat').mockResolvedValue('Check your saved plan.');
+    await service.analyzeBudgetSpending({ familySize: 4, location: 'UK', totalIncome: 0, totalExpenses: 0, expensesByCategory: [], monthName: 'October' });
+    expect(chat.mock.calls[0][0]).toContain('not actual bank activity');
+    expect(chat.mock.calls[0][1]).toContain('No saved planned categories.');
+    await service.analyzeBudgetSpending({ familySize: 4, location: 'UK', totalIncome: 0, totalExpenses: 10, expensesByCategory: [{ category: 'Groceries', amount: 10 }], monthName: 'October' });
+    expect(chat.mock.calls[1][1]).toContain('Groceries: £10.00');
+    expect(chat.mock.calls[1][1]).not.toContain('undefined');
+  });
 });

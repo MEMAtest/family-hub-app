@@ -91,7 +91,7 @@ const MindMapCanvas = () => {
   );
 
   return (
-    <div className="h-full w-full">
+    <div className="h-[60dvh] min-h-80 w-full min-w-0">
       <ReactFlow
         nodes={nodes}
         edges={edges}

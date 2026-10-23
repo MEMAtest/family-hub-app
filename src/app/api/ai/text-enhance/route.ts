@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { aiService } from '@/services/aiService';
+import { requireAuth } from '@/lib/auth-utils';
+
+export const maxDuration = 60;
 
 const requestSchema = z.object({
   text: z.string().min(1).max(4000),
   context: z.string().max(160).optional(),
-  mode: z.enum(['polish', 'spellcheck', 'summarize']).default('polish'),
+  mode: z.enum(['polish', 'spellcheck', 'summarize', 'title']).default('polish'),
 });
 
 const fallbackEnhance = (text: string) =>
@@ -16,19 +19,19 @@ const fallbackEnhance = (text: string) =>
     .replace(/\s+([,.!?;:])/g, '$1')
     .trim();
 
-export async function POST(request: NextRequest) {
+export const POST = requireAuth(async (request: NextRequest) => {
   try {
     const body = requestSchema.parse(await request.json());
 
-    if (body.mode === 'summarize' && !process.env.ANTHROPIC_API_KEY && !process.env.OPENROUTER_API_KEY) {
-      return NextResponse.json({ error: 'AI summaries are temporarily unavailable.' }, { status: 503 });
+    if ((body.mode === 'summarize' || body.mode === 'title') && !process.env.ANTHROPIC_API_KEY && !process.env.OPENROUTER_API_KEY) {
+      return NextResponse.json({ error: body.mode === 'title' ? 'AI title suggestions are temporarily unavailable.' : 'AI summaries are temporarily unavailable.' }, { status: 503 });
     }
 
     try {
       const enhanced = await aiService.enhanceFreeText(body);
-      return NextResponse.json({ enhanced: enhanced.trim(), source: 'ai' });
+      return NextResponse.json({ enhanced: body.mode === 'title' ? enhanced.trim().replace(/^['"]|['"]$/g, '').slice(0, 90) : enhanced.trim(), source: 'ai' });
     } catch (error) {
-      if (body.mode === 'summarize') {
+      if (body.mode === 'summarize' || body.mode === 'title') {
         console.error('AI text summary unavailable:', error);
         return NextResponse.json({ error: 'AI summary failed. Please try again.' }, { status: 503 });
       }
@@ -46,4 +49,4 @@ export async function POST(request: NextRequest) {
     console.error('Text enhancement failed:', error);
     return NextResponse.json({ error: 'Failed to enhance text' }, { status: 500 });
   }
-}
+});

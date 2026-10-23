@@ -14,11 +14,14 @@ export const normalizeBrainTitle = (value: string) =>
 export const deriveBrainNoteTitle = (content: string, fallback = 'Untitled note') => {
   const firstLine = content
     .split('\n')
-    .map((line) => line.trim().replace(/^#+\s*/, ''))
+    .map((line) => line.trim().replace(/^#+\s*|^[-*]\s+(?:\[[ xX]\]\s*)?/, ''))
     .find(Boolean);
 
   if (!firstLine) return fallback;
-  return firstLine.slice(0, 90);
+  const sentence = firstLine.split(/(?<=[.!?])\s/)[0];
+  if (sentence.length <= 90) return sentence;
+  const clipped = sentence.slice(0, 87);
+  return `${clipped.replace(/\s+\S*$/, '') || clipped}...`;
 };
 
 export const extractBrainLinks = (content = '') => {

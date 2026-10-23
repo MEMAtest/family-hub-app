@@ -17,9 +17,9 @@ const BrainFilterBar = () => {
   const { quickFilter, setQuickFilter, searchQuery, setSearchQuery } = useBrainContext();
 
   return (
-    <div className="flex items-center gap-2 border-b border-gray-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900">
+    <div className="flex min-w-0 flex-wrap items-center gap-2 border-b border-gray-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900">
       {/* Status pills - scrollable on mobile */}
-      <div className="flex items-center gap-1 overflow-x-auto scrollbar-hide">
+      <div className="flex min-w-0 max-w-full items-center gap-1 overflow-x-auto scrollbar-hide">
         {FILTER_OPTIONS.map((opt) => (
           <button
             key={opt.label}

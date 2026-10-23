@@ -6,6 +6,7 @@ export type RecentSpendingReport = {
   previous: { start: string; end: string; coverage: 'complete' | 'partial' | 'none'; spending: number | null; change: number | null; changePercent: number | null };
   categories: Array<{ category: string; amount: number; count: number; previous: number | null; change: number | null; changePercent: number | null }>;
   transactions: MoneyReport['transactions'];
+  daily: Array<{ date: string; outgoing: number | null; covered: boolean }>;
 };
 
 const dayMs = 86_400_000;
@@ -127,5 +128,11 @@ export function buildRecentSpending(input: {
       spending: previousCoverage.coverage === 'none' ? null : money(previousSpending),
       change: change === null ? null : money(change), changePercent: change === null ? null : percent(change, previousSpending) },
     categories, transactions: current.map(row => row.transaction),
+    daily: Array.from({ length: input.days }, (_, index) => {
+      const date = offsetDate(range.start, index);
+      const covered = accountIds.length > 0 && accountIds.every(accountId => imports.some(item => item.accountId === accountId && item.start <= date && item.end >= date));
+      const payments = current.filter(row => row.transaction.transactionDate === date);
+      return { date, covered, outgoing: covered || payments.some(row => row.transaction.direction === 'debit') ? money(debitSum(payments)) : null };
+    }),
   };
 }

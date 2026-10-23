@@ -61,16 +61,16 @@ const ProjectBrainDashboard = () => {
   const [mode, setMode] = useState<'notes' | 'map' | 'tasks'>('notes');
 
   return (
-    <div className="flex min-h-[680px] flex-col overflow-visible">
+    <div className="flex min-w-0 flex-col">
       {/* Mobile: horizontal project selector */}
       {!isDesktop && <MobileProjectSelector />}
 
-      <div className="flex flex-1 overflow-visible">
+      <div className="flex min-w-0 flex-1">
         {/* Desktop sidebar */}
         {isDesktop && <ProjectSidebar />}
 
         {/* Main content area */}
-        <div className="flex flex-1 flex-col overflow-visible">
+        <div className="flex min-w-0 flex-1 flex-col">
           {activeProjectId ? (
             <>
               <div className="flex items-center justify-between border-b border-gray-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900">
@@ -114,8 +114,8 @@ const ProjectBrainDashboard = () => {
                 </div>
               </div>
               <BrainFilterBar />
-              <div className={`flex flex-1 ${mode === 'notes' ? 'overflow-visible' : 'overflow-hidden'}`}>
-                <div className="flex-1">
+              <div className={`flex min-w-0 flex-1 ${mode === 'notes' ? '' : 'overflow-hidden'}`}>
+                <div className="min-w-0 flex-1">
                   {isLoading ? (
                     <div className="flex h-full items-center justify-center">
                       <div className="h-8 w-8 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />

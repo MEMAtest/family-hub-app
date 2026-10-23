@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Trash2, Calendar, Tag, Link2, CheckCircle2, Circle } from 'lucide-react';
 import { useBrainContext } from '@/contexts/familyHub/BrainContext';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
@@ -12,6 +13,7 @@ import {
   type BrainNodeType,
 } from '@/types/brain.types';
 import AIEnhancedField from '@/components/common/AIEnhancedField';
+import { BrainNoteTitle } from './BrainNoteTitle';
 import { buildBrainLinkMarkup, extractBrainChecklistItems, replaceBrainChecklistItem } from '@/utils/brainText';
 
 const NODE_TYPES: { value: BrainNodeType; label: string }[] = [
@@ -39,18 +41,29 @@ const NodeDetailPanel = () => {
   const isDesktop = useMediaQuery('(min-width: 768px)');
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const selectedNodeIdRef = useRef(selectedNodeId);
+  const pending = useRef<Record<string, string | string[] | boolean | null>>({});
+  const flushSave = useCallback(() => {
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    const nodeId = selectedNodeIdRef.current;
+    if (nodeId && Object.keys(pending.current).length) {
+      const patch = pending.current;
+      pending.current = {};
+      void updateNode(nodeId, patch);
+    }
+  }, [updateNode]);
 
   // Keep ref in sync so debounced callback always targets the correct node
   useEffect(() => {
+    flushSave();
     selectedNodeIdRef.current = selectedNodeId;
-  }, [selectedNodeId]);
+  }, [selectedNodeId, flushSave]);
 
   // Clean up save timer on unmount
   useEffect(() => {
     return () => {
-      if (saveTimer.current) clearTimeout(saveTimer.current);
+      flushSave();
     };
-  }, []);
+  }, [flushSave]);
 
   const node = nodes.find((n) => n.id === selectedNodeId);
 
@@ -58,9 +71,11 @@ const NodeDetailPanel = () => {
   const [content, setContent] = useState('');
   const [tagInput, setTagInput] = useState('');
   const [linkTargetId, setLinkTargetId] = useState('');
+  const editingId = useRef<string | null>(null);
 
   useEffect(() => {
-    if (node) {
+    if (node && editingId.current !== node.id) {
+      editingId.current = node.id;
       setTitle(node.title);
       setContent(node.content || '');
       setLinkTargetId('');
@@ -71,12 +86,13 @@ const NodeDetailPanel = () => {
     (field: string, value: string | string[] | boolean | null) => {
       const nodeId = selectedNodeIdRef.current;
       if (!nodeId) return;
+      pending.current[field] = value;
       if (saveTimer.current) clearTimeout(saveTimer.current);
       saveTimer.current = setTimeout(() => {
-        void updateNode(nodeId, { [field]: value });
+        flushSave();
       }, 500);
     },
-    [updateNode]
+    [flushSave]
   );
 
   const handleTitleChange = (val: string) => {
@@ -108,6 +124,8 @@ const NodeDetailPanel = () => {
 
   const handleDelete = () => {
     if (!selectedNodeId) return;
+    pending.current = {};
+    if (saveTimer.current) clearTimeout(saveTimer.current);
     void deleteNode(selectedNodeId);
     setIsNodeDetailOpen(false);
   };
@@ -132,7 +150,7 @@ const NodeDetailPanel = () => {
   const checklistItems = extractBrainChecklistItems(content);
 
   const panelContent = (
-    <div className="flex h-full flex-col">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-slate-700">
         <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-100">
@@ -146,7 +164,8 @@ const NodeDetailPanel = () => {
             <Trash2 className="h-4 w-4" />
           </button>
           <button
-            onClick={() => setIsNodeDetailOpen(false)}
+            aria-label="Close note details"
+            onClick={() => { flushSave(); setIsNodeDetailOpen(false); }}
             className="rounded p-1.5 text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700"
           >
             <X className="h-4 w-4" />
@@ -155,14 +174,9 @@ const NodeDetailPanel = () => {
       </div>
 
       {/* Body */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 space-y-4">
         {/* Title */}
-        <input
-          value={title}
-          onChange={(e) => handleTitleChange(e.target.value)}
-          className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-          placeholder="Node title"
-        />
+        <BrainNoteTitle title={title} content={content} onChange={handleTitleChange} placeholder="Node title" />
 
         {/* Status / Priority / Type row */}
         <div className="grid grid-cols-3 gap-2">
@@ -409,14 +423,14 @@ const NodeDetailPanel = () => {
   }
 
   // Mobile: bottom sheet
-  return (
-    <div className="fixed inset-0 z-[70] flex flex-col justify-end">
-      <div className="absolute inset-0 bg-black/30" onClick={() => setIsNodeDetailOpen(false)} />
-      <div className="relative max-h-[80vh] rounded-t-xl bg-white dark:bg-slate-900 shadow-xl overflow-hidden" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+  return createPortal(
+    <div role="dialog" aria-modal="true" aria-label="Note details" className="fixed inset-0 z-[100] flex flex-col justify-end">
+      <div className="absolute inset-0 bg-black/30" onClick={() => { flushSave(); setIsNodeDetailOpen(false); }} />
+      <div className="relative flex h-[85dvh] min-h-0 flex-col rounded-t-lg bg-white dark:bg-slate-900 shadow-xl overflow-hidden" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
         <div className="mx-auto mt-2 mb-1 h-1 w-10 rounded-full bg-gray-300 dark:bg-slate-600" />
         {panelContent}
       </div>
-    </div>
+    </div>, document.body
   );
 };
 

@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { ChevronRight, RefreshCw } from "lucide-react";
 import type { RecentSpendingReport } from "@/lib/budget/recentSpending";
 import { cashFlowDate, cashFlowMoney } from "@/lib/budget/cashFlow";
+import { MoneyVisualOverview } from './MoneyVisualOverview';
+import { SpendingActions } from './SpendingActions';
 
 type Props = {
   familyId: string | null;
@@ -36,6 +38,7 @@ export function RecentSpending({
   const [category, setCategory] = useState("All");
   const [page, setPage] = useState(0);
   const [ledgerOpen, setLedgerOpen] = useState(false);
+  const [search, setSearch] = useState('');
   const scope = `${familyId ?? ""}:${days}`;
   const data = result?.scope === scope ? result : null;
   const report = data?.report;
@@ -126,16 +129,16 @@ export function RecentSpending({
     () =>
       (report?.transactions ?? []).filter(
         (row) =>
-          category === "All" ||
+          (category === "All" ||
           (category === "Needs review" && row.kind === "review") ||
-          row.category === category,
+          row.category === category) && (!search.trim() || `${row.description} ${row.category} ${row.amount}`.toLowerCase().includes(search.trim().toLowerCase())),
       ),
-    [report, category],
+    [report, category, search],
   );
-  const maxAmount = Math.max(
-    1,
-    ...(report?.categories.map((item) => item.amount) ?? []),
-  );
+  const openCategory = (value: string) => {
+    setCategory(value); setSearch(''); setPage(0); setLedgerOpen(true);
+    requestAnimationFrame(() => document.getElementById('recent-payment-ledger')?.scrollIntoView({ block: 'start', behavior: 'smooth' }));
+  };
 
   return (
     <section
@@ -144,9 +147,9 @@ export function RecentSpending({
     >
       <header className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 pb-4 dark:border-slate-700">
         <div>
-          <h2 id="recent-spending-title" className="text-xl font-semibold">
-            Spending in the last {days} {days === 1 ? "day" : "days"}
-          </h2>
+          <p className="mb-1 text-xs font-semibold uppercase text-teal-700 dark:text-teal-300">Family finances</p>
+          <h2 className="text-2xl font-semibold sm:text-3xl">Your money at a glance</h2>
+          <h3 id="recent-spending-title" className="mt-2 text-sm font-medium">Spending in the last {days} {days === 1 ? "day" : "days"}</h3>
           {report && (
             <p className="mt-1 text-sm text-slate-500">
               {cashFlowDate(report.start)}–{cashFlowDate(report.end)} ·
@@ -154,19 +157,9 @@ export function RecentSpending({
             </p>
           )}
         </div>
-        <button
-          type="button"
-          className={button}
-          aria-label="Refresh recent spending"
-          title="Refresh recent spending"
-          onClick={() => setRevision((value) => value + 1)}
-        >
-          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-        </button>
-      </header>
-      <div className="mt-4 flex flex-wrap items-end gap-3">
+      <div className="flex max-w-full flex-wrap items-end gap-3">
         <label className="min-w-0 text-xs font-medium">
-          Period
+          <span className="sr-only">Period</span>
           <select
             aria-label="Spending period"
             value={selection}
@@ -188,6 +181,15 @@ export function RecentSpending({
             <option value="custom">Custom number of days</option>
           </select>
         </label>
+        <button
+          type="button"
+          className={button}
+          aria-label="Refresh recent spending"
+          title="Refresh recent spending"
+          onClick={() => setRevision((value) => value + 1)}
+        >
+          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+        </button>
         {selection === "custom" && (
           <form
             className="flex max-w-full flex-wrap items-end gap-2"
@@ -218,6 +220,7 @@ export function RecentSpending({
           </form>
         )}
       </div>
+      </header>
       {loading && (
         <p role="status" className="py-8 text-sm text-slate-500">
           Loading recorded spending...
@@ -235,26 +238,7 @@ export function RecentSpending({
       )}
       {!loading && !error && report && (
         <>
-          <dl className="mt-5 border-y border-slate-200 py-4 dark:border-slate-700">
-            <dt className="text-sm text-slate-500">Recorded money out</dt>
-            <dd className="mt-1 text-3xl font-semibold tabular-nums">
-              {money(report.summary.outgoing)}
-            </dd>
-            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
-              {[
-                ["Identified spending", report.summary.spending],
-                ["Purpose to check", report.summary.review],
-                ["Transfers, not spending", report.summary.transfers],
-              ].map(([label, amount]) => (
-                <div key={String(label)} className="min-w-0">
-                  <dt className="text-xs text-slate-500">{label}</dt>
-                  <dd className="mt-1 break-words text-lg font-semibold tabular-nums">
-                    {money(amount as number | null)}
-                  </dd>
-                </div>
-              ))}
-            </div>
-          </dl>
+          <MoneyVisualOverview report={report} onCategory={openCategory} onReview={() => onReviewMonth(report.end.slice(0, 7))} />
           <p
             className={`mt-3 text-sm ${report.coverage === "complete" ? "text-slate-600 dark:text-slate-300" : "text-amber-800 dark:text-amber-300"}`}
           >
@@ -285,47 +269,12 @@ export function RecentSpending({
               . This is past spending, not a saving prediction.
             </p>
           )}
-          {report.categories.some(item => item.count > 0) && (
-            <section aria-label="Recent spending categories" className="mt-6">
-              <h3 className="text-base font-semibold">What we spent on</h3>
-              <div className="mt-2 divide-y divide-slate-100 dark:divide-slate-800">
-                {report.categories.filter(item => item.count > 0).map((item) => (
-                  <div key={item.category} className="py-3">
-                    <button
-                      type="button"
-                      aria-pressed={category === item.category}
-                      onClick={() => {
-                        setCategory(
-                          category === item.category ? "All" : item.category,
-                        );
-                        setPage(0);
-                        setLedgerOpen(true);
-                      }}
-                      className="flex min-h-10 w-full flex-wrap items-center justify-between gap-2 text-left text-sm"
-                    >
-                      <span className="font-medium">{item.category}</span>
-                      <span className="tabular-nums">
-                        {money(item.amount)}{" "}
-                        <span className="text-xs text-slate-500">
-                          · {item.count} {item.count === 1 ? "payment" : "payments"}
-                        </span>
-                      </span>
-                    </button>
-                    <div className="h-2 bg-slate-100 dark:bg-slate-800">
-                      <div
-                        className="h-full bg-teal-700"
-                        style={{ width: `${(item.amount / maxAmount) * 100}%` }}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
+          {familyId && <SpendingActions report={report} familyId={familyId} onCategory={openCategory} onReview={() => onReviewMonth(report.end.slice(0, 7))} />}
           <details
+            id="recent-payment-ledger"
             open={ledgerOpen}
             onToggle={(event) => setLedgerOpen(event.currentTarget.open)}
-            className="mt-6 border-t border-slate-200 pt-3 dark:border-slate-700"
+            className="mt-6 scroll-mt-36 border-t border-slate-200 pt-3 dark:border-slate-700"
           >
             <summary className="min-h-11 cursor-pointer py-2 text-sm font-semibold">
               Payments in this period ({report.summary.count})
@@ -353,6 +302,7 @@ export function RecentSpending({
                 ))}
               </select>
             </label>
+            <input aria-label="Search recent payments" placeholder="Search merchant, category or amount..." value={search} onChange={event => { setSearch(event.target.value); setPage(0); }} className="mt-3 min-h-11 w-full rounded-md border border-slate-300 bg-transparent px-3 text-sm dark:border-slate-700" />
             <div className="mt-3 divide-y divide-slate-100 dark:divide-slate-800">
               {transactions.slice(page * 10, (page + 1) * 10).map((row) => (
                 <div

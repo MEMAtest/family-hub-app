@@ -9,7 +9,7 @@ const members = [
 
 const stubHousehold = async (page: Page) => {
   let savedEvent: Record<string, unknown> | null = null;
-  let preferences = { hiddenUpcoming: [] as string[], acceptedOverlaps: [], lastPlace: null };
+  const preferences = { hiddenUpcoming: [] as string[], acceptedOverlaps: [], lastPlace: null };
   await page.route('**/api/families/**', (route) => route.fulfill({
     status: 200,
     contentType: 'application/json',

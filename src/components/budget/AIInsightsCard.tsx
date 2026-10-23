@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Sparkles,
   TrendingUp,
@@ -44,27 +44,35 @@ export const AIInsightsCard: React.FC<AIInsightsCardProps> = ({
   const [benchmarkResult, setBenchmarkResult] = useState<BenchmarkResult | null>(null);
   const [benchmarkMetadata, setBenchmarkMetadata] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<'insights' | 'benchmark'>('insights');
+  const currentScope = `${familyId}:${month}:${year}`;
+  const scopeRef = useRef(currentScope);
+  scopeRef.current = currentScope;
+  useEffect(() => {
+    setInsights(null); setRecommendations(null); setData(null); setError(null);
+    setBenchmarkResult(null); setBenchmarkMetadata(null); setBenchmarkError(null);
+    setIsLoading(false); setIsBenchmarkLoading(false); setActiveTab('insights');
+  }, [currentScope]);
 
   const renderFormattedLines = (text: string) => {
     return text.split('\n').map((line, idx) => {
-      const cleaned = line.replace(/^\*+\s*/, '').replace(/\*\*/g, '').trim();
+      const cleaned = line.replace(/\*\*/g, '').trim();
       if (!cleaned) {
         return null;
       }
 
-      if (/^[\d\-•]/.test(cleaned)) {
+      if (/^(?:\d+[.)]|[-*•])\s+/.test(cleaned)) {
         return (
           <div key={`${line}-${idx}`} className="flex gap-2">
             <span className="text-purple-600 flex-shrink-0">•</span>
-            <span>{cleaned.replace(/^[\d\-•]\s*\.?\s*/, '')}</span>
+            <span className="min-w-0 break-words">{cleaned.replace(/^(?:\d+[.)]|[-*•])\s+/, '')}</span>
           </div>
         );
       }
 
-      if (cleaned === cleaned.toUpperCase() && cleaned.length > 3) {
+      if (/^#{1,6}\s+/.test(cleaned) || (cleaned === cleaned.toUpperCase() && cleaned.length > 3)) {
         return (
           <div key={`${line}-${idx}`} className="font-semibold text-purple-800 mt-2">
-            {cleaned}
+            {cleaned.replace(/^#{1,6}\s+/, '')}
           </div>
         );
       }
@@ -115,8 +123,8 @@ export const AIInsightsCard: React.FC<AIInsightsCardProps> = ({
         <div className="p-2 bg-purple-100 rounded-lg flex-shrink-0">
           <Sparkles className="w-5 h-5 text-purple-600" />
         </div>
-        <div className="flex-1">
-          <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+        <div className="min-w-0 flex-1">
+          <h3 className="font-semibold text-gray-900 mb-2 flex flex-wrap items-center gap-2">
             Planned Spending Insights
             {data && (
               <span className="text-xs font-normal text-gray-600">
@@ -137,7 +145,7 @@ export const AIInsightsCard: React.FC<AIInsightsCardProps> = ({
               </div>
 
               {data && (
-                <div className="mt-4 grid grid-cols-3 gap-3">
+                <div className="mt-4 grid gap-3 sm:grid-cols-3">
                   <div className="bg-white bg-opacity-60 rounded-lg p-3 text-center">
                     <p className="text-xs text-gray-600 mb-1">Planned income</p>
                     <p className="font-bold text-green-700">£{data.totalIncome.toLocaleString()}</p>
@@ -247,6 +255,7 @@ export const AIInsightsCard: React.FC<AIInsightsCardProps> = ({
 
   const fetchBenchmark = async () => {
     if (!familyId) return;
+    const requestedScope = currentScope;
 
     setIsBenchmarkLoading(true);
     setBenchmarkError(null);
@@ -269,21 +278,24 @@ export const AIInsightsCard: React.FC<AIInsightsCardProps> = ({
       }
 
       const result = await response.json();
+      if (scopeRef.current !== requestedScope) return;
       setBenchmarkResult({
         analysis: result.analysis,
         comparisons: Array.isArray(result.comparisons) ? result.comparisons : [],
       });
       setBenchmarkMetadata(result.metadata);
     } catch (err) {
+      if (scopeRef.current !== requestedScope) return;
       console.error('Error fetching benchmark insights:', err);
       setBenchmarkError(err instanceof Error ? err.message : 'Failed to load benchmark insights');
     } finally {
-      setIsBenchmarkLoading(false);
+      if (scopeRef.current === requestedScope) setIsBenchmarkLoading(false);
     }
   };
 
   const fetchInsights = async () => {
     if (!familyId) return;
+    const requestedScope = currentScope;
 
     setActiveTab('insights');
     setIsLoading(true);
@@ -293,16 +305,7 @@ export const AIInsightsCard: React.FC<AIInsightsCardProps> = ({
     setBenchmarkMetadata(null);
 
     try {
-      // Build query parameters
-      const params = new URLSearchParams();
-      if (month) params.append('month', String(month));
-      if (year) params.append('year', String(year));
-      const queryString = params.toString();
-
-      // Use the correct GET endpoint
-      const url = `/api/families/${familyId}/budget/ai-insights${queryString ? `?${queryString}` : ''}`;
-
-      const response = await fetch(url);
+      const response = await fetch('/api/ai/budget/insights', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ month, year }) });
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -310,24 +313,17 @@ export const AIInsightsCard: React.FC<AIInsightsCardProps> = ({
       }
 
       const result = await response.json();
+      if (scopeRef.current !== requestedScope) return;
       setInsights(result.insights);
       setRecommendations(result.recommendations);
 
-      // Map the summary data to the expected format
-      setData({
-        totalIncome: result.summary.totalIncome,
-        totalExpenses: result.summary.totalExpenses,
-        monthName: month && year ? new Date(year, month - 1).toLocaleDateString('en', { month: 'long', year: 'numeric' }) : 'All Time',
-        familySize: result.summary.familySize || 'Unknown'
-      });
-
-      // Fetch benchmark (optional feature - will fail gracefully if issues)
-      await fetchBenchmark();
+      setData(result.data);
     } catch (err) {
+      if (scopeRef.current !== requestedScope) return;
       console.error('Error fetching AI insights:', err);
       setError(err instanceof Error ? err.message : 'Failed to load AI insights');
     } finally {
-      setIsLoading(false);
+      if (scopeRef.current === requestedScope) setIsLoading(false);
     }
   };
 
@@ -343,9 +339,9 @@ export const AIInsightsCard: React.FC<AIInsightsCardProps> = ({
             <Sparkles className="w-5 h-5 text-purple-600" />
           </div>
           <div className="flex-1">
-            <h3 className="font-semibold text-gray-900 mb-2">Smart Spending Insights</h3>
+            <h3 className="font-semibold text-gray-900 mb-2">Saved-plan insights</h3>
             <p className="text-sm text-gray-700 mb-4">
-              Get personalized insights about your spending patterns, compare to UK averages, and receive tailored recommendations.
+              Uses saved planned entries, not bank spending. Open Overview for recorded spending patterns and next steps.
             </p>
             <button
               onClick={fetchInsights}
@@ -400,7 +396,7 @@ export const AIInsightsCard: React.FC<AIInsightsCardProps> = ({
           </button>
           <button
             onClick={() => setActiveTab('benchmark')}
-            disabled={!hasBenchmarkContent}
+            disabled={isBenchmarkLoading}
             className={`px-4 py-2 text-sm font-medium transition-colors border-l border-purple-200 ${
               activeTab === 'benchmark'
                 ? 'bg-purple-600 text-white'

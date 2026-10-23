@@ -110,6 +110,8 @@ test("recent actual spending supports presets, custom days, reload and phone wit
       }),
     });
   });
+  let failInsights = false;
+  await page.route('**/budget/recent-insights', route => route.fulfill(failInsights ? { status: 503, json: { error: 'Synthetic AI unavailable; verified facts remain.' } } : { json: { actions: [{ factId: 'review', action: 'Check the payment purpose before setting a target.' }] } }));
   await page.addInitScript(() => {
     localStorage.setItem("familyHub_setupComplete", "skipped");
     localStorage.setItem("familyId", "recent-fixture");
@@ -120,14 +122,26 @@ test("recent actual spending supports presets, custom days, reload and phone wit
   await expect(
     recent.getByRole("heading", { name: "Spending in the last 30 days" }),
   ).toBeVisible({ timeout: 25_000 });
-  await expect(recent.getByText("£395.30", { exact: true })).toBeVisible();
+  await expect(recent.getByText("£395.30", { exact: true }).first()).toBeVisible();
   await expect(
     recent.getByText("£95.30", { exact: true }).first(),
   ).toBeVisible();
-  await expect(recent.getByText("£200.00", { exact: true })).toBeVisible();
+  await expect(recent.getByText("£200.00", { exact: true }).first()).toBeVisible();
   await expect(
     recent.getByText("Full imported coverage for this period."),
   ).toBeVisible();
+  await recent.getByRole('button', { name: 'Suggest next steps' }).click();
+  await expect(recent.getByText('Check the payment purpose before setting a target.')).toBeVisible();
+  failInsights = true;
+  await recent.getByRole('button', { name: 'Suggest next steps' }).click();
+  await expect(recent.getByRole('alert')).toHaveText('Synthetic AI unavailable; verified facts remain.');
+  await expect(recent.getByText('Start with the payments we cannot explain yet')).toBeVisible();
+  await recent.getByRole('button', { name: /Groceries/ }).click();
+  await expect(recent.getByLabel('Recent payment category')).toHaveValue('Groceries');
+  await recent.getByLabel('Search recent payments').fill('Lidl');
+  await expect(recent.getByText('Lidl', { exact: true })).toBeVisible();
+  await expect(recent.getByText('Tesco', { exact: true })).not.toBeVisible();
+  await recent.getByLabel('Search recent payments').fill('');
   await expect(
     page.getByRole("heading", { name: "Where your money went" }),
   ).not.toBeVisible();
@@ -155,7 +169,7 @@ test("recent actual spending supports presets, custom days, reload and phone wit
   await expect(
     recent.getByText("£15.10", { exact: true }).first(),
   ).toBeVisible();
-  await expect(recent.getByText('· 1 payment', { exact: true })).toBeVisible();
+  await expect(recent.getByRole('button', { name: /Groceries/ })).toBeVisible();
   const count = requests.length;
   await page.getByLabel("Number of spending days").fill("0");
   await page
@@ -164,12 +178,12 @@ test("recent actual spending supports presets, custom days, reload and phone wit
     .click();
   expect(requests.length).toBe(count);
   await page.getByLabel("Spending period", { exact: true }).selectOption("90");
-  await expect(recent.getByText("£565.30", { exact: true })).toBeVisible();
+  await expect(recent.getByText("£565.30", { exact: true }).first()).toBeVisible();
   await page.reload();
   await expect(
     recent.getByRole("heading", { name: "Spending in the last 90 days" }),
   ).toBeVisible();
-  await expect(recent.getByText("£565.30", { exact: true })).toBeVisible();
+  await expect(recent.getByText("£565.30", { exact: true }).first()).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth),
@@ -206,5 +220,5 @@ test("recent actual spending supports presets, custom days, reload and phone wit
   await expect(recent.getByText('£565.30', { exact: true })).not.toBeVisible();
   disconnected = false;
   await page.getByRole('button', { name: 'Refresh recent spending' }).click();
-  await expect(recent.getByText('£565.30', { exact: true })).toBeVisible();
+  await expect(recent.getByText('£565.30', { exact: true }).first()).toBeVisible();
 });

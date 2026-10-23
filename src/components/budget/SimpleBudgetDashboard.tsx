@@ -86,7 +86,8 @@ const SimpleBudgetDashboard: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [viewTab, setViewTab] = useState<'all' | 'receipt-scans'>('all');
-  const [budgetMode, setBudgetMode] = useState<'overview' | 'source' | 'plans' | 'calculator'>('overview');
+  const [budgetMode, setBudgetMode] = useState<'overview' | 'review' | 'source' | 'plans' | 'calculator'>('overview');
+  const isActualView = budgetMode === 'overview' || budgetMode === 'review';
   const [plansError, setPlansError] = useState('');
   const [plansReloadKey, setPlansReloadKey] = useState(0);
   const [plansFamilyId, setPlansFamilyId] = useState<string | null>(null);
@@ -107,7 +108,8 @@ const SimpleBudgetDashboard: React.FC = () => {
       setSelectedYear(Number(month.slice(0, 4)));
       setSelectedMonth(Number(month.slice(5, 7)));
     }
-    if (mode === 'overview' || mode === 'source' || mode === 'plans' || mode === 'calculator') setBudgetMode(mode);
+    if (mode === 'overview' || mode === 'review' || mode === 'source' || mode === 'plans' || mode === 'calculator') setBudgetMode(mode);
+    if (mode === 'review') setMonthlyOpen(true);
     setMoneyLocationReady(true);
   }, []);
 
@@ -521,8 +523,8 @@ const SimpleBudgetDashboard: React.FC = () => {
 
   // Mobile Header Component
   const renderMobileHeader = () => (
-    <div className="lg:hidden bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 px-4 py-3 sticky top-0 z-40 pwa-safe-top">
-      <div className="flex items-center justify-between mb-3">
+    <div className="lg:hidden bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 px-4 py-2 sticky top-0 z-40 pwa-safe-top">
+      <div className={`flex items-center justify-between ${isActualView ? '' : 'mb-3'}`}>
         <div className="flex items-center gap-3">
           <DollarSign className="w-6 h-6 text-blue-600" />
           <h1 className="text-lg font-semibold">Family Money Planner</h1>
@@ -539,7 +541,7 @@ const SimpleBudgetDashboard: React.FC = () => {
         </div>
       </div>
       {/* Month Navigation */}
-      <div className="flex items-center justify-between" style={{ display: budgetMode === 'overview' ? 'none' : undefined }}>
+      <div className="flex items-center justify-between" style={{ display: budgetMode === 'overview' || budgetMode === 'review' ? 'none' : undefined }}>
         <button
           onClick={goToPreviousMonth}
           aria-label="Previous month"
@@ -675,17 +677,17 @@ const SimpleBudgetDashboard: React.FC = () => {
   }
 
   return (
-    <div className={`bg-gray-50 dark:bg-slate-950 min-h-screen ${isMobile ? 'pb-safe-bottom' : 'p-3 sm:p-4 md:p-6 lg:p-8'}`}>
+    <div className={`bg-gray-50 dark:bg-slate-950 min-h-screen ${isMobile ? 'pb-safe-bottom' : 'p-3 sm:p-4 md:p-5'}`}>
       {/* Mobile Header */}
       {isMobile && renderMobileHeader()}
 
       {/* Desktop Header */}
       {!isMobile && (
-        <div className="mb-8">
-          <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+        <div className="mb-4">
+          <div className="flex flex-wrap items-center justify-between gap-4 mb-3">
             <div>
               <h1 className="text-2xl font-semibold text-gray-900 dark:text-slate-100 mb-2">Family Money Planner</h1>
-              <div className="flex items-center gap-3" style={{ display: budgetMode === 'overview' ? 'none' : undefined }}>
+              <div className="flex items-center gap-3" style={{ display: isActualView ? 'none' : undefined }}>
                 <button
                   onClick={goToPreviousMonth}
                   className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
@@ -715,14 +717,14 @@ const SimpleBudgetDashboard: React.FC = () => {
                 <Plus className="w-4 h-4" />
                 Plan income
               </button>
-              <button style={{ display: budgetMode === 'overview' ? 'none' : undefined }}
+              <button style={{ display: isActualView ? 'none' : undefined }}
                 onClick={() => setShowAddExpense(true)}
                 className="bg-red-600 text-white px-4 py-2 rounded-sm hover:bg-red-700 transition-colors text-sm font-medium flex items-center gap-2"
               >
                 <Plus className="w-4 h-4" />
                 Add Expense
               </button>
-              <button style={{ display: budgetMode === 'overview' ? 'none' : undefined }}
+              <button style={{ display: isActualView ? 'none' : undefined }}
                 onClick={() => setShowReceiptScanner(true)}
                 className="bg-purple-600 text-white px-4 py-2 rounded-sm hover:bg-purple-700 transition-colors text-sm font-medium flex items-center gap-2"
               >
@@ -736,21 +738,21 @@ const SimpleBudgetDashboard: React.FC = () => {
                 <FileUp className="w-4 h-4" />
                 Import Statement
               </button>
-              <button style={{ display: budgetMode === 'overview' ? 'none' : undefined }}
+              <button style={{ display: isActualView ? 'none' : undefined }}
                 onClick={() => setShowAddSavingsGoal(true)}
                 className="bg-blue-600 text-white px-4 py-2 rounded-sm hover:bg-blue-700 transition-colors text-sm font-medium flex items-center gap-2"
               >
                 <Target className="w-4 h-4" />
                 Savings Goal
               </button>
-              <button style={{ display: budgetMode === 'overview' ? 'none' : undefined }}
+              <button style={{ display: isActualView ? 'none' : undefined }}
                 onClick={() => setBudgetMode('calculator')}
                 className="bg-[#147c72] text-white px-4 py-2 rounded-sm hover:bg-[#0f625a] transition-colors text-sm font-medium flex items-center gap-2"
               >
                 <Calculator className="w-4 h-4" />
                 Calculator
               </button>
-              <button style={{ display: budgetMode === 'overview' ? 'none' : undefined }}
+              <button style={{ display: isActualView ? 'none' : undefined }}
                 onClick={() => setShowAdvancedReports(true)}
                 className="bg-purple-600 text-white px-4 py-2 rounded-sm hover:bg-purple-700 transition-colors text-sm font-medium flex items-center gap-2"
               >
@@ -777,24 +779,25 @@ const SimpleBudgetDashboard: React.FC = () => {
       )}
 
       <div className={`${isMobile ? 'px-4' : ''} mb-4`}>
-        <div className="flex max-w-full flex-wrap gap-1 rounded-lg border border-[#dde5e0] bg-white/80 p-1 dark:border-slate-800 dark:bg-slate-900/80">
+        <div className="flex max-w-full gap-1 overflow-x-auto rounded-lg border border-[#dde5e0] bg-white/80 p-1 dark:border-slate-800 dark:bg-slate-900/80">
           <button
             type="button"
             onClick={() => setBudgetMode('overview')}
-            className={`rounded-md px-3 py-2 text-sm font-semibold transition ${
+            className={`min-h-11 min-w-0 flex-1 rounded-md px-2 py-2 text-xs font-semibold transition sm:text-sm ${
               budgetMode === 'overview'
                 ? 'bg-[#147c72] text-white'
                 : 'text-[#5f6a64] hover:bg-[#eaf1e7] dark:text-slate-300 dark:hover:bg-slate-800'
             }`}
           >
-            Planner
+            Overview
           </button>
-          <button type="button" onClick={() => setBudgetMode('source')} className={`rounded-md px-3 py-2 text-sm font-semibold transition ${budgetMode === 'source' ? 'bg-[#147c72] text-white' : 'text-[#5f6a64] hover:bg-[#eaf1e7] dark:text-slate-300 dark:hover:bg-slate-800'}`}>Bank source</button>
-          <button type="button" onClick={() => setBudgetMode('plans')} className={`rounded-md px-3 py-2 text-sm font-semibold transition ${budgetMode === 'plans' ? 'bg-[#147c72] text-white' : 'text-[#5f6a64] hover:bg-[#eaf1e7] dark:text-slate-300 dark:hover:bg-slate-800'}`}>Saved plans</button>
+          <button type="button" aria-label="Transactions & analysis" onClick={() => { setMonthlyOpen(true); setBudgetMode('review'); }} className={`min-h-11 min-w-0 flex-1 rounded-md px-2 py-2 text-xs font-semibold sm:text-sm ${budgetMode === 'review' ? 'bg-[#147c72] text-white' : 'text-[#5f6a64] dark:text-slate-300'}`}>Review</button>
+          <button type="button" onClick={() => setBudgetMode('source')} className={`min-h-11 min-w-0 flex-1 rounded-md px-2 py-2 text-xs font-semibold transition sm:text-sm ${budgetMode === 'source' ? 'bg-[#147c72] text-white' : 'text-[#5f6a64] hover:bg-[#eaf1e7] dark:text-slate-300 dark:hover:bg-slate-800'}`}>Bank source</button>
+          <button type="button" onClick={() => setBudgetMode('plans')} className={`min-h-11 min-w-0 flex-1 rounded-md px-2 py-2 text-xs font-semibold transition sm:text-sm ${budgetMode === 'plans' ? 'bg-[#147c72] text-white' : 'text-[#5f6a64] hover:bg-[#eaf1e7] dark:text-slate-300 dark:hover:bg-slate-800'}`}>Saved plans</button>
           <button
             type="button"
             onClick={() => setBudgetMode('calculator')}
-            style={{ display: budgetMode === 'overview' || budgetMode === 'source' ? 'none' : undefined }}
+            style={{ display: budgetMode === 'overview' || budgetMode === 'review' || budgetMode === 'source' ? 'none' : undefined }}
             className={`rounded-md px-3 py-2 text-sm font-semibold transition ${
               budgetMode === 'calculator'
                 ? 'bg-[#147c72] text-white'
@@ -806,11 +809,10 @@ const SimpleBudgetDashboard: React.FC = () => {
         </div>
       </div>
 
-      {budgetMode === 'overview' && <>
-        <RecentSpending familyId={familyId} refreshKey={cashFlowRefreshKey} onReviewMonth={month => {
-          setSelectedYear(Number(month.slice(0, 4))); setSelectedMonth(Number(month.slice(5, 7))); setMonthlyOpen(true);
-          requestAnimationFrame(() => monthlyRef.current?.scrollIntoView({ block: 'start' }));
-        }} />
+      {(budgetMode === 'overview' || budgetMode === 'review') && <>
+        {budgetMode === 'overview' && <RecentSpending familyId={familyId} refreshKey={cashFlowRefreshKey} onReviewMonth={month => {
+          setSelectedYear(Number(month.slice(0, 4))); setSelectedMonth(Number(month.slice(5, 7))); setMonthlyOpen(true); setBudgetMode('review');
+        }} />}
         <details ref={monthlyRef} open={monthlyOpen} onToggle={event => setMonthlyOpen(event.currentTarget.open)} className="mt-5 scroll-mt-40 border-y border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
           <summary className="min-h-12 cursor-pointer px-4 py-3 text-sm font-semibold">Monthly review · {getMonthName(selectedMonth)} {selectedYear}</summary>
           {monthlyOpen && <>

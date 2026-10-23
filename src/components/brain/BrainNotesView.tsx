@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { CheckCircle2, Circle, FileText, Link2, Plus, Search, Tag } from 'lucide-react';
 import { useBrainContext } from '@/contexts/familyHub/BrainContext';
 import AIEnhancedField from '@/components/common/AIEnhancedField';
+import { BrainNoteTitle } from './BrainNoteTitle';
 import {
   deriveBrainNoteTitle,
   buildBrainLinkMarkup,
@@ -31,6 +32,7 @@ const BrainNotesView = () => {
   } = useBrainContext();
 
   const [title, setTitle] = useState('');
+  const [manualTitle, setManualTitle] = useState(false);
   const [content, setContent] = useState('');
   const [linkTargetId, setLinkTargetId] = useState('');
   const [saving, setSaving] = useState(false);
@@ -90,6 +92,7 @@ const BrainNotesView = () => {
         tags: extractBrainTags(trimmedContent),
       });
       setTitle('');
+      setManualTitle(false);
       setContent('');
       setLinkTargetId('');
     } catch (error) {
@@ -106,21 +109,14 @@ const BrainNotesView = () => {
   };
 
   return (
-    <div className="bg-gray-50 pb-6 dark:bg-slate-950">
-      <div className="sticky top-0 z-10 border-b border-gray-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
+    <div className="min-w-0 bg-gray-50 pb-20 dark:bg-slate-950">
+      <div className="hidden border-b border-gray-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900 md:block">
         <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_260px]">
-          <div className="space-y-2">
-            <input
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              placeholder="Optional note title"
-              spellCheck
-              lang="en-GB"
-              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
-            />
+          <div className="min-w-0 space-y-2">
+            <BrainNoteTitle title={title} content={content} onChange={value => { setTitle(value); setManualTitle(Boolean(value.trim())); }} />
             <AIEnhancedField
               value={content}
-              onChange={setContent}
+              onChange={(value) => { setContent(value); if (!manualTitle) setTitle(deriveBrainNoteTitle(value, '')); }}
               context="Project Brain household note"
               rows={5}
               placeholder="Capture a note, checklist, or linked thought..."
@@ -182,6 +178,7 @@ const BrainNotesView = () => {
       </div>
 
       <div className="p-3 sm:p-4">
+        <h3 className="mb-3 text-sm font-semibold text-gray-700 dark:text-slate-200 md:hidden">Notes <span className="ml-1 text-gray-400">{noteNodes.length}</span></h3>
         {noteNodes.length === 0 ? (
           <div className="rounded-lg border border-dashed border-gray-300 bg-white p-8 text-center text-sm text-gray-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
             No notes found.

@@ -1,11 +1,14 @@
 'use client'
 
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
+import { deriveBrainNoteTitle } from '@/utils/brainText';
 import { X } from 'lucide-react';
 import { useBrainContext } from '@/contexts/familyHub/BrainContext';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { NODE_STATUS_CONFIG, NODE_PRIORITY_CONFIG, type BrainNodeStatus, type BrainNodePriority, type BrainNodeType } from '@/types/brain.types';
 import AIEnhancedField from '@/components/common/AIEnhancedField';
+import { BrainNoteTitle } from './BrainNoteTitle';
 
 const NODE_TYPES: { value: BrainNodeType; label: string }[] = [
   { value: 'thought', label: 'Thought' },
@@ -20,6 +23,7 @@ const CreateNodeModal = () => {
   const isDesktop = useMediaQuery('(min-width: 768px)');
 
   const [title, setTitle] = useState('');
+  const [manualTitle, setManualTitle] = useState(false);
   const [content, setContent] = useState('');
   const [nodeType, setNodeType] = useState<BrainNodeType>('note');
   const [status, setStatus] = useState<BrainNodeStatus>('todo');
@@ -51,6 +55,7 @@ const CreateNodeModal = () => {
         dueDate: dueDate || undefined,
       });
       setTitle('');
+      setManualTitle(false);
       setContent('');
       setNodeType('note');
       setStatus('todo');
@@ -66,11 +71,12 @@ const CreateNodeModal = () => {
   };
 
   const formContent = (
-    <form onSubmit={handleSubmit} className="flex flex-col h-full">
+    <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-slate-700">
         <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-100">Add Note</h3>
         <button
           type="button"
+          aria-label="Close note"
           onClick={() => setIsCreateNodeOpen(false)}
           className="rounded p-1.5 text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700"
         >
@@ -78,18 +84,10 @@ const CreateNodeModal = () => {
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 space-y-4">
         <div>
           <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-slate-400">Title</label>
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Optional note title"
-            spellCheck
-            lang="en-GB"
-            autoFocus
-            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-          />
+          <BrainNoteTitle title={title} content={content} onChange={value => { setTitle(value); setManualTitle(Boolean(value.trim())); }} />
         </div>
 
         <div className="grid grid-cols-2 gap-3">
@@ -125,7 +123,7 @@ const CreateNodeModal = () => {
           <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-slate-400">Note</label>
           <AIEnhancedField
             value={content}
-            onChange={setContent}
+            onChange={(value) => { setContent(value); if (!manualTitle) setTitle(deriveBrainNoteTitle(value, '')); }}
             context="Project Brain note"
             rows={7}
             placeholder="Write the note, checklist, or linked thought..."
@@ -175,25 +173,25 @@ const CreateNodeModal = () => {
 
   // Desktop: centered modal
   if (isDesktop) {
-    return (
-      <div className="fixed inset-0 z-[70] flex items-center justify-center">
+    return createPortal(
+      <div role="dialog" aria-modal="true" aria-label="Add note" className="fixed inset-0 z-[100] flex items-center justify-center p-4">
         <div className="absolute inset-0 bg-black/30" onClick={() => setIsCreateNodeOpen(false)} />
-        <div className="relative w-full max-w-md rounded-xl bg-white shadow-xl dark:bg-slate-900">
+        <div className="relative flex max-h-[90dvh] w-full max-w-md flex-col overflow-hidden rounded-lg bg-white shadow-xl dark:bg-slate-900">
           {formContent}
         </div>
-      </div>
+      </div>, document.body
     );
   }
 
   // Mobile: bottom sheet
-  return (
-    <div className="fixed inset-0 z-[70] flex flex-col justify-end">
+  return createPortal(
+    <div role="dialog" aria-modal="true" aria-label="Add note" className="fixed inset-0 z-[100] flex flex-col justify-end">
       <div className="absolute inset-0 bg-black/30" onClick={() => setIsCreateNodeOpen(false)} />
-      <div className="relative rounded-t-xl bg-white dark:bg-slate-900 shadow-xl">
+      <div className="relative flex max-h-[90dvh] min-h-0 flex-col overflow-hidden rounded-t-lg bg-white dark:bg-slate-900 shadow-xl">
         <div className="mx-auto mt-2 mb-1 h-1 w-10 rounded-full bg-gray-300 dark:bg-slate-600" />
         {formContent}
       </div>
-    </div>
+    </div>, document.body
   );
 };
 
