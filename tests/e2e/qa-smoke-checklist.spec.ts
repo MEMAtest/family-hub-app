@@ -127,13 +127,14 @@ test.describe('QA Smoke Checklist - Desktop Responsive (1440x900)', () => {
     console.log('✅ Desktop calendar navigation works');
   });
 
-  test('should navigate to Budget view', async ({ page }) => {
+  test('should navigate to Money view', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(BASE_URL);
     await preparePage(page);
 
-    const budgetButton = page.locator('text=Budget').first();
+    const budgetButton = page.locator('aside').getByRole('button', { name: 'Money', exact: true });
     await budgetButton.click();
+    await expect(page.getByRole('heading', { name: 'Family Money Planner', exact: true })).toBeVisible();
     await page.waitForTimeout(2000);
 
     await takeScreenshot(page, 'desktop-1440x900-budget.png');
@@ -223,9 +224,10 @@ test.describe('QA Smoke Checklist - Mobile (iPhone 14 - 390x844)', () => {
     }
 
     // Test Budget navigation
-    const budgetButton = page.locator('text=Budget').first();
+    const budgetButton = page.getByRole('button', { name: 'Money', exact: true }).first();
     if (await budgetButton.isVisible()) {
       await budgetButton.click();
+      await expect(page.getByRole('heading', { name: 'Family Money Planner', exact: true })).toBeVisible();
       await page.waitForTimeout(1000);
       await takeScreenshot(page, 'mobile-390x844-budget.png');
     }
@@ -322,13 +324,14 @@ test.describe('QA Smoke Checklist - Share Target', () => {
 
 test.describe('QA Smoke Checklist - Regression Tests', () => {
 
-  test('should load Budget view and verify charts', async ({ page }) => {
+  test('should load Money view and verify recent-spending entry', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(BASE_URL);
     await preparePage(page);
 
-    const budgetButton = page.locator('text=Budget').first();
+    const budgetButton = page.locator('aside').getByRole('button', { name: 'Money', exact: true });
     await budgetButton.click();
+    await expect(page.getByRole('heading', { name: /^Spending in the last/ })).toBeVisible();
     await page.waitForTimeout(2000);
 
     await takeScreenshot(page, 'regression-budget-loaded.png');

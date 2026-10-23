@@ -16,9 +16,9 @@ const budgetFixtures = {
   income: [
     {
       id: 'e2e-income',
-      incomeName: 'Playwright Income Search',
+      incomeName: 'Sample Income Search',
       amount: 1234.56,
-      category: 'Playwright QA',
+      category: 'Other',
       isRecurring: false,
       paymentDate: fixtureDate,
       createdAt: fixtureDate,
@@ -27,9 +27,9 @@ const budgetFixtures = {
   expenses: [
     {
       id: 'e2e-expense',
-      expenseName: 'Playwright Filter Expense',
+      expenseName: 'Sample Filter Expense',
       amount: 87.75,
-      category: 'Playwright QA',
+      category: 'Other',
       isRecurring: false,
       paymentDate: fixtureDate,
       createdAt: fixtureDate,
@@ -37,9 +37,9 @@ const budgetFixtures = {
     },
     {
       id: 'e2e-receipt',
-      expenseName: 'Playwright Receipt Expense',
+      expenseName: 'Sample Receipt Expense',
       amount: 42.5,
-      category: 'Playwright QA',
+      category: 'Other',
       isRecurring: false,
       paymentDate: fixtureDate,
       createdAt: fixtureDate,
@@ -70,7 +70,7 @@ test.beforeAll(async () => {
   const baseExpenseData = {
     familyId,
     paymentDate,
-    category: 'Playwright QA',
+    category: 'Other',
     personId: null,
     isRecurring: false,
   };
@@ -78,7 +78,7 @@ test.beforeAll(async () => {
   const receiptExpense = await prisma.budgetExpense.create({
     data: {
       ...baseExpenseData,
-      expenseName: 'Playwright Receipt Expense',
+      expenseName: 'Sample Receipt Expense',
       amount: 42.5,
       isReceiptScan: true,
       receiptScanDate: new Date(),
@@ -89,7 +89,7 @@ test.beforeAll(async () => {
   const regularExpense = await prisma.budgetExpense.create({
     data: {
       ...baseExpenseData,
-      expenseName: 'Playwright Filter Expense',
+      expenseName: 'Sample Filter Expense',
       amount: 87.75,
       budgetLimit: 200,
       isReceiptScan: false,
@@ -100,9 +100,9 @@ test.beforeAll(async () => {
   const income = await prisma.budgetIncome.create({
     data: {
       familyId,
-      incomeName: 'Playwright Income Search',
+      incomeName: 'Sample Income Search',
       amount: 1234.56,
-      category: 'Playwright QA',
+      category: 'Other',
       isRecurring: false,
       paymentDate,
     },
@@ -124,44 +124,46 @@ test.afterAll(async () => {
   await prisma.$disconnect();
 });
 
-test('budget search and receipt filter behave as expected', async ({ page }) => {
-  await page.goto('/');
+test('saved-plan search and receipt filter behave as expected', async ({ page }) => {
+  await page.goto(`/?moneyMonth=${fixtureDate.slice(0, 7)}`);
 
-  const budgetNavButton = page.locator('aside').getByRole('button', { name: 'Budget', exact: true });
+  const budgetNavButton = page.locator('aside').getByRole('button', { name: 'Money', exact: true });
   await budgetNavButton.click();
+  await page.getByRole('button', { name: 'Saved plans', exact: true }).click();
 
   const searchInput = page.getByPlaceholder('Search income, expenses, or amounts');
   await expect(searchInput).toBeVisible({ timeout: 60_000 });
 
   // Search incomes
-  await searchInput.fill('Playwright Income Search');
-  await expect(page.getByText('Playwright Income Search')).toBeVisible();
-  await expect(page.getByText('Playwright Filter Expense')).not.toBeVisible();
+  await searchInput.fill('Sample Income Search');
+  await expect(page.getByText('Sample Income Search')).toBeVisible();
+  await expect(page.getByText('Sample Filter Expense')).not.toBeVisible();
 
   // Clear search and search expenses
   await searchInput.fill('');
   await searchInput.fill('Filter Expense');
-  await expect(page.getByText('Playwright Filter Expense')).toBeVisible();
-  await expect(page.getByText('Playwright Income Search')).not.toBeVisible();
+  await expect(page.getByText('Sample Filter Expense')).toBeVisible();
+  await expect(page.getByText('Sample Income Search')).not.toBeVisible();
   await searchInput.fill('');
 
   // View receipt scans only
   await searchInput.fill('');
   await page.getByRole('button', { name: 'Receipt scans' }).click();
-  await expect(page.getByText('Playwright Receipt Expense')).toBeVisible();
-  await expect(page.getByText('Playwright Filter Expense')).not.toBeVisible();
+  await expect(page.getByText('Sample Receipt Expense')).toBeVisible();
+  await expect(page.getByText('Sample Filter Expense')).not.toBeVisible();
 
   // Reset to all items
   await page.getByRole('button', { name: 'All items' }).click();
   await searchInput.fill('Filter Expense');
-  await expect(page.getByText('Playwright Filter Expense')).toBeVisible();
+  await expect(page.getByText('Sample Filter Expense')).toBeVisible();
 });
 
 test('budget calculator opens and recalculates monthly plan', async ({ page }) => {
-  await page.goto('/');
+  await page.goto(`/?moneyMonth=${fixtureDate.slice(0, 7)}`);
 
-  const budgetNavButton = page.locator('aside').getByRole('button', { name: 'Budget', exact: true });
+  const budgetNavButton = page.locator('aside').getByRole('button', { name: 'Money', exact: true });
   await budgetNavButton.click();
+  await page.getByRole('button', { name: 'Saved plans', exact: true }).click();
 
   await expect(page.getByPlaceholder('Search income, expenses, or amounts')).toBeVisible({ timeout: 60_000 });
   await page.getByRole('button', { name: 'Calculator' }).first().click();
@@ -179,11 +181,12 @@ test('budget calculator opens and recalculates monthly plan', async ({ page }) =
 });
 
 test('receipt scanner opens and shows offline OCR UI', async ({ page }) => {
-  await page.goto('/');
+  await page.goto(`/?moneyMonth=${fixtureDate.slice(0, 7)}`);
 
   // Navigate to budget
-  const budgetNavButton = page.locator('aside').getByRole('button', { name: 'Budget', exact: true });
+  const budgetNavButton = page.locator('aside').getByRole('button', { name: 'Money', exact: true });
   await budgetNavButton.click();
+  await page.getByRole('button', { name: 'Saved plans', exact: true }).click();
 
   // Wait for page to load
   await expect(page.getByPlaceholder('Search income, expenses, or amounts')).toBeVisible({ timeout: 60_000 });
