@@ -130,6 +130,34 @@ test("recent actual spending supports presets, custom days, reload and phone wit
   await expect(
     recent.getByText("Full imported coverage for this period."),
   ).toBeVisible();
+  const ledger = recent.locator('#recent-payment-ledger');
+  await recent.getByRole('button', { name: 'View recorded money out payments', exact: true }).click();
+  await expect(recent.getByLabel('Recent payment type')).toHaveValue('outgoing');
+  await expect(ledger.getByRole('status')).toHaveText('5 matching payments · £395.30 net out');
+  await expect(ledger.getByText('Personal incoming', { exact: true })).not.toBeVisible();
+  await recent.getByRole('button', { name: 'View purpose to check payments', exact: true }).click();
+  await expect(recent.getByLabel('Recent payment type')).toHaveValue('review');
+  await expect(ledger.getByText('Payment purpose unclear', { exact: true })).toBeVisible();
+  await expect(ledger.getByRole('status')).toHaveText('1 matching payment · £100.00 net out');
+  await expect(ledger.getByText('Personal incoming', { exact: true })).not.toBeVisible();
+  await recent.getByRole('button', { name: 'View transfers, not spending payments', exact: true }).click();
+  await expect(recent.getByLabel('Recent payment type')).toHaveValue('transfer');
+  await expect(ledger.getByText('Own account', { exact: true })).toBeVisible();
+  await expect(ledger.getByRole('status')).toHaveText('1 matching payment · £200.00 net out');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await recent.getByRole('button', { name: 'View identified spending payments', exact: true }).focus();
+  await page.keyboard.press('Enter');
+  await expect(recent.getByLabel('Recent payment type')).toHaveValue('spend');
+  await expect(ledger.getByRole('status')).toHaveText('3 matching payments · £95.30 net out');
+  await expect(ledger.getByText('Payment purpose unclear', { exact: true })).not.toBeVisible();
+  await expect(ledger.locator('summary')).toBeFocused();
+  await recent.getByLabel('Search recent payments').fill('Lidl');
+  await recent.getByRole('button', { name: 'View recorded money out payments', exact: true }).click();
+  await expect(recent.getByLabel('Search recent payments')).toHaveValue('');
+  await expect(recent.getByLabel('Recent payment category')).toHaveValue('All');
+  await recent.getByLabel('Recent payment type').selectOption('all');
+  await expect(ledger.getByText('Personal incoming', { exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   await page.setViewportSize({ width: 1024, height: 900 });
   const legend = recent.getByRole('region', { name: 'Where recorded money went' });
   for (const item of await legend.getByRole('button').all()) {
@@ -234,4 +262,18 @@ test("recent actual spending supports presets, custom days, reload and phone wit
   await page.reload();
   await expect(page.getByRole('button', { name: 'Transactions & analysis' })).toBeVisible();
   await expect(page).toHaveURL(/moneyView=review/);
+  const navigation = page.getByRole('navigation', { name: 'Money sections' });
+  await expect(navigation.getByRole('button', { name: 'Transactions & analysis' })).toHaveAttribute('aria-current', 'page');
+  await navigation.getByRole('button', { name: 'Overview', exact: true }).click();
+  await expect(recent.getByRole('heading', { name: 'Your money at a glance' })).toBeVisible();
+  await expect(page.locator('details').filter({ has: page.locator('summary').filter({ hasText: 'Monthly review' }) }).first()).not.toHaveAttribute('open');
+  for (const [label, mode] of [['Bank source', 'source'], ['Saved plans', 'plans'], ['Overview', 'overview'], ['Transactions & analysis', 'review']]) {
+    await navigation.getByRole('button', { name: label, exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`moneyView=${mode}`));
+    await expect(navigation.getByRole('button', { name: label, exact: true })).toHaveAttribute('aria-current', 'page');
+    if (mode !== 'overview') await expect(recent).not.toBeVisible();
+    if (mode === 'source') await expect(page.getByRole('heading', { name: 'Actual cash flow', exact: true })).toBeVisible();
+    if (mode === 'plans') await expect(page.getByRole('heading', { name: 'Saved plans, not bank-verified spending', exact: true })).toBeVisible();
+  }
+  await expect(page.locator('details').filter({ has: page.locator('summary').filter({ hasText: 'Monthly review' }) }).first()).toHaveAttribute('open', '');
 });

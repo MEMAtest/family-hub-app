@@ -94,6 +94,12 @@ const SimpleBudgetDashboard: React.FC = () => {
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [monthlyOpen, setMonthlyOpen] = useState(false);
   const monthlyRef = useRef<HTMLDetailsElement>(null);
+  const moneyNavigationRef = useRef<HTMLElement>(null);
+  const openMoneySection = (mode: typeof budgetMode) => {
+    setMonthlyOpen(mode === 'review');
+    setBudgetMode(mode);
+    requestAnimationFrame(() => moneyNavigationRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' }));
+  };
 
   // Month/Year navigation state
   const [selectedMonth, setSelectedMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1).getMonth() + 1);
@@ -779,10 +785,11 @@ const SimpleBudgetDashboard: React.FC = () => {
       )}
 
       <div className={`${isMobile ? 'px-4' : ''} mb-4`}>
-        <div className="flex max-w-full gap-1 overflow-x-auto rounded-lg border border-[#dde5e0] bg-white/80 p-1 dark:border-slate-800 dark:bg-slate-900/80">
+        <nav ref={moneyNavigationRef} aria-label="Money sections" className="flex max-w-full scroll-mt-36 gap-1 overflow-x-auto rounded-lg border border-[#dde5e0] bg-white/80 p-1 dark:border-slate-800 dark:bg-slate-900/80">
           <button
             type="button"
-            onClick={() => setBudgetMode('overview')}
+            aria-current={budgetMode === 'overview' ? 'page' : undefined}
+            onClick={() => openMoneySection('overview')}
             className={`min-h-11 min-w-0 flex-1 rounded-md px-2 py-2 text-xs font-semibold transition sm:text-sm ${
               budgetMode === 'overview'
                 ? 'bg-[#147c72] text-white'
@@ -791,12 +798,13 @@ const SimpleBudgetDashboard: React.FC = () => {
           >
             Overview
           </button>
-          <button type="button" aria-label="Transactions & analysis" onClick={() => { setMonthlyOpen(true); setBudgetMode('review'); }} className={`min-h-11 min-w-0 flex-1 rounded-md px-2 py-2 text-xs font-semibold sm:text-sm ${budgetMode === 'review' ? 'bg-[#147c72] text-white' : 'text-[#5f6a64] dark:text-slate-300'}`}>Review</button>
-          <button type="button" onClick={() => setBudgetMode('source')} className={`min-h-11 min-w-0 flex-1 rounded-md px-2 py-2 text-xs font-semibold transition sm:text-sm ${budgetMode === 'source' ? 'bg-[#147c72] text-white' : 'text-[#5f6a64] hover:bg-[#eaf1e7] dark:text-slate-300 dark:hover:bg-slate-800'}`}>Bank source</button>
-          <button type="button" onClick={() => setBudgetMode('plans')} className={`min-h-11 min-w-0 flex-1 rounded-md px-2 py-2 text-xs font-semibold transition sm:text-sm ${budgetMode === 'plans' ? 'bg-[#147c72] text-white' : 'text-[#5f6a64] hover:bg-[#eaf1e7] dark:text-slate-300 dark:hover:bg-slate-800'}`}>Saved plans</button>
+          <button type="button" aria-label="Transactions & analysis" aria-current={budgetMode === 'review' ? 'page' : undefined} onClick={() => openMoneySection('review')} className={`min-h-11 min-w-0 flex-1 rounded-md px-2 py-2 text-xs font-semibold sm:text-sm ${budgetMode === 'review' ? 'bg-[#147c72] text-white' : 'text-[#5f6a64] dark:text-slate-300'}`}>Review</button>
+          <button type="button" aria-current={budgetMode === 'source' ? 'page' : undefined} onClick={() => openMoneySection('source')} className={`min-h-11 min-w-0 flex-1 rounded-md px-2 py-2 text-xs font-semibold transition sm:text-sm ${budgetMode === 'source' ? 'bg-[#147c72] text-white' : 'text-[#5f6a64] hover:bg-[#eaf1e7] dark:text-slate-300 dark:hover:bg-slate-800'}`}>Bank source</button>
+          <button type="button" aria-current={budgetMode === 'plans' ? 'page' : undefined} onClick={() => openMoneySection('plans')} className={`min-h-11 min-w-0 flex-1 rounded-md px-2 py-2 text-xs font-semibold transition sm:text-sm ${budgetMode === 'plans' ? 'bg-[#147c72] text-white' : 'text-[#5f6a64] hover:bg-[#eaf1e7] dark:text-slate-300 dark:hover:bg-slate-800'}`}>Saved plans</button>
           <button
             type="button"
-            onClick={() => setBudgetMode('calculator')}
+            aria-current={budgetMode === 'calculator' ? 'page' : undefined}
+            onClick={() => openMoneySection('calculator')}
             style={{ display: budgetMode === 'overview' || budgetMode === 'review' || budgetMode === 'source' ? 'none' : undefined }}
             className={`rounded-md px-3 py-2 text-sm font-semibold transition ${
               budgetMode === 'calculator'
@@ -806,7 +814,7 @@ const SimpleBudgetDashboard: React.FC = () => {
           >
             Calculator
           </button>
-        </div>
+        </nav>
       </div>
 
       {(budgetMode === 'overview' || budgetMode === 'review') && <>

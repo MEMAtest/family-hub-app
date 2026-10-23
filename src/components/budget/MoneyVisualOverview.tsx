@@ -36,13 +36,17 @@ const colours = [
 const amount = (value: number | null) =>
   value === null ? "Unavailable" : cashFlowMoney(value);
 
+export type PaymentScope = 'all' | 'outgoing' | 'spend' | 'review' | 'transfer';
+
 export function MoneyVisualOverview({
   report,
   onCategory,
+  onPayments,
   onReview,
 }: {
   report: RecentSpendingReport;
   onCategory: (category: string) => void;
+  onPayments: (scope: PaymentScope) => void;
   onReview: () => void;
 }) {
   const id = useId().replace(/:/g, "");
@@ -79,6 +83,7 @@ export function MoneyVisualOverview({
       icon: Wallet,
       style: "bg-teal-800 text-white",
       detail: "All recorded outgoing payments",
+      scope: 'outgoing' as const,
     },
     {
       label: "Identified spending",
@@ -87,6 +92,7 @@ export function MoneyVisualOverview({
       style:
         "bg-emerald-50 text-emerald-950 dark:bg-emerald-950 dark:text-emerald-100",
       detail: "Confirmed or recognisable purposes",
+      scope: 'spend' as const,
     },
     {
       label: "Purpose to check",
@@ -96,6 +102,7 @@ export function MoneyVisualOverview({
       detail: report.summary.outgoing
         ? `${(((report.summary.review ?? 0) / report.summary.outgoing) * 100).toFixed(1)}% of recorded money out`
         : "Review imported payments",
+      scope: 'review' as const,
     },
     {
       label: "Transfers, not spending",
@@ -104,18 +111,22 @@ export function MoneyVisualOverview({
       style:
         "bg-indigo-50 text-indigo-950 dark:bg-indigo-950 dark:text-indigo-100",
       detail: "Kept out of category spending",
+      scope: 'transfer' as const,
     },
   ];
   return (
     <div className="mt-5 space-y-5">
       <dl className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        {stats.map(({ label, value, icon: Icon, style, detail }) => (
-          <div key={label} className={`min-w-0 rounded-lg p-3 sm:p-5 ${style}`}>
-            <dt className="flex items-center gap-2 text-xs font-medium sm:text-sm"><Icon aria-hidden="true" className="h-4 w-4 shrink-0 opacity-80" />{label}</dt>
-            <dd className="mt-1 break-words text-xl font-semibold tabular-nums sm:text-2xl">
-              {amount(value)}
+        {stats.map(({ label, value, icon: Icon, style, detail, scope }) => (
+          <div key={label} className="min-w-0">
+            <dt className="sr-only">{label}</dt>
+            <dd className="h-full">
+              <button type="button" aria-label={`View ${label.toLowerCase()} payments`} aria-controls="recent-payment-ledger" onClick={() => onPayments(scope)} className={`h-full w-full min-w-0 rounded-lg p-3 text-left transition hover:brightness-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 sm:p-5 ${style}`}>
+                <span className="flex items-center gap-2 text-xs font-medium sm:text-sm"><Icon aria-hidden="true" className="h-4 w-4 shrink-0 opacity-80" /><span className="min-w-0 flex-1">{label}</span><ArrowRight aria-hidden="true" className="h-4 w-4 shrink-0" /></span>
+                <span className="mt-1 block break-words text-xl font-semibold tabular-nums sm:text-2xl">{amount(value)}</span>
+                <span className="mt-2 block text-[11px] leading-4 opacity-80 sm:text-xs sm:leading-5">{detail}</span>
+              </button>
             </dd>
-            <p className="mt-2 text-[11px] leading-4 opacity-80 sm:text-xs sm:leading-5">{detail}</p>
           </div>
         ))}
       </dl>
