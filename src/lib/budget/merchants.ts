@@ -4,6 +4,7 @@ type MerchantRule = {
   category: string;
   pattern: RegExp;
   mixed?: boolean;
+  directDebitOnly?: boolean;
 };
 
 // Match the payee, not arbitrary words in a personal transfer or bank reference.
@@ -24,6 +25,23 @@ const merchantText = (description: string) =>
     .trim();
 
 const rules: MerchantRule[] = [
+  {
+    name: "Home Insurance LBIS",
+    category: "Insurance",
+    pattern: /^home\s+insurance\s*lbis\b/,
+  },
+  {
+    name: "Mytime Active",
+    category: "Subscriptions",
+    pattern: /^mytime\s+active\b/,
+    directDebitOnly: true,
+  },
+  {
+    name: "Mytime Active",
+    category: "Entertainment",
+    pattern: /^mytime\s+active\b/,
+    mixed: true,
+  },
   { name: "Uber Eats", category: "Dining", pattern: /^uber\s*eats\b/ },
   { name: "Deliveroo", category: "Dining", pattern: /^deliveroo\b/ },
   { name: "Just Eat", category: "Dining", pattern: /^just\s*eat\b/ },
@@ -480,7 +498,11 @@ export function recogniseMerchant(description: string): MerchantMatch | null {
     )
   )
     return null;
-  const rule = rules.find((item) => item.pattern.test(text));
+  const rule = rules.find(
+    (item) =>
+      item.pattern.test(text) &&
+      (!item.directDebitOnly || /^\s*direct debit\s+/i.test(description)),
+  );
   if (!rule) return null;
   return {
     name: rule.name,

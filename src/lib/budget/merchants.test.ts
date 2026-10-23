@@ -7,6 +7,13 @@ import {
 } from "./moneyPlanner";
 
 test.each([
+  [
+    "Direct Debit Home Insurancelbis, SYNTHETIC",
+    "Home Insurance LBIS",
+    "Insurance",
+  ],
+  ["Direct Debit Mytime Active, SYNTHETIC", "Mytime Active", "Subscriptions"],
+  ["Card WLT 1234, Mytime Active", "Mytime Active", "Entertainment"],
   ["Card WLT 1234, Tesco-Stores 123", "Tesco", "Groceries"],
   ["Card CLS 1234, Sainsburys S/Mkts", "Sainsbury's", "Groceries"],
   ["Sainsbury’s Woolwich", "Sainsbury's", "Groceries"],
@@ -108,6 +115,8 @@ test.each([
   "Loan payment Tesco",
   "Interest family support",
   "Disney Store",
+  "Home Insurance refund from Alex",
+  "Gocardless",
   "Octopus Publishing",
 ])("does not invent a shopping purpose for %s", (description) => {
   expect(recogniseMerchant(description)).toBeNull();
