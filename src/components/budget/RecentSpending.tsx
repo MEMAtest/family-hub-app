@@ -233,7 +233,7 @@ export function RecentSpending({
       )}
       {!loading && !error && report && (
         <>
-          <MoneyVisualOverview report={report} onCategory={openCategory} onPayments={scope => setSelectionDetails({ scope })} onDate={date => setSelectionDetails({ scope: 'outgoing', date })} onReview={() => setSelectionDetails({ scope: 'review' })} />
+          <MoneyVisualOverview report={report} onCategory={openCategory} onPayments={scope => setSelectionDetails({ scope })} onDate={date => setSelectionDetails({ scope: 'outgoing', date })} onReview={() => setSelectionDetails({ scope: 'review' })} onMonth={onReviewMonth} onSupplier={supplier => setSelectionDetails({ scope: 'outgoing', supplier })} />
           {report.context && <CalendarMoneyComparison months={report.context.months} />}
           <p
             className={`mt-3 text-sm ${report.coverage === "complete" ? "text-slate-600 dark:text-slate-300" : "text-amber-800 dark:text-amber-300"}`}

@@ -16,6 +16,7 @@ export type PaymentSelection = {
   category?: string;
   view?: "payments" | "suppliers";
   date?: string;
+  supplier?: string;
 };
 const field =
   "min-h-11 max-w-full rounded-md border border-slate-300 bg-transparent px-3 text-sm dark:border-slate-600";
@@ -65,7 +66,7 @@ export function PaymentDetailsModal({
     setCategory(selection.category ?? "All");
     setQuery("");
     setView(selection.view ?? "payments");
-    setSupplier(null);
+    setSupplier(selection.supplier ?? null);
     setPage(0);
     setEditing(null);
     setMessage("");

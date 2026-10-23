@@ -38,6 +38,7 @@ import { ActualCashFlowPanel } from './ActualCashFlowPanel';
 import { IncomeForecastPanel } from './IncomeForecastPanel';
 import { FamilyMoneyPlanner } from './FamilyMoneyPlanner';
 import { RecentSpending } from './RecentSpending';
+import { ProjectFundingPanel } from './ProjectFundingPanel';
 import databaseService from '@/services/databaseService';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { filterExpenses, filterIncome } from '@/utils/budgetFilters';
@@ -86,8 +87,8 @@ const SimpleBudgetDashboard: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [viewTab, setViewTab] = useState<'all' | 'receipt-scans'>('all');
-  const [budgetMode, setBudgetMode] = useState<'overview' | 'review' | 'source' | 'plans' | 'calculator'>('overview');
-  const isActualView = budgetMode === 'overview' || budgetMode === 'review';
+  const [budgetMode, setBudgetMode] = useState<'overview' | 'review' | 'source' | 'plans' | 'calculator' | 'projects'>('overview');
+  const isActualView = budgetMode === 'overview' || budgetMode === 'review' || budgetMode === 'projects';
   const [plansError, setPlansError] = useState('');
   const [plansReloadKey, setPlansReloadKey] = useState(0);
   const [plansFamilyId, setPlansFamilyId] = useState<string | null>(null);
@@ -114,7 +115,7 @@ const SimpleBudgetDashboard: React.FC = () => {
       setSelectedYear(Number(month.slice(0, 4)));
       setSelectedMonth(Number(month.slice(5, 7)));
     }
-    if (mode === 'overview' || mode === 'review' || mode === 'source' || mode === 'plans' || mode === 'calculator') setBudgetMode(mode);
+    if (mode === 'overview' || mode === 'review' || mode === 'source' || mode === 'plans' || mode === 'calculator' || mode === 'projects') setBudgetMode(mode);
     if (mode === 'review') setMonthlyOpen(true);
     setMoneyLocationReady(true);
   }, []);
@@ -800,12 +801,13 @@ const SimpleBudgetDashboard: React.FC = () => {
           </button>
           <button type="button" aria-label="Transactions & analysis" aria-current={budgetMode === 'review' ? 'page' : undefined} onClick={() => openMoneySection('review')} className={`min-h-11 min-w-0 flex-1 rounded-md px-2 py-2 text-xs font-semibold sm:text-sm ${budgetMode === 'review' ? 'bg-[#147c72] text-white' : 'text-[#5f6a64] dark:text-slate-300'}`}>Review</button>
           <button type="button" aria-current={budgetMode === 'source' ? 'page' : undefined} onClick={() => openMoneySection('source')} className={`min-h-11 min-w-0 flex-1 rounded-md px-2 py-2 text-xs font-semibold transition sm:text-sm ${budgetMode === 'source' ? 'bg-[#147c72] text-white' : 'text-[#5f6a64] hover:bg-[#eaf1e7] dark:text-slate-300 dark:hover:bg-slate-800'}`}>Bank source</button>
+          <button type="button" aria-current={budgetMode === 'projects' ? 'page' : undefined} onClick={() => openMoneySection('projects')} className={`min-h-11 min-w-0 flex-1 rounded-md px-2 py-2 text-xs font-semibold transition sm:text-sm ${budgetMode === 'projects' ? 'bg-[#147c72] text-white' : 'text-[#5f6a64] hover:bg-[#eaf1e7] dark:text-slate-300 dark:hover:bg-slate-800'}`}>Projects</button>
           <button type="button" aria-current={budgetMode === 'plans' ? 'page' : undefined} onClick={() => openMoneySection('plans')} className={`min-h-11 min-w-0 flex-1 rounded-md px-2 py-2 text-xs font-semibold transition sm:text-sm ${budgetMode === 'plans' ? 'bg-[#147c72] text-white' : 'text-[#5f6a64] hover:bg-[#eaf1e7] dark:text-slate-300 dark:hover:bg-slate-800'}`}>Saved plans</button>
           <button
             type="button"
             aria-current={budgetMode === 'calculator' ? 'page' : undefined}
             onClick={() => openMoneySection('calculator')}
-            style={{ display: budgetMode === 'overview' || budgetMode === 'review' || budgetMode === 'source' ? 'none' : undefined }}
+            style={{ display: budgetMode === 'overview' || budgetMode === 'review' || budgetMode === 'source' || budgetMode === 'projects' ? 'none' : undefined }}
             className={`rounded-md px-3 py-2 text-sm font-semibold transition ${
               budgetMode === 'calculator'
                 ? 'bg-[#147c72] text-white'
@@ -835,6 +837,7 @@ const SimpleBudgetDashboard: React.FC = () => {
         <details className="mt-5 border-y border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900"><summary className="min-h-10 cursor-pointer text-sm font-semibold">Expected money and longer-term plans</summary><IncomeForecastPanel familyId={familyId} refreshKey={cashFlowRefreshKey} onPlanIncome={() => { setEditingIncome(null); setShowAddIncome(true); }} /></details>
       </>}
       {budgetMode === 'source' && <ActualCashFlowPanel familyId={familyId} month={`${selectedYear}-${String(selectedMonth).padStart(2, '0')}`} refreshKey={cashFlowRefreshKey} />}
+      {budgetMode === 'projects' && <ProjectFundingPanel familyId={familyId} />}
       {budgetMode === 'plans' && <section className="mb-4 border-y border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900"><h2 className="font-semibold">Saved plans, not bank-verified spending</h2><p className="mt-1">These saved entries are kept for review. They do not supply the Home or Budget Overview figures. Edit or remove entries that are not yours.</p>{plansError && <><p role="alert" className="mt-2">{plansError}</p><button type="button" onClick={() => setPlansReloadKey(value => value + 1)} className="mt-2 underline">Retry saved plans</button></>}</section>}
       {(budgetMode === 'plans' || budgetMode === 'calculator') && !plansReady && <p role="status" className="p-4 text-sm text-slate-500">Loading saved plans...</p>}
 

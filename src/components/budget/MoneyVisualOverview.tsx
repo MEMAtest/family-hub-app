@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import type { RecentSpendingReport } from "@/lib/budget/recentSpending";
 import { cashFlowDate, cashFlowMoney } from "@/lib/budget/cashFlow";
+import { MoneyExtraCharts } from './MoneyExtraCharts';
 
 const colours = [
   "#087f73",
@@ -44,15 +45,19 @@ export function MoneyVisualOverview({
   onPayments,
   onDate,
   onReview,
+  onMonth,
+  onSupplier,
 }: {
   report: RecentSpendingReport;
   onCategory: (category: string) => void;
   onPayments: (scope: PaymentScope) => void;
   onDate: (date: string) => void;
   onReview: () => void;
+  onMonth: (month: string) => void;
+  onSupplier: (key: string) => void;
 }) {
   const id = useId().replace(/:/g, "");
-  const [chart, setChart] = useState<'trend' | 'categories'>('trend');
+  const [chart, setChart] = useState<'trend' | 'categories' | 'months' | 'payees' | 'calendar'>('trend');
   const categories = report.categories.filter((item) => item.count > 0);
   const segments = [
     ...categories.map((item, index) => ({
@@ -134,7 +139,8 @@ export function MoneyVisualOverview({
         ))}
       </dl>
       <div className="min-w-0 border-y border-slate-200 py-3 dark:border-slate-700">
-        <div className="mb-3 flex gap-1" aria-label="Money chart view">{(['trend', 'categories'] as const).map(value => <button key={value} type="button" aria-pressed={chart === value} onClick={() => setChart(value)} className={`min-h-11 rounded-md px-3 text-sm font-medium ${chart === value ? 'bg-teal-700 text-white' : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'}`}>{value === 'trend' ? 'Daily money out' : 'Categories'}</button>)}</div>
+        <div className="mb-3 flex gap-1 overflow-x-auto" aria-label="Money chart view">{(['trend', 'categories', 'months', 'payees', 'calendar'] as const).map(value => <button key={value} type="button" aria-label={value === 'trend' ? 'Daily money out' : undefined} aria-pressed={chart === value} onClick={() => setChart(value)} className={`min-h-11 shrink-0 rounded-md px-3 text-xs font-medium sm:text-sm ${chart === value ? 'bg-teal-700 text-white' : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'}`}>{{trend:'Daily',categories:'Categories',months:'Months',payees:'Payees',calendar:'Bill days'}[value]}</button>)}</div>
+        {(chart === 'months' || chart === 'payees' || chart === 'calendar') && <MoneyExtraCharts report={report} mode={chart} onMonth={onMonth} onSupplier={onSupplier} onDate={onDate} />}
         <section hidden={chart !== 'trend'} className="min-w-0" aria-label="Recorded outgoing trend">
           <h3 className="font-semibold">When money went out</h3>
           <p className="mt-1 text-xs text-slate-500">

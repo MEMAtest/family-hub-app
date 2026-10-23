@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { ArrowLeft, MoreHorizontal, Bath, ShowerHead, LayoutDashboard, Mail, Users, FileText, Calendar, Bell, CheckSquare, Settings, Edit2, Plus, CalendarPlus, Phone, Building2, UserPlus, Upload, BarChart3, PieChart, Download, FileSpreadsheet, FileJson, Printer, ShoppingBasket, Search } from 'lucide-react';
+import { ArrowLeft, ArrowRight, MoreHorizontal, Bath, ShowerHead, LayoutDashboard, Mail, Users, FileText, Calendar, Bell, CheckSquare, Settings, Edit2, Plus, CalendarPlus, Phone, Building2, UserPlus, Upload, BarChart3, PieChart, Download, FileSpreadsheet, FileJson, Printer, ShoppingBasket, Search } from 'lucide-react';
 import { ProjectEmailInbox } from './ProjectEmailInbox';
 import PDFQuoteExtractor from '@/components/projects/PDFQuoteExtractor';
 import QuoteCostBreakdownChart from '@/components/projects/charts/QuoteCostBreakdownChart';
@@ -692,6 +692,7 @@ export const ProjectDetailView = ({
               {project.title}
             </h1>
             <div className="mt-2 flex flex-wrap items-center gap-3">
+              {!isReadOnly && <a href={`/?view=contractors&contractorTab=money&projectId=${encodeURIComponent(project.id)}`} className="inline-flex min-h-10 items-center gap-2 text-sm font-semibold text-teal-800 dark:text-teal-200">Allocate project money<ArrowRight className="h-4 w-4" /></a>}
               <span className={`${!isReadOnly ? 'hidden' : 'inline-flex'} items-center rounded-full px-3 py-1 text-sm font-medium ${status.bg} ${status.text}`}>
                 {status.label}
               </span>

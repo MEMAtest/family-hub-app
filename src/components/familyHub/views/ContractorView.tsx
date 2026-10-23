@@ -7,6 +7,7 @@ import { useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { UpcomingContractorVisits } from '@/components/contractors';
+import { ProjectFundingPanel } from '@/components/budget/ProjectFundingPanel';
 import { useContractorContext } from '@/contexts/familyHub/ContractorContext';
 import { useFamilyStore } from '@/store/familyStore';
 import {
@@ -145,6 +146,14 @@ export const ContractorView = () => {
   const searchParams = useSearchParams();
   const { contractors, appointments, openQuickAppointment, getSpecialtyLabel, createContractor, updateContractor, deleteContractor } = useContractorContext();
   const familyId = useFamilyStore((state) => state.databaseStatus.familyId);
+  const requestedWorkspace = searchParams.get('contractorTab') === 'money' ? 'money' : 'directory';
+  const [workspace, setWorkspace] = useState<'directory' | 'money'>(requestedWorkspace);
+  useEffect(() => setWorkspace(requestedWorkspace), [requestedWorkspace]);
+  const openWorkspace = (value: 'directory' | 'money') => {
+    setWorkspace(value);
+    const url = new URL(window.location.href); url.searchParams.set('contractorTab', value);
+    window.history.replaceState(window.history.state, '', url);
+  };
   const projects = useFamilyStore((state) => state.propertyProjects);
   const propertyTasks = useFamilyStore((state) => state.propertyTasks);
   const requestedProject = searchParams.get('projectId') ?? '';
@@ -257,6 +266,8 @@ export const ContractorView = () => {
 
   return <div className="min-h-full space-y-7 bg-gray-50 p-3 pb-28 dark:bg-slate-950 sm:p-5 lg:p-8">
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="text-2xl font-semibold text-gray-900 dark:text-slate-100">Contractors & trades</h2><p className="text-sm text-gray-600 dark:text-slate-400">Find, check and compare companies before you appoint them.</p></div><button onClick={openQuickAppointment} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-amber-600 px-4 text-sm font-medium text-white hover:bg-amber-700"><Plus className="h-4 w-4" />Book appointment</button></div>
+    <nav aria-label="Contractor workspace" className="flex gap-1 border-b border-gray-200 pb-2 dark:border-slate-700">{(['directory', 'money'] as const).map(value => <button key={value} type="button" aria-pressed={workspace === value} onClick={() => openWorkspace(value)} className={`min-h-11 rounded-md px-4 text-sm font-semibold ${workspace === value ? 'bg-teal-700 text-white' : 'text-gray-600 dark:text-slate-300'}`}>{value === 'directory' ? 'Companies & visits' : 'Project money'}</button>)}</nav>
+    {workspace === 'money' ? <ProjectFundingPanel familyId={familyId} initialProjectId={projectId} /> : <>
     {requestedTask && <section className="border-l-4 border-teal-600 bg-white p-4 dark:bg-slate-900 sm:p-5"><Link href={{ pathname: '/', query: { view: 'property', tab: 'tasks' } }} className="inline-flex min-h-10 items-center gap-2 text-sm font-medium text-teal-800 dark:text-teal-200"><ArrowLeft className="h-4 w-4" />Back to survey plan</Link><div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between"><div><p className="text-xs font-semibold uppercase text-teal-700 dark:text-teal-300">Finding options for</p><h3 className="mt-1 text-base font-semibold text-gray-900 dark:text-slate-100">{requestedTask.title}</h3><p className="mt-1 text-xs text-gray-500">{requestedTask.pageReference} · {requestedTask.recommendedContractor}</p></div><span className="shrink-0 rounded-full bg-teal-50 px-3 py-1 text-xs font-semibold text-teal-800 dark:bg-teal-950 dark:text-teal-200">Linked to survey action</span></div></section>}
     <section className="overflow-hidden rounded-lg border border-teal-200 bg-white dark:border-teal-900 dark:bg-slate-900"><div className="border-b border-teal-100 bg-teal-50 p-4 dark:border-teal-900 dark:bg-teal-950/30 sm:p-5"><div className="flex items-center gap-2"><Search className="h-5 w-5 text-teal-700" /><h3 className="font-semibold text-gray-900 dark:text-slate-100">Find a trade</h3></div><p className="mt-1 text-sm text-gray-600 dark:text-slate-300">Enter a company name or share its website. You choose the correct match before anything is saved.</p></div><div className="p-4 sm:p-5">
       <div className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-1 dark:border-slate-700 dark:bg-slate-800" role="group" aria-label="Lookup method"><button onClick={() => { setMode('name'); setLookup(''); setResults([]); setSearchError(''); }} className={`min-h-10 rounded-md px-4 text-sm ${mode === 'name' ? 'bg-white font-medium text-teal-800 shadow-sm dark:bg-slate-700 dark:text-teal-200' : 'text-gray-600 dark:text-slate-300'}`}>Company name</button><button onClick={() => { setMode('link'); setLookup(''); setResults([]); setSearchError(''); }} className={`min-h-10 rounded-md px-4 text-sm ${mode === 'link' ? 'bg-white font-medium text-teal-800 shadow-sm dark:bg-slate-700 dark:text-teal-200' : 'text-gray-600 dark:text-slate-300'}`}>Paste link</button></div>
@@ -275,6 +286,7 @@ export const ContractorView = () => {
     </section>
     <section className="rounded-lg border border-gray-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-900"><h3 className="font-semibold text-gray-900 dark:text-slate-100">Appointment history</h3>{history.length === 0 ? <p className="mt-3 text-sm text-gray-500">No past appointments yet.</p> : <div className="mt-4 divide-y divide-gray-100 dark:divide-slate-800">{history.slice(0, 20).map((appointment) => <div key={appointment.id} className="flex min-h-14 items-center justify-between gap-3 py-3"><div><p className="text-sm font-medium">{appointment.contractor?.name || 'Contractor'}: {appointment.purpose}</p><p className="text-xs text-gray-500">{appointment.date} {appointment.time} · {appointment.status}</p></div>{appointment.cost ? <p className="text-sm font-semibold">{formatMoney(appointment.cost)}</p> : <span className="text-xs text-gray-400">No cost recorded</span>}</div>)}</div>}</section>
     <ProfileDialog contractor={selectedProfile} projects={projects} onClose={() => setSelectedProfile(null)} onSave={updateContractor} onDelete={deleteContractor} />
+    </>}
   </div>;
 };
 
