@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { MerchantBreakdown } from './MerchantBreakdown';
 import {
   ArrowDownRight,
   ArrowUpRight,
@@ -200,7 +201,7 @@ export function FamilyMoneyPlanner({
           (category === "All" ||
             (category === "Needs review" && row.kind === "review") ||
             row.category === category) &&
-          `${row.description} ${row.category}`
+          `${row.description} ${row.merchantName ?? ''} ${row.category}`
             .toLowerCase()
             .includes(query.toLowerCase()),
       ),
@@ -757,6 +758,10 @@ export function FamilyMoneyPlanner({
               ))}
             </section>
           </details>
+          <MerchantBreakdown transactions={report.transactions} onSelect={(merchant) => {
+            setQuery(merchant); setCategory('All'); setPage(0); setReviewId(null);
+            paymentsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }} />
           <section
             aria-label="Review payments"
             ref={paymentsRef}
@@ -823,16 +828,18 @@ export function FamilyMoneyPlanner({
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
                       <p className="break-words text-sm font-medium">
-                        {row.description}
+                        {row.merchantName ?? row.description}
                       </p>
+                      {row.merchantName && row.merchantName !== row.description && <p className="mt-1 break-words text-xs text-slate-500">{row.description}</p>}
                       <p className="mt-1 text-xs text-slate-500">
                         {cashFlowDate(row.transactionDate)} · {row.category} ·{" "}
                         {row.assignmentSource === "confirmed"
                           ? "Confirmed by household"
                           : row.assignmentSource === "recorded"
-                            ? "Recorded transfer"
+                            ? "Recorded by bank"
                             : "Suggested / needs checking"}
                       </p>
+                      <p className="mt-1 text-xs text-slate-500">{row.reason}</p>
                     </div>
                     <span className="shrink-0 text-sm font-semibold tabular-nums">
                       {row.direction === "credit" ? "+" : "−"}

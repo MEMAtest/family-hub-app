@@ -1,4 +1,5 @@
 import { coveredByImports } from './historyForecast';
+import { recogniseMerchant } from './merchants';
 
 export type MoneyKind = 'spend' | 'income' | 'refund' | 'transfer' | 'review';
 export type MoneyAssignment = { category: string; kind: MoneyKind };
@@ -13,7 +14,7 @@ export type MoneyPreferences = {
 export const MONEY_CATEGORIES = [
   'Groceries', 'Dining', 'Household bills', 'Housing', 'Childcare', 'Transport', 'Shopping',
   'Subscriptions', 'Insurance', 'Health', 'Home improvements', 'Holidays', 'Education',
-  'Entertainment', 'Income', 'Refunds', 'Transfers', 'Needs review',
+  'Entertainment', 'Clothing', 'Personal care', "Children's activities", 'Income', 'Refunds', 'Transfers', 'Needs review',
 ];
 
 export type MoneyRow = {
@@ -30,7 +31,7 @@ export type MoneyReport = {
   month: string;
   months: ReportMonth[];
   categories: Array<{ category: string; amounts: Array<number | null>; counts: number[]; change: number | null; changePercent: number | null }>;
-  transactions: Array<MoneyRow & { category: string; kind: MoneyKind; assignmentSource: 'suggested' | 'confirmed' | 'recorded'; reason: string; merchantKey: string }>;
+  transactions: Array<MoneyRow & { category: string; kind: MoneyKind; assignmentSource: 'suggested' | 'confirmed' | 'recorded'; reason: string; merchantKey: string; merchantName?: string | null }>;
   daily: Array<{ date: string; outgoing: number; spending: number; review: number; cumulative: number }>;
   pressure: { start: string; end: string; amount: number; share: number } | null;
   insights: Array<{ id: string; type: 'shopping' | 'category-rise' | 'recurring'; title: string; detail: string; category: string | null; amount: number | null; savingsStatus: 'potential' | null }>;
@@ -86,19 +87,10 @@ const validAssignment = (value: MoneyAssignment | undefined): value is MoneyAssi
 const assignment = (category: string, kind: MoneyKind): MoneyAssignment => ({ category, kind });
 const merchantSuggestion = (description: string): MoneyAssignment | null => {
   const text = description.toLowerCase();
-  const has = (pattern: RegExp) => pattern.test(text);
-  if (has(/\b(uber\s*eats|ubereats|deliveroo|just eat)\b/)) return assignment('Dining', 'spend');
-  if (has(/\b(refund|reversal)\b/)) return assignment('Refunds', 'refund');
-  if (has(/\b(tesco|sainsbury'?s|asda|aldi|lidl|waitrose|morrisons|co-?op|ocado)\b/)) return assignment('Groceries', 'spend');
-  if (has(/\b(grandir)\b/)) return assignment('Childcare', 'spend');
-  if (has(/\b(interest|credit interest)\b/)) return assignment('Income', 'income');
-  if (has(/\b(netflix|spotify|disney\+|amazon prime|youtube premium)\b/)) return assignment('Subscriptions', 'spend');
-  if (has(/\b(octopus(?: energy)?|british gas|edf|council tax|water bill|electricity|gas bill|broadband|virgin media|bt group)\b/)) return assignment('Household bills', 'spend');
-  if (has(/\b(argos|dunelm)\b/)) return assignment('Shopping', 'spend');
-  if (has(/\b(b\s*&\s*q|screwfix)\b/)) return assignment('Home improvements', 'spend');
-  if (has(/\b(pharmacy|boots|superdrug|dentist|optician)\b/)) return assignment('Health', 'spend');
-  if (has(/\b(uber|trainline|national rail|tfl|transport for london)\b/)) return assignment('Transport', 'spend');
-  return null;
+  if (/\b(refund|reversal)\b/.test(text)) return assignment('Refunds', 'refund');
+  if (/^(?:other\s+)?(?:(?:credit|gross|net)\s+)?interest(?:\s+(?:paid|received))?$/i.test(text.trim())) return assignment('Income', 'income');
+  const merchant = recogniseMerchant(description);
+  return merchant ? assignment(merchant.category, 'spend') : null;
 };
 const compatible = (kind: MoneyKind, direction: string) => kind === 'review' || kind === 'transfer'
   || (direction === 'debit' && kind === 'spend') || (direction === 'credit' && (kind === 'income' || kind === 'refund'));
@@ -120,7 +112,8 @@ const classify = (row: MoneyRow, preferences: MoneyPreferences, key: string) => 
       if (type === 'refund') { selected = assignment('Refunds', 'refund'); source = 'recorded'; reason = 'Recorded as a refund.'; }
       else if (type === 'income' || type === 'payroll') { selected = assignment('Income', 'income'); source = 'recorded'; reason = 'Recorded as income.'; }
       else selected = merchantSuggestion(row.description) ?? undefined;
-      if (selected && source === 'suggested') reason = 'Suggested from the merchant description; confirm if needed.';
+      if (selected && source === 'suggested') reason = selected.kind === 'spend'
+        ? recogniseMerchant(row.description)!.reason : 'Suggested from the payment description; confirm if needed.';
       if (!selected) selected = assignment('Needs review', 'review');
     }
   }
@@ -133,7 +126,8 @@ const classify = (row: MoneyRow, preferences: MoneyPreferences, key: string) => 
 export const classifyMoneyTransaction = (row: MoneyRow, preferences: MoneyPreferences): MoneyReport['transactions'][number] => {
   const merchantKey = moneyMerchantKey(row.accountId, row.description);
   const result = classify(row, preferences, merchantKey);
-  return { ...row, category: result.category, kind: result.kind, assignmentSource: result.source, reason: result.reason, merchantKey };
+  return { ...row, category: result.category, kind: result.kind, assignmentSource: result.source, reason: result.reason, merchantKey,
+    merchantName: row.transactionType.trim().toLowerCase() === 'transfer' ? null : recogniseMerchant(row.description)?.name ?? null };
 };
 
 const accountCoverage = (month: string, accountIds: string[], imports: MoneyImport[], rows: Array<{ accountId: string; transactionDate: string }> = []) => {

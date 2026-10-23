@@ -146,8 +146,8 @@ test("recent actual spending supports presets, custom days, reload and phone wit
   await recent.getByRole('button', { name: /Groceries/ }).click();
   await expect(recent.getByLabel('Recent payment category')).toHaveValue('Groceries');
   await recent.getByLabel('Search recent payments').fill('Lidl');
-  await expect(recent.getByText('Lidl', { exact: true })).toBeVisible();
-  await expect(recent.getByText('Tesco', { exact: true })).not.toBeVisible();
+  await expect(recent.locator('#recent-payment-ledger').getByText('Lidl', { exact: true })).toBeVisible();
+  await expect(recent.locator('#recent-payment-ledger').getByText('Tesco', { exact: true })).not.toBeVisible();
   await recent.getByLabel('Search recent payments').fill('');
   await expect(
     page.getByRole("heading", { name: "Where your money went" }),

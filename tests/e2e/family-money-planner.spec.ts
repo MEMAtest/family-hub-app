@@ -41,7 +41,7 @@ const rows: MoneyRow[] = [
     accountId: "synthetic",
     transactionDate: `2026-09-${day}`,
     amount: 50,
-    description: index === 2 ? "Lidl" : "Tesco",
+    description: index === 2 ? "Lidl" : index === 0 ? 'Card WLT 1234, Tesco Stores 012' : "Tesco",
     direction: "debit",
     transactionType: "normal",
   })),
@@ -259,6 +259,15 @@ test("planner compares three months, identifies pressure without invented saving
     page.getByText(/not visits or avoidable spending/),
   ).toBeVisible();
   await expect(page.getByText(/verified saving/).first()).not.toBeVisible();
+
+  const shops = page.getByRole('region', { name: 'Shops and providers' });
+  await expect(shops.getByRole('button', { name: 'View Tesco payments' })).toContainText('2 payments');
+  await shops.getByRole('button', { name: 'View Tesco payments' }).click();
+  await expect(page.getByLabel('Search planner payments')).toHaveValue('Tesco');
+  const payments = page.getByRole('region', { name: 'Review payments' });
+  await expect(payments.getByText('Card WLT 1234, Tesco Stores 012', { exact: true })).toBeVisible();
+  await expect(payments.getByRole('button', { name: 'Categorise Lidl' })).not.toBeVisible();
+  await page.getByLabel('Search planner payments').fill('');
 
   await page
     .getByRole("button", { name: "Set spending target", exact: true })

@@ -6,6 +6,7 @@ import type { RecentSpendingReport } from "@/lib/budget/recentSpending";
 import { cashFlowDate, cashFlowMoney } from "@/lib/budget/cashFlow";
 import { MoneyVisualOverview } from './MoneyVisualOverview';
 import { SpendingActions } from './SpendingActions';
+import { MerchantBreakdown } from './MerchantBreakdown';
 
 type Props = {
   familyId: string | null;
@@ -68,6 +69,7 @@ export function RecentSpending({
     setCategory("All");
     setPage(0);
     setLedgerOpen(false);
+    setSearch('');
     if (!familyId || !ready) {
       setLoading(false);
       return () => controller.abort();
@@ -131,7 +133,7 @@ export function RecentSpending({
         (row) =>
           (category === "All" ||
           (category === "Needs review" && row.kind === "review") ||
-          row.category === category) && (!search.trim() || `${row.description} ${row.category} ${row.amount}`.toLowerCase().includes(search.trim().toLowerCase())),
+          row.category === category) && (!search.trim() || `${row.description} ${row.merchantName ?? ''} ${row.category} ${row.amount}`.toLowerCase().includes(search.trim().toLowerCase())),
       ),
     [report, category, search],
   );
@@ -270,6 +272,10 @@ export function RecentSpending({
             </p>
           )}
           {familyId && <SpendingActions report={report} familyId={familyId} onCategory={openCategory} onReview={month => onReviewMonth(month ?? report.end.slice(0, 7))} />}
+          <MerchantBreakdown transactions={report.transactions} onSelect={merchant => {
+            setSearch(merchant); setCategory('All'); setPage(0); setLedgerOpen(true);
+            requestAnimationFrame(() => document.getElementById('recent-payment-ledger')?.scrollIntoView({ block: 'start', behavior: 'smooth' }));
+          }} />
           <details
             id="recent-payment-ledger"
             open={ledgerOpen}
@@ -311,11 +317,13 @@ export function RecentSpending({
                 >
                   <div className="min-w-0">
                     <p className="break-words text-sm font-medium">
-                      {row.description}
+                      {row.merchantName ?? row.description}
                     </p>
+                    {row.merchantName && row.merchantName !== row.description && <p className="mt-1 break-words text-xs text-slate-500">{row.description}</p>}
                     <p className="mt-1 text-xs text-slate-500">
                       {cashFlowDate(row.transactionDate)} · {row.category}
                     </p>
+                    <p className="mt-1 text-xs text-slate-500">{row.assignmentSource === 'suggested' ? row.reason : row.assignmentSource === 'confirmed' ? 'Confirmed by household' : 'Recorded by bank'}</p>
                     <button
                       type="button"
                       onClick={() =>
