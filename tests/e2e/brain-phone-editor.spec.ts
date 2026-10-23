@@ -157,4 +157,8 @@ test("Brain phone editor fits a short screen, auto-titles, preserves manual titl
     path: "output/playwright/brain-phone-release.png",
     fullPage: false,
   });
+  await page.setViewportSize({ width: 1024, height: 900 });
+  await page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Updated shopping plan', exact: true }) }).getByRole('button').first().click();
+  expect(await page.getByLabel('Note title', { exact: true }).first().evaluate(element => element.getBoundingClientRect().width)).toBeGreaterThan(100);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1024);
 });

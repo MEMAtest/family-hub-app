@@ -111,7 +111,7 @@ const BrainNotesView = () => {
   return (
     <div className="min-w-0 bg-gray-50 pb-20 dark:bg-slate-950">
       <div className="hidden border-b border-gray-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900 md:block">
-        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_260px]">
+        <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_260px]">
           <div className="min-w-0 space-y-2">
             <BrainNoteTitle title={title} content={content} onChange={value => { setTitle(value); setManualTitle(Boolean(value.trim())); }} />
             <AIEnhancedField

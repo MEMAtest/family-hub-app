@@ -119,7 +119,7 @@ export function MoneyVisualOverview({
           </div>
         ))}
       </dl>
-      <div className="grid min-w-0 gap-6 border-y border-slate-200 py-5 dark:border-slate-700 lg:grid-cols-2">
+      <div className="grid min-w-0 gap-6 border-y border-slate-200 py-5 dark:border-slate-700 xl:grid-cols-2">
         <section className="min-w-0" aria-label="Recorded outgoing trend">
           <h3 className="font-semibold">When money went out</h3>
           <p className="mt-1 text-xs text-slate-500">

@@ -130,6 +130,13 @@ test("recent actual spending supports presets, custom days, reload and phone wit
   await expect(
     recent.getByText("Full imported coverage for this period."),
   ).toBeVisible();
+  await page.setViewportSize({ width: 1024, height: 900 });
+  const legend = recent.getByRole('region', { name: 'Where recorded money went' });
+  for (const item of await legend.getByRole('button').all()) {
+    expect(await item.locator('span').nth(1).evaluate(element => element.getBoundingClientRect().width)).toBeGreaterThan(60);
+    expect(await item.evaluate(element => element.getBoundingClientRect().height)).toBeLessThan(70);
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
   await recent.getByRole('button', { name: 'Suggest next steps' }).click();
   await expect(recent.getByText('Check the payment purpose before setting a target.')).toBeVisible();
   failInsights = true;
