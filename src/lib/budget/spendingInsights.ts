@@ -7,6 +7,7 @@ export type SpendingFact = {
   evidence: string;
   action: string;
   category?: string;
+  reviewMonth?: string;
 };
 
 export function spendingFacts(report: RecentSpendingReport): SpendingFact[] {
@@ -67,6 +68,7 @@ export function spendingFacts(report: RecentSpendingReport): SpendingFact[] {
   if (daily[0])
     facts.push({
       id: "pressure",
+      reviewMonth: daily[0].date.slice(0, 7),
       title: "When money left fastest",
       evidence: `${cashFlowDate(daily[0].date)} had ${cashFlowMoney(daily[0].outgoing!)} of recorded money out.`,
       action:

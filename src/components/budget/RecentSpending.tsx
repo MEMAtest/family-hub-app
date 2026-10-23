@@ -269,7 +269,7 @@ export function RecentSpending({
               . This is past spending, not a saving prediction.
             </p>
           )}
-          {familyId && <SpendingActions report={report} familyId={familyId} onCategory={openCategory} onReview={() => onReviewMonth(report.end.slice(0, 7))} />}
+          {familyId && <SpendingActions report={report} familyId={familyId} onCategory={openCategory} onReview={month => onReviewMonth(month ?? report.end.slice(0, 7))} />}
           <details
             id="recent-payment-ledger"
             open={ledgerOpen}

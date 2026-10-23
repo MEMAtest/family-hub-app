@@ -14,7 +14,7 @@ export function SpendingActions({
   report: RecentSpendingReport;
   familyId: string;
   onCategory: (category: string) => void;
-  onReview: () => void;
+  onReview: (month?: string) => void;
 }) {
   const facts = spendingFacts(report);
   const [actions, setActions] = useState<Record<string, string>>({});
@@ -137,7 +137,7 @@ export function SpendingActions({
               <button
                 type="button"
                 onClick={() =>
-                  fact.category ? onCategory(fact.category) : onReview()
+                    fact.category ? onCategory(fact.category) : onReview(fact.reviewMonth)
                 }
                 className="mt-1 inline-flex min-h-10 items-center gap-1 text-xs font-semibold text-teal-800 dark:text-teal-300"
               >

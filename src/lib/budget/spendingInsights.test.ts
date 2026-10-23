@@ -62,6 +62,7 @@ test("actionable facts separate review, groceries, cash timing and incomplete co
   expect(facts.find((fact) => fact.id === "pressure")?.evidence).toContain(
     "£300.00",
   );
+  expect(facts.find((fact) => fact.id === 'pressure')?.reviewMonth).toBe('2026-10');
   expect(facts.find((fact) => fact.id === "comparison")).toBeUndefined();
   expect(JSON.stringify(facts)).not.toContain("Private payee");
   expect(JSON.stringify(facts)).not.toContain("bank");
@@ -70,6 +71,11 @@ test("only complete periods produce a comparison fact", () => {
   expect(
     spendingFacts(report(true)).find((fact) => fact.id === "comparison"),
   ).toBeDefined();
+});
+
+test('a peak-day drill-down follows the actual payment month across a rolling period', () => {
+  const value = buildRecentSpending({ days: 90, referenceDate: '2026-10-23', accountIds: ['bank'], transactions: [{ ...rows[2], transactionDate: '2026-09-30' }], imports: [], preferences: emptyMoneyPreferences() });
+  expect(spendingFacts(value).find(fact => fact.id === 'pressure')?.reviewMonth).toBe('2026-09');
 });
 test("no coverage is unavailable rather than a saving opportunity", () => {
   const none = buildRecentSpending({

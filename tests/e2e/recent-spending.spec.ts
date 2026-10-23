@@ -221,4 +221,10 @@ test("recent actual spending supports presets, custom days, reload and phone wit
   disconnected = false;
   await page.getByRole('button', { name: 'Refresh recent spending' }).click();
   await expect(recent.getByText('£565.30', { exact: true }).first()).toBeVisible();
+  await recent.getByRole('button', { name: 'Review month', exact: true }).click();
+  await expect(page).toHaveURL(/moneyMonth=2026-09/);
+  await expect(page).toHaveURL(/moneyView=review/);
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Transactions & analysis' })).toBeVisible();
+  await expect(page).toHaveURL(/moneyView=review/);
 });
