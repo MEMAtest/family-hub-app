@@ -481,7 +481,13 @@ export const DashboardView = () => {
       value: actualsKnown && bankCashFlow.data ? formatPrivateCurrency(bankCashFlow.data.summary.actualNet) : bankCashFlow.loading ? 'Loading...' : 'Unavailable',
       subtext: `${cashFlowMonth(overviewMonth)} · ${bankCashFlow.data?.coverage.status === 'complete' ? 'Imported full-month range' : 'Partial / missing imported coverage'}`,
       icon: DollarSign,
-      onClick: () => setView('budget' as const),
+      onClick: () => {
+        const url = new URL(window.location.href);
+        url.searchParams.set('moneyMonth', overviewMonth);
+        url.searchParams.set('moneyView', 'source');
+        window.history.replaceState(window.history.state, '', url);
+        setView('budget' as const);
+      },
     },
     {
       key: 'shopping',

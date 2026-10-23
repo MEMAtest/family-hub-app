@@ -114,7 +114,7 @@ test('Home and Budget Overview reconcile to the same bank rows, never saved-plan
     localStorage.setItem('budgetExpenses:overview-family', JSON.stringify([{ expenseName: 'Stale device example', amount: 999999, isRecurring: true }]));
   });
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto('/');
+  await page.goto('/?moneyView=plans&moneyMonth=2026-08');
   const summary = page.getByTestId('bank-cash-flow-summary');
   await expect(summary.getByText('£234.56', { exact: true })).toBeVisible({ timeout: 25_000 });
   await expect(summary.getByText('£876.55', { exact: true })).not.toBeVisible();
@@ -122,8 +122,9 @@ test('Home and Budget Overview reconcile to the same bank rows, never saved-plan
   await expect(page.getByText(/£88,888/)).not.toBeVisible();
   await expect(page.getByRole('button', { name: /^Actual net flow/ })).toContainText('£965.44');
   await page.getByRole('button', { name: /^Actual net flow/ }).click();
-  await page.getByRole('button', { name: 'Bank source', exact: true }).click();
-  await page.getByRole('button', { name: 'Next month', exact: true }).click();
+  await expect(page).toHaveURL(/moneyView=source/);
+  await expect(page).toHaveURL(/moneyMonth=2026-10/);
+  await expect(page.getByRole('heading', { name: 'Actual cash flow', exact: true })).toBeVisible();
   await expect(summary.getByText('£234.56', { exact: true })).toBeVisible();
   await expect(summary.getByText('£965.44', { exact: true })).toBeVisible();
   await expect(page.getByText('Planned Expenses', { exact: true })).not.toBeVisible();

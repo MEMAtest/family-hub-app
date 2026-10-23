@@ -530,6 +530,8 @@ const SimpleBudgetDashboard: React.FC = () => {
         <div className="flex items-center gap-2">
           <button
             onClick={() => setShowMobileMenu(true)}
+            aria-label="Money actions"
+            title="Money actions"
             className="mobile-btn-secondary p-2"
           >
             <Menu className="w-5 h-5" />
@@ -757,6 +759,8 @@ const SimpleBudgetDashboard: React.FC = () => {
               </button>
               <button
                 onClick={() => setShowSettings(true)}
+                aria-label="Money settings"
+                title="Money settings"
                 className="border border-gray-300 text-gray-700 px-4 py-2 rounded-sm hover:bg-gray-50 dark:bg-slate-950 transition-colors text-sm font-medium"
               >
                 <Settings className="w-4 h-4" />
