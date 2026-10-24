@@ -155,7 +155,7 @@ const NodeDetailPanel = () => {
       {/* Header */}
       <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-slate-700">
         <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-100">
-          Node Details
+          {node.nodeType === 'task' ? 'Task details' : 'Note details'}
         </h3>
         <div className="flex items-center gap-2">
           <button

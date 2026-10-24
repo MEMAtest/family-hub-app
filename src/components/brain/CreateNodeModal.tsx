@@ -71,7 +71,7 @@ const CreateNodeModal = () => {
   const formContent = (
     <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-slate-700">
-        <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-100">Add Note</h3>
+        <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-100">{nodeType === 'task' ? 'Add Task' : 'Add Note'}</h3>
         <button
           type="button"
           aria-label="Close note"

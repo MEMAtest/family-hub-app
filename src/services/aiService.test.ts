@@ -59,6 +59,7 @@ describe('AIService calendar summaries', () => {
     const chat = jest.spyOn(service as any, 'chat').mockResolvedValue(JSON.stringify({ title: 'Arrange a boiler quote', content: 'Ask for a boiler quote of £150.' }));
     expect(await service.refineBrainWriting({ text: 'ask boiler quote £150', nodeType: 'task' })).toEqual({ title: 'Arrange a boiler quote', content: 'Ask for a boiler quote of £150.' });
     expect(chat.mock.calls[0][0]).toContain('not merely spelling');
+    expect(chat.mock.calls[0][0]).toContain('content must be self-contained');
     expect(chat.mock.calls[0][0]).toContain('Never invent');
     expect(chat.mock.calls[0][0]).toContain('For tasks use an action-led title');
     expect(JSON.parse(String(chat.mock.calls[0][1])).type).toBe('task');
