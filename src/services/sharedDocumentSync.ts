@@ -111,9 +111,9 @@ export class SharedDocumentSync {
     }
   }
 
-  private url(key?: SharedDocumentKey) {
+  private url(key?: SharedDocumentKey, versions?: Record<string, number>) {
     const base = `/api/families/${encodeURIComponent(this.familyId)}/documents`;
-    return key ? `${base}/${encodeURIComponent(key)}` : `${base}?keys=${KEYS.join(',')}`;
+    return key ? `${base}/${encodeURIComponent(key)}` : `${base}?keys=${KEYS.join(',')}${versions && Object.keys(versions).length ? `&versions=${encodeURIComponent(JSON.stringify(versions))}` : ''}`;
   }
 
   private read(key: SharedDocumentKey) {
@@ -168,13 +168,16 @@ export class SharedDocumentSync {
     if (this.stopped) return;
 
     if (typeof window !== 'undefined') {
-      const onFocus = () => { void this.pull(); };
-      const onVisible = () => { if (document.visibilityState === 'visible') void this.pull(); };
-      const onOnline = () => { void this.pull(); };
+      const refresh = () => {
+        if (document.visibilityState === 'visible' && navigator.onLine !== false) void this.pull();
+      };
+      const onFocus = refresh;
+      const onVisible = refresh;
+      const onOnline = refresh;
       window.addEventListener('focus', onFocus);
       window.addEventListener('online', onOnline);
       document.addEventListener('visibilitychange', onVisible);
-      const interval = setInterval(() => { void this.pull(); }, PULL_INTERVAL_MS);
+      const interval = setInterval(refresh, PULL_INTERVAL_MS);
       this.cleanups.push(() => {
         window.removeEventListener('focus', onFocus);
         window.removeEventListener('online', onOnline);
@@ -211,14 +214,25 @@ export class SharedDocumentSync {
 
   private async doPull() {
     let documents: Record<string, SharedDocumentPayload>;
+    let unchangedVersions: Record<string, number>;
+    const versions: Record<string, number> = {};
+    if (this.hasPulled) for (const key of KEYS) {
+      const version = this.meta[key]?.version;
+      if (version && !this.dirty.has(key) && !this.inflight.has(key)) versions[key] = version;
+    }
     try {
-      const response = await this.fetchImpl(this.url(), { cache: 'no-store' });
+      const response = await this.fetchImpl(this.url(undefined, versions), { cache: 'no-store' });
       if (response.status === 503) {
         this.problem = 'unavailable';
         return;
       }
       if (!response.ok) throw new Error(`Shared data load failed (${response.status})`);
-      documents = (await response.json()).documents || {};
+      const payload = await response.json();
+      documents = payload.documents || {};
+      unchangedVersions = payload.unchangedVersions || {};
+      if (Object.entries(unchangedVersions).some(([key, version]) => versions[key] !== version)) {
+        throw new Error('Server returned an unrequested document version');
+      }
       this.problem = null;
     } catch (error) {
       console.warn('Shared data sync: working offline for now.', error);
@@ -229,6 +243,7 @@ export class SharedDocumentSync {
 
     for (const key of KEYS) {
       if (this.inflight.has(key)) continue; // its push will reconcile on reply
+      if (unchangedVersions[key] !== undefined && !documents[key]) continue;
       const server = documents[key];
       const known = this.meta[key];
 

@@ -62,19 +62,31 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
   // Bind to current family and sync DB-backed notifications (offline-first)
   useEffect(() => {
     let active = true;
+    let refreshing = false;
+    const refresh = async () => {
+      if (!active || document.visibilityState !== 'visible' || navigator.onLine === false || refreshing) return;
+      refreshing = true;
+      try {
+        notificationService.refreshActiveNotifications();
+        if (isConnected && familyId) await notificationService.syncFromDatabase();
+      } finally { refreshing = false; }
+    };
     void notificationService.setFamilyId(familyId).then(async () => {
       if (!active) return;
       setSettings(await notificationService.getSettings());
-      if (isConnected && familyId) await notificationService.syncFromDatabase();
+      await refresh();
     });
-    const refresh = () => {
-      if (!active) return;
-      notificationService.refreshActiveNotifications();
-      if (isConnected && familyId) void notificationService.syncFromDatabase();
-    };
     const interval = window.setInterval(refresh, 60_000);
     window.addEventListener('focus', refresh);
-    return () => { active = false; clearInterval(interval); window.removeEventListener('focus', refresh); };
+    window.addEventListener('online', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      active = false;
+      clearInterval(interval);
+      window.removeEventListener('focus', refresh);
+      window.removeEventListener('online', refresh);
+      document.removeEventListener('visibilitychange', refresh);
+    };
   }, [familyId, isConnected]);
 
   // Request notification permission

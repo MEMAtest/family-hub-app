@@ -441,8 +441,11 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
   useEffect(() => {
     if (!databaseStatus.connected) return;
 
+    let refreshing = false;
     const refresh = () => {
-      void refreshEventsFromDatabase();
+      if (document.visibilityState !== 'visible' || navigator.onLine === false || refreshing) return;
+      refreshing = true;
+      void refreshEventsFromDatabase().finally(() => { refreshing = false; });
     };
 
     const refreshWhenVisible = () => {
@@ -450,11 +453,13 @@ export const CalendarProvider = ({ children }: PropsWithChildren) => {
     };
 
     window.addEventListener('focus', refresh);
+    window.addEventListener('online', refresh);
     document.addEventListener('visibilitychange', refreshWhenVisible);
     const intervalId = window.setInterval(refresh, 60_000);
 
     return () => {
       window.removeEventListener('focus', refresh);
+      window.removeEventListener('online', refresh);
       document.removeEventListener('visibilitychange', refreshWhenVisible);
       window.clearInterval(intervalId);
     };

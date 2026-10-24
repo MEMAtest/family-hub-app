@@ -19,8 +19,13 @@ const createServer = () => {
     const url = String(input);
     if (!init?.method || init.method === 'GET') {
       const documents: Record<string, unknown> = {};
-      rows.forEach((row, key) => { documents[key] = { key, ...row, updatedAt: '' }; });
-      return json(200, { documents });
+      const versions = JSON.parse(new URL(url, 'http://localhost').searchParams.get('versions') || '{}');
+      const unchangedVersions: Record<string, number> = {};
+      rows.forEach((row, key) => {
+        if (versions[key] === row.version) unchangedVersions[key] = row.version;
+        else documents[key] = { key, ...row, updatedAt: '' };
+      });
+      return json(200, { documents, unchangedVersions });
     }
     const key = decodeURIComponent(url.split('/documents/')[1]);
     const { data, baseVersion } = JSON.parse(String(init.body));
@@ -87,6 +92,74 @@ describe('SharedDocumentSync between two devices', () => {
     expect(server.rows.size).toBe(Object.keys(SHARED_DOCUMENTS).length);
     expect(server.rows.get('property.issues')!.data).toEqual([issue('gutters')]);
     expect(a.store.getState().sharedSyncStatus).toBe('synced');
+  });
+
+  test('unchanged pulls request versions and do not re-upload omitted documents; newer versions still merge', async () => {
+    const server = createServer();
+    const fetch = jest.spyOn(server, 'fetchImpl');
+    const a = device(server);
+    await a.sync.start();
+    await a.sync.flush();
+    fetch.mockClear();
+    await a.sync.pull();
+    await a.sync.flush();
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(String(fetch.mock.calls[0][0])).toContain('&versions=');
+    const payload = await (await fetch.mock.results[0].value).json();
+    expect(payload.documents).toEqual({});
+    expect(Object.keys(payload.unchangedVersions)).toHaveLength(Object.keys(SHARED_DOCUMENTS).length);
+    server.rows.set('property.issues', { data: [issue('new-roof')], version: 2 });
+    await a.sync.pull();
+    expect(a.store.getState().propertyIssues).toEqual([issue('new-roof')]);
+  });
+
+  test('periodic pulls pause in hidden or offline tabs and resume on visibility or connectivity', async () => {
+    const visibility = jest.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+    const online = jest.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+    const server = createServer();
+    const fetch = jest.spyOn(server, 'fetchImpl');
+    const a = device(server);
+    await a.sync.start();
+    await a.sync.flush();
+    jest.useFakeTimers();
+    try {
+      fetch.mockClear();
+      visibility.mockReturnValue('hidden');
+      jest.advanceTimersByTime(120_000);
+      window.dispatchEvent(new Event('focus'));
+      expect(fetch).not.toHaveBeenCalled();
+      visibility.mockReturnValue('visible');
+      document.dispatchEvent(new Event('visibilitychange'));
+      expect(fetch).toHaveBeenCalledTimes(1);
+      await a.sync.pull();
+      fetch.mockClear();
+      online.mockReturnValue(false);
+      jest.advanceTimersByTime(120_000);
+      expect(fetch).not.toHaveBeenCalled();
+      online.mockReturnValue(true);
+      window.dispatchEvent(new Event('online'));
+      expect(fetch).toHaveBeenCalledTimes(1);
+      await a.sync.pull();
+      a.sync.stop();
+      fetch.mockClear();
+      window.dispatchEvent(new Event('focus'));
+      expect(fetch).not.toHaveBeenCalled();
+    } finally { a.sync.stop(); jest.useRealTimers(); visibility.mockRestore(); online.mockRestore(); }
+  });
+
+  test('an invalid unchanged-version response cannot turn omitted data into uploads', async () => {
+    const server = createServer();
+    const fetch = jest.spyOn(server, 'fetchImpl');
+    const a = device(server);
+    await a.sync.start();
+    await a.sync.flush();
+    fetch.mockClear();
+    fetch.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ documents: {}, unchangedVersions: { 'property.profile': 999 } }) } as Response);
+    await a.sync.pull();
+    await a.sync.flush();
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(a.store.getState().sharedSyncStatus).toBe('offline');
+    expect(server.rows.get('property.profile')?.version).toBe(1);
   });
 
   test('a second device picks up the household data', async () => {
