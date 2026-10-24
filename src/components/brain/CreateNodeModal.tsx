@@ -2,13 +2,12 @@
 
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { deriveBrainNoteTitle } from '@/utils/brainText';
 import { X } from 'lucide-react';
 import { useBrainContext } from '@/contexts/familyHub/BrainContext';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { NODE_STATUS_CONFIG, NODE_PRIORITY_CONFIG, type BrainNodeStatus, type BrainNodePriority, type BrainNodeType } from '@/types/brain.types';
-import AIEnhancedField from '@/components/common/AIEnhancedField';
-import { BrainNoteTitle } from './BrainNoteTitle';
+import { BrainTitleField, BrainContentField } from './BrainWritingFields';
+import { useBrainWritingAssist } from './useBrainWritingAssist';
 
 const NODE_TYPES: { value: BrainNodeType; label: string }[] = [
   { value: 'thought', label: 'Thought' },
@@ -23,7 +22,6 @@ const CreateNodeModal = () => {
   const isDesktop = useMediaQuery('(min-width: 768px)');
 
   const [title, setTitle] = useState('');
-  const [manualTitle, setManualTitle] = useState(false);
   const [content, setContent] = useState('');
   const [nodeType, setNodeType] = useState<BrainNodeType>('note');
   const [status, setStatus] = useState<BrainNodeStatus>('todo');
@@ -31,6 +29,7 @@ const CreateNodeModal = () => {
   const [dueDate, setDueDate] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const assist = useBrainWritingAssist({ identity: isCreateNodeOpen ? 'create-open' : 'create-closed', enabled: isCreateNodeOpen && !saving, title, content, nodeType, onTitle: setTitle, onContent: setContent });
 
   if (!isCreateNodeOpen) return null;
 
@@ -55,7 +54,6 @@ const CreateNodeModal = () => {
         dueDate: dueDate || undefined,
       });
       setTitle('');
-      setManualTitle(false);
       setContent('');
       setNodeType('note');
       setStatus('todo');
@@ -87,13 +85,14 @@ const CreateNodeModal = () => {
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 space-y-4">
         <div>
           <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-slate-400">Title</label>
-          <BrainNoteTitle title={title} content={content} onChange={value => { setTitle(value); setManualTitle(Boolean(value.trim())); }} />
+          <BrainTitleField assist={assist} />
         </div>
 
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-slate-400">Type</label>
             <select
+              aria-label="Item type"
               value={nodeType}
               onChange={(e) => setNodeType(e.target.value as BrainNodeType)}
               className="w-full rounded-lg border border-gray-200 bg-white px-2 py-2 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
@@ -121,13 +120,10 @@ const CreateNodeModal = () => {
 
         <div>
           <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-slate-400">Note</label>
-          <AIEnhancedField
-            value={content}
-            onChange={(value) => { setContent(value); if (!manualTitle) setTitle(deriveBrainNoteTitle(value, '')); }}
-            context="Project Brain note"
+          <BrainContentField
+            assist={assist}
             rows={7}
             placeholder="Write the note, checklist, or linked thought..."
-            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
           />
         </div>
 

@@ -3,8 +3,8 @@
 import { useMemo, useState } from 'react';
 import { CheckCircle2, Circle, FileText, Link2, Plus, Search, Tag } from 'lucide-react';
 import { useBrainContext } from '@/contexts/familyHub/BrainContext';
-import AIEnhancedField from '@/components/common/AIEnhancedField';
-import { BrainNoteTitle } from './BrainNoteTitle';
+import { BrainTitleField, BrainContentField } from './BrainWritingFields';
+import { useBrainWritingAssist } from './useBrainWritingAssist';
 import {
   deriveBrainNoteTitle,
   buildBrainLinkMarkup,
@@ -32,11 +32,12 @@ const BrainNotesView = () => {
   } = useBrainContext();
 
   const [title, setTitle] = useState('');
-  const [manualTitle, setManualTitle] = useState(false);
   const [content, setContent] = useState('');
   const [linkTargetId, setLinkTargetId] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [draftNumber, setDraftNumber] = useState(0);
+  const assist = useBrainWritingAssist({ identity: `inline-note-${draftNumber}`, enabled: !saving, title, content, nodeType: 'note', onTitle: setTitle, onContent: setContent });
 
   const noteNodes = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -92,8 +93,8 @@ const BrainNotesView = () => {
         tags: extractBrainTags(trimmedContent),
       });
       setTitle('');
-      setManualTitle(false);
       setContent('');
+      setDraftNumber(number => number + 1);
       setLinkTargetId('');
     } catch (error) {
       console.warn('Failed to save brain note:', error);
@@ -113,14 +114,11 @@ const BrainNotesView = () => {
       <div className="hidden border-b border-gray-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900 md:block">
         <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_260px]">
           <div className="min-w-0 space-y-2">
-            <BrainNoteTitle title={title} content={content} onChange={value => { setTitle(value); setManualTitle(Boolean(value.trim())); }} />
-            <AIEnhancedField
-              value={content}
-              onChange={(value) => { setContent(value); if (!manualTitle) setTitle(deriveBrainNoteTitle(value, '')); }}
-              context="Project Brain household note"
+            <BrainTitleField assist={assist} />
+            <BrainContentField
+              assist={assist}
               rows={5}
               placeholder="Capture a note, checklist, or linked thought..."
-              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
             />
           </div>
 

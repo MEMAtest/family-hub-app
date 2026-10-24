@@ -12,8 +12,8 @@ import {
   type BrainNodePriority,
   type BrainNodeType,
 } from '@/types/brain.types';
-import AIEnhancedField from '@/components/common/AIEnhancedField';
-import { BrainNoteTitle } from './BrainNoteTitle';
+import { BrainTitleField, BrainContentField } from './BrainWritingFields';
+import { useBrainWritingAssist } from './useBrainWritingAssist';
 import { buildBrainLinkMarkup, extractBrainChecklistItems, replaceBrainChecklistItem } from '@/utils/brainText';
 
 const NODE_TYPES: { value: BrainNodeType; label: string }[] = [
@@ -104,6 +104,7 @@ const NodeDetailPanel = () => {
     setContent(val);
     debouncedSave('content', val);
   };
+  const assist = useBrainWritingAssist({ identity: node?.id ?? 'no-node', enabled: isNodeDetailOpen && Boolean(node), protectTitle: true, title, content, nodeType: node?.nodeType ?? 'note', onTitle: handleTitleChange, onContent: handleContentChange });
 
   const handleFieldChange = (field: string, value: string | boolean | null) => {
     if (!selectedNodeId) return;
@@ -176,7 +177,7 @@ const NodeDetailPanel = () => {
       {/* Body */}
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 space-y-4">
         {/* Title */}
-        <BrainNoteTitle title={title} content={content} onChange={handleTitleChange} placeholder="Node title" />
+        <BrainTitleField assist={assist} placeholder="Node title" />
 
         {/* Status / Priority / Type row */}
         <div className="grid grid-cols-3 gap-2">
@@ -211,6 +212,7 @@ const NodeDetailPanel = () => {
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-slate-400">Type</label>
             <select
+              aria-label="Item type"
               value={node.nodeType}
               onChange={(e) => handleFieldChange('nodeType', e.target.value)}
               className="w-full rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
@@ -284,13 +286,10 @@ const NodeDetailPanel = () => {
         {/* Content (markdown) */}
         <div>
           <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-slate-400">Notes</label>
-          <AIEnhancedField
-            value={content}
-            onChange={handleContentChange}
+          <BrainContentField
+            assist={assist}
             rows={6}
-            context="Project Brain node notes"
             placeholder="Add notes (markdown supported)..."
-            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-gray-900 font-mono focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
           />
         </div>
 

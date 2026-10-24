@@ -54,6 +54,18 @@ describe('AIService calendar summaries', () => {
     await expect(service.suggestSpendingActions(facts)).rejects.toThrow('Unsupported spending suggestion');
   });
 
+  it('refines Brain drafts as one structured pass with task-specific titles and no invented details', async () => {
+    const service = new AIService();
+    const chat = jest.spyOn(service as any, 'chat').mockResolvedValue(JSON.stringify({ title: 'Arrange a boiler quote', content: 'Ask for a boiler quote of £150.' }));
+    expect(await service.refineBrainWriting({ text: 'ask boiler quote £150', nodeType: 'task' })).toEqual({ title: 'Arrange a boiler quote', content: 'Ask for a boiler quote of £150.' });
+    expect(chat.mock.calls[0][0]).toContain('not merely spelling');
+    expect(chat.mock.calls[0][0]).toContain('Never invent');
+    expect(chat.mock.calls[0][0]).toContain('For tasks use an action-led title');
+    expect(JSON.parse(String(chat.mock.calls[0][1])).type).toBe('task');
+    chat.mockResolvedValue(JSON.stringify({ title: 'Boiler quote', content: 'Ask for a boiler quote of £200.' }));
+    await expect(service.refineBrainWriting({ text: 'ask boiler quote £150', nodeType: 'task' })).rejects.toThrow('protected details');
+  });
+
   it('can analyse an empty or single-category plan without claiming planned figures are actual spending', async () => {
     const service = new AIService();
     const chat = jest.spyOn(service as any, 'chat').mockResolvedValue('Check your saved plan.');

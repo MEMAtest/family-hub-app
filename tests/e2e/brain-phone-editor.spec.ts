@@ -57,7 +57,10 @@ test("Brain phone editor fits a short screen, auto-titles, preserves manual titl
     Object.assign(node, route.request().postDataJSON());
     await route.fulfill({ json: node });
   });
-  await page.route("**/api/ai/text-enhance", (route) =>
+  let aiCalls = 0;
+  await page.route("**/api/ai/brain-writing", (route) => {
+    aiCalls++;
+    return (
     route.fulfill(
       failAI
         ? {
@@ -66,15 +69,12 @@ test("Brain phone editor fits a short screen, auto-titles, preserves manual titl
           }
         : {
             json: {
-              enhanced:
-                route.request().postDataJSON().mode === "title"
-                  ? "Kitchen shopping plan"
-                  : "Remember to buy milk tomorrow.",
+              draft: { title: route.request().postDataJSON().nodeType === 'task' ? 'Buy milk and eggs' : 'Kitchen shopping plan', content: route.request().postDataJSON().nodeType === 'task' ? 'Buy milk and eggs tomorrow.' : 'Remember to buy milk tomorrow.' },
               source: "ai",
             },
           },
-    ),
-  );
+    ));
+  });
   await page.addInitScript(() => {
     localStorage.setItem("familyHub_setupComplete", "skipped");
     localStorage.setItem("familyId", "brain-phone-fixture");
@@ -99,21 +99,26 @@ test("Brain phone editor fits a short screen, auto-titles, preserves manual titl
   await expect(dialog.getByLabel("Note title", { exact: true })).toHaveValue(
     "My shopping note",
   );
-  await dialog.getByRole("button", { name: "AI enhance", exact: true }).click();
+  await dialog.getByLabel('Note title', { exact: true }).click();
   await expect(body).toHaveValue("Remember to buy milk tomorrow.");
-  await expect(dialog.getByText("AI updated the wording.")).toBeVisible();
+  await expect(dialog.getByText("Notes refined. Original wording kept for undo.")).toBeVisible();
+  await expect(dialog.getByLabel('Note title', { exact: true })).toHaveValue('My shopping note');
+  await expect(dialog.getByRole('button', { name: 'AI enhance', exact: true })).not.toBeVisible();
   await dialog.getByRole("button", { name: "Undo AI changes" }).click();
   await expect(body).toHaveValue("remeber to buy milk tomorow");
-  await dialog.getByRole("button", { name: "Suggest note title" }).click();
+  await dialog.getByRole("button", { name: "Use title", exact: true }).click();
   await expect(dialog.getByLabel("Note title", { exact: true })).toHaveValue(
     "Kitchen shopping plan",
   );
   failAI = true;
-  await dialog.getByRole("button", { name: "AI enhance", exact: true }).click();
+  await body.fill('remeber to buy milk tomorow please');
+  await dialog.getByLabel('Note title', { exact: true }).click();
   await expect(dialog.getByRole("alert")).toHaveText(
     "Synthetic AI temporarily unavailable",
   );
-  await expect(body).toHaveValue("remeber to buy milk tomorow");
+  await expect(body).toHaveValue("remeber to buy milk tomorow please");
+  expect(aiCalls).toBeGreaterThan(0);
+  failAI = false;
   await page.setViewportSize({ width: 360, height: 500 });
   const save = dialog.getByRole("button", { name: "Create Note", exact: true });
   await expect(save).toBeInViewport();
@@ -153,6 +158,16 @@ test("Brain phone editor fits a short screen, auto-titles, preserves manual titl
     page.getByRole("heading", { name: "Updated shopping plan", exact: true }),
   ).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('button', { name: 'Add note', exact: true }).click();
+  await dialog.getByLabel('Item type', { exact: true }).selectOption('task');
+  await body.fill('buy milk an eggs tomorow');
+  await expect(dialog.getByLabel('Note title', { exact: true })).toHaveValue('Buy milk and eggs');
+  await expect(body).toHaveValue('buy milk an eggs tomorow');
+  await dialog.getByLabel('Note title', { exact: true }).click();
+  await expect(body).toHaveValue('Buy milk and eggs tomorrow.');
+  await dialog.getByRole('button', { name: 'Create Task', exact: true }).click();
+  await expect(dialog).not.toBeVisible();
+  expect(nodes.some(node => node.nodeType === 'task' && node.title === 'Buy milk and eggs' && node.content === 'Buy milk and eggs tomorrow.')).toBe(true);
   await page.screenshot({
     path: "output/playwright/brain-phone-release.png",
     fullPage: false,
