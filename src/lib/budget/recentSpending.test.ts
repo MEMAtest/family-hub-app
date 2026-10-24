@@ -160,5 +160,5 @@ test('daily chart reconciles to recorded money out, includes unresolved bills bu
   ] });
   expect(result.daily.map(day => day.outgoing)).toEqual([3724, 1100, null]);
   expect(result.daily.reduce((sum, day) => sum + Math.round((day.outgoing ?? 0) * 100), 0) / 100).toBe(result.summary.outgoing);
-  expect(result.summary).toMatchObject({ outgoing: 4824, review: 3723.62, spending: 1100.38 });
+  expect(result.summary).toMatchObject({ outgoing: 4824, review: 4823.62, spending: .38 });
 });

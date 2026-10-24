@@ -12,7 +12,7 @@ export type MoneyPreferences = {
 };
 
 export const MONEY_CATEGORIES = [
-  'Groceries', 'Dining', 'Household bills', 'Housing', 'Childcare', 'Transport', 'Shopping',
+  'Groceries', 'Dining', 'Household bills', 'Housing', 'Mortgage', 'Childcare', 'Transport', 'Shopping',
   'Subscriptions', 'Insurance', 'Tax & government', 'Health', 'Home improvements', 'Holidays', 'Education',
   'Entertainment', 'Clothing', 'Personal care', "Children's activities", 'Income', 'Refunds', 'Transfers', 'Needs review',
 ];
@@ -130,8 +130,12 @@ export const classifyMoneyTransaction = (row: MoneyRow, preferences: MoneyPrefer
   const merchantKey = moneyMerchantKey(row.accountId, row.description);
   const merchant = recogniseMerchant(row.description);
   const result = classify(row, preferences, merchantKey, merchant);
+  const mortgage = result.source === 'confirmed' && result.kind === 'spend' && result.category === 'Mortgage' && /^\s*direct debit\s+halifax\s*,/i.test(row.description);
+  const childcareFunding = result.category === 'Childcare' && merchant?.name === 'HMRC childcare account';
   return { ...row, category: result.category, kind: result.kind, assignmentSource: result.source, reason: result.reason, merchantKey,
-    merchantName: result.kind === 'transfer' ? null : merchant?.name ?? null,
+    ...(mortgage ? { reason: `${result.reason} Halifax mortgage confirmed by your household.` } : {}),
+    ...(childcareFunding && result.source === 'confirmed' ? { reason: `${result.reason} Childcare account funding, not a provider bill.` } : {}),
+    merchantName: result.kind === 'transfer' ? null : mortgage ? 'Halifax mortgage' : merchant?.name ?? null,
     ...(result.kind !== 'transfer' && merchant?.evidence ? { merchantEvidence: merchant.evidence } : {}) };
 };
 

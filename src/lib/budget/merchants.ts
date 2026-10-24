@@ -646,8 +646,23 @@ const rules: MerchantRule[] = [
 
 export function recogniseMerchant(description: string): MerchantMatch | null {
   const mobilePayee = /^\s*transfer mob,\s*([^,]+),/i.exec(description)?.[1].trim();
+  if (mobilePayee && /^sunnyfields day nu(?:rsery)?$/i.test(mobilePayee)) {
+    return {
+      name: 'Sunnyfields Day Nursery', category: 'Childcare',
+      reason: 'Sunnyfields Day Nursery identified from the named payee, not a child name in the reference.',
+      evidence: { url: 'https://www.sunnyfields.net/', checkedAt: '2026-10-24', note: 'The official nursery website describes its childcare provision. The statement abbreviates the payee to Sunnyfields Day Nu.' },
+    };
+  }
   if (mobilePayee && /^(?:hmrc|hm revenue (?:and|&) customs|london borough of(?: [a-z -]+)?)$/i.test(mobilePayee)) {
     const name = /^hm/i.test(mobilePayee) ? 'HMRC' : 'Local council';
+    if (name === 'HMRC') {
+      const childcareReference = /^\s*transfer mob,\s*[^,]+,\s*1100\d{9}\s*$/i.test(description);
+      return childcareReference ? {
+        name: 'HMRC childcare account', category: 'Childcare',
+        reason: 'Named HMRC payee with the documented Tax-Free Childcare account-reference format. Childcare account funding, not a provider bill; no child identity inferred.',
+        evidence: { url: 'https://www.gov.uk/guidance/sign-in-to-your-childcare-provider-account-for-tax-free-childcare', checkedAt: '2026-10-24', note: 'HMRC documents a unique 13-digit childcare account number beginning 1100. A contribution is not the later provider payment.' },
+      } : { name: 'HMRC', category: 'Needs review', reason: 'HMRC administers tax and childcare accounts. The named payee alone does not establish this payment purpose.' };
+    }
     return { name, category: 'Tax & government', reason: `${name} identified from the named bank payee. Government payment; the specific tax or fee is not stated.` };
   }
   const text = merchantText(description);

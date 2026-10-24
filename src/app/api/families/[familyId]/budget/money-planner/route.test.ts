@@ -167,6 +167,17 @@ test("rejects inaccessible rows, contradictory direction and already recorded tr
   ).toBe(409);
   expect(prisma.familyDocument.create).not.toHaveBeenCalled();
 });
+test("saves a confirmed mortgage mandate while retaining unrelated household choices", async () => {
+  const current = emptyMoneyPreferences();
+  current.overrides.existing = { category: 'Childcare', kind: 'spend' };
+  (prisma.familyDocument.findUnique as jest.Mock).mockResolvedValue({ id: 'preferences', version: 4, data: current });
+  (prisma.budgetTransaction.findFirst as jest.Mock).mockResolvedValue({ accountId: 'joint', description: 'Direct Debit Halifax, synthetic-mandate', direction: 'debit', transactionType: 'normal' });
+  const response = await put({ action: 'assign', transactionId: 'mortgage', category: 'Mortgage', kind: 'spend', applyToGroup: true });
+  expect(response.status).toBe(200);
+  expect(response.body.preferences.rules[moneyMerchantKey('joint', 'Direct Debit Halifax, synthetic-mandate')]).toEqual({ category: 'Mortgage', kind: 'spend' });
+  expect(response.body.preferences.overrides.existing).toEqual(current.overrides.existing);
+  expect(prisma.familyDocument.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: { familyId: 'home', key: 'money.planner.preferences', version: 4 } }));
+});
 test("target baseline comes from server report, not client-provided totals", async () => {
   const response = await put({
     action: "target",
